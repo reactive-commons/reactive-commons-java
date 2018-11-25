@@ -1,1 +1,1 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=us.sofka.commons.reactive.async.MessageConfig
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=org.reactivecommons.async.impl.config.MessageConfig

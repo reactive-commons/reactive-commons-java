@@ -3,7 +3,7 @@ rootProject.name = 'ReactiveArchitectureCommons'
 FileTree buildFiles = fileTree(rootDir) {
 	List excludes = gradle.startParameter.projectProperties.get("excludeProjects")?.split(",")
 	include '**/*.gradle'
-	exclude 'main.gradle', 'build', '**/gradle', 'settings.gradle', 'buildSrc', '/build.gradle', '.*', 'out'
+	exclude 'main.gradle', 'build', '**/gradle', '**/settings.gradle', 'buildSrc', '/build.gradle', '.*', 'out'
 	exclude '**/grails3'
 	if(excludes) {
 		exclude excludes

@@ -14,8 +14,9 @@ import java.time.Duration;
 @Log
 public class SampleSenderApp {
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         SpringApplication.run(SampleSenderApp.class, args);
+        Thread.sleep(Long.MAX_VALUE);
     }
 
     @Bean

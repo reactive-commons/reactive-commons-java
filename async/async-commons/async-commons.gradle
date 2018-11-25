@@ -3,11 +3,12 @@ dependencies {
     compile project(":domain-events-api")
 
     compile 'io.projectreactor:reactor-core'
-//    implementation 'io.projectreactor.addons:reactor-extra'
-//    compile 'org.springframework.cloud:spring-cloud-stream-reactive'
-//    compile 'org.springframework.cloud:spring-cloud-starter-stream-rabbit'
-    compile 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation 'io.projectreactor.addons:reactor-extra'
+    compile('org.springframework.boot:spring-boot-starter')
+//    compile 'org.springframework.boot:spring-boot-starter-amqp'
+//    compile group: 'org.springframework.amqp', name: 'spring-amqp'
     compile "io.projectreactor.rabbitmq:reactor-rabbitmq:1.0.0.RC1"
+//    compile project(":async:libs:reactor-rabbitmq")
     compile 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
     testImplementation 'io.projectreactor:reactor-test'
 }

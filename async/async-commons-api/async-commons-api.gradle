@@ -2,7 +2,5 @@ dependencies {
     compile project(":domain-events-api")
     implementation 'io.projectreactor:reactor-core'
     implementation 'io.projectreactor.addons:reactor-extra'
-    implementation 'org.springframework.cloud:spring-cloud-stream-reactive'
-    implementation 'org.springframework.cloud:spring-cloud-starter-stream-rabbit'
     testImplementation 'io.projectreactor:reactor-test'
 }

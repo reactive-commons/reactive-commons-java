@@ -1,3 +1,4 @@
 dependencies {
     compile project(":async-commons")
+//    compile 'org.springframework.boot:spring-boot-starter-amqp'
 }
