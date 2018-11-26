@@ -1,5 +1,7 @@
 dependencies {
-    implementation 'io.projectreactor:reactor-core'
-    implementation 'io.projectreactor.addons:reactor-extra'
-    testImplementation 'io.projectreactor:reactor-test'
+//    implementation 'io.projectreactor:reactor-core'
+//    implementation 'io.projectreactor.addons:reactor-extra'
+    // https://mvnrepository.com/artifact/org.reactivestreams/reactive-streams
+    compile group: 'org.reactivestreams', name: 'reactive-streams', version: '1.0.2'
+//    testImplementation 'io.projectreactor:reactor-test'
 }

@@ -1,6 +1,6 @@
 package org.reactivecommons.async.impl.config;
 
-import com.rabbitmq.client.Channel;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.java.Log;
@@ -8,6 +8,7 @@ import org.reactivecommons.async.api.MessageConverter;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -19,17 +20,30 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.*;
 
-import java.io.IOException;
 import java.time.Duration;
 import java.util.logging.Level;
 
+@Log
 @Configuration
 @EnableConfigurationProperties(RabbitProperties.class)
-@Log
 public class RabbitMqConfig {
 
     @Value("${spring.application.name}")
     private String appName;
+
+    @Bean
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter){
+        final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
+        final Sender sender = ReactorRabbitMq.createSender(new SenderOptions().connectionMono(senderConnection));
+        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
+    }
+
+    @Bean
+    public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
+        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
+        Receiver receiver = ReactorRabbitMq.createReceiver(new ReceiverOptions().connectionMono(connection));
+        return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
+    }
 
     @Bean
     @ConditionalOnMissingBean
@@ -49,17 +63,9 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter){
-        final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
-        final Sender sender = ReactorRabbitMq.createSender(new SenderOptions().connectionMono(senderConnection));
-        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
-    }
-
-    @Bean
-    public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
-        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
-        Receiver receiver = ReactorRabbitMq.createReceiver(new ReceiverOptions().connectionMono(connection));
-        return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
+    @ConditionalOnMissingBean
+    public MessageConverter messageConverter(){
+        return new JacksonMessageConverter(new ObjectMapper());
     }
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name){
@@ -73,15 +79,4 @@ public class RabbitMqConfig {
             .cache();
     }
 
-//    @Bean
-//    public Mono<Connection> sharedConnectionMono(ConnectionFactoryProvider factory){
-//        final Scheduler senderScheduler = Schedulers.newElastic("shared" + "_scheduler");
-//        return Mono.fromCallable(() -> factory.getConnectionFactory().newConnection("shared"))
-//            .doOnError(err ->
-//                log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
-//            )
-//            .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
-//            .subscribeOn(senderScheduler)
-//            .cache();
-//    }
 }

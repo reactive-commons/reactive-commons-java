@@ -1,13 +1,13 @@
 package org.reactivecommons.async.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.async.api.AsyncQuery;
+import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
-import org.reactivecommons.async.impl.config.MessageConfig;
+import org.reactivecommons.async.impl.config.BrokerConfig;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 import reactor.core.publisher.Mono;
-import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.api.DirectAsyncGateway;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -21,13 +21,13 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
-    private final MessageConfig.BrokerConfig config;
+    private final BrokerConfig config;
     private final ReactiveReplyRouter router;
     private final ReactiveMessageSender sender;
     private final String exchange;
 
 
-    public RabbitDirectAsyncGateway(MessageConfig.BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange) {
+    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange) {
         this.config = config;
         this.router = router;
         this.sender = sender;

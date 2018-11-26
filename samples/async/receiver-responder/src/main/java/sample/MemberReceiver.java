@@ -23,7 +23,7 @@ public class MemberReceiver implements QueryHandler<MemberRegisteredEvent, AddMe
             System.out.println("Causando error!!");
             throw new RuntimeException("Error Causado");
         }
-        return eventBus.emit(new DomainEvent<>("persona.registrada", "342", new MemberRegisteredEvent(UUID.randomUUID().toString(), new Random().nextInt()%100)))
+        return Mono.from(eventBus.emit(new DomainEvent<>("persona.registrada", "342", new MemberRegisteredEvent(UUID.randomUUID().toString(), new Random().nextInt()%100))))
         .then(Mono.fromSupplier(() -> new MemberRegisteredEvent(UUID.randomUUID().toString(), new Random().nextInt()%100))
             .delayElement(Duration.ofMillis(400)));
     }

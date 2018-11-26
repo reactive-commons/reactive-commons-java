@@ -1,9 +1,9 @@
 package org.reactivecommons.api.domain;
 
-import reactor.core.publisher.Mono;
+import org.reactivestreams.Publisher;
 
 public interface DomainEventBus {
 
-    <T> Mono<Void> emit(DomainEvent<T> event);
+    <T> Publisher<Void> emit(DomainEvent<T> event);
 
 }

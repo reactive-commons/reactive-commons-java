@@ -1,11 +1,10 @@
 package org.reactivecommons.async.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.reactivecommons.async.impl.config.MessageConfig;
-import org.springframework.beans.factory.annotation.Autowired;
-import reactor.core.publisher.Mono;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.springframework.beans.factory.annotation.Autowired;
+import reactor.core.publisher.Mono;
 
 /**
  * Publicador simple de mensajes en RabbitMQ, se asume y delega la disponibilidad en el communications
@@ -15,9 +14,6 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 @Deprecated
 public abstract class ReplyCommandSender {
 
-
-    @Autowired
-    MessageConfig.BrokerConfig config;
 
     @Autowired
     DirectAsyncGateway asyncGateway;

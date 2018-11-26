@@ -14,6 +14,9 @@ import java.time.Duration;
 import java.util.logging.Level;
 
 @Log
+/*
+ Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0.0.RC2
+ */
 public class TopologyCreator {
 
     private final Mono<Channel> channel;

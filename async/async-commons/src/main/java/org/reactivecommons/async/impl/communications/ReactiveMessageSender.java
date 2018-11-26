@@ -60,5 +60,9 @@ public class ReactiveMessageSender {
     public Sender getSender() {
         return sender;
     }
+
+    public TopologyCreator getTopologyCreator() {
+        return topologyCreator;
+    }
 }
 

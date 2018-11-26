@@ -45,7 +45,7 @@ public class SampleReceiverApp {
         private final DomainEventBus eventBus;
 
         public Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event){
-            return eventBus.emit(new DomainEvent<>("persona.procesada", "213", event.getData()))
+            return Mono.from(eventBus.emit(new DomainEvent<>("persona.procesada", "213", event.getData())))
                 .doOnSuccess(_v -> System.out.println("Persona procesada"));
         }
     }
