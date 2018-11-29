@@ -1,4 +1,4 @@
-package org.reactivecommons.async.api;
+package org.reactivecommons.async.impl.exceptions;
 
 public class MessageConversionException extends RuntimeException {
 

@@ -3,7 +3,7 @@ package org.reactivecommons.async.impl;
 
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.handlers.EventHandler;
-import org.reactivecommons.async.api.Message;
+import org.reactivecommons.async.impl.communications.Message;
 import reactor.core.publisher.Mono;
 
 import java.util.function.Function;

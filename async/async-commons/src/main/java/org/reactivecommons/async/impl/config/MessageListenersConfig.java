@@ -2,9 +2,11 @@ package org.reactivecommons.async.impl.config;
 
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.MessageConverter;
 import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
@@ -67,13 +69,13 @@ public class MessageListenersConfig {
             .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler.getHandler()),
                 ConcurrentHashMap::putAll);
 
-        final Map<String, HandlerRegistry.RegisteredEventListener> eventListeners = registries
+        final Map<String, RegisteredEventListener> eventListeners = registries
             .values().stream()
             .flatMap(r -> r.getEventListeners().stream())
             .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                 ConcurrentHashMap::putAll);
 
-        final Map<String, HandlerRegistry.RegisteredCommandHandler> commandHandlers = registries
+        final Map<String, RegisteredCommandHandler> commandHandlers = registries
             .values().stream()
             .flatMap(r -> r.getCommandHandlers().stream())
             .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
@@ -97,9 +99,9 @@ public class MessageListenersConfig {
 
             @Override
             @SuppressWarnings("unchecked")
-            public <T> HandlerRegistry.RegisteredCommandHandler<T> getCommandHandler(String path) {
-                final HandlerRegistry.RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new HandlerRegistry.RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
+            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
+                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
+                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
             }
         };
     }

@@ -1,14 +1,81 @@
+plugins {
+    id "com.jfrog.bintray" version "1.8.4"
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+}
+
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "danielbustamante"
+            name "Daniel Bustamante Ospina"
+            email "daniel.bustamante@sofka.com.co"
+        }
+    }
+
+    scm {
+        url "git@github.com:reactive-commons/reactive-commons-java.git"
+    }
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            groupId 'org.reactivecommons'
+            artifactId 'async-commons'
+            version '0.0.1-alpha1'
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Async Commons')
+                root.appendNode('name', 'async-commons')
+                root.appendNode('url', 'https://site_for_lib.tld')
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    publications = ['MyPublication']
+    pkg {
+        repo = 'maven-artifacts'
+        userOrg = 'reactive-commons'
+        name = 'async-commons'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'git@github.com:reactive-commons/reactive-commons-java.git'
+        version {
+            name = '0.0.1-alpha1'
+            desc = 'First version'
+            released  = new Date()
+            vcsTag = '0.0.1-alpha1'
+        }
+    }
+}
+
 dependencies {
+//    api 'org.reactivecommons:async-commons-api:0.0.1-alpha1'
     compile project(":async-commons-api")
     compile project(":domain-events-api")
 
-    compile 'io.projectreactor:reactor-core'
-    implementation 'io.projectreactor.addons:reactor-extra'
-    compile('org.springframework.boot:spring-boot-starter')
+    api 'io.projectreactor:reactor-core'
+    api 'io.projectreactor.addons:reactor-extra'
+    api('org.springframework.boot:spring-boot-starter')
 //    compile 'org.springframework.boot:spring-boot-starter-amqp'
 //    compile group: 'org.springframework.amqp', name: 'spring-amqp'
-    compile "io.projectreactor.rabbitmq:reactor-rabbitmq:1.0.0.RC1"
+    api "io.projectreactor.rabbitmq:reactor-rabbitmq:1.0.0.RC1"
 //    compile project(":async:libs:reactor-rabbitmq")
-    compile 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
+    api 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
     testImplementation 'io.projectreactor:reactor-test'
 }

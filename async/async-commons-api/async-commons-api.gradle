@@ -1,6 +1,74 @@
+plugins {
+    id "com.jfrog.bintray" version "1.8.4"
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+}
+
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "danielbustamante"
+            name "Daniel Bustamante Ospina"
+            email "daniel.bustamante@sofka.com.co"
+        }
+    }
+
+    scm {
+        url "git@github.com:reactive-commons/reactive-commons-java.git"
+    }
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            groupId 'org.reactivecommons'
+            artifactId 'async-commons-api'
+            version '0.0.1-alpha1'
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Async Commons API')
+                root.appendNode('name', 'async-commons-api')
+                root.appendNode('url', 'https://site_for_lib.tld')
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    publications = ['MyPublication']
+    pkg {
+        repo = 'maven-artifacts'
+        userOrg = 'reactive-commons'
+        name = 'async-commons-api'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'git@github.com:reactive-commons/reactive-commons-java.git'
+        version {
+            name = '0.0.1-alpha1'
+            desc = 'First version'
+            released  = new Date()
+            vcsTag = '0.0.1-alpha1'
+        }
+    }
+}
+
 dependencies {
     compile project(":domain-events-api")
+//    api 'org.reactivecommons:domain-events-api:0.0.1-alpha1'
+//    compile 'org.reactivecommons:domain-events-api:0.0.1-alpha1'
     implementation 'io.projectreactor:reactor-core'
-    implementation 'io.projectreactor.addons:reactor-extra'
+//    implementation 'io.projectreactor.addons:reactor-extra'
     testImplementation 'io.projectreactor:reactor-test'
 }

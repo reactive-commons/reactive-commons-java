@@ -1,7 +1,7 @@
 package org.reactivecommons.async.impl.listeners;
 
 import lombok.extern.java.Log;
-import org.reactivecommons.async.api.Message;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
@@ -9,7 +9,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
-import reactor.rabbitmq.Sender;
 import reactor.util.function.Tuple2;
 
 import java.time.Duration;

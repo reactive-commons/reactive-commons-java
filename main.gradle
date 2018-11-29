@@ -7,6 +7,7 @@ subprojects {
 
     repositories {
         mavenCentral()
+        maven { url "https://dl.bintray.com/sofka/clean-domain-commons" }
         maven { url "https://repo.spring.io/snapshot" }
         maven { url "https://repo.spring.io/milestone" }
     }

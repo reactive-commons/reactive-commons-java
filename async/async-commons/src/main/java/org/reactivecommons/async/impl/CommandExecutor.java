@@ -2,7 +2,7 @@ package org.reactivecommons.async.impl;
 
 
 import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.api.Message;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.api.handlers.CommandHandler;
 import reactor.core.publisher.Mono;
 

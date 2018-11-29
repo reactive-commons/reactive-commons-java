@@ -2,7 +2,8 @@ package org.reactivecommons.async.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.handlers.QueryHandler;
-import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 
 import java.util.Collection;
 import java.util.Map;
@@ -11,8 +12,8 @@ import java.util.Map;
 public class HandlerResolver {
 
     private final Map<String, QueryHandler<?, ?>> queryHandlers;
-    private final Map<String, HandlerRegistry.RegisteredEventListener> eventListeners;
-    private final Map<String, HandlerRegistry.RegisteredCommandHandler> commandHandlers;
+    private final Map<String, RegisteredEventListener> eventListeners;
+    private final Map<String, RegisteredCommandHandler> commandHandlers;
 
 
     @SuppressWarnings("unchecked")
@@ -21,16 +22,16 @@ public class HandlerResolver {
     }
 
     @SuppressWarnings("unchecked")
-    public <T> HandlerRegistry.RegisteredCommandHandler<T> getCommandHandler(String path) {
+    public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
         return commandHandlers.get(path);
     }
 
     @SuppressWarnings("unchecked")
-    public <T> HandlerRegistry.RegisteredEventListener<T> getEventListener(String path) {
+    public <T> RegisteredEventListener<T> getEventListener(String path) {
         return eventListeners.get(path);
     }
 
-    public Collection<HandlerRegistry.RegisteredEventListener> getEventListeners() {
+    public Collection<RegisteredEventListener> getEventListeners() {
         return eventListeners.values();
     }
 }

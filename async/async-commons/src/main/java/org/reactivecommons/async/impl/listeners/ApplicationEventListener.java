@@ -5,16 +5,19 @@ import com.rabbitmq.client.AMQP;
 import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.Message;
-import org.reactivecommons.async.api.MessageConverter;
+import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.impl.EventExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
 
 import java.util.function.Function;
 
@@ -45,7 +48,7 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final HandlerRegistry.RegisteredEventListener<Object> handler = resolver.getEventListener(executorPath);
+        final RegisteredEventListener<Object> handler = resolver.getEventListener(executorPath);
         final Class<Object> eventClass = handler.getInputClass();
         Function<Message, DomainEvent<Object>> converter = msj -> messageConverter.readDomainEvent(msj, eventClass);
         final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);

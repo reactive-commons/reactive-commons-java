@@ -1,7 +1,9 @@
-package org.reactivecommons.async.api;
+package org.reactivecommons.async.impl.converters;
 
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.api.AsyncQuery;
+import org.reactivecommons.async.impl.communications.Message;
 
 public interface MessageConverter {
 

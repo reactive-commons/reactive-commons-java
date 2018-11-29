@@ -1,8 +1,7 @@
 package org.reactivecommons.async.impl.communications;
 
 import com.rabbitmq.client.AMQP;
-import org.reactivecommons.async.api.Message;
-import org.reactivecommons.async.api.MessageConverter;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.exceptions.SendFailureNoAckException;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessage;

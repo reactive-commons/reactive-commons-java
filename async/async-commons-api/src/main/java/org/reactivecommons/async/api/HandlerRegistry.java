@@ -3,10 +3,12 @@ package org.reactivecommons.async.api;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.handlers.CommandHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
@@ -26,6 +28,11 @@ public class HandlerRegistry {
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> fn, Class<T> eventClass){
         eventListeners.add(new RegisteredEventListener<>(eventName, fn,  eventClass));
+        return this;
+    }
+
+    public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler){
+        eventListeners.add(new RegisteredEventListener<>(eventName, handler,  inferGenericParameterType(handler)));
         return this;
     }
 
@@ -49,35 +56,20 @@ public class HandlerRegistry {
         }
     }
 
+    private <T> Class<T> inferGenericParameterType(EventHandler<T> handler){
+        try{
+            ParameterizedType genericSuperclass = (ParameterizedType) handler.getClass().getGenericInterfaces()[0];
+            return  (Class<T>) genericSuperclass.getActualTypeArguments()[0];
+        }catch (Exception e){
+            throw new RuntimeException("Fail to infer generic Query class, please use listenEvent(eventName, handler, class) instead");
+        }
+    }
+
     public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler, Class<R> queryClass){
         handlers.add(new RegisteredQueryHandler<>(commandId, handler, queryClass));
         return this;
     }
 
-
-    @RequiredArgsConstructor
-    @Getter
-    public static class RegisteredQueryHandler<T, R> {
-        private final String path;
-        private final QueryHandler<T, R> handler;
-        private final Class<R> queryClass;
-    }
-
-    @RequiredArgsConstructor
-    @Getter
-    public static class RegisteredEventListener<T> {
-        private final String path;
-        private final EventHandler<T> handler;
-        private final Class<T> inputClass;
-    }
-
-    @RequiredArgsConstructor
-    @Getter
-    public static class RegisteredCommandHandler<T> {
-        private final String path;
-        private final CommandHandler<T> handler;
-        private final Class<T> inputClass;
-    }
 
 }
 

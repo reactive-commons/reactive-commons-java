@@ -7,9 +7,8 @@ import lombok.Data;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.api.Message;
-import org.reactivecommons.async.api.MessageConversionException;
-import org.reactivecommons.async.api.MessageConverter;
+import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.impl.exceptions.MessageConversionException;
 import org.reactivecommons.async.impl.RabbitMessage;
 
 import java.io.IOException;
@@ -53,6 +52,16 @@ public class JacksonMessageConverter implements MessageConverter {
             final CommandJson commandJson = objectMapper.readValue(message.getBody(), CommandJson.class);
             final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
             return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
+        } catch (IOException e) {
+            throw new MessageConversionException("Failed to convert Message content", e);
+        }
+    }
+
+    //TODO: pull definition up to interface
+    public <T> Command<T> readCommandStructure(Message message) {
+        try {
+            final CommandJson commandJson = objectMapper.readValue(message.getBody(), CommandJson.class);
+            return new Command<>(commandJson.getName(), commandJson.getCommandId(), null);
         } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }

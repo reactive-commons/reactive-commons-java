@@ -2,7 +2,7 @@ package org.reactivecommons.async.impl;
 
 
 import org.reactivecommons.async.api.handlers.QueryHandler;
-import org.reactivecommons.async.api.Message;
+import org.reactivecommons.async.impl.communications.Message;
 import reactor.core.publisher.Mono;
 
 import java.util.function.Function;

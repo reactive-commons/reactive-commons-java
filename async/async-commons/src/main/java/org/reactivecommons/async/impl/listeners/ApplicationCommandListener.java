@@ -3,15 +3,20 @@ package org.reactivecommons.async.impl.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.Message;
-import org.reactivecommons.async.api.MessageConverter;
+import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.impl.CommandExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
+import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
 
 import java.util.function.Function;
 
@@ -39,15 +44,17 @@ public class ApplicationCommandListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final HandlerRegistry.RegisteredCommandHandler<Object> handler = resolver.getCommandHandler(executorPath);
+        final RegisteredCommandHandler<Object> handler = resolver.getCommandHandler(executorPath);
         final Class<Object> eventClass = handler.getInputClass();
         Function<Message, Command<Object>> converter = msj -> messageConverter.readCommand(msj, eventClass);
         final CommandExecutor<Object> executor = new CommandExecutor<>(handler.getHandler(), converter);
         return msj -> executor.execute(msj).cast(Object.class);
     }
 
+    //TODO: replace with interface
     protected String getExecutorPath(AcknowledgableDelivery msj) {
-        return msj.getEnvelope().getRoutingKey();
+        final Command<Object> command = ((JacksonMessageConverter) messageConverter).readCommandStructure(RabbitMessage.fromDelivery(msj));
+        return command.getName();
     }
 
 
