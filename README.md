@@ -96,7 +96,7 @@ public class ManageTasksUseCase {
     }
 
     private Mono<Void> emitCreatedEvent(TaskToDo task) {
-        return from(eventBus.emit(new DomainEvent<>("task.created", task.getId(), task)));
+        return Mono.from(eventBus.emit(new DomainEvent<>("task.created", task.getId(), task)));
     }
     //...
 }
