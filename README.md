@@ -102,6 +102,36 @@ public class ManageTasksUseCase {
 }
 ```
 
+Then enable this feature in a Configuration class and inject implementation:
+
+```java
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDomainEventBus
+public class MainApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MainApplication.class, args);
+    }
+    
+    @Bean
+    public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+        return new ManageTasksUseCase(tasks, eventBus);
+    }    
+    
+}
+```
+Don't forget to add the implementation dependency to the main spring boot module:
+
+```groovy
+    dependencies {
+      compile 'org.reactivecommons:async-commons:0.0.1-alpha1'
+    }
+```
+
+
 
 ## Disclaimer
 This Alpha version is a first development version intended for initial internal use with direct support from the developer of this module, so use with so much care.
