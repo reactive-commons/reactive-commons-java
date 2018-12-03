@@ -41,10 +41,21 @@ public class HandlerRegistry {
         return this;
     }
 
+    public <T> HandlerRegistry handleCommand(String commandName, CommandHandler<T> fn){
+        commandHandlers.add(new RegisteredCommandHandler<>(commandName, fn,  inferGenericParameterType(fn)));
+        return this;
+    }
+
     @SuppressWarnings("unchecked")
     public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler){
         return serveQuery(commandId, handler, inferGenericParameterType(handler));
     }
+
+    public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler, Class<R> queryClass){
+        handlers.add(new RegisteredQueryHandler<>(commandId, handler, queryClass));
+        return this;
+    }
+
 
     @SuppressWarnings("unchecked")
     private <T, R> Class<R> inferGenericParameterType(QueryHandler<T, R> handler){
@@ -53,6 +64,16 @@ public class HandlerRegistry {
             return  (Class<R>) genericSuperclass.getActualTypeArguments()[1];
         }catch (Exception e){
             throw new RuntimeException("Fail to infer generic Query class, please use serveQuery(path, handler, class) instead");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> Class<T> inferGenericParameterType(CommandHandler<T> handler){
+        try{
+            ParameterizedType genericSuperclass = (ParameterizedType) handler.getClass().getGenericInterfaces()[0];
+            return  (Class<T>) genericSuperclass.getActualTypeArguments()[0];
+        }catch (Exception e){
+            throw new RuntimeException("Fail to infer generic Command class, please use handleCommand(path, handler, class) instead");
         }
     }
 
@@ -65,10 +86,7 @@ public class HandlerRegistry {
         }
     }
 
-    public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler, Class<R> queryClass){
-        handlers.add(new RegisteredQueryHandler<>(commandId, handler, queryClass));
-        return this;
-    }
+
 
 
 }

@@ -5,6 +5,22 @@ subprojects {
 
     sourceCompatibility = JavaVersion.VERSION_1_8
 
+    task sourcesJar(type: Jar, dependsOn: classes) {
+        classifier = 'sources'
+        from sourceSets.main.allSource
+    }
+
+    javadoc.failOnError = false
+    task javadocJar(type: Jar, dependsOn: javadoc) {
+        classifier = 'javadoc'
+        from javadoc.destinationDir
+    }
+
+    artifacts {
+        archives sourcesJar
+        archives javadocJar
+    }
+
     repositories {
         mavenCentral()
         maven { url "https://dl.bintray.com/sofka/clean-domain-commons" }

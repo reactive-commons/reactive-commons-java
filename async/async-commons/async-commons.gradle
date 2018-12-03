@@ -31,9 +31,15 @@ publishing {
     publications {
         MyPublication(MavenPublication) {
             from components.java
+            artifact sourcesJar {
+                classifier "sources"
+            }
+            artifact javadocJar {
+                classifier "javadoc"
+            }
             groupId 'org.reactivecommons'
             artifactId 'async-commons'
-            version '0.0.1-alpha1'
+            version project.property('version')
             pom.withXml {
                 def root = asNode()
                 root.appendNode('description', 'Async Commons')
@@ -52,30 +58,26 @@ bintray {
     pkg {
         repo = 'maven-artifacts'
         userOrg = 'reactive-commons'
-        name = 'async-commons'
+        name = 'reactive-commons'
         licenses = ['Apache-2.0']
         vcsUrl = 'git@github.com:reactive-commons/reactive-commons-java.git'
         version {
-            name = '0.0.1-alpha1'
+            name = project.property('version')
             desc = 'First version'
             released  = new Date()
-            vcsTag = '0.0.1-alpha1'
+            vcsTag = project.property('version')
         }
     }
 }
 
 dependencies {
-//    api 'org.reactivecommons:async-commons-api:0.0.1-alpha1'
     compile project(":async-commons-api")
     compile project(":domain-events-api")
 
     api 'io.projectreactor:reactor-core'
     api 'io.projectreactor.addons:reactor-extra'
     api('org.springframework.boot:spring-boot-starter')
-//    compile 'org.springframework.boot:spring-boot-starter-amqp'
-//    compile group: 'org.springframework.amqp', name: 'spring-amqp'
     api "io.projectreactor.rabbitmq:reactor-rabbitmq:1.0.0.RC1"
-//    compile project(":async:libs:reactor-rabbitmq")
     api 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
     testImplementation 'io.projectreactor:reactor-test'
 }

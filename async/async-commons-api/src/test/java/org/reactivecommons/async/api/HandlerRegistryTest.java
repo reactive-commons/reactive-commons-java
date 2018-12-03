@@ -5,29 +5,92 @@ import static org.mockito.Mockito.*;
 
 import lombok.Data;
 import org.junit.Test;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.api.handlers.CommandHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
+import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import reactor.core.publisher.Mono;
 
 public class HandlerRegistryTest {
 
     private HandlerRegistry registry = HandlerRegistry.register();
+    private String name = "some.event";
 
     @Test
     public void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed(){
-        String eventName = "some.event";
         SomeEventHandler eventHandler = new SomeEventHandler();
 
-        registry.listenEvent(eventName, eventHandler);
+        registry.listenEvent(name, eventHandler);
 
         assertThat(registry.getEventListeners()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
-                .containsExactly(eventName, SomeDataClass.class, eventHandler);
+                .containsExactly(name, SomeDataClass.class, eventHandler);
         }).hasSize(1);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void listenEvent() {
+        EventHandler<SomeDataClass> handler = mock(EventHandler.class);
+        registry.listenEvent(name, handler, SomeDataClass.class);
+
+        assertThat(registry.getEventListeners()).anySatisfy(registered -> {
+            assertThat(registered).extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                .containsExactly(name, SomeDataClass.class, handler);
+        }).hasSize(1);
+    }
+
+    @Test
+    public void handleCommandWithTypeInference() {
+        SomeCommandHandler handler = new SomeCommandHandler();
+
+        registry.handleCommand(name, handler);
+
+        assertThat(registry.getCommandHandlers()).anySatisfy(registered -> {
+            assertThat(registered).extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
+                .containsExactly(name, SomeDataClass.class, handler);
+        }).hasSize(1);
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void handleCommandWithoutTypeShouldFail() {
+        SomeCommandHandler handler = new SomeCommandHandler();
+        registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty());
+    }
+
+    @Test
+    public void handleCommandWithLambda() {
+        registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty(), SomeDataClass.class);
+
+        assertThat(registry.getCommandHandlers()).anySatisfy(registered -> {
+            assertThat(registered).extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass)
+                .containsExactly(name, SomeDataClass.class);
+        }).hasSize(1);
+    }
+
+
+    @Test
+    public void serveQueryWithLambda() {
+        registry.serveQuery(name, message -> Mono.empty(), SomeDataClass.class);
+        assertThat(registry.getHandlers()).anySatisfy(registered -> {
+            assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
+                .containsExactly(name, SomeDataClass.class);
+        }).hasSize(1);
+    }
+
+    @Test
+    public void serveQueryWithTypeInference() {
+        QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
+        registry.serveQuery(name, handler);
+        assertThat(registry.getHandlers()).anySatisfy(registered -> {
+            assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass, RegisteredQueryHandler::getHandler)
+                .containsExactly(name, SomeDataClass.class, handler);
+        }).hasSize(1);
+    }
 
     private static class SomeEventHandler implements EventHandler<SomeDataClass> {
         @Override
@@ -35,6 +98,21 @@ public class HandlerRegistryTest {
             return Mono.empty();
         }
     }
+
+    private static class SomeCommandHandler implements CommandHandler<SomeDataClass> {
+        @Override
+        public Mono<Void> handle(Command<SomeDataClass> message) {
+            return Mono.empty();
+        }
+    }
+
+    private static class SomeQueryHandler implements QueryHandler<SomeDataClass, SomeDataClass> {
+        @Override
+        public Mono<SomeDataClass> handle(SomeDataClass message) {
+            return Mono.empty();
+        }
+    }
+
 
     @Data
     private static class SomeDataClass {
