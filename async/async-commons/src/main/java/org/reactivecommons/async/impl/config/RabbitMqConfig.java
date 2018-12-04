@@ -3,6 +3,8 @@ package org.reactivecommons.async.impl.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
@@ -25,6 +27,8 @@ import java.util.logging.Level;
 
 @Log
 @Configuration
+@NoArgsConstructor
+@AllArgsConstructor
 @EnableConfigurationProperties(RabbitProperties.class)
 public class RabbitMqConfig {
 

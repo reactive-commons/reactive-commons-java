@@ -1,5 +1,7 @@
 package org.reactivecommons.async.impl.config;
 
+import lombok.AllArgsConstructor;
+import lombok.NoArgsConstructor;
 import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
@@ -16,8 +18,9 @@ import java.util.UUID;
 
 @Configuration
 @Import(RabbitMqConfig.class)
+@AllArgsConstructor
+@NoArgsConstructor
 public class DirectAsyncGatewayConfig {
-
 
     @Value("${app.async.direct.exchange:directMessages}")
     private String directMessagesExchangeName;
