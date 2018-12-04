@@ -38,13 +38,13 @@ publishing {
                 classifier "javadoc"
             }
             groupId 'org.reactivecommons'
-            artifactId 'async-commons-api'
+            artifactId 'async-commons-starter'
             version project.property('version')
             pom.withXml {
                 def root = asNode()
-                root.appendNode('description', 'Async Commons API')
-                root.appendNode('name', 'async-commons-api')
-                root.appendNode('url', 'http://reactivecommons.org')
+                root.appendNode('description', 'Async Commons Starter')
+                root.appendNode('name', 'async-commons-starter')
+                root.appendNode('url', 'https://site_for_lib.tld')
                 root.children().last() + pomConfig
             }
         }
@@ -72,7 +72,7 @@ bintray {
 }
 
 dependencies {
-    compile project(":domain-events-api")
-    implementation 'io.projectreactor:reactor-core'
+    compile project(":async-commons")
+    api('org.springframework.boot:spring-boot-starter')
     testImplementation 'io.projectreactor:reactor-test'
 }

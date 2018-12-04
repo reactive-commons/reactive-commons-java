@@ -5,12 +5,16 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Mono;
 
 @SpringBootApplication
+@EnableMessageListeners
+@EnableDomainEventBus
 public class SampleReceiverApp {
     public static void main(String[] args) {
         SpringApplication.run(SampleReceiverApp.class, args);

@@ -208,7 +208,7 @@ public class RabbitProperties {
         this.password = password;
     }
 
-    public RabbitProperties.Ssl getSsl() {
+    public Ssl getSsl() {
         return this.ssl;
     }
 

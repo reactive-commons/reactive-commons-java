@@ -1,39 +1,29 @@
 package org.reactivecommons.async.impl.config;
 
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.util.Base64Utils;
 
 import java.nio.ByteBuffer;
+import java.util.Base64;
 import java.util.UUID;
 
-@Configuration
-@Import(RabbitMqConfig.class)
-@AllArgsConstructor
-@NoArgsConstructor
 public class DirectAsyncGatewayConfig {
 
-    @Value("${app.async.direct.exchange:directMessages}")
     private String directMessagesExchangeName;
-
-    @Value("${spring.application.name}")
     private String appName;
 
-    @Bean
+    public DirectAsyncGatewayConfig(String directMessagesExchangeName, String appName) {
+        this.directMessagesExchangeName = directMessagesExchangeName;
+        this.appName = appName;
+    }
+
     public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender) throws Exception {
         return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName);
     }
 
-    @Bean
     public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ReactiveMessageListener listener)  {
         final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, listener, generateName());
         replyListener.startListening(config.getRoutingKey());
@@ -41,13 +31,11 @@ public class DirectAsyncGatewayConfig {
     }
 
 
-    @Bean
     public BrokerConfig brokerConfig() {
         return new BrokerConfig();
     }
 
 
-    @Bean
     public ReactiveReplyRouter router() {
         return new ReactiveReplyRouter();
     }
@@ -58,7 +46,18 @@ public class DirectAsyncGatewayConfig {
         bb.putLong(uuid.getMostSignificantBits())
             .putLong(uuid.getLeastSignificantBits());
         // Convert to base64 and remove trailing =
-        return this.appName + Base64Utils.encodeToUrlSafeString(bb.array())
+        return this.appName + encodeToUrlSafeString(bb.array())
             .replaceAll("=", "");
+    }
+
+    public static String encodeToUrlSafeString(byte[] src) {
+        return new String(encodeUrlSafe(src));
+    }
+
+    public static byte[] encodeUrlSafe(byte[] src) {
+        if (src.length == 0) {
+            return src;
+        }
+        return Base64.getUrlEncoder().encode(src);
     }
 }

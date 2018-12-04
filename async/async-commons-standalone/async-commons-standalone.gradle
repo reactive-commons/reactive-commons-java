@@ -38,13 +38,13 @@ publishing {
                 classifier "javadoc"
             }
             groupId 'org.reactivecommons'
-            artifactId 'async-commons-api'
+            artifactId 'async-commons-standalone'
             version project.property('version')
             pom.withXml {
                 def root = asNode()
-                root.appendNode('description', 'Async Commons API')
-                root.appendNode('name', 'async-commons-api')
-                root.appendNode('url', 'http://reactivecommons.org')
+                root.appendNode('description', 'Async Commons Standalone Config')
+                root.appendNode('name', 'async-commons-standalone')
+                root.appendNode('url', 'https://site_for_lib.tld')
                 root.children().last() + pomConfig
             }
         }
@@ -72,7 +72,5 @@ bintray {
 }
 
 dependencies {
-    compile project(":domain-events-api")
-    implementation 'io.projectreactor:reactor-core'
-    testImplementation 'io.projectreactor:reactor-test'
+    compile project(":async-commons")
 }

@@ -2,7 +2,6 @@ package org.reactivecommons.async.impl.config;
 
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
-import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -10,6 +9,7 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
 import org.reactivecommons.async.impl.listeners.ApplicationQueryListener;

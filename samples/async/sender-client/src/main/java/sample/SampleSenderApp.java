@@ -1,6 +1,7 @@
 package sample;
 
 import lombok.extern.java.Log;
+import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -10,6 +11,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 
+@EnableDirectAsyncGateway
 @SpringBootApplication
 @Log
 public class SampleSenderApp {
