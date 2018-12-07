@@ -58,8 +58,17 @@ public class HandlerRegistryTest {
 
     @Test(expected = RuntimeException.class)
     public void handleCommandWithoutTypeShouldFail() {
-        SomeCommandHandler handler = new SomeCommandHandler();
         registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty());
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void listenEventWithoutTypeShouldFail() {
+        registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty());
+    }
+
+    @Test(expected = RuntimeException.class)
+    public void handleQueryWithoutTypeShouldFail() {
+        registry.serveQuery(name, (SomeDataClass query) -> Mono.empty());
     }
 
     @Test
