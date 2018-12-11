@@ -2,6 +2,7 @@ package org.reactivecommons.async.impl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.api.domain.Headers;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
@@ -43,15 +44,16 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
-        final Mono<R> replyHolder = router.register(correlationID).timeout(Duration.ofSeconds(15)).flatMap(s ->
-                fromCallable(() -> String.class.equals(type) ? type.cast(s) : mapper.readValue(s, type)));
+        final Mono<R> replyHolder = router.register(correlationID)
+                .timeout(Duration.ofSeconds(15))
+                .flatMap(s -> fromCallable(() -> String.class.equals(type) ? type.cast(s) : mapper.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
-        headers.put("x-reply_id", config.getRoutingKey());
-        headers.put("x-serveQuery-id", query.getResource());
-        headers.put("x-correlation-id", correlationID);
+        headers.put(Headers.REPLY_ID, config.getRoutingKey());
+        headers.put(Headers.SERVED_QUERY_ID, query.getResource());
+        headers.put(Headers.CORRELATION_ID, correlationID);
 
-        return sender.sendWithConfirm(query, exchange, targetName+".query", headers).then(replyHolder);
+        return sender.sendWithConfirm(query, exchange, targetName + ".query", headers).then(replyHolder);
     }
 
 }

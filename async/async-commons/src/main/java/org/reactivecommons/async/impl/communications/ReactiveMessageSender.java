@@ -1,6 +1,8 @@
 package org.reactivecommons.async.impl.communications;
 
 import com.rabbitmq.client.AMQP;
+import org.reactivecommons.api.domain.Headers;
+import org.reactivecommons.async.impl.EmptyMessage;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.exceptions.SendFailureNoAckException;
 import reactor.core.publisher.Mono;
@@ -36,7 +38,10 @@ public class ReactiveMessageSender {
     }
 
     private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers) {
-        final Message message = messageConverter.toMessage(object);
+        final Message message = object != null ?
+                messageConverter.toMessage(object) :
+                new EmptyMessage();
+
         final AMQP.BasicProperties props = buildMessageProperties(message, headers);
         return new OutboundMessage(exchange, routingKey, props, message.getBody());
     }
@@ -45,7 +50,7 @@ public class ReactiveMessageSender {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
-        baseHeaders.put("sourceApplication", sourceApplication);
+        baseHeaders.put(Headers.SOURCE_APPLICATION, sourceApplication);
         return new AMQP.BasicProperties.Builder()
             .contentType(properties.getContentType())
             .appId(sourceApplication)
