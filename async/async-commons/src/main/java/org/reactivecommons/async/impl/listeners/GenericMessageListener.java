@@ -99,7 +99,7 @@ public abstract class GenericMessageListener {
     protected abstract String getExecutorPath(AcknowledgableDelivery msj);
 
     protected Mono<Void> enrichPostProcess(Mono<Object> data, AcknowledgableDelivery delivery) {
-        return Mono.empty();
+        return data.then();
     }
 
 
