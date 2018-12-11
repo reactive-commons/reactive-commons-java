@@ -1,18 +1,24 @@
 package org.reactivecommons.async.impl.listeners;
 
 import com.rabbitmq.client.AMQP;
+import lombok.Value;
 import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.Headers;
 import org.reactivecommons.async.api.handlers.QueryHandler;
-import org.reactivecommons.async.impl.communications.Message;
-import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.QueryExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
+import org.reactivecommons.async.impl.QueryExecutor;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
 import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.HashMap;
@@ -58,18 +64,43 @@ public class ApplicationQueryListener extends GenericMessageListener {
 
     @Override
     protected String getExecutorPath(AcknowledgableDelivery msj) {
-        return msj.getProperties().getHeaders().get("x-serveQuery-id").toString();
+        return msj.getProperties().getHeaders().get(Headers.SERVED_QUERY_ID).toString();
     }
 
     @Override
-    protected Mono<Object> enrichPostProcess(Mono<Tuple2<Object, AcknowledgableDelivery>> flow) {
-        return flow.flatMap(o -> {
-            final String replyID = o.getT2().getProperties().getHeaders().get("x-reply_id").toString();
-            final String correlationID = o.getT2().getProperties().getHeaders().get("x-correlation-id").toString();
-            final HashMap<String, Object> headers = new HashMap<>();
-            headers.put("x-correlation-id", correlationID);
-            return sender.sendWithConfirm(o.getT1(),replyExchange, replyID, headers);
-        });
+    protected Mono<Void> enrichPostProcess(Mono<Object> dataMono, AcknowledgableDelivery delivery) {
+        return dataMono
+                .map(HandlerResponse::dataful)
+                .defaultIfEmpty(HandlerResponse.empty())
+                .flatMap(bundle -> sendReply(bundle.getData(), delivery, bundle.getSignalType()));
+    }
+
+    private Mono<Void> sendReply(Object data, AcknowledgableDelivery delivery, String signalType) {
+        final String replyID = delivery.getProperties().getHeaders().get(Headers.REPLY_ID).toString();
+        final String correlationID = delivery.getProperties().getHeaders().get(Headers.CORRELATION_ID).toString();
+
+        final HashMap<String, Object> headers = new HashMap<>();
+        headers.put(Headers.CORRELATION_ID, correlationID);
+        headers.put(Headers.SIGNAL_TYPE, signalType);
+
+        return sender.sendWithConfirm(data, replyExchange, replyID, headers);
+    }
+
+    @Value
+    private static class HandlerResponse {
+
+        private Object data;
+        private String signalType;
+
+
+        public static HandlerResponse dataful(Object data) {
+            return new HandlerResponse(data, "dataful");
+        }
+
+        public static HandlerResponse empty() {
+            return new HandlerResponse(null, "empty");
+        }
+
     }
 
 }

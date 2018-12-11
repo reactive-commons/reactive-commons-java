@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.UnicastProcessor;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.*;
 import reactor.util.context.Context;
@@ -24,7 +25,6 @@ public class App {
     @Bean
     public CommandLineRunner runner() {
         return args -> {
-
 //            ConnectionFactory factory = new ConnectionFactory();
 //            factory.setTopologyRecoveryEnabled(true);
 //            factory.setAutomaticRecoveryEnabled(true);

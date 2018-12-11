@@ -3,8 +3,8 @@ package sample;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.springframework.boot.SpringApplication;
@@ -21,21 +21,22 @@ public class SampleReceiverApp {
     }
 
     @Bean
-    public HandlerRegistry handlerRegistry(MemberReceiver receiver) {
+    public HandlerRegistry handlerRegistry(MemberReceiver receiver, EmptyReceiver emptyReceiver) {
         return HandlerRegistry.register()
-            .serveQuery("serveQuery.register.member", receiver)
-            .serveQuery("serveQuery.register.member.new", new QueryHandler<MemberRegisteredEvent, AddMemberCommand>(){
-                @Override
-                public Mono<MemberRegisteredEvent> handle(AddMemberCommand command) {
-                    return Mono.just(new MemberRegisteredEvent("42", 69));
-                }
-            });
+                .serveQuery("serveQuery.register.member", receiver)
+                .serveQuery("serveQuery.register.member.new", new QueryHandler<MemberRegisteredEvent, AddMemberCommand>() {
+                    @Override
+                    public Mono<MemberRegisteredEvent> handle(AddMemberCommand command) {
+                        return Mono.just(new MemberRegisteredEvent("42", 69));
+                    }
+                })
+                .serveQuery("serveQuery.empty", emptyReceiver);
     }
 
     @Bean
     public HandlerRegistry eventListeners(SampleUseCase useCase) {
         return HandlerRegistry.register()
-            .listenEvent("persona.registrada", useCase::reactToPersonaEvent, MemberRegisteredEvent.class);
+                .listenEvent("persona.registrada", useCase::reactToPersonaEvent, MemberRegisteredEvent.class);
     }
 
 
@@ -48,9 +49,9 @@ public class SampleReceiverApp {
     public static class SampleUseCase {
         private final DomainEventBus eventBus;
 
-        public Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event){
+        public Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event) {
             return Mono.from(eventBus.emit(new DomainEvent<>("persona.procesada", "213", event.getData())))
-                .doOnSuccess(_v -> System.out.println("Persona procesada"));
+                    .doOnSuccess(_v -> System.out.println("Persona procesada"));
         }
     }
 
