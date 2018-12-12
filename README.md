@@ -15,7 +15,7 @@ To include all (API and implementation):
     }
 
     dependencies {
-      compile 'org.reactivecommons:async-commons:0.0.1-alpha1'
+      compile 'org.reactivecommons:async-commons:0.0.3-beta1'
     }
 ```
 
@@ -23,7 +23,7 @@ To include only domain events API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:domain-events-api:0.0.1-alpha1'
+      compile 'org.reactivecommons:domain-events-api:0.0.3-beta1'
     }
 ```
 
@@ -31,7 +31,7 @@ To include only async commons API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-api:0.0.1-alpha1'
+      compile 'org.reactivecommons:async-commons-api:0.0.3-beta1'
     }
 ```
 
