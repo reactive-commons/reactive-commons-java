@@ -10,8 +10,7 @@ The first approach to this work was to release a very simple abstractions and a 
 To include all (API and implementation):
 ```groovy
     repositories {
-      mavenCentral()
-      maven { url "https://dl.bintray.com/reactive-commons/maven-artifacts" }
+      jcenter()
     }
 
     dependencies {
