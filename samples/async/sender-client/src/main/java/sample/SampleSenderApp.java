@@ -1,6 +1,8 @@
 package sample;
 
 import lombok.extern.java.Log;
+import org.reactivecommons.async.api.AsyncQuery;
+import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
@@ -22,18 +24,19 @@ public class SampleSenderApp {
     }
 
     @Bean
-    public CommandLineRunner run(MemberRegistrySender sender) {
-        return args -> {
-            Flux.interval(Duration.ofSeconds(1)).concatMap(n -> {
-                AddMemberCommand command = new AddMemberCommand("Daniel " + n, n+"");
-                return Mono.defer(() -> sender.registerMember(command));
-            })  .doOnError(t -> log.warning(t.getMessage()))
-                .retry()
-                .subscribe(event -> {
-                    log.info("Registered Event");
-                    log.info(event.getMemberId());
-                    log.info(event.getInitialScore() + " Score");
-                });
-        };
+    public CommandLineRunner run(MemberRegistrySender sender, DirectAsyncGateway asyncGateway) {
+        return args -> Flux.interval(Duration.ofSeconds(1)).concatMap(n -> {
+            AddMemberCommand command = new AddMemberCommand("Daniel " + n, n+"");
+            return asyncGateway.requestReply(new AsyncQuery<>("serveQuery.empty", "test"), "Receiver2", String.class)
+                .doOnNext(s -> log.warning("Should not be called!!"))
+                .doOnSuccess(s -> log.info("Empty Completion response!"))
+                .then(Mono.defer(() -> sender.registerMember(command)));
+        })  .doOnError(t -> log.warning(t.getMessage()))
+            .retry()
+            .subscribe(event -> {
+                log.info("Registered Event");
+                log.info(event.getMemberId());
+                log.info(event.getInitialScore() + " Score");
+            });
     }
 }

@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.reactivecommons.async.impl.Headers.*;
 import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
@@ -43,15 +44,16 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
-        final Mono<R> replyHolder = router.register(correlationID).timeout(Duration.ofSeconds(15)).flatMap(s ->
-                fromCallable(() -> String.class.equals(type) ? type.cast(s) : mapper.readValue(s, type)));
+        final Mono<R> replyHolder = router.register(correlationID)
+            .timeout(Duration.ofSeconds(15))
+            .flatMap(s -> fromCallable(() -> String.class.equals(type) ? type.cast(s) : mapper.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
-        headers.put("x-reply_id", config.getRoutingKey());
-        headers.put("x-serveQuery-id", query.getResource());
-        headers.put("x-correlation-id", correlationID);
+        headers.put(REPLY_ID, config.getRoutingKey());
+        headers.put(SERVED_QUERY_ID, query.getResource());
+        headers.put(CORRELATION_ID, correlationID);
 
-        return sender.sendWithConfirm(query, exchange, targetName+".query", headers).then(replyHolder);
+        return sender.sendWithConfirm(query, exchange, targetName + ".query", headers).then(replyHolder);
     }
 
 }

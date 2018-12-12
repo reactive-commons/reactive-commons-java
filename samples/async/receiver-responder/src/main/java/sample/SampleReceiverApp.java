@@ -12,6 +12,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Mono;
 
+import static org.reactivecommons.async.api.HandlerRegistry.*;
+
 @SpringBootApplication
 @EnableMessageListeners
 @EnableDomainEventBus
@@ -22,7 +24,7 @@ public class SampleReceiverApp {
 
     @Bean
     public HandlerRegistry handlerRegistry(MemberReceiver receiver) {
-        return HandlerRegistry.register()
+        return register()
             .serveQuery("serveQuery.register.member", receiver)
             .serveQuery("serveQuery.register.member.new", new QueryHandler<MemberRegisteredEvent, AddMemberCommand>(){
                 @Override
@@ -33,8 +35,14 @@ public class SampleReceiverApp {
     }
 
     @Bean
+    public HandlerRegistry handlerRegistryForEmpty(EmptyReceiver emptyReceiver) {
+        return register()
+            .serveQuery("serveQuery.empty", emptyReceiver);
+    }
+
+    @Bean
     public HandlerRegistry eventListeners(SampleUseCase useCase) {
-        return HandlerRegistry.register()
+        return register()
             .listenEvent("persona.registrada", useCase::reactToPersonaEvent, MemberRegisteredEvent.class);
     }
 
@@ -48,7 +56,7 @@ public class SampleReceiverApp {
     public static class SampleUseCase {
         private final DomainEventBus eventBus;
 
-        public Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event){
+        Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event){
             return Mono.from(eventBus.emit(new DomainEvent<>("persona.procesada", "213", event.getData())))
                 .doOnSuccess(_v -> System.out.println("Persona procesada"));
         }

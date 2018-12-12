@@ -1,20 +1,21 @@
 package org.reactivecommons.async.impl.listeners;
 
 import lombok.extern.java.Log;
-import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.RabbitMessage;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
-import reactor.util.function.Tuple2;
 
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.logging.Level;
+
+import static java.util.function.Function.identity;
 
 @Log
 public abstract class GenericMessageListener {
@@ -44,11 +45,10 @@ public abstract class GenericMessageListener {
     }
 
 
-    @SuppressWarnings("unchecked")
     private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj) {
         final Function<Message, Mono<Object>> handler = getExecutor(getExecutorPath(msj));
         final Message message = RabbitMessage.fromDelivery(msj);
-        return Mono.defer(() -> handler.apply(message).zipWith(Mono.just(msj)).transform(this::enrichPostProcess)).thenReturn(msj);
+        return handler.apply(message).transform(enrichPostProcess(message)).thenReturn(msj);
     }
 
 
@@ -95,8 +95,9 @@ public abstract class GenericMessageListener {
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);
     protected abstract String getExecutorPath(AcknowledgableDelivery msj);
-    protected Mono<Object> enrichPostProcess(Mono<Tuple2<Object, AcknowledgableDelivery>> flow){
-        return flow.map(Tuple2::getT1);
+
+    protected Function<Mono<Object>, Mono<Object>> enrichPostProcess(Message msg){
+        return identity();
     }
 
 

@@ -29,4 +29,11 @@ public class ReactiveReplyRouter {
             processor.onError(new RuntimeException(data));
         }
     }
+
+    public void routeEmpty(String correlationID) {
+        final UnicastProcessor<String> processor = processors.remove(correlationID);
+        if (processor != null) {
+            processor.onComplete();
+        }
+    }
 }

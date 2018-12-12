@@ -8,6 +8,7 @@ import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
 
+import static org.reactivecommons.async.impl.Headers.*;
 import static reactor.rabbitmq.ResourcesSpecification.*;
 
 @Log
@@ -31,8 +32,13 @@ public class ApplicationReplyListener {
             .then(creator.bind(binding("globalReply", routeKey, queueName)))
             .thenMany(receiver.consumeAutoAck(queueName).doOnNext(delivery -> {
                 try {
-                    final String correlationID = delivery.getProperties().getHeaders().get("x-correlation-id").toString();
-                    router.routeReply(correlationID, new String(delivery.getBody()));
+                    final String correlationID = delivery.getProperties().getHeaders().get(CORRELATION_ID).toString();
+                    final boolean isEmpty = delivery.getProperties().getHeaders().get(COMPLETION_ONLY_SIGNAL) != null;
+                    if (isEmpty) {
+                        router.routeEmpty(correlationID);
+                    } else {
+                        router.routeReply(correlationID, new String(delivery.getBody()));
+                    }
                 } catch (Exception e) {
                     log.log(Level.SEVERE, "Error in reply reception", e);
                 }

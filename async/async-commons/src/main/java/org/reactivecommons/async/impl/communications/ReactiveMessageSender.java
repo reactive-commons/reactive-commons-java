@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static org.reactivecommons.async.impl.Headers.SOURCE_APPLICATION;
 import static reactor.core.publisher.Mono.just;
 
 public class ReactiveMessageSender {
@@ -45,7 +46,7 @@ public class ReactiveMessageSender {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
-        baseHeaders.put("sourceApplication", sourceApplication);
+        baseHeaders.put(SOURCE_APPLICATION, sourceApplication);
         return new AMQP.BasicProperties.Builder()
             .contentType(properties.getContentType())
             .appId(sourceApplication)
