@@ -47,12 +47,12 @@ public class HandlerRegistry {
     }
 
     @SuppressWarnings("unchecked")
-    public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler){
-        return serveQuery(commandId, handler, inferGenericParameterType(handler));
+    public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler){
+        return serveQuery(resource, handler, inferGenericParameterType(handler));
     }
 
-    public <T, R> HandlerRegistry serveQuery(String commandId, QueryHandler<T, R> handler, Class<R> queryClass){
-        handlers.add(new RegisteredQueryHandler<>(commandId, handler, queryClass));
+    public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass){
+        handlers.add(new RegisteredQueryHandler<>(resource, handler, queryClass));
         return this;
     }
 

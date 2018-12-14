@@ -4,7 +4,7 @@ subprojects {
     apply plugin: 'io.spring.dependency-management'
 
     sourceCompatibility = JavaVersion.VERSION_1_8
-
+ 
     task sourcesJar(type: Jar, dependsOn: classes) {
         classifier = 'sources'
         from sourceSets.main.allSource
@@ -23,7 +23,6 @@ subprojects {
 
     repositories {
         mavenCentral()
-        maven { url "https://dl.bintray.com/sofka/clean-domain-commons" }
         maven { url "https://repo.spring.io/snapshot" }
         maven { url "https://repo.spring.io/milestone" }
     }
@@ -44,7 +43,6 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
-//            mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
         }
     }
 }
