@@ -1,0 +1,76 @@
+plugins {
+    id "com.jfrog.bintray" version "1.8.4"
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+}
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "danielbustamante"
+            name "Daniel Bustamante Ospina"
+            email "daniel.bustamante@sofka.com.co"
+        }
+    }
+
+    scm {
+        url "git@github.com:reactive-commons/reactive-commons-java.git"
+    }
+}
+
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            artifact sourcesJar {
+                classifier "sources"
+            }
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+            groupId 'org.reactivecommons.utils'
+            artifactId 'object-mapper'
+            version project.property('version')
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Simple Object Mapper for Lombok builders (Enable inmutability)')
+                root.appendNode('name', 'object-mapper')
+                root.appendNode('url', 'http://reactivecommons.org')
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    publications = ['MyPublication']
+    publish = true
+    pkg {
+        repo = 'maven-artifacts'
+        name = 'reactive-commons'
+        userOrg = 'reactive-commons'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'git@github.com:reactive-commons/reactive-commons-java.git'
+        version {
+            name = project.property('version')
+            desc = 'First version'
+            released  = new Date()
+            vcsTag = project.property('version')
+        }
+    }
+}
+
+dependencies {
+    compile group: 'org.modelmapper', name: 'modelmapper', version: '1.1.3'
+}
