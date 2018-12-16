@@ -3,6 +3,7 @@ package org.reactivecommons.async.impl.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.Headers;
 import org.reactivecommons.async.impl.QueryExecutor;
@@ -26,6 +27,7 @@ import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.impl.Headers.*;
 
 @Log
+//TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos
 public class ApplicationQueryListener extends GenericMessageListener {
 
 
@@ -48,11 +50,10 @@ public class ApplicationQueryListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final QueryHandler<Object, Object> handler1 = handlerResolver.getQueryHandler(executorPath);
-        ParameterizedType genericSuperclass = (ParameterizedType) handler1.getClass().getGenericInterfaces()[0];
-        final Class<?> handlerClass = (Class<?>) genericSuperclass.getActualTypeArguments()[1];
+        final RegisteredQueryHandler<Object, Object> handler1 = handlerResolver.getQueryHandler(executorPath);
+        final Class<?> handlerClass = (Class<?>) handler1.getQueryClass();
         Function<Message, Object> messageConverter = msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
-        final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler1, messageConverter);
+        final QueryExecutor executor = new QueryExecutor(handler1.getHandler(), messageConverter);
         return executor::execute;
     }
 

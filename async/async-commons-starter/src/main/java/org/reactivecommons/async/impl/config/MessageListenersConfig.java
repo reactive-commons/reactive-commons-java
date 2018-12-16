@@ -6,6 +6,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
@@ -63,10 +64,10 @@ public class MessageListenersConfig {
     public HandlerResolver resolver(ApplicationContext context, DefaultQueryHandler defaultHandler, Environment env, DefaultCommandHandler defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
 
-        final ConcurrentHashMap<String, QueryHandler<?, ?>> handlers = registries
+        final ConcurrentHashMap<String, RegisteredQueryHandler> handlers = registries
             .values().stream()
             .flatMap(r -> r.getHandlers().stream())
-            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler.getHandler()),
+            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                 ConcurrentHashMap::putAll);
 
         final Map<String, RegisteredEventListener> eventListeners = registries
@@ -82,21 +83,6 @@ public class MessageListenersConfig {
                 ConcurrentHashMap::putAll);
 
         return new HandlerResolver(handlers, eventListeners, commandHandlers) {
-            @Override
-            @SuppressWarnings("unchecked")
-            public QueryHandler<?, ?> getQueryHandler(String path) {
-                final QueryHandler<?, ?> handler = super.getQueryHandler(path);
-                if (handler == null) {
-                    try {
-                        final String handlerName = env.getProperty(path);
-                        return context.getBean(handlerName, QueryHandler.class);
-                    } catch (Exception e) {
-                        return defaultHandler;
-                    }
-                }
-                return handler;
-            }
-
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {

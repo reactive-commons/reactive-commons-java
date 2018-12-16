@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 
 import java.util.Collection;
 import java.util.Map;
@@ -11,14 +12,14 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class HandlerResolver {
 
-    private final Map<String, QueryHandler<?, ?>> queryHandlers;
+    private final Map<String, RegisteredQueryHandler> queryHandlers;
     private final Map<String, RegisteredEventListener> eventListeners;
     private final Map<String, RegisteredCommandHandler> commandHandlers;
 
 
     @SuppressWarnings("unchecked")
-    public <T, R> QueryHandler<T, R> getQueryHandler(String path) {
-        return (QueryHandler<T, R>) queryHandlers.get(path);
+    public <T, R> RegisteredQueryHandler<T, R> getQueryHandler(String path) {
+        return (RegisteredQueryHandler<T, R>) queryHandlers.get(path);
     }
 
     @SuppressWarnings("unchecked")
