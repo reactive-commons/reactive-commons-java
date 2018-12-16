@@ -51,6 +51,9 @@ public class ApplicationQueryListener extends GenericMessageListener {
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredQueryHandler<Object, Object> handler1 = handlerResolver.getQueryHandler(executorPath);
+        if (handler1 == null) {
+            return message -> Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
+        }
         final Class<?> handlerClass = (Class<?>) handler1.getQueryClass();
         Function<Message, Object> messageConverter = msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
         final QueryExecutor executor = new QueryExecutor(handler1.getHandler(), messageConverter);
