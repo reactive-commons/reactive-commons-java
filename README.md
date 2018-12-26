@@ -131,6 +131,22 @@ Don't forget to add the implementation dependency to the main spring boot module
     }
 ```
 
+### Request-Reply
+Example Code:
+
+```java
+    public Mono<AggregateResponse> queryInformation() {
+        AsyncQuery<String> userQuery = new AsyncQuery<>("user.byId", "42");
+        AsyncQuery<String> projectQuery = new AsyncQuery<>("project.byId", "343");
+        AsyncQuery<String> productQuery = new AsyncQuery<>("product.byId", "22");
+
+        Mono<User> user = gateway.requestReply(userQuery, "Users", User.class);
+        Mono<Project> project = gateway.requestReply(projectQuery, "Projects", Project.class);
+        Mono<Product> product = gateway.requestReply(productQuery, "Products", Product.class);
+
+        return zip(user, project, product).map(function(this::aggregate));
+    }
+```
 
 
 ## Disclaimer
