@@ -1,5 +1,6 @@
 package org.reactivecommons.async.impl.config;
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
@@ -52,7 +53,7 @@ public class RabbitMqConfig {
     }
 
     public MessageConverter messageConverter(){
-        return new JacksonMessageConverter(new ObjectMapper());
+        return new JacksonMessageConverter();
     }
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name){

@@ -1,6 +1,7 @@
 package org.reactivecommons.async.impl.converters;
 
 
+import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
@@ -20,7 +21,9 @@ public class JacksonMessageConverter implements MessageConverter {
 
     private final ObjectMapper objectMapper;
 
-    public JacksonMessageConverter(ObjectMapper objectMapper) {
+    public JacksonMessageConverter() {
+        final ObjectMapper objectMapper = new ObjectMapper();
+        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.objectMapper = objectMapper;
     }
 

@@ -36,7 +36,7 @@ public class ReactiveMessageSenderTest {
     private Sender sender;
 
     @Spy
-    private final MessageConverter messageConverter = new JacksonMessageConverter(new ObjectMapper());
+    private final MessageConverter messageConverter = new JacksonMessageConverter();
 
     @Before
     public void init() {
