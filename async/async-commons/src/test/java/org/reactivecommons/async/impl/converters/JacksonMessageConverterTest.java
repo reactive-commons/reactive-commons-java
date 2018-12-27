@@ -53,7 +53,22 @@ public class JacksonMessageConverterTest {
 
         assertThat(command.getData()).extracting(SampleClass::getId, SampleClass::getName)
             .containsExactly("23", "one");
+    }
 
+    @Test
+    public void readValue() {
+        Date date = new Date();
+        final Message message = converter.toMessage(new SampleClass("35", "name1", date));
+        final SampleClass value = converter.readValue(message, SampleClass.class);
+        assertThat(value).extracting(SampleClass::getId, SampleClass::getName, SampleClass::getDate)
+            .containsExactly("35", "name1", date);
+    }
+
+    @Test
+    public void readValueString() {
+        final Message message = converter.toMessage("Hi!");
+        final String value = converter.readValue(message, String.class);
+        assertThat(value).isEqualTo("Hi!");
     }
 
     @RequiredArgsConstructor

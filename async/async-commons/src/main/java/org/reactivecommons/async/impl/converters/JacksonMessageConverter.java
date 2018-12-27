@@ -60,6 +60,15 @@ public class JacksonMessageConverter implements MessageConverter {
         }
     }
 
+    @Override
+    public <T> T readValue(Message message, Class<T> valueClass) {
+        try {
+            return objectMapper.readValue(message.getBody(), valueClass);
+        } catch (IOException e) {
+            throw new MessageConversionException("Failed to convert Message content", e);
+        }
+    }
+
     //TODO: pull definition up to interface
     public <T> Command<T> readCommandStructure(Message message) {
         try {

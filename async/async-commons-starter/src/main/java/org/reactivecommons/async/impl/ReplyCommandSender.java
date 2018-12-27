@@ -18,8 +18,6 @@ public abstract class ReplyCommandSender {
     @Autowired
     DirectAsyncGateway asyncGateway;
 
-    private final ObjectMapper mapper = new ObjectMapper();
-
     protected <R, C> Mono<R> sendCommand(C command, String commandId, Class<R> type) {
         AsyncQuery<C> asyncQuery = new AsyncQuery<C>(commandId, command);
         return asyncGateway.requestReply(asyncQuery, target(), type);

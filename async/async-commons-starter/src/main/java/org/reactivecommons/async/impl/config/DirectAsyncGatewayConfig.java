@@ -5,6 +5,7 @@ import lombok.NoArgsConstructor;
 import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,7 +15,6 @@ import org.springframework.context.annotation.Import;
 import org.springframework.util.Base64Utils;
 
 import java.nio.ByteBuffer;
-import java.util.Base64;
 import java.util.UUID;
 
 @Configuration
@@ -30,8 +30,8 @@ public class DirectAsyncGatewayConfig {
     private String appName;
 
     @Bean
-    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName);
+    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter) throws Exception {
+        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter);
     }
 
     @Bean

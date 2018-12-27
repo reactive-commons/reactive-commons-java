@@ -3,6 +3,7 @@ package org.reactivecommons.async.impl.config;
 import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 
@@ -20,8 +21,8 @@ public class DirectAsyncGatewayConfig {
         this.appName = appName;
     }
 
-    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName);
+    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter) throws Exception {
+        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter);
     }
 
     public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ReactiveMessageListener listener)  {

@@ -1,11 +1,11 @@
 package org.reactivecommons.async.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.BrokerConfig;
+import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 import reactor.core.publisher.Mono;
 
@@ -20,19 +20,19 @@ import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
-    private final ObjectMapper mapper = new ObjectMapper();
-
     private final BrokerConfig config;
     private final ReactiveReplyRouter router;
     private final ReactiveMessageSender sender;
     private final String exchange;
+    private final MessageConverter converter;
 
 
-    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange) {
+    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange, MessageConverter converter) {
         this.config = config;
         this.router = router;
         this.sender = sender;
         this.exchange = exchange;
+        this.converter = converter;
     }
 
     @Override
@@ -46,7 +46,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
         final Mono<R> replyHolder = router.register(correlationID)
             .timeout(Duration.ofSeconds(15))
-            .flatMap(s -> fromCallable(() -> String.class.equals(type) ? type.cast(s) : mapper.readValue(s, type)));
+            .flatMap(s -> fromCallable(() -> (R)converter.readAsyncQuery(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
         headers.put(REPLY_ID, config.getRoutingKey());

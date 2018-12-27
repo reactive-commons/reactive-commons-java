@@ -1,6 +1,8 @@
 package org.reactivecommons.async.impl.listeners;
 
 import lombok.extern.java.Log;
+import org.reactivecommons.async.impl.RabbitMessage;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
@@ -37,7 +39,7 @@ public class ApplicationReplyListener {
                     if (isEmpty) {
                         router.routeEmpty(correlationID);
                     } else {
-                        router.routeReply(correlationID, new String(delivery.getBody()));
+                        router.routeReply(correlationID, RabbitMessage.fromDelivery(delivery));
                     }
                 } catch (Exception e) {
                     log.log(Level.SEVERE, "Error in reply reception", e);
