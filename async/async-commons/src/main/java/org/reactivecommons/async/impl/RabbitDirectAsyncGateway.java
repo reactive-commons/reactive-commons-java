@@ -46,7 +46,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
         final Mono<R> replyHolder = router.register(correlationID)
             .timeout(Duration.ofSeconds(15))
-            .flatMap(s -> fromCallable(() -> (R)converter.readAsyncQuery(s, type)));
+            .flatMap(s -> fromCallable(() -> (R)converter.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
         headers.put(REPLY_ID, config.getRoutingKey());
