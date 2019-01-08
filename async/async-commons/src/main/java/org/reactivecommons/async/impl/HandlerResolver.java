@@ -35,4 +35,8 @@ public class HandlerResolver {
     public Collection<RegisteredEventListener> getEventListeners() {
         return eventListeners.values();
     }
+
+    void addEventListener(RegisteredEventListener listener) {
+        eventListeners.put(listener.getPath(), listener);
+    }
 }

@@ -2,20 +2,19 @@ package org.reactivecommons.async.impl.config;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import lombok.AllArgsConstructor;
-import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
 import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
@@ -26,19 +25,15 @@ import java.util.logging.Level;
 
 @Log
 @Configuration
-@NoArgsConstructor
-@AllArgsConstructor
 @EnableConfigurationProperties(RabbitProperties.class)
+@Import(BrokerConfigProps.class)
 public class RabbitMqConfig {
 
-    @Value("${spring.application.name}")
-    private String appName;
-
     @Bean
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter){
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter, BrokerConfigProps props){
         final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(senderConnection));
-        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
+        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(senderConnection));
     }
 
     @Bean
