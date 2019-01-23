@@ -7,6 +7,8 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 
@@ -16,6 +18,7 @@ import java.util.function.Function;
 import java.util.logging.Level;
 
 import static java.util.function.Function.identity;
+import static reactor.core.publisher.Mono.defer;
 
 @Log
 public abstract class GenericMessageListener {
@@ -25,6 +28,7 @@ public abstract class GenericMessageListener {
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
     final String queueName;
+    private Scheduler scheduler = Schedulers.newParallel(getClass().getSimpleName(), 12);
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener) {
         this.receiver = listener.getReceiver();
@@ -48,7 +52,8 @@ public abstract class GenericMessageListener {
     private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj) {
         final Function<Message, Mono<Object>> handler = getExecutor(getExecutorPath(msj));
         final Message message = RabbitMessage.fromDelivery(msj);
-        return handler.apply(message).transform(enrichPostProcess(message)).thenReturn(msj);
+        return defer(() -> handler.apply(message)).transform(enrichPostProcess(message))
+            .subscribeOn(scheduler).thenReturn(msj);
     }
 
 

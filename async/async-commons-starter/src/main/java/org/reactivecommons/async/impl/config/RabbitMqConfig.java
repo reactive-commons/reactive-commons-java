@@ -67,7 +67,7 @@ public class RabbitMqConfig {
     }
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name){
-        final Scheduler senderScheduler = Schedulers.newElastic(name + "_scheduler");
+        final Scheduler senderScheduler = Schedulers.elastic();
         return Mono.fromCallable(() -> factory.newConnection(name))
             .doOnError(err ->
                 log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
