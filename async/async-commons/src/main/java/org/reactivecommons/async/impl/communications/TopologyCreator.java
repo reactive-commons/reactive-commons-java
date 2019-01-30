@@ -63,6 +63,16 @@ public class TopologyCreator {
         });
     }
 
+    public Mono<AMQP.Queue.UnbindOk> unbind(BindingSpecification binding) {
+       return channel.map(ch -> {
+           try {
+               return ch.queueUnbind(binding.getQueue(), binding.getExchange(), binding.getRoutingKey(), binding.getArguments());
+           } catch (IOException e) {
+               throw new TopologyDefException("Fail to unbind queue: " + binding.getQueue(), e);
+           }
+       }) ;
+    }
+
     public static class TopologyDefException extends RuntimeException {
         public TopologyDefException(String message, Throwable cause) {
             super(message, cause);
