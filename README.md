@@ -161,3 +161,16 @@ Example Code:
         <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
     }
 ```
+
+#### Command Type
+
+```java
+    package org.reactivecommons.api.domain;
+
+    public class Command<T> {
+        private final String name;
+        private final String commandId;
+        private final T data;
+    }
+```
+
