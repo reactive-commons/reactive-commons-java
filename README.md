@@ -148,6 +148,16 @@ Example Code:
     }
 ```
 
+### Direct Commands
 
-## Disclaimer
-This Alpha version is a first development version intended for initial internal use with direct support from the developer of this module, so use with so much care.
+```java
+    package org.reactivecommons.async.api;
+
+    import org.reactivecommons.api.domain.Command;
+    import reactor.core.publisher.Mono;
+
+    public interface DirectAsyncGateway {
+        <T> Mono<Void> sendCommand(Command<T> command, String targetName);
+        <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
+    }
+```
