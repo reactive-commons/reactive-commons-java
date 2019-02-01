@@ -174,3 +174,16 @@ Example Code:
     }
 ```
 
+#### Send Commands
+
+
+```java    
+    private static final String REGISTER_MEMBER = "Members.registerMember";
+    private static final String TARGET = "Members";
+    private DirectAsyncGateway asyncGateway;
+    
+    public Mono<Void> registerMember(Member member){
+        String uuid = UUID.randomUUID().toString();
+        return asyncGateway.sendCommand(new Command<>(REGISTER_MEMBER, uuid, member), TARGET);
+    }
+```    
