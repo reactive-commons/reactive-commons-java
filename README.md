@@ -187,3 +187,14 @@ Example Code:
         return asyncGateway.sendCommand(new Command<>(REGISTER_MEMBER, uuid, member), TARGET);
     }
 ```    
+
+#### Handle Commands
+```java
+    private static final String REGISTER_MEMBER = "Members.registerMember";
+
+    @Bean
+    public HandlerRegistry commandHandlers(MembersRegistryUseCase useCase) {
+        return HandlerRegistry.register()
+            .handleCommand(REGISTER_MEMBER, useCase::registerMember, Member.class);
+    }
+``` 
