@@ -148,6 +148,53 @@ Example Code:
     }
 ```
 
+### Direct Commands
 
-## Disclaimer
-This Alpha version is a first development version intended for initial internal use with direct support from the developer of this module, so use with so much care.
+```java
+    package org.reactivecommons.async.api;
+
+    import org.reactivecommons.api.domain.Command;
+    import reactor.core.publisher.Mono;
+
+    public interface DirectAsyncGateway {
+        <T> Mono<Void> sendCommand(Command<T> command, String targetName);
+        <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
+    }
+```
+
+#### Command Type
+
+```java
+    package org.reactivecommons.api.domain;
+
+    public class Command<T> {
+        private final String name;
+        private final String commandId;
+        private final T data;
+    }
+```
+
+#### Send Commands
+
+
+```java    
+    private static final String REGISTER_MEMBER = "Members.registerMember";
+    private static final String TARGET = "Members";
+    private DirectAsyncGateway asyncGateway;
+    
+    public Mono<Void> registerMember(Member member){
+        String uuid = UUID.randomUUID().toString();
+        return asyncGateway.sendCommand(new Command<>(REGISTER_MEMBER, uuid, member), TARGET);
+    }
+```    
+
+#### Handle Commands
+```java
+    private static final String REGISTER_MEMBER = "Members.registerMember";
+
+    @Bean
+    public HandlerRegistry commandHandlers(MembersRegistryUseCase useCase) {
+        return HandlerRegistry.register()
+            .handleCommand(REGISTER_MEMBER, useCase::registerMember, Member.class);
+    }
+``` 
