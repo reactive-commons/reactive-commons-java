@@ -15,6 +15,8 @@ public interface MessageConverter {
 
     <T> T readValue(Message message, Class<T> valueClass);
 
+    <T> Command<T> readCommandStructure(Message message);
+
     Message toMessage(Object object);
 
 }

@@ -51,9 +51,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
         return msj -> executor.execute(msj).cast(Object.class);
     }
 
-    //TODO: replace with interface
     protected String getExecutorPath(AcknowledgableDelivery msj) {
-        final Command<Object> command = ((JacksonMessageConverter) messageConverter).readCommandStructure(RabbitMessage.fromDelivery(msj));
+        final Command<Object> command = messageConverter.readCommandStructure(RabbitMessage.fromDelivery(msj));
         return command.getName();
     }
 

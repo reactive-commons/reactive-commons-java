@@ -51,7 +51,7 @@ public class ReactiveMessageSender {
             .contentType(properties.getContentType())
             .appId(sourceApplication)
             .contentEncoding(properties.getContentEncoding())
-            .deliveryMode(1)
+            .deliveryMode(2)
             .timestamp(new Date())
             .messageId(UUID.randomUUID().toString())
             .headers(baseHeaders).build();

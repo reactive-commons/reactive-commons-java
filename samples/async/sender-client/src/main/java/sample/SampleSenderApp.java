@@ -1,6 +1,7 @@
 package sample;
 
 import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
@@ -25,6 +26,8 @@ public class SampleSenderApp {
 
     @Bean
     public CommandLineRunner run(MemberRegistrySender sender, DirectAsyncGateway asyncGateway) {
+        Command<String> command0 = new Command<>("test", "01", "Daniel");
+        asyncGateway.sendCommand(command0, "Receiver2").repeat(5).subscribe();
         return args -> Flux.interval(Duration.ofSeconds(1)).concatMap(n -> {
             AddMemberCommand command = new AddMemberCommand("Daniel " + n, n+"");
             return asyncGateway.requestReply(new AsyncQuery<>("serveQuery.empty", "test"), "Receiver2", String.class)

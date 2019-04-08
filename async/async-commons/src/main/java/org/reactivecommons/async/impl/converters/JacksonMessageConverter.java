@@ -73,7 +73,7 @@ public class JacksonMessageConverter implements MessageConverter {
     public <T> Command<T> readCommandStructure(Message message) {
         try {
             final CommandJson commandJson = objectMapper.readValue(message.getBody(), CommandJson.class);
-            return new Command<>(commandJson.getName(), commandJson.getCommandId(), null);
+            return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T)commandJson.getData());
         } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }
