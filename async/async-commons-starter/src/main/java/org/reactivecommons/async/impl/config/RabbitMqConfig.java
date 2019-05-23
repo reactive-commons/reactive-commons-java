@@ -9,6 +9,7 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
 import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.PropertyMapper;
@@ -29,6 +30,9 @@ import java.util.logging.Level;
 @Import(BrokerConfigProps.class)
 public class RabbitMqConfig {
 
+    @Value("${app.async.flux.maxConcurrency:250}")
+    private Integer maxConcurrency;
+
     @Bean
     public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter, BrokerConfigProps props){
         final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
@@ -40,7 +44,7 @@ public class RabbitMqConfig {
     public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
         final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
         Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
-        return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
+        return new ReactiveMessageListener(receiver, new TopologyCreator(connection), maxConcurrency);
     }
 
     @Bean

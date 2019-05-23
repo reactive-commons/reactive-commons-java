@@ -1,5 +1,6 @@
 package org.reactivecommons.test.perf;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.reactivecommons.api.domain.Command;
@@ -68,7 +69,7 @@ public class BlockingCommandHandlePerfTest {
 
         final long total = System.currentTimeMillis() - init;
         out.println("Test duration: " +total);
-        assertThat(total).isLessThan(1500L);
+        assertThat(total).isLessThan(2500L);
 
         //Give some time to finish messages ack
         Thread.sleep(350);

@@ -1,5 +1,6 @@
 package org.reactivecommons.test.perf;
 
+import org.junit.Ignore;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.reactivecommons.api.domain.Command;
@@ -47,7 +48,7 @@ public class SimpleCommandHandlePerfTest {
     private String commandId = ThreadLocalRandom.current().nextInt() + "";
     private Long data = ThreadLocalRandom.current().nextLong();
 
-    @Test
+    @Test @Ignore
     public void commandShouldBeHandledInParallel() {
         Flux.range(0, 30).flatMap(i -> {
             Command<Long> command = new Command<>(COMMAND_NAME, commandId+1, data+1);

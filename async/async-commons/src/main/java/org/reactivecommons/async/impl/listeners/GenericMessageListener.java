@@ -41,6 +41,7 @@ public abstract class GenericMessageListener {
     }
 
     public void startListener() {
+        log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
         setUpBindings(messageListener.getTopologyCreator()).thenMany(
         receiver.consumeManualAck(queueName)
             .transform(this::consumeFaultTolerant)
@@ -84,7 +85,7 @@ public abstract class GenericMessageListener {
                     }
                     return Mono.just(msj).delayElement(Duration.ofMillis(200)).doOnNext(s -> msj.nack(true));
                 }).doOnSuccess(s -> msj.ack())
-        );
+        , messageListener.getMaxConcurrency());
     }
 
     private Function<Message, Mono<Object>> getExecutor(String path) {
