@@ -7,14 +7,11 @@ Even though the main purpose is to provide such abstractions in a mostly generic
 The first approach to this work was to release a very simple abstractions and a corresponding implementation over asyncronous message driven communication between microservices build on top of project-reactor and spring boot.
 
 ## Get Started
-To include all (API and implementation):
+To include all (API and implementation) (Spring boot Starter):
 ```groovy
-    repositories {
-      jcenter()
-    }
 
     dependencies {
-      compile 'org.reactivecommons:async-commons:0.0.3-beta1'
+      compile 'org.reactivecommons:async-commons-starter:0.0.7-beta1'
     }
 ```
 
@@ -22,7 +19,7 @@ To include only domain events API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:domain-events-api:0.0.3-beta1'
+      compile 'org.reactivecommons:domain-events-api:0.0.7-beta1'
     }
 ```
 
@@ -30,7 +27,7 @@ To include only async commons API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-api:0.0.3-beta1'
+      compile 'org.reactivecommons:async-commons-api:0.0.7-beta1'
     }
 ```
 
