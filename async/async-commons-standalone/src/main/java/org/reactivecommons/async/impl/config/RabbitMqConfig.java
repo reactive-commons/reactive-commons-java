@@ -1,15 +1,14 @@
 package org.reactivecommons.async.impl.config;
 
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
@@ -27,7 +26,7 @@ public class RabbitMqConfig {
         this.appName = appName;
     }
 
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter){
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter) {
         final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(senderConnection));
         return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
@@ -39,7 +38,7 @@ public class RabbitMqConfig {
         return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
     }
 
-    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties){
+    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
         factory.setHost(properties.getHost());
         factory.setPort(properties.getPort());
@@ -52,19 +51,19 @@ public class RabbitMqConfig {
         return () -> factory;
     }
 
-    public MessageConverter messageConverter(){
-        return new JacksonMessageConverter();
+    public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
+        return new JacksonMessageConverter(objectMapperSupplier.get());
     }
 
-    Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name){
+    Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
         final Scheduler senderScheduler = Schedulers.newElastic(name + "_scheduler");
         return Mono.fromCallable(() -> factory.newConnection(name))
-            .doOnError(err ->
-                log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
-            )
-            .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
-            .subscribeOn(senderScheduler)
-            .cache();
+                .doOnError(err ->
+                        log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
+                )
+                .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
+                .subscribeOn(senderScheduler)
+                .cache();
     }
 
 }

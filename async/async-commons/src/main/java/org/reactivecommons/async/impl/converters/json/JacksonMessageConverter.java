@@ -1,16 +1,15 @@
-package org.reactivecommons.async.impl.converters;
+package org.reactivecommons.async.impl.converters.json;
 
-
-import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.impl.communications.Message;
-import org.reactivecommons.async.impl.exceptions.MessageConversionException;
 import org.reactivecommons.async.impl.RabbitMessage;
+import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.exceptions.MessageConversionException;
 
 import java.io.IOException;
 import java.nio.charset.Charset;
@@ -21,9 +20,8 @@ public class JacksonMessageConverter implements MessageConverter {
 
     private final ObjectMapper objectMapper;
 
-    public JacksonMessageConverter() {
-        final ObjectMapper objectMapper = new ObjectMapper();
-        objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+
+    public JacksonMessageConverter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
     }
 
