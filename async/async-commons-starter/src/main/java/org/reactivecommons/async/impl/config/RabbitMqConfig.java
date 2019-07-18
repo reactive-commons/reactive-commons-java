@@ -7,8 +7,10 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
-import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -34,7 +36,7 @@ public class RabbitMqConfig {
     private Integer maxConcurrency;
 
     @Bean
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter, BrokerConfigProps props){
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter, BrokerConfigProps props) {
         final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(senderConnection));
         return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(senderConnection));
@@ -49,7 +51,7 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties){
+    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
         PropertyMapper map = PropertyMapper.get();
         map.from(properties::determineHost).whenNonNull().to(factory::setHost);
@@ -66,19 +68,25 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public MessageConverter messageConverter(){
-        return new JacksonMessageConverter();
+    public ObjectMapperSupplier objectMapperSupplier() {
+        return new DefaultObjectMapperSupplier();
     }
 
-    Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name){
+    @Bean
+    @ConditionalOnMissingBean
+    public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
+        return new JacksonMessageConverter(objectMapperSupplier.get());
+    }
+
+    Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
         final Scheduler senderScheduler = Schedulers.elastic();
         return Mono.fromCallable(() -> factory.newConnection(name))
-            .doOnError(err ->
-                log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
-            )
-            .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
-            .subscribeOn(senderScheduler)
-            .cache();
+                .doOnError(err ->
+                        log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
+                )
+                .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
+                .subscribeOn(senderScheduler)
+                .cache();
     }
 
 }

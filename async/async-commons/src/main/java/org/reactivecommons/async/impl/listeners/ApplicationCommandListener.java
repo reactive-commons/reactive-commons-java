@@ -11,7 +11,6 @@ import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;

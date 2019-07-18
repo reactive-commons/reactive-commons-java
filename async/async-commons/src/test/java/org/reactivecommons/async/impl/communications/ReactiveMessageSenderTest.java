@@ -9,8 +9,9 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
-import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
@@ -23,6 +24,7 @@ import java.util.HashMap;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
+@SpringBootTest
 @RunWith(MockitoJUnitRunner.class)
 public class ReactiveMessageSenderTest {
 
@@ -32,11 +34,13 @@ public class ReactiveMessageSenderTest {
 
     private OutboundMessageResult result = new OutboundMessageResult(null, true);
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Mock
     private Sender sender;
 
     @Spy
-    private final MessageConverter messageConverter = new JacksonMessageConverter();
+    private final MessageConverter messageConverter = new JacksonMessageConverter(objectMapper);
 
     @Before
     public void init() {
