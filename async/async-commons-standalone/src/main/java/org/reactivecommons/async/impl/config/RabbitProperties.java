@@ -9,4 +9,5 @@ public class RabbitProperties {
     private String username = "guest";
     private String password = "guest";
     private String virtualHost;
+    private Integer channelPoolMaxCacheSize;
 }

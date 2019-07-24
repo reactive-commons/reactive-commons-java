@@ -26,9 +26,17 @@ public class RabbitMqConfig {
         this.appName = appName;
     }
 
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter) {
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
+                                               RabbitProperties rabbitProperties) {
         final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(senderConnection));
+
+        ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
+                senderConnection,
+                new ChannelPoolOptions().maxCacheSize(rabbitProperties.getChannelPoolMaxCacheSize())
+        );
+
+        final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
+
         return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
     }
 

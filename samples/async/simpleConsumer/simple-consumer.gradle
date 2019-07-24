@@ -2,5 +2,5 @@ dependencies {
 //    compile 'org.springframework.boot:spring-boot-starter-amqp'
     compile('org.springframework.boot:spring-boot-starter')
 //    compile project(":async:libs:reactor-rabbitmq")
-    compile "io.projectreactor.rabbitmq:reactor-rabbitmq:1.0.0.RC1"
+    compile "io.projectreactor.rabbitmq:reactor-rabbitmq:1.2.0.RELEASE"
 }
