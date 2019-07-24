@@ -36,10 +36,23 @@ public class RabbitMqConfig {
     private Integer maxConcurrency;
 
     @Bean
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter, BrokerConfigProps props) {
-        final Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(senderConnection));
-        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(senderConnection));
+    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
+                                               BrokerConfigProps brokerConfigProps, RabbitProperties rabbitProperties) {
+        Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
+        ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
+
+        PropertyMapper map = PropertyMapper.get();
+        map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
+                .to(channelPoolOptions::maxCacheSize);
+
+        ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
+                senderConnection,
+                channelPoolOptions
+        );
+
+        final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
+
+        return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(senderConnection));
     }
 
     @Bean
