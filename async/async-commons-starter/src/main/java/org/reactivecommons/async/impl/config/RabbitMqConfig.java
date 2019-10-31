@@ -35,10 +35,16 @@ public class RabbitMqConfig {
     @Value("${app.async.flux.maxConcurrency:250}")
     private Integer maxConcurrency;
 
+    @Value("${app.async.rabbitMQ.listener.prefetch:250}")
+    private Integer prefetch;
+
+    @Value("${spring.application.name}")
+    private String appName;
+
     @Bean
     public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
                                                BrokerConfigProps brokerConfigProps, RabbitProperties rabbitProperties) {
-        Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
+        Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), appName + " sender");
         ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
 
         PropertyMapper map = PropertyMapper.get();
@@ -57,9 +63,9 @@ public class RabbitMqConfig {
 
     @Bean
     public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
-        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
+        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), appName + " listener");
         Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
-        return new ReactiveMessageListener(receiver, new TopologyCreator(connection), maxConcurrency);
+        return new ReactiveMessageListener(receiver, new TopologyCreator(connection), maxConcurrency, prefetch);
     }
 
     @Bean

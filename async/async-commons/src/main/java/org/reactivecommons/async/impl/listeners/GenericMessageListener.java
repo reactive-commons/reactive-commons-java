@@ -10,6 +10,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
 import java.time.Duration;
@@ -42,8 +43,10 @@ public abstract class GenericMessageListener {
 
     public void startListener() {
         log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
+        ConsumeOptions consumeOptions = new ConsumeOptions();
+        consumeOptions.qos(messageListener.getPrefetch());
         setUpBindings(messageListener.getTopologyCreator()).thenMany(
-        receiver.consumeManualAck(queueName)
+        receiver.consumeManualAck(queueName, consumeOptions)
             .transform(this::consumeFaultTolerant)
             .transform(this::outerFailureProtection))
             .subscribe();
