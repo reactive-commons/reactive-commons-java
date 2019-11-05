@@ -11,7 +11,7 @@ To include all (API and implementation) (Spring boot Starter):
 ```groovy
 
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:0.0.7-beta1'
+      compile 'org.reactivecommons:async-commons-starter:0.2.1-beta1'
     }
 ```
 
@@ -19,7 +19,7 @@ To include only domain events API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:domain-events-api:0.0.7-beta1'
+      compile 'org.reactivecommons:domain-events-api:0.2.1-beta1'
     }
 ```
 
@@ -27,7 +27,7 @@ To include only async commons API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-api:0.0.7-beta1'
+      compile 'org.reactivecommons:async-commons-api:0.2.1-beta1'
     }
 ```
 
