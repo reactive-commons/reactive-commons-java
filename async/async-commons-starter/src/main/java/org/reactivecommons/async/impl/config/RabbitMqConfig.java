@@ -35,6 +35,9 @@ public class RabbitMqConfig {
     @Value("${app.async.flux.maxConcurrency:250}")
     private Integer maxConcurrency;
 
+    @Value("${spring.application.name}")
+    private String appName;
+
     @Bean
     public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
                                                BrokerConfigProps brokerConfigProps, RabbitProperties rabbitProperties) {
@@ -93,7 +96,7 @@ public class RabbitMqConfig {
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
         final Scheduler senderScheduler = Schedulers.elastic();
-        return Mono.fromCallable(() -> factory.newConnection(name))
+        return Mono.fromCallable(() -> factory.newConnection(appName + " " + name))
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
                 )
