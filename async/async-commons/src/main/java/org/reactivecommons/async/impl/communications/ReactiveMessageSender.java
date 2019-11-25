@@ -19,8 +19,6 @@ import static reactor.core.publisher.Mono.just;
 
 public class ReactiveMessageSender {
 
-    private static final Scheduler senderScheduler = Schedulers.newElastic("reactive-message-sender");
-
     private final Sender sender;
     private final String sourceApplication;
     private final MessageConverter messageConverter;
@@ -35,7 +33,6 @@ public class ReactiveMessageSender {
 
     public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey, Map<String, Object> headers) {
         return just(toOutboundMessage(message, exchange, routingKey, headers))
-                .publishOn(senderScheduler)
                 .map(Mono::just)
                 .flatMapMany(sender::sendWithPublishConfirms)
                 .flatMap(result -> result.isAck() ?

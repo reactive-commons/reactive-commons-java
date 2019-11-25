@@ -76,7 +76,7 @@ dependencies {
     compile project(":domain-events-api")
 
     api 'io.projectreactor:reactor-core'
-    api "io.projectreactor.rabbitmq:reactor-rabbitmq:1.2.0.RELEASE"
+    api "io.projectreactor.rabbitmq:reactor-rabbitmq:1.4.0.RC1"
     api 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
     testImplementation 'io.projectreactor:reactor-test'
 }
