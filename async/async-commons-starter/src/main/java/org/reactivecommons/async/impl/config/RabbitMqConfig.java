@@ -55,14 +55,16 @@ public class RabbitMqConfig {
 
         final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
 
-        return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(senderConnection));
+        return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(sender));
     }
 
     @Bean
     public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
         final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
         Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
-        return new ReactiveMessageListener(receiver, new TopologyCreator(connection), maxConcurrency);
+        final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
+
+        return new ReactiveMessageListener(receiver, new TopologyCreator(sender), maxConcurrency);
     }
 
     @Bean
@@ -75,9 +77,6 @@ public class RabbitMqConfig {
         map.from(properties::determineUsername).whenNonNull().to(factory::setUsername);
         map.from(properties::determinePassword).whenNonNull().to(factory::setPassword);
         map.from(properties::determineVirtualHost).whenNonNull().to(factory::setVirtualHost);
-        map.from(properties::getRequestedHeartbeat).whenNonNull().asInt(Duration::getSeconds).to(factory::setRequestedHeartbeat);
-        factory.setAutomaticRecoveryEnabled(true);
-        factory.setTopologyRecoveryEnabled(true);
         factory.useNio();
         return () -> factory;
     }

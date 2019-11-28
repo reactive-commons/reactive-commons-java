@@ -6,6 +6,7 @@ buildscript {
     }
     dependencies {
         classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
+        classpath("com.github.ben-manes:gradle-versions-plugin:$gradleVersionsVersion")
     }
 }
 
@@ -14,5 +15,4 @@ plugins {
 }
 
 apply from: './main.gradle'
-
-
+apply plugin: 'com.github.ben-manes.versions'
