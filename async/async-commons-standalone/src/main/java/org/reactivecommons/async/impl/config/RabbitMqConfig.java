@@ -37,14 +37,14 @@ public class RabbitMqConfig {
 
         final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
 
-        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(senderConnection));
+        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(sender));
     }
 
-    public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
+    /*public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
         final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
         Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
         return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
-    }
+    }*/
 
     public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
