@@ -5,6 +5,7 @@ plugins {
     id 'maven-publish'
 }
 
+test.onlyIf { false }
 
 def pomConfig = {
     licenses {
