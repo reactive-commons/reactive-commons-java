@@ -19,16 +19,20 @@ public class RabbitMqConfigTest {
 
     @Test
     public void retryInitialConnection() throws IOException, TimeoutException {
+        final String connectionType = "sender";
+        final String appName = "appName";
+        final String connectionName = "appName sender";
+
         final AtomicInteger count = new AtomicInteger();
         final Connection connection = mock(Connection.class);
         ConnectionFactory factory = mock(ConnectionFactory.class);
-        when(factory.newConnection("test")).thenAnswer(invocation -> {
+        when(factory.newConnection(connectionName)).thenAnswer(invocation -> {
             if(count.incrementAndGet() == 10){
                 return connection;
             }
             throw new RuntimeException();
         });
-        StepVerifier.withVirtualTime(() -> config.createSenderConnectionMono(factory, "test"))
+        StepVerifier.withVirtualTime(() -> config.createConnectionMono(factory, appName, connectionType))
             .thenAwait(Duration.ofMinutes(2))
             .expectNext(connection).verifyComplete();
     }

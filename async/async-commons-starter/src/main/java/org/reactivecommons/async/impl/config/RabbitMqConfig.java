@@ -32,6 +32,11 @@ import java.util.logging.Level;
 @Import(BrokerConfigProps.class)
 public class RabbitMqConfig {
 
+    private static final String LISTENER_TYPE = "listener";
+
+    private static final String SENDER_TYPE = "sender";
+
+
     @Value("${app.async.flux.maxConcurrency:250}")
     private Integer maxConcurrency;
 
@@ -41,14 +46,15 @@ public class RabbitMqConfig {
     @Bean
     public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
                                                BrokerConfigProps brokerConfigProps, RabbitProperties rabbitProperties) {
-        Mono<Connection> senderConnection = createSenderConnectionMono(provider.getConnectionFactory(), "sender");
-        ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
+        final Mono<Connection> senderConnection =
+                createConnectionMono(provider.getConnectionFactory(), appName, SENDER_TYPE);
+        final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
+        final PropertyMapper map = PropertyMapper.get();
 
-        PropertyMapper map = PropertyMapper.get();
         map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
                 .to(channelPoolOptions::maxCacheSize);
 
-        ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
+        final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
                 senderConnection,
                 channelPoolOptions
         );
@@ -60,8 +66,9 @@ public class RabbitMqConfig {
 
     @Bean
     public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
-        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
-        Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
+        final Mono<Connection> connection =
+                createConnectionMono(provider.getConnectionFactory(), appName, LISTENER_TYPE);
+        final Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
 
         return new ReactiveMessageListener(receiver, new TopologyCreator(sender), maxConcurrency);
@@ -93,9 +100,9 @@ public class RabbitMqConfig {
         return new JacksonMessageConverter(objectMapperSupplier.get());
     }
 
-    Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
+    Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix, String connectionType) {
         final Scheduler senderScheduler = Schedulers.elastic();
-        return Mono.fromCallable(() -> factory.newConnection(appName + " " + name))
+        return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
                 )
