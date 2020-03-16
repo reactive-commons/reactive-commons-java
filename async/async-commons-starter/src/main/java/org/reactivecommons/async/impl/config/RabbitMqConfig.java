@@ -19,8 +19,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.*;
 
 import java.time.Duration;
@@ -59,7 +57,9 @@ public class RabbitMqConfig {
                 channelPoolOptions
         );
 
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
+        final Sender sender = RabbitFlux.createSender(new SenderOptions()
+                .channelPool(channelPool)
+                .resourceManagementChannelMono(channelPool.getChannelMono()));
 
         return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(sender));
     }
@@ -101,13 +101,11 @@ public class RabbitMqConfig {
     }
 
     Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix, String connectionType) {
-        final Scheduler senderScheduler = Schedulers.elastic();
         return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
                 )
                 .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
-                .subscribeOn(senderScheduler)
                 .cache();
     }
 
