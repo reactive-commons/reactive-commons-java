@@ -33,7 +33,7 @@ jobs:
         run: bash <(curl -s https://codecov.io/bash)
 
   release:
-    if: github.event_name == 'release' && github.ref == 'refs/heads/master'
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     needs: build
     steps:
