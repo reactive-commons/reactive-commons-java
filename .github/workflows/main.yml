@@ -49,6 +49,8 @@ jobs:
       - name: Push codeCoverage to Codecov
         run: bash <(curl -s https://codecov.io/bash)
       - name: Echo credentials
-        run: echo "bintrayUser=${{secrets.BINTRAY_USER}}\nbintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties
+        run: echo "bintrayUser=${{secrets.BINTRAY_USER}}" >> gradle.properties
+      - name: Echo credentials Key
+        run: echo "bintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties     
       - name: Publish plugin
         run: ./gradlew bintrayUpload
