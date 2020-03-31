@@ -32,7 +32,7 @@ jobs:
         run: bash <(curl -s https://codecov.io/bash)
 
   release:
-    if: github.event_name == 'release'
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -49,6 +49,6 @@ jobs:
       - name: Push codeCoverage to Codecov
         run: bash <(curl -s https://codecov.io/bash)
       - name: Echo credentials
-        run: echo "bintrayUser=${{secrets.BINTRAY_USER}}\nbintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties
+        run: echo "bintrayUser=${{secrets.BINTRAY_USER}}\nbintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties
       - name: Publish plugin
         run: ./gradlew bintrayUpload
