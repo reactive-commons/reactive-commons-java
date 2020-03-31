@@ -10,8 +10,7 @@ on:
       - master
   
   release:
-    types:
-      - created
+    types: [created]
 
 jobs:
   build:
