@@ -196,7 +196,7 @@ Example Code:
     }
 ``` 
 
-### Broker Configuration (RabitMQ)
+### Broker Configuration (RabbitMQ)
 
 ```
 spring:
