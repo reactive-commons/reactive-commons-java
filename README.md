@@ -195,3 +195,13 @@ Example Code:
             .handleCommand(REGISTER_MEMBER, useCase::registerMember, Member.class);
     }
 ``` 
+
+### Broker Configuration (RabitMQ)
+
+```
+spring:
+  rabbitmq:
+    host: 8.8.8.1
+    port: YYY
+    username: user
+    password: pass
