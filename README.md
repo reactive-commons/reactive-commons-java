@@ -205,3 +205,16 @@ spring:
     port: YYY
     username: user
     password: pass
+
+```
+
+props format:
+
+```
+spring.rabbitmq.host= 8.8.8.1
+spring.rabbitmq.port=5729
+spring.rabbitmq.username=user
+spring.rabbitmq.password=pass
+
+```
+
