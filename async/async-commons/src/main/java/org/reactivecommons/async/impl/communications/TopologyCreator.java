@@ -12,6 +12,8 @@ import reactor.rabbitmq.Sender;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.logging.Level;
 
 @Log
@@ -44,6 +46,25 @@ public class TopologyCreator {
     public Mono<AMQP.Queue.UnbindOk> unbind(BindingSpecification binding) {
         return sender.unbind(binding)
                 .onErrorMap(TopologyDefException::new);
+    }
+
+    public Mono<AMQP.Queue.DeclareOk> declareDLQ(String originQueue, String retryTarget, int retryTime){
+        final Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", retryTarget);
+        args.put("x-message-ttl", retryTime);
+        QueueSpecification specification = QueueSpecification.queue(originQueue + ".DLQ")
+                .durable(true)
+                .arguments(args);
+        return declare(specification);
+    }
+
+    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange){
+        final Map<String, Object> args = new HashMap<>();
+        args.put("x-dead-letter-exchange", dlqExchange);
+        QueueSpecification specification = QueueSpecification.queue(name)
+                .durable(true)
+                .arguments(args);
+        return declare(specification);
     }
 
     public static class TopologyDefException extends RuntimeException {

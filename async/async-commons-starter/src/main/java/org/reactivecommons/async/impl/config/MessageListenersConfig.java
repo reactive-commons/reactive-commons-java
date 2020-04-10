@@ -44,23 +44,32 @@ public class MessageListenersConfig {
     @Value("${app.async.direct.exchange:directMessages}")
     private String directMessagesExchangeName;
 
+    @Value("${app.async.maxRetries:10}")
+    private long maxRetries;
+
+    @Value("${app.async.retryDelay:1000}")
+    private int retryDelay;
+
+    @Value("${app.async.withDLQRetry:false}")
+    private boolean withDLQRetry;
+
     @Bean //TODO: move to own config (QueryListenerConfig)
     public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter, ReactiveMessageListener receiver) throws Exception {
-        final ApplicationEventListener listener = new ApplicationEventListener(receiver, appName + ".subsEvents", resolver, domainEventsExchangeName, messageConverter);
+        final ApplicationEventListener listener = new ApplicationEventListener(receiver, appName + ".subsEvents", resolver, domainEventsExchangeName, messageConverter, withDLQRetry, maxRetries, retryDelay);
         listener.startListener();
         return listener;
     }
 
     @Bean //TODO: move to own config (QueryListenerConfig)
     public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver, ReactiveMessageSender sender, ReactiveMessageListener rlistener) throws Exception {
-        final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener, appName+".query", resolver, sender, directMessagesExchangeName, converter, "globalReply");
+        final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener, appName+".query", resolver, sender, directMessagesExchangeName, converter, "globalReply", withDLQRetry, maxRetries, retryDelay);
         listener.startListener();
         return listener;
     }
 
     @Bean
     public ApplicationCommandListener applicationCommandListener(ReactiveMessageListener listener, HandlerResolver resolver, MessageConverter converter){
-        ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver, directMessagesExchangeName, converter);
+        ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver, directMessagesExchangeName, converter, withDLQRetry, maxRetries, retryDelay);
         commandListener.startListener();
         return commandListener;
     }

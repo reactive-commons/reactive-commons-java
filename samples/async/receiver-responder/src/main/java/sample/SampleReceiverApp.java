@@ -31,7 +31,10 @@ public class SampleReceiverApp {
                 public Mono<MemberRegisteredEvent> handle(AddMemberCommand command) {
                     return Mono.just(new MemberRegisteredEvent("42", 69));
                 }
-            });
+            })
+            .serveQuery("test.query", message -> {
+                return Mono.error(new RuntimeException("Falla Generada Query"));
+            }, AddMemberCommand.class);
     }
 
     @Bean
