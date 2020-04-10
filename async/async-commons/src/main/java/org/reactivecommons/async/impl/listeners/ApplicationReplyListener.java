@@ -2,7 +2,6 @@ package org.reactivecommons.async.impl.listeners;
 
 import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.RabbitMessage;
-import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;

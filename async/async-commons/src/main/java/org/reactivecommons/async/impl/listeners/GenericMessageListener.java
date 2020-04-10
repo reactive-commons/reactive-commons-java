@@ -2,6 +2,7 @@ package org.reactivecommons.async.impl.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.FallbackStrategy;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.Message;
@@ -20,7 +21,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.function.Predicate;
 import java.util.logging.Level;
 
 import static java.lang.String.format;
@@ -38,13 +38,15 @@ public abstract class GenericMessageListener {
     private Scheduler scheduler = Schedulers.newParallel(getClass().getSimpleName(), 12);
     private final boolean useDLQRetries;
     private final long maxRetries;
+    private final DiscardNotifier discardNotifier;
 
-    public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries) {
+    public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
         this.maxRetries = maxRetries;
         this.useDLQRetries = useDLQRetries;
+        this.discardNotifier = discardNotifier;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -132,9 +134,10 @@ public abstract class GenericMessageListener {
         Long retryNumber = getRetryNumber(msj);
         if ((msj.getEnvelope().isRedeliver() || retryNumber > 0) && useDLQRetries) {
             if (retryNumber >= maxRetries) {
-                //Send Message to final DLQ
                 logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
-                msj.ack();
+                return discardNotifier
+                        .notifyDiscard(RabbitMessage.fromDelivery(msj))
+                        .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
             } else {
                 logError(err, msj, FallbackStrategy.RETRY_DLQ);
                 msj.nack(false);

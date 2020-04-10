@@ -1,8 +1,6 @@
 package org.reactivecommons.async.impl.communications;
 
 import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.Connection;
 import lombok.extern.java.Log;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
@@ -10,11 +8,8 @@ import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 import reactor.rabbitmq.Sender;
 
-import java.io.IOException;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.logging.Level;
 
 @Log
 /*

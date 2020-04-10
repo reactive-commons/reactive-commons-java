@@ -1,6 +1,5 @@
 package org.reactivecommons.async.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.springframework.beans.factory.annotation.Autowired;

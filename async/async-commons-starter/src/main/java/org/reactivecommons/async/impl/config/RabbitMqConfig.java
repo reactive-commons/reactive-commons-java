@@ -3,6 +3,10 @@ package org.reactivecommons.async.impl.config;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.impl.RabbitDiscardNotifier;
+import org.reactivecommons.async.impl.RabbitDomainEventBus;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
@@ -23,6 +27,8 @@ import reactor.rabbitmq.*;
 
 import java.time.Duration;
 import java.util.logging.Level;
+
+import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 @Configuration
@@ -98,6 +104,18 @@ public class RabbitMqConfig {
     @ConditionalOnMissingBean
     public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
         return new JacksonMessageConverter(objectMapperSupplier.get());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, ReactiveMessageSender sender, BrokerConfigProps props) {
+        return new RabbitDiscardNotifier(domainEventBus(sender, props), objectMapperSupplier.get());
+    }
+
+    private DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props) {
+        final String exchangeName = props.getDomainEventsExchangeName();
+        sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+        return new RabbitDomainEventBus(sender, exchangeName);
     }
 
     Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix, String connectionType) {

@@ -21,14 +21,12 @@ import reactor.core.publisher.UnicastProcessor;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 import static java.lang.System.out;
 import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.empty;
-import static reactor.core.publisher.Mono.fromRunnable;
 
 @SpringBootTest
 @RunWith(SpringRunner.class)

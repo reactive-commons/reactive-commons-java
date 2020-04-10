@@ -5,6 +5,7 @@ import com.rabbitmq.client.AMQP;
 import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
@@ -32,8 +33,8 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final boolean withDLQRetry;
     private final int retryDelay;
 
-    public ApplicationEventListener(ReactiveMessageListener receiver, String queueName, HandlerResolver resolver, String eventsExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay) {
-        super(queueName, receiver, withDLQRetry, maxRetries);
+    public ApplicationEventListener(ReactiveMessageListener receiver, String queueName, HandlerResolver resolver, String eventsExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, DiscardNotifier discardNotifier) {
+        super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;

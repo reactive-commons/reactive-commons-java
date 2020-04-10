@@ -3,6 +3,7 @@ package org.reactivecommons.async.impl.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -29,8 +30,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
     private final int retryDelay;
 
     //TODO: change large constructor parameters number
-    public ApplicationCommandListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, String directExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay) {
-        super(queueName, listener, withDLQRetry, maxRetries);
+    public ApplicationCommandListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, String directExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, DiscardNotifier discardNotifier) {
+        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;

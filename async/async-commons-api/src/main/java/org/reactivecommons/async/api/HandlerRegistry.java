@@ -46,7 +46,6 @@ public class HandlerRegistry {
         return this;
     }
 
-    @SuppressWarnings("unchecked")
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler){
         return serveQuery(resource, handler, inferGenericParameterType(handler));
     }

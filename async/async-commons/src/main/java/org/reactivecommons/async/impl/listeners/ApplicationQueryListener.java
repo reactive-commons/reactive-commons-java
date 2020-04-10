@@ -2,8 +2,8 @@ package org.reactivecommons.async.impl.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.Headers;
 import org.reactivecommons.async.impl.QueryExecutor;
@@ -18,7 +18,6 @@ import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 
-import java.lang.reflect.ParameterizedType;
 import java.util.HashMap;
 import java.util.function.Function;
 
@@ -40,8 +39,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private final int retryDelay;
 
 
-    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, ReactiveMessageSender sender, String directExchange, MessageConverter converter, String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay) {
-        super(queueName, listener, withDLQRetry, maxRetries);
+    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, ReactiveMessageSender sender, String directExchange, MessageConverter converter, String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay, DiscardNotifier discardNotifier) {
+        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.converter = converter;

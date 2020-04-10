@@ -4,8 +4,6 @@ import com.rabbitmq.client.AMQP;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.exceptions.SendFailureNoAckException;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.Sender;
 

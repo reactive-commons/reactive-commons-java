@@ -1,7 +1,6 @@
 package org.reactivecommons.async.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
