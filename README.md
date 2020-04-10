@@ -198,17 +198,6 @@ Example Code:
 
 ### Broker Configuration (RabbitMQ)
 
-```
-spring:
-  rabbitmq:
-    host: 8.8.8.1
-    port: YYY
-    username: user
-    password: pass
-
-```
-
-props format:
 
 ```
 spring.rabbitmq.host= 8.8.8.1
@@ -217,4 +206,16 @@ spring.rabbitmq.username=user
 spring.rabbitmq.password=pass
 
 ```
+
+### Retry Strategy Config (RabbitMQ)
+
+```
+app.async.withDLQRetry=true
+app.async.retryDelay=1000
+app.async.maxRetries=10
+
+```
+* withDLQRetry: Wheter to enable or not the new Retry DLQ Strategy
+* retryDelay: Delay retry value in ms
+* maxRetries: Max number of retries in case of error in adition to the one automatic retry per queue.
 
