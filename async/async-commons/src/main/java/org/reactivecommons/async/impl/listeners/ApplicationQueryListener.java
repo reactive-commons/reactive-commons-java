@@ -40,7 +40,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
 
 
     public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, ReactiveMessageSender sender, String directExchange, MessageConverter converter, String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay, DiscardNotifier discardNotifier) {
-        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier);
+        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query");
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.converter = converter;

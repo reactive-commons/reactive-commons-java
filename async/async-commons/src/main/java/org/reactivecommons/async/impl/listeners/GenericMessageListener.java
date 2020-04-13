@@ -16,6 +16,7 @@ import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
@@ -39,14 +40,17 @@ public abstract class GenericMessageListener {
     private final boolean useDLQRetries;
     private final long maxRetries;
     private final DiscardNotifier discardNotifier;
+    private final String objectType;
 
-    public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier) {
+    public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
+                                  long maxRetries, DiscardNotifier discardNotifier, String objectType) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
         this.maxRetries = maxRetries;
         this.useDLQRetries = useDLQRetries;
         this.discardNotifier = discardNotifier;
+        this.objectType = objectType;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -55,35 +59,52 @@ public abstract class GenericMessageListener {
 
     public void startListener() {
         log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
-        if (useDLQRetries){
+        if (useDLQRetries) {
             log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!", new Object[]{maxRetries});
-        }else {
+        } else {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
         setUpBindings(messageListener.getTopologyCreator()).thenMany(
-        receiver.consumeManualAck(queueName)
-            .transform(this::consumeFaultTolerant)
-            .transform(this::outerFailureProtection))
-            .subscribe();
+                receiver.consumeManualAck(queueName)
+                        .transform(this::consumeFaultTolerant)
+                        .transform(this::outerFailureProtection))
+                .subscribe();
     }
 
 
     private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj) {
-        final Function<Message, Mono<Object>> handler = getExecutor(getExecutorPath(msj));
+        String executorPath = getExecutorPath(msj);
+        final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
         final Message message = RabbitMessage.fromDelivery(msj);
-        return defer(() -> handler.apply(message)).transform(enrichPostProcess(message))
-            .subscribeOn(scheduler).thenReturn(msj);
+
+        return defer(() -> handler.apply(message))
+                .transform(enrichPostProcess(message))
+                .transform(logExecution(executorPath))
+                .subscribeOn(scheduler).thenReturn(msj);
     }
 
+    private Function<Mono<Object>, Mono<Object>> logExecution(String executorPath) {
+        return objectMono -> {
+            Instant beforeExecutionTime = Instant.now();
+
+            return objectMono.doOnTerminate(() -> {
+                Instant afterExecutionTime = Instant.now();
+                long timeElapsed = Duration.between(beforeExecutionTime, afterExecutionTime).toMillis();
+
+                log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
+                        objectType, executorPath, timeElapsed));
+            });
+        };
+    }
 
     private <T> Flux<T> outerFailureProtection(Flux<T> messageFlux) {
         return messageFlux.onErrorContinue(t -> true, (throwable, elem) -> {
-            if(elem instanceof AcknowledgableDelivery){
+            if (elem instanceof AcknowledgableDelivery) {
                 try {
                     String messageID = ((AcknowledgableDelivery) elem).getProperties().getMessageId();
                     log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", messageID));
                     requeueOrAck((AcknowledgableDelivery) elem, throwable).subscribe();
-                }catch (Exception e){
+                } catch (Exception e) {
                     log.log(Level.SEVERE, "Error returning message in failure!", e);
                 }
             }
@@ -92,14 +113,14 @@ public abstract class GenericMessageListener {
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
         return messageFlux.flatMap(msj ->
-            handle(msj)
-                .doOnSuccess(AcknowledgableDelivery::ack)
-                .onErrorResume(err -> requeueOrAck(msj, err))
-        , messageListener.getMaxConcurrency());
+                        handle(msj)
+                                .doOnSuccess(AcknowledgableDelivery::ack)
+                                .onErrorResume(err -> requeueOrAck(msj, err))
+                , messageListener.getMaxConcurrency());
     }
 
 
-    protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy){
+    protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         String messageID = msj.getProperties().getMessageId();
         try {
             log.log(Level.SEVERE, format("Error encounter while processing message %s: %s", messageID, err.toString()));
@@ -107,7 +128,7 @@ public abstract class GenericMessageListener {
             log.warning(format("Message %s Body: %s", messageID, new String(msj.getBody())));
         } catch (Exception e) {
             log.log(Level.SEVERE, "Error Login message Content!!", e);
-        }finally {
+        } finally {
             log.warning(format(strategy.message, messageID));
         }
     }
@@ -119,14 +140,15 @@ public abstract class GenericMessageListener {
 
     private Function<Message, Mono<Object>> computeRawMessageHandler(String commandId) {
         return handlers.computeIfAbsent(commandId, s ->
-            rawMessageHandler(commandId)
+                rawMessageHandler(commandId)
         );
     }
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);
+
     protected abstract String getExecutorPath(AcknowledgableDelivery msj);
 
-    protected Function<Mono<Object>, Mono<Object>> enrichPostProcess(Message msg){
+    protected Function<Mono<Object>, Mono<Object>> enrichPostProcess(Message msg) {
         return identity();
     }
 
@@ -143,7 +165,7 @@ public abstract class GenericMessageListener {
                 msj.nack(false);
             }
             return Mono.just(msj);
-        }else {
+        } else {
             logError(err, msj, FallbackStrategy.FAST_RETRY);
             return Mono.just(msj).delayElement(Duration.ofMillis(200)).doOnNext(m -> m.nack(true));
         }
@@ -152,7 +174,7 @@ public abstract class GenericMessageListener {
     private Long getRetryNumber(AcknowledgableDelivery delivery) {
         return Optional.ofNullable(delivery.getProperties())
                 .map(AMQP.BasicProperties::getHeaders)
-                .map(x -> (List<HashMap>)x.get("x-death"))
+                .map(x -> (List<HashMap>) x.get("x-death"))
                 .filter(list -> !list.isEmpty())
                 .map(list -> list.get(0))
                 .map(hashMap -> (Long) hashMap.get("count"))
