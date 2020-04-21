@@ -33,6 +33,7 @@ public class ReactiveMessageSender {
         return just(toOutboundMessage(message, exchange, routingKey, headers))
                 .map(Mono::just)
                 .flatMapMany(sender::sendWithPublishConfirms)
+                .next()
                 .flatMap(result -> result.isAck() ?
                         Mono.empty() :
                         Mono.error(new SendFailureNoAckException("Event no ACK in communications"))
