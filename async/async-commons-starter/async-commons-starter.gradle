@@ -75,5 +75,8 @@ bintray {
 dependencies {
     compile project(":async-commons")
     api('org.springframework.boot:spring-boot-starter')
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
     testImplementation 'io.projectreactor:reactor-test'
 }

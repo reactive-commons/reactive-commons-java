@@ -15,7 +15,7 @@ import static org.mockito.Mockito.when;
 
 public class RabbitMqConfigTest {
 
-    RabbitMqConfig config = new RabbitMqConfig();
+    RabbitMqConfig config = new RabbitMqConfig(null);
 
     @Test
     public void retryInitialConnection() throws IOException, TimeoutException {

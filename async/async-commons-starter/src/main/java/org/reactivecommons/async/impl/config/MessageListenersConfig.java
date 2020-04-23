@@ -1,5 +1,6 @@
 package org.reactivecommons.async.impl.config;
 
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.DynamicRegistry;
@@ -12,6 +13,7 @@ import org.reactivecommons.async.impl.DynamicRegistryImp;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
+import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
@@ -22,7 +24,6 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.env.Environment;
 import reactor.core.publisher.Mono;
 
 import java.util.Map;
@@ -30,45 +31,53 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
 @Configuration
+@RequiredArgsConstructor
 @Import(RabbitMqConfig.class)
 public class MessageListenersConfig {
-
-    @Value("${app.async.domain.events.exchange:domainEvents}")
-    private String domainEventsExchangeName;
 
     @Value("${spring.application.name}")
     private String appName;
 
-    @Value("${app.async.direct.exchange:directMessages}")
-    private String directMessagesExchangeName;
+    private final AsyncProps asyncProps;
 
-    @Value("${app.async.maxRetries:10}")
-    private long maxRetries;
-
-    @Value("${app.async.retryDelay:1000}")
-    private int retryDelay;
-
-    @Value("${app.async.withDLQRetry:false}")
-    private boolean withDLQRetry;
 
     @Bean //TODO: move to own config (QueryListenerConfig)
-    public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter, ReactiveMessageListener receiver, DiscardNotifier discardNotifier) throws Exception {
-        final ApplicationEventListener listener = new ApplicationEventListener(receiver, appName + ".subsEvents", resolver, domainEventsExchangeName, messageConverter, withDLQRetry, maxRetries, retryDelay, discardNotifier);
+    public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
+                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+        final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+                appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
+                messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),
+                discardNotifier);
+
         listener.startListener();
+
         return listener;
     }
 
     @Bean //TODO: move to own config (QueryListenerConfig)
-    public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver, ReactiveMessageSender sender, ReactiveMessageListener rlistener, DiscardNotifier discardNotifier) throws Exception {
-        final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener, appName+".query", resolver, sender, directMessagesExchangeName, converter, "globalReply", withDLQRetry, maxRetries, retryDelay, discardNotifier);
+    public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver,
+                                                  ReactiveMessageSender sender, ReactiveMessageListener rlistener,
+                                                  DiscardNotifier discardNotifier) {
+        final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
+                appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
+                "globalReply", asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
+                asyncProps.getRetryDelay(), discardNotifier);
+
         listener.startListener();
+
         return listener;
     }
 
     @Bean
-    public ApplicationCommandListener applicationCommandListener(ReactiveMessageListener listener, HandlerResolver resolver, MessageConverter converter, DiscardNotifier discardNotifier){
-        ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver, directMessagesExchangeName, converter, withDLQRetry, maxRetries, retryDelay, discardNotifier);
+    public ApplicationCommandListener applicationCommandListener(ReactiveMessageListener listener,
+                                                                 HandlerResolver resolver, MessageConverter converter,
+                                                                 DiscardNotifier discardNotifier) {
+        ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
+                asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
+                asyncProps.getRetryDelay(), discardNotifier);
+
         commandListener.startListener();
+
         return commandListener;
     }
 
@@ -78,26 +87,26 @@ public class MessageListenersConfig {
     }
 
     @Bean
-    public HandlerResolver resolver(ApplicationContext context, DefaultQueryHandler defaultHandler, Environment env, DefaultCommandHandler defaultCommandHandler) {
+    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
 
         final ConcurrentMap<String, RegisteredQueryHandler> handlers = registries
-            .values().stream()
-            .flatMap(r -> r.getHandlers().stream())
-            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                ConcurrentHashMap::putAll);
+                .values().stream()
+                .flatMap(r -> r.getHandlers().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
 
         final ConcurrentMap<String, RegisteredEventListener> eventListeners = registries
-            .values().stream()
-            .flatMap(r -> r.getEventListeners().stream())
-            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                ConcurrentHashMap::putAll);
+                .values().stream()
+                .flatMap(r -> r.getEventListeners().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
 
         final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registries
-            .values().stream()
-            .flatMap(r -> r.getCommandHandlers().stream())
-            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                ConcurrentHashMap::putAll);
+                .values().stream()
+                .flatMap(r -> r.getCommandHandlers().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
 
         return new HandlerResolver(handlers, eventListeners, commandHandlers) {
             @Override
@@ -113,13 +122,13 @@ public class MessageListenersConfig {
     @ConditionalOnMissingBean
     public DefaultQueryHandler defaultHandler() {
         return (DefaultQueryHandler<Object, Object>) command ->
-            Mono.error(new RuntimeException("No Handler Registered"));
+                Mono.error(new RuntimeException("No Handler Registered"));
     }
 
 
     @Bean
     @ConditionalOnMissingBean
-    public DefaultCommandHandler defaultCommandHandler(){
+    public DefaultCommandHandler defaultCommandHandler() {
         return message -> Mono.error(new RuntimeException("No Handler Registered"));
     }
 }

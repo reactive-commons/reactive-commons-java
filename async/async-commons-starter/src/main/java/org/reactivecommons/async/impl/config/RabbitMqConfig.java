@@ -2,6 +2,7 @@ package org.reactivecommons.async.impl.config;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.impl.DiscardNotifier;
@@ -10,7 +11,9 @@ import org.reactivecommons.async.impl.RabbitDomainEventBus;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
+import org.reactivecommons.async.impl.config.props.FluxProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
@@ -24,6 +27,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.*;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.logging.Level;
@@ -32,7 +36,11 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 @Configuration
-@EnableConfigurationProperties(RabbitProperties.class)
+@RequiredArgsConstructor
+@EnableConfigurationProperties({
+        RabbitProperties.class,
+        AsyncProps.class
+})
 @Import(BrokerConfigProps.class)
 public class RabbitMqConfig {
 
@@ -40,9 +48,7 @@ public class RabbitMqConfig {
 
     private static final String SENDER_TYPE = "sender";
 
-
-    @Value("${app.async.flux.maxConcurrency:250}")
-    private Integer maxConcurrency;
+    private final AsyncProps asyncProps;
 
     @Value("${spring.application.name}")
     private String appName;
@@ -57,6 +63,8 @@ public class RabbitMqConfig {
 
         map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
                 .to(channelPoolOptions::maxCacheSize);
+
+
 
         final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
                 senderConnection,
@@ -77,7 +85,9 @@ public class RabbitMqConfig {
         final Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
 
-        return new ReactiveMessageListener(receiver, new TopologyCreator(sender), maxConcurrency);
+        return new ReactiveMessageListener(receiver,
+                new TopologyCreator(sender),
+                asyncProps.getFlux().getMaxConcurrency());
     }
 
     @Bean
@@ -89,7 +99,6 @@ public class RabbitMqConfig {
         map.from(properties::determinePort).to(factory::setPort);
         map.from(properties::determineUsername).whenNonNull().to(factory::setUsername);
         map.from(properties::determinePassword).whenNonNull().to(factory::setPassword);
-        map.from(properties::determineVirtualHost).whenNonNull().to(factory::setVirtualHost);
         factory.useNio();
         return () -> factory;
     }
@@ -123,7 +132,8 @@ public class RabbitMqConfig {
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
                 )
-                .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(300))
+                        .maxBackoff(Duration.ofMillis(3000)))
                 .cache();
     }
 
