@@ -1,5 +1,5 @@
 plugins {
-    id "com.jfrog.bintray" version "1.8.4"
+    id "com.jfrog.bintray" version "1.8.5"
     id 'java-library'
     id 'maven'
     id 'maven-publish'
@@ -76,7 +76,7 @@ dependencies {
     compile project(":domain-events-api")
 
     api 'io.projectreactor:reactor-core'
-    api "io.projectreactor.rabbitmq:reactor-rabbitmq:1.4.0.RELEASE"
-    api 'com.fasterxml.jackson.core:jackson-databind:2.9.7'
+    api "io.projectreactor.rabbitmq:reactor-rabbitmq"
+    api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
 }
