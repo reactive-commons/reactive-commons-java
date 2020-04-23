@@ -70,7 +70,8 @@ public class RabbitMqConfig {
 
         final Sender sender = RabbitFlux.createSender(new SenderOptions()
                 .channelPool(channelPool)
-                .resourceManagementChannelMono(channelPool.getChannelMono()));
+                .resourceManagementChannelMono(channelPool.getChannelMono()
+                        .transform(Utils::cache)));
 
         return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(sender));
     }
