@@ -22,6 +22,8 @@ public class AsyncProps {
 
     private Integer maxRetries = 10;
 
+    private Integer prefetchCount = 250;
+
     private Integer retryDelay = 1000;
 
     private Boolean withDLQRetry = false;

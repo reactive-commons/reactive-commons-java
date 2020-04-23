@@ -72,5 +72,5 @@ bintray {
 }
 
 dependencies {
-    api group: 'org.reactivestreams', name: 'reactive-streams'
+    api group: 'org.reactivestreams', name: 'reactive-streams', version: '1.0.3'
 }

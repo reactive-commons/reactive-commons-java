@@ -13,7 +13,6 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
-import org.reactivecommons.async.impl.config.props.FluxProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
@@ -64,8 +63,6 @@ public class RabbitMqConfig {
         map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
                 .to(channelPoolOptions::maxCacheSize);
 
-
-
         final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
                 senderConnection,
                 channelPoolOptions
@@ -87,7 +84,8 @@ public class RabbitMqConfig {
 
         return new ReactiveMessageListener(receiver,
                 new TopologyCreator(sender),
-                asyncProps.getFlux().getMaxConcurrency());
+                asyncProps.getFlux().getMaxConcurrency(),
+                asyncProps.getPrefetchCount());
     }
 
     @Bean
@@ -99,6 +97,7 @@ public class RabbitMqConfig {
         map.from(properties::determinePort).to(factory::setPort);
         map.from(properties::determineUsername).whenNonNull().to(factory::setUsername);
         map.from(properties::determinePassword).whenNonNull().to(factory::setPassword);
+        map.from(properties::determineVirtualHost).whenNonNull().to(factory::setVirtualHost);
         factory.useNio();
         return () -> factory;
     }
