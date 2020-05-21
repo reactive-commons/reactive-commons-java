@@ -91,7 +91,7 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
+    public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
         PropertyMapper map = PropertyMapper.get();
         map.from(properties::determineHost).whenNonNull().to(factory::setHost);
