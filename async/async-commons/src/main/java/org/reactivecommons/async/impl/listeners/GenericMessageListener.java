@@ -112,6 +112,8 @@ public abstract class GenericMessageListener {
                 } catch (Exception e) {
                     log.log(Level.SEVERE, "Error returning message in failure!", e);
                 }
+            } else {
+                throw new RuntimeException(throwable);
             }
         });
     }

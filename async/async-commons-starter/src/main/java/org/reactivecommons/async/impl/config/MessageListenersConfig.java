@@ -17,6 +17,7 @@ import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
+import org.reactivecommons.async.impl.listeners.ApplicationNotificationListener;
 import org.reactivecommons.async.impl.listeners.ApplicationQueryListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -48,9 +49,21 @@ public class MessageListenersConfig {
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
                 messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),
                 discardNotifier);
-
         listener.startListener();
+        return listener;
+    }
 
+    @Bean
+    public ApplicationNotificationListener eventNotificationListener(HandlerResolver resolver, MessageConverter messageConverter,
+                                                         ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+        final ApplicationNotificationListener listener = new ApplicationNotificationListener(
+                receiver,
+                asyncProps.getDomain().getEvents().getExchange(),
+                asyncProps.getNotificationProps().getQueueName(appName),
+                resolver,
+                messageConverter,
+                discardNotifier);
+        listener.startListener();
         return listener;
     }
 
@@ -62,9 +75,7 @@ public class MessageListenersConfig {
                 appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
                 "globalReply", asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
                 asyncProps.getRetryDelay(), discardNotifier);
-
         listener.startListener();
-
         return listener;
     }
 
@@ -75,9 +86,7 @@ public class MessageListenersConfig {
         ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
                 asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
                 asyncProps.getRetryDelay(), discardNotifier);
-
         commandListener.startListener();
-
         return commandListener;
     }
 
@@ -108,7 +117,14 @@ public class MessageListenersConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(handlers, eventListeners, commandHandlers) {
+        final ConcurrentMap<String, RegisteredEventListener> eventNotificationListener = registries
+                .values()
+                .stream()
+                .flatMap(r -> r.getEventNotificationListener().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        return new HandlerResolver(handlers, eventListeners, commandHandlers, eventNotificationListener) {
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
@@ -124,7 +140,6 @@ public class MessageListenersConfig {
         return (DefaultQueryHandler<Object, Object>) command ->
                 Mono.error(new RuntimeException("No Handler Registered"));
     }
-
 
     @Bean
     @ConditionalOnMissingBean

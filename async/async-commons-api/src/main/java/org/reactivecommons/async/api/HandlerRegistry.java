@@ -25,6 +25,7 @@ public class HandlerRegistry {
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener> eventListeners = new CopyOnWriteArrayList<>();
     private final List<RegisteredCommandHandler> commandHandlers = new CopyOnWriteArrayList<>();
+    private final List<RegisteredEventListener> eventNotificationListener = new CopyOnWriteArrayList<>();
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> fn, Class<T> eventClass){
         eventListeners.add(new RegisteredEventListener<>(eventName, fn,  eventClass));
@@ -33,6 +34,11 @@ public class HandlerRegistry {
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler){
         eventListeners.add(new RegisteredEventListener<>(eventName, handler,  inferGenericParameterType(handler)));
+        return this;
+    }
+
+    public <T> HandlerRegistry listenNotificationEvent(String eventName, EventHandler<T> fn, Class<T> eventClass){
+        eventNotificationListener.add(new RegisteredEventListener<>(eventName, fn,  eventClass));
         return this;
     }
 
