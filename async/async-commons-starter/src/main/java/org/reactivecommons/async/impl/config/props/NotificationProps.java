@@ -1,0 +1,27 @@
+package org.reactivecommons.async.impl.config.props;
+
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import org.reactivecommons.async.impl.utils.NameGenerator;
+
+import java.util.concurrent.atomic.AtomicReference;
+
+@Getter
+@RequiredArgsConstructor
+public class NotificationProps {
+    private String exchangeName = "notification";
+    private final AtomicReference<String> queueName = new AtomicReference<>();
+
+    public String getQueueName(String applicationName) {
+        final String name = this.queueName.get();
+        if(name == null) return getGeneratedName(applicationName);
+        return name;
+    }
+
+    private String getGeneratedName(String applicationName) {
+        String generatedName = NameGenerator.generateNameFrom(applicationName, exchangeName);
+        return this.queueName
+                .compareAndSet(null, generatedName) ?
+                generatedName : this.queueName.get();
+    }
+}
