@@ -42,7 +42,8 @@ public class DynamicRegistryImpTest {
         Map<String, RegisteredCommandHandler> commandHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener> eventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler> queryHandlers = new ConcurrentHashMap<>();
-        resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers);
+        Map<String, RegisteredEventListener> notificationEventListeners = new ConcurrentHashMap<>();
+        resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers,notificationEventListeners);
         when(props.getDomainEventsExchangeName()).thenReturn("domainEx");
         when(props.getEventsQueue()).thenReturn("events.queue");
         registry = new DynamicRegistryImp(resolver, topologyCreator, props);
