@@ -128,6 +128,31 @@ Don't forget to add the implementation dependency to the main spring boot module
     }
 ```
 
+### Domain Event-Listener
+Reactive commons has four types of listeners implemented, available to be registered in the application via the **HandlerRegistry**, each of them is designed to tackle   
+common requirements for listeners in event based applications and abstracts the behavior of event flow in every situation (Varying for example in retrying strategy, dead letter events, sources and so on).
+
+The available event listeners are:
+- Domain Event Listener
+- Query Event Listener
+- Command Listener
+- Notification Listener
+
+Example Code:
+```java
+        public HandlerRegistry notificationEvents() {
+            return HandlerRegistry.register()
+                    .listenNotificationEvent("gatewayRouteAdded", message -> {
+                        System.out.println("Refreshing instance");
+                        return Mono.empty();
+                    },GatewayEvent.class);
+        }
+```
+
+The above code shows how to handle a notification event (Notification event: an event that should be handled by
+every running instance of a microservice, e.g: notify to every instance that a configuration setting has changed
+  and has to do a hot reload from a persistent source of that data).
+
 ### Request-Reply
 Example Code:
 

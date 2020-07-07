@@ -100,7 +100,7 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
+    public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
         PropertyMapper map = PropertyMapper.get();
         map.from(properties::determineHost).whenNonNull().to(factory::setHost);
@@ -168,7 +168,14 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(handlers, eventListeners, commandHandlers) {
+        final ConcurrentMap<String, RegisteredEventListener> eventNotificationListener = registries
+                .values()
+                .stream()
+                .flatMap(r -> r.getEventNotificationListener().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        return new HandlerResolver(handlers, eventListeners, commandHandlers, eventNotificationListener) {
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {

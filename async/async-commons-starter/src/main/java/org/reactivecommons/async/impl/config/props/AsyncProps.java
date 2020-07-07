@@ -23,6 +23,9 @@ public class AsyncProps {
     @NestedConfigurationProperty
     private GlobalProps global = new GlobalProps();
 
+    @NestedConfigurationProperty
+    private NotificationProps notificationProps = new NotificationProps();
+
     private Integer maxRetries = 10;
 
     private Integer prefetchCount = 250;
