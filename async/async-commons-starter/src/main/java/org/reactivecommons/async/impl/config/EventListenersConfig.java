@@ -15,17 +15,17 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @RequiredArgsConstructor
 @Import(RabbitMqConfig.class)
-public class MessageListenersConfig {
+public class EventListenersConfig {
 
     @Value("${spring.application.name}")
     private String appName;
 
     private final AsyncProps asyncProps;
 
-
-    @Bean //TODO: move to own config (QueryListenerConfig)
+    @Bean
     public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
                                                   ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+
         final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
                 messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),asyncProps.getDomain().getEvents().getMaxLengthBytes(),

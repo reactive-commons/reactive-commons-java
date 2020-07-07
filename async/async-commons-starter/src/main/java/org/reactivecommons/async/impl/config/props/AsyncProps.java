@@ -20,6 +20,9 @@ public class AsyncProps {
     @NestedConfigurationProperty
     private DirectProps direct = new DirectProps();
 
+    @NestedConfigurationProperty
+    private GlobalProps global = new GlobalProps();
+
     private Integer maxRetries = 10;
 
     private Integer prefetchCount = 250;
@@ -27,5 +30,4 @@ public class AsyncProps {
     private Integer retryDelay = 1000;
 
     private Boolean withDLQRetry = false;
-
 }

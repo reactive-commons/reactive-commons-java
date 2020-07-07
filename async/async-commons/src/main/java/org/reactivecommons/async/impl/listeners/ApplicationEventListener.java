@@ -20,6 +20,7 @@ import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 
+import java.util.Optional;
 import java.util.function.Function;
 
 import static reactor.core.publisher.Flux.fromIterable;
@@ -32,22 +33,24 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final String eventsExchange;
     private final boolean withDLQRetry;
     private final int retryDelay;
+    private final Optional<Integer> maxLengthBytes;
 
-    public ApplicationEventListener(ReactiveMessageListener receiver, String queueName, HandlerResolver resolver, String eventsExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, DiscardNotifier discardNotifier) {
+    public ApplicationEventListener(ReactiveMessageListener receiver, String queueName, HandlerResolver resolver, String eventsExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
         super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event");
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;
         this.eventsExchange = eventsExchange;
         this.messageConverter = messageConverter;
+        this.maxLengthBytes = maxLengthBytes;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         if (withDLQRetry) {
             final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic"));
             final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(ExchangeSpecification.exchange(eventsExchange+".DLQ").durable(true).type("topic"));
-            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(queueName, eventsExchange, retryDelay);
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, eventsExchange+".DLQ");
+            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(queueName, eventsExchange, retryDelay, maxLengthBytes);
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, eventsExchange+".DLQ", maxLengthBytes);
             final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners()).flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange, listener.getPath(), queueName)));
             final Flux<AMQP.Queue.BindOk> bindingDLQ = fromIterable(resolver.getEventListeners()).flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange+".DLQ", listener.getPath(), queueName + ".DLQ")));
             return declareExchange.then(declareExchangeDLQ).then(declareQueue).then(declareDLQ).thenMany(bindings).thenMany(bindingDLQ).then();
@@ -55,7 +58,7 @@ public class ApplicationEventListener extends GenericMessageListener {
             final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners())
                     .flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange, listener.getPath(), queueName)));
             final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic"));
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declare(QueueSpecification.queue(queueName).durable(true));
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, maxLengthBytes);
             return declareExchange.then(declareQueue).thenMany(bindings).then();
         }
 

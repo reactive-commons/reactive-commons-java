@@ -215,6 +215,31 @@ app.async.retryDelay=1000
 app.async.maxRetries=10
 
 ```
+### Domain custom Configuration (RabbitMQ)
+
+
+```
+app.async.domain.events.exchange=exchangeCustomName
+app.async.domain.events.maxLengthBytes=125000000
+
+```
+
+### Direct custom Configuration (RabbitMQ)
+
+
+```
+app.async.direct.exchange=exchangeCustomName
+app.async.direct.maxLengthBytes=125000000
+```
+
+### Global custom Configuration (RabbitMQ)
+
+
+```
+app.async.global.exchange=exchangeCustomName
+app.async.global.maxLengthBytes=125000000
+```
+
 * withDLQRetry: Wheter to enable or not the new Retry DLQ Strategy
 * retryDelay: Delay retry value in ms
 * maxRetries: Max number of retries in case of error in adition to the one automatic retry per queue.
