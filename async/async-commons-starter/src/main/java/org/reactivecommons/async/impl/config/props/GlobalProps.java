@@ -7,9 +7,9 @@ import java.util.Optional;
 
 @Getter
 @Setter
-public class DirectProps {
+public class GlobalProps {
 
-    private String exchange = "directMessages";
+    private String exchange = "globalReply";
 
     private Optional<Integer> maxLengthBytes = Optional.empty();
 

@@ -21,6 +21,9 @@ public class AsyncProps {
     private DirectProps direct = new DirectProps();
 
     @NestedConfigurationProperty
+    private GlobalProps global = new GlobalProps();
+
+    @NestedConfigurationProperty
     private NotificationProps notificationProps = new NotificationProps();
 
     private Integer maxRetries = 10;

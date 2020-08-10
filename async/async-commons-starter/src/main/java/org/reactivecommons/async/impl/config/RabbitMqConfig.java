@@ -5,9 +5,14 @@ import com.rabbitmq.client.ConnectionFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.impl.DiscardNotifier;
-import org.reactivecommons.async.impl.RabbitDiscardNotifier;
-import org.reactivecommons.async.impl.RabbitDomainEventBus;
+import org.reactivecommons.async.api.DefaultCommandHandler;
+import org.reactivecommons.async.api.DefaultQueryHandler;
+import org.reactivecommons.async.api.DynamicRegistry;
+import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.impl.*;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
@@ -21,6 +26,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.PropertyMapper;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -29,6 +35,9 @@ import reactor.rabbitmq.*;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
@@ -135,6 +144,63 @@ public class RabbitMqConfig {
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(300))
                         .maxBackoff(Duration.ofMillis(3000)))
                 .cache();
+    }
+
+    @Bean
+    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
+        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
+
+        final ConcurrentMap<String, RegisteredQueryHandler> handlers = registries
+                .values().stream()
+                .flatMap(r -> r.getHandlers().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        final ConcurrentMap<String, RegisteredEventListener> eventListeners = registries
+                .values().stream()
+                .flatMap(r -> r.getEventListeners().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registries
+                .values().stream()
+                .flatMap(r -> r.getCommandHandlers().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        final ConcurrentMap<String, RegisteredEventListener> eventNotificationListener = registries
+                .values()
+                .stream()
+                .flatMap(r -> r.getEventNotificationListener().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        return new HandlerResolver(handlers, eventListeners, commandHandlers, eventNotificationListener) {
+            @Override
+            @SuppressWarnings("unchecked")
+            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
+                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
+                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
+            }
+        };
+    }
+
+    @Bean
+    public DynamicRegistry dynamicRegistry(HandlerResolver resolver, ReactiveMessageListener listener, IBrokerConfigProps props) {
+        return new DynamicRegistryImp(resolver, listener.getTopologyCreator(), props);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DefaultQueryHandler defaultHandler() {
+        return (DefaultQueryHandler<Object, Object>) command ->
+                Mono.error(new RuntimeException("No Handler Registered"));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public DefaultCommandHandler defaultCommandHandler() {
+        return message -> Mono.error(new RuntimeException("No Handler Registered"));
     }
 
 }

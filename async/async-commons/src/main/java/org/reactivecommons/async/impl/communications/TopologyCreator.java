@@ -10,6 +10,7 @@ import reactor.rabbitmq.Sender;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 @Log
 /*
@@ -43,22 +44,36 @@ public class TopologyCreator {
                 .onErrorMap(TopologyDefException::new);
     }
 
-    public Mono<AMQP.Queue.DeclareOk> declareDLQ(String originQueue, String retryTarget, int retryTime){
+    public Mono<AMQP.Queue.DeclareOk> declareDLQ(String originQueue, String retryTarget, int retryTime, Optional<Integer> maxLengthBytesOpt) {
         final Map<String, Object> args = new HashMap<>();
         args.put("x-dead-letter-exchange", retryTarget);
         args.put("x-message-ttl", retryTime);
+        maxLengthBytesOpt.ifPresent(maxLengthBytes -> args.put("x-max-length-bytes", maxLengthBytes));
         QueueSpecification specification = QueueSpecification.queue(originQueue + ".DLQ")
                 .durable(true)
                 .arguments(args);
         return declare(specification);
     }
 
-    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange){
+    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange, Optional<Integer> maxLengthBytesOpt) {
         final Map<String, Object> args = new HashMap<>();
         args.put("x-dead-letter-exchange", dlqExchange);
+        maxLengthBytesOpt.ifPresent(maxLengthBytes -> args.put("x-max-length-bytes", maxLengthBytes));
         QueueSpecification specification = QueueSpecification.queue(name)
                 .durable(true)
                 .arguments(args);
+        return declare(specification);
+    }
+
+    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, Optional<Integer> maxLengthBytesOpt) {
+        QueueSpecification specification = QueueSpecification.queue(name)
+                .durable(true);
+        if (maxLengthBytesOpt.isPresent()) {
+            final Map<String, Object> args = new HashMap<>();
+            args.put("x-max-length-bytes", maxLengthBytesOpt.orElse(0));
+            specification = specification.arguments(args);
+        }
+
         return declare(specification);
     }
 

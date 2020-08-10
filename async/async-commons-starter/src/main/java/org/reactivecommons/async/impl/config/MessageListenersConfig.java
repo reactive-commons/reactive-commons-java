@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentMap;
 
 @Configuration
 @RequiredArgsConstructor
+@Deprecated
 @Import(RabbitMqConfig.class)
 public class MessageListenersConfig {
 
@@ -48,14 +49,14 @@ public class MessageListenersConfig {
         final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
                 messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),
-                discardNotifier);
+                asyncProps.getDomain().getEvents().getMaxLengthBytes(), discardNotifier);
         listener.startListener();
         return listener;
     }
 
     @Bean
     public ApplicationNotificationListener eventNotificationListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                         ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+                                                                     ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
         final ApplicationNotificationListener listener = new ApplicationNotificationListener(
                 receiver,
                 asyncProps.getDomain().getEvents().getExchange(),
@@ -73,8 +74,8 @@ public class MessageListenersConfig {
                                                   DiscardNotifier discardNotifier) {
         final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
                 appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
-                "globalReply", asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(), discardNotifier);
+                asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
+                asyncProps.getRetryDelay(), asyncProps.getGlobal().getMaxLengthBytes(), discardNotifier);
         listener.startListener();
         return listener;
     }
@@ -85,7 +86,7 @@ public class MessageListenersConfig {
                                                                  DiscardNotifier discardNotifier) {
         ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
                 asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(), discardNotifier);
+                asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier);
         commandListener.startListener();
         return commandListener;
     }
