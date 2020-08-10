@@ -13,6 +13,8 @@ import org.reactivecommons.async.impl.EventExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.utils.matcher.KeyMatcher;
+import org.reactivecommons.async.impl.utils.matcher.Matcher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -21,7 +23,9 @@ import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static reactor.core.publisher.Flux.fromIterable;
 
@@ -34,8 +38,20 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final boolean withDLQRetry;
     private final int retryDelay;
     private final Optional<Integer> maxLengthBytes;
+    private final Matcher keyMatcher;
 
-    public ApplicationEventListener(ReactiveMessageListener receiver, String queueName, HandlerResolver resolver, String eventsExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
+
+    
+
+    public ApplicationEventListener(ReactiveMessageListener receiver, 
+                                    String queueName, 
+                                    HandlerResolver resolver, 
+                                    String eventsExchange, 
+                                    MessageConverter messageConverter, 
+                                    boolean withDLQRetry, 
+                                    long maxRetries, int retryDelay, 
+                                    Optional<Integer> maxLengthBytes, 
+                                    DiscardNotifier discardNotifier) {
         super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event");
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
@@ -43,6 +59,7 @@ public class ApplicationEventListener extends GenericMessageListener {
         this.eventsExchange = eventsExchange;
         this.messageConverter = messageConverter;
         this.maxLengthBytes = maxLengthBytes;
+        this.keyMatcher = new KeyMatcher();
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -66,25 +83,23 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredEventListener<Object> handler = resolver.getEventListener(executorPath);
+        final Set<String> listenerKeys = resolver.getEventListeners()
+                .stream()
+                .map(RegisteredEventListener::getPath)
+                .collect(Collectors.toSet());
+        final String matchedKey = keyMatcher.match(listenerKeys, executorPath);
+        final RegisteredEventListener<Object> handler = resolver.getEventListener(matchedKey);
         final Class<Object> eventClass = handler.getInputClass();
         Function<Message, DomainEvent<Object>> converter = msj -> messageConverter.readDomainEvent(msj, eventClass);
         final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);
-        return msj -> executor.execute(msj).cast(Object.class);
+        return msj -> executor
+                .execute(msj)
+                .cast(Object.class);
     }
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         return msj.getEnvelope().getRoutingKey();
     }
-
-
-    @Data
-    private static class DomainEventInt {
-        private String name;
-        private String eventId;
-        private JsonNode data;
-    }
-
 
 }
 

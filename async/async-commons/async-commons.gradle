@@ -79,4 +79,6 @@ dependencies {
     api "io.projectreactor.rabbitmq:reactor-rabbitmq"
     api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
+    testCompile group: 'org.databene', name: 'contiperf', version: '2.3.4'
+
 }
