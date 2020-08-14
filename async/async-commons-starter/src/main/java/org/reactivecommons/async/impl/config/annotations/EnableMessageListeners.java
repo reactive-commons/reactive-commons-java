@@ -10,12 +10,10 @@ import org.springframework.context.annotation.Import;
 import java.lang.annotation.*;
 
 /**
- * Actualmente se utiliza EnableMessageListeners para habilitar Comandos, querys y eventos al mismo tiempo,
- * se han separado en 3 EnableCommandListeners, EnableQueryListeners y EnableEventListeners, estos se pueden utilizar
- * todos juntos o de manera individual segun necesidad
- * @deprecated Use EnableCommandListeners, EnableQueryListeners, EnableEventListeners
+ * This annotation enables all messages listeners (Query, Commands, Events). If you want to enable separately, please use
+ * EnableCommandListeners, EnableQueryListeners or EnableEventListeners.
+ *
  */
-@Deprecated
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 @Documented

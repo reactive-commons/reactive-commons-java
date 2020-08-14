@@ -4,6 +4,7 @@ import org.databene.contiperf.PerfTest;
 import org.databene.contiperf.Required;
 import org.databene.contiperf.junit.ContiPerfRule;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -26,14 +27,14 @@ public class KeyMatcherPerformanceTest {
 
     @Rule
     public ContiPerfRule contiPerfRule = new ContiPerfRule();
-    Map<String, String> candidates = new HashMap<>();
+    static Map<String, String> candidates = new HashMap<>();
 
     private KeyMatcher keyMatcher = new KeyMatcher();
 
 
-    @Before
-    public void init() {
-        ClassLoader classLoader = getClass().getClassLoader();
+    @BeforeClass
+    public static void init() {
+        ClassLoader classLoader = KeyMatcherPerformanceTest.class.getClassLoader();
         File file = new File(classLoader.getResource("candidateNamesForMatching.txt").getFile());
         try {
              Set<String> names =  new HashSet<>(Files

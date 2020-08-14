@@ -11,6 +11,7 @@ import org.mockito.Spy;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivestreams.Publisher;
 import org.springframework.boot.test.context.SpringBootTest;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,8 +33,6 @@ public class ReactiveMessageSenderTest {
 
     private ReactiveMessageSender messageSender;
 
-    private OutboundMessageResult result = new OutboundMessageResult(null, true);
-
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Mock
@@ -44,14 +43,19 @@ public class ReactiveMessageSenderTest {
 
     @Before
     public void init() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class))).then(invocation -> {
+            final Flux<ReactiveMessageSender.MyOutboundMessage> argument = invocation.getArgument(0);
+            return argument.map(myOutboundMessage -> {
+                OutboundMessageResult<ReactiveMessageSender.MyOutboundMessage> outboundMessageResult = new OutboundMessageResult<>(myOutboundMessage, true);
+                return outboundMessageResult;
+            });
+        });
         messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null);
     }
 
 
     @Test
     public void sendWithConfirmEmptyNullMessage() {
-        when(sender.sendWithPublishConfirms(any())).thenReturn(Flux.just(result));
-
         final Mono<Void> voidMono = messageSender.sendWithConfirm(null, "exchange", "rkey", new HashMap<>());
 
         StepVerifier.create(voidMono).verifyComplete();
@@ -59,8 +63,6 @@ public class ReactiveMessageSenderTest {
 
     @Test
     public void sendWithConfirmSomeMessage() {
-        when(sender.sendWithPublishConfirms(any())).thenReturn(Flux.just(result));
-
         SomeClass some = new SomeClass("42", "Daniel", new Date());
         final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>());
 

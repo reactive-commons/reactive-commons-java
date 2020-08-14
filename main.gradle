@@ -36,6 +36,16 @@ subprojects {
         testCompileOnly 'org.projectlombok:lombok'
     }
 
+    configurations.all {
+
+        resolutionStrategy.eachDependency {DependencyResolveDetails details ->
+            if (details.requested.group == 'io.projectreactor.rabbitmq'){
+                details.useVersion('1.5.0-M2')
+                details.because('Upgrade')
+            }
+        }
+    }
+
 
     jacoco {
         toolVersion = '0.8.2'

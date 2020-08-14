@@ -62,27 +62,29 @@ public class RabbitMqConfig {
     private String appName;
 
     @Bean
-    public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
-                                               BrokerConfigProps brokerConfigProps, RabbitProperties rabbitProperties) {
-        final Mono<Connection> senderConnection =
-                createConnectionMono(provider.getConnectionFactory(), appName, SENDER_TYPE);
+    public ReactiveMessageSender messageSender(MessageConverter converter, BrokerConfigProps brokerConfigProps, SenderOptions senderOptions) {
+        final Sender sender = RabbitFlux.createSender(senderOptions);
+        return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(sender));
+    }
+
+    @Bean
+    public SenderOptions reactiveCommonsSenderOptions(ConnectionFactoryProvider provider, RabbitProperties rabbitProperties) {
+        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName, SENDER_TYPE);
         final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
         final PropertyMapper map = PropertyMapper.get();
 
         map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
-                .to(channelPoolOptions::maxCacheSize);
+            .to(channelPoolOptions::maxCacheSize);
 
         final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
-                senderConnection,
-                channelPoolOptions
+            senderConnection,
+            channelPoolOptions
         );
 
-        final Sender sender = RabbitFlux.createSender(new SenderOptions()
-                .channelPool(channelPool)
-                .resourceManagementChannelMono(channelPool.getChannelMono()
-                        .transform(Utils::cache)));
-
-        return new ReactiveMessageSender(sender, brokerConfigProps.getAppName(), converter, new TopologyCreator(sender));
+        return new SenderOptions()
+            .channelPool(channelPool)
+            .resourceManagementChannelMono(channelPool.getChannelMono()
+                .transform(Utils::cache));
     }
 
     @Bean

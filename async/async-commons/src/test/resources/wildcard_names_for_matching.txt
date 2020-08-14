@@ -1,0 +1,10 @@
+System.*.service.event.action
+System.segment.*.event.action
+System.segment.service.*.action
+System.segment.service.event.*
+System.segment.service.*.action
+System2.segment.service.0.action
+System0.segment.service.aa.action
+System2.segment.service.1.action
+System1.segment.service.aa.action
+System2.segment.service.2.action

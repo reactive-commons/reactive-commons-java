@@ -76,9 +76,19 @@ dependencies {
     compile project(":domain-events-api")
 
     api 'io.projectreactor:reactor-core'
-    api "io.projectreactor.rabbitmq:reactor-rabbitmq"
+    api ("io.projectreactor.rabbitmq:reactor-rabbitmq")
     api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
     testCompile group: 'org.databene', name: 'contiperf', version: '2.3.4'
 
+}
+
+configurations.all {
+
+    resolutionStrategy.eachDependency {DependencyResolveDetails details ->
+        if (details.requested.group == 'io.projectreactor.rabbitmq'){
+            details.useVersion('1.5.0-M2')
+            details.because('Upgrade')
+        }
+    }
 }

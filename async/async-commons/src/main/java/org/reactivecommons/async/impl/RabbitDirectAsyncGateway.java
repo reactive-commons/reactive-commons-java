@@ -7,7 +7,10 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.BrokerConfig;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.UnicastProcessor;
+import reactor.rabbitmq.OutboundMessageResult;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -33,11 +36,20 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         this.sender = sender;
         this.exchange = exchange;
         this.converter = converter;
+
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
         return sender.sendWithConfirm(command, exchange, targetName, Collections.emptyMap());
+    }
+
+    public <T> Flux<OutboundMessageResult> sendCommands(Flux<Command<T>> commands, String targetName) {
+        return sender.sendWithConfirm2(commands, exchange, targetName, Collections.emptyMap());
+    }
+
+    public <T> Mono<Void> sendCommandsNoConfirm(Flux<Command<T>> commands, String targetName) {
+        return sender.sendNoConfirm(commands, exchange, targetName, Collections.emptyMap());
     }
 
     @Override

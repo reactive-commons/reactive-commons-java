@@ -16,3 +16,13 @@ plugins {
 
 apply from: './main.gradle'
 apply plugin: 'com.github.ben-manes.versions'
+
+configurations.all {
+
+    resolutionStrategy.eachDependency {DependencyResolveDetails details ->
+        if (details.requested.group == 'io.projectreactor.rabbitmq'){
+            details.useVersion('1.5.0-M2')
+            details.because('Upgrade')
+        }
+    }
+}
