@@ -4,9 +4,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,12 +19,12 @@ import org.springframework.test.context.junit4.SpringRunner;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -32,65 +32,36 @@ import static reactor.core.publisher.Flux.range;
 
 @SpringBootTest
 @RunWith(SpringRunner.class)
-public class DirectGatewayPerfTest {
+public class QueryProcessPerfTest {
 
-    private static final String COMMAND_NAME = "app.command.test";
+    private static final String QUERY_NAME = "app.command.test";
     private static final int messageCount = 40000;
     private static final Semaphore semaphore = new Semaphore(0);
+    private static final AtomicLong atomicLong = new AtomicLong(0);
+    private static final CountDownLatch latch = new CountDownLatch(12 + 1);
 
     @Autowired
-    private RabbitDirectAsyncGateway gateway;
+    private DirectAsyncGateway gateway;
 
     @Value("${spring.application.name}")
     private String appName;
 
 
     @Test
-    public void shouldSendInOptimalTime() throws InterruptedException {
-        final Flux<Command<DummyMessage>> messages = createMessages(messageCount);
-        final Flux<Void> target = messages.flatMap(dummyMessageCommand ->
-            gateway.sendCommand(dummyMessageCommand, appName)
-            .doOnSuccess(aVoid -> semaphore.release()));
+    public void serveQueryPerformanceTest() throws InterruptedException {
+        final Flux<AsyncQuery<DummyMessage>> messages = createMessages(messageCount);
 
         final long init = System.currentTimeMillis();
-        target.subscribe();
+        messages
+            .flatMap(dummyMessageAsyncQuery -> gateway.requestReply(dummyMessageAsyncQuery, appName, DummyMessage.class)
+                .doOnNext(s -> semaphore.release())
+            )
+            .subscribe();
         semaphore.acquire(messageCount);
         final long end = System.currentTimeMillis();
 
-        assertMessageThroughput(end - init, messageCount, 200);
-    }
-
-    @Test
-    public void shouldSendBatchInOptimalTime4Channels() throws InterruptedException {
-        shouldSendBatchInOptimalTimeNChannels(4);
-    }
-
-    @Test
-    public void shouldSendBatchInOptimalTime2Channels() throws InterruptedException {
-        shouldSendBatchInOptimalTimeNChannels(2);
-    }
-
-    @Test
-    public void shouldSendBatchInOptimalTime1Channel() throws InterruptedException {
-        shouldSendBatchInOptimalTimeNChannels(1);
-    }
-
-    private void shouldSendBatchInOptimalTimeNChannels(int channels) throws InterruptedException {
-        List<Mono<Void>> subs = new ArrayList<>(channels);
-        for (int i = 0; i < channels; ++i) {
-            final Flux<Command<DummyMessage>> messages = createMessages(messageCount/channels);
-            final Mono<Void> target = gateway.sendCommands(messages, appName).then().doOnSuccess(_v -> semaphore.release());
-            subs.add(target);
-        }
-
-        final long init = System.currentTimeMillis();
-        subs.forEach(Mono::subscribe);
-        System.out.println("Wait for publish");
-        semaphore.acquire(channels);
-        final long end = System.currentTimeMillis();
-
         final long total = end - init;
-        assertMessageThroughput(total, messageCount, 230);
+        assertMessageThroughput(total, messageCount, 200);
     }
 
     private void assertMessageThroughput(long total, long messageCount, int reqMicrosPerMessage) {
@@ -102,17 +73,33 @@ public class DirectGatewayPerfTest {
         Assertions.assertThat(microsPerMessage).isLessThan(reqMicrosPerMessage);
     }
 
-    private Flux<Command<DummyMessage>> createMessages(int count) {
-        final List<Command<DummyMessage>> commands = IntStream.range(0, count).mapToObj(value -> new Command<>(COMMAND_NAME, UUID.randomUUID().toString(), new DummyMessage())).collect(Collectors.toList());
-        return Flux.fromIterable(commands);
+
+    private Flux<AsyncQuery<DummyMessage>> createMessages(int count) {
+        final List<AsyncQuery<DummyMessage>> queryList = IntStream.range(0, count).mapToObj(_v -> new AsyncQuery<>(QUERY_NAME, new DummyMessage())).collect(Collectors.toList());
+        return Flux.fromIterable(queryList);
     }
+
 
     @SpringBootApplication
     @EnableDirectAsyncGateway
+    @EnableMessageListeners
     static class App{
         public static void main(String[] args) {
             SpringApplication.run(App.class, args);
         }
+
+        @Bean
+        public HandlerRegistry registry() {
+            final HandlerRegistry registry = range(0, 20).reduce(HandlerRegistry.register(), (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
+            return registry
+                .serveQuery(QUERY_NAME, this::handleSimple, DummyMessage.class);
+        }
+
+        private Mono<DummyMessage> handleSimple(DummyMessage message) {
+            message.setAge(message.getAge() + 12);
+            return Mono.just(message);
+        }
+
 
     }
 }

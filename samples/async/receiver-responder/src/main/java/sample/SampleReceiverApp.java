@@ -1,5 +1,8 @@
 package sample;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import lombok.AllArgsConstructor;
+import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -13,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Mono;
 
 import static org.reactivecommons.async.api.HandlerRegistry.*;
+import static reactor.core.publisher.Mono.just;
 
 @SpringBootApplication
 @EnableMessageListeners
@@ -22,14 +26,14 @@ public class SampleReceiverApp {
         SpringApplication.run(SampleReceiverApp.class, args);
     }
 
-    @Bean
+    //@Bean
     public HandlerRegistry handlerRegistry(MemberReceiver receiver) {
         return register()
             .serveQuery("serveQuery.register.member", receiver)
             .serveQuery("serveQuery.register.member.new", new QueryHandler<MemberRegisteredEvent, AddMemberCommand>(){
                 @Override
                 public Mono<MemberRegisteredEvent> handle(AddMemberCommand command) {
-                    return Mono.just(new MemberRegisteredEvent("42", 69));
+                    return just(new MemberRegisteredEvent("42", 69));
                 }
             })
             .serveQuery("test.query", message -> {
@@ -38,12 +42,42 @@ public class SampleReceiverApp {
     }
 
     @Bean
+    public HandlerRegistry handlerRegistrySubs() {
+        return HandlerRegistry.register()
+            .serveQuery("query1", message -> just(new RespQuery1("Ok", message)), Call.class);
+    }
+
+
+    @Data
+    @AllArgsConstructor
+    static class RespQuery1 {
+        private String response;
+        private Call request;
+    }
+
+
+    @Data
+    @AllArgsConstructor
+    static class Call {
+        private String name;
+        private String phone;
+    }
+
+    @Data
+    @AllArgsConstructor
+    static class CallResponse {
+        private String message;
+        private Integer code;
+    }
+
+
+    //@Bean
     public HandlerRegistry handlerRegistryForEmpty(EmptyReceiver emptyReceiver) {
         return register()
             .serveQuery("serveQuery.empty", emptyReceiver);
     }
 
-    @Bean
+    //@Bean
     public HandlerRegistry eventListeners(SampleUseCase useCase) {
         return register()
             .listenEvent("persona.registrada", useCase::reactToPersonaEvent, MemberRegisteredEvent.class);

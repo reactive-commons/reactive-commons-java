@@ -50,13 +50,14 @@ public class ReactiveMessageSenderTest {
                 return outboundMessageResult;
             });
         });
+        when(sender.send(any(Publisher.class))).thenReturn(Mono.empty());
         messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null);
     }
 
 
     @Test
     public void sendWithConfirmEmptyNullMessage() {
-        final Mono<Void> voidMono = messageSender.sendWithConfirm(null, "exchange", "rkey", new HashMap<>());
+        final Mono<Void> voidMono = messageSender.sendWithConfirm(null, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
     }
@@ -64,7 +65,7 @@ public class ReactiveMessageSenderTest {
     @Test
     public void sendWithConfirmSomeMessage() {
         SomeClass some = new SomeClass("42", "Daniel", new Date());
-        final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>());
+        final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
     }

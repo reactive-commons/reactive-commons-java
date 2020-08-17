@@ -102,6 +102,12 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
+    public BrokerConfig brokerConfig() {
+        return new BrokerConfig();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();
         PropertyMapper map = PropertyMapper.get();

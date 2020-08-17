@@ -25,10 +25,10 @@ public class SampleSenderApp {
 
     public static void main(String[] args) throws InterruptedException {
         SpringApplication.run(SampleSenderApp.class, args);
-        Thread.sleep(Long.MAX_VALUE);
+//        Thread.sleep(Long.MAX_VALUE);
     }
 
-    @Bean
+//    @Bean
     public CommandLineRunner run(MemberRegistrySender sender, DirectAsyncGateway asyncGateway, DomainEventBus bus) {
         //Command<AddMemberCommand> command0 = new Command<>("test.cmd", "01", new AddMemberCommand("Daniel ", "a"));
         //asyncGateway.sendCommand(command0, "Receiver2").subscribe();

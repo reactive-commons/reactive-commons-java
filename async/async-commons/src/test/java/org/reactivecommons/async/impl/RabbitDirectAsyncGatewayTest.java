@@ -29,8 +29,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 public class RabbitDirectAsyncGatewayTest {
 
-    @Mock
-    private BrokerConfig config;
+    private final BrokerConfig config = new BrokerConfig();
 
     @Mock
     private ReactiveReplyRouter router;

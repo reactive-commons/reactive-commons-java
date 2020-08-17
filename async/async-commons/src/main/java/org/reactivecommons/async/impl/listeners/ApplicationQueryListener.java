@@ -104,7 +104,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
                 headers.put(Headers.COMPLETION_ONLY_SIGNAL, TRUE.toString());
             }
 
-            return sender.sendWithConfirm(signal.get(),replyExchange, replyID, headers);
+            return sender.sendNoConfirm(signal.get(),replyExchange, replyID, headers, false);
         });
     }
 }

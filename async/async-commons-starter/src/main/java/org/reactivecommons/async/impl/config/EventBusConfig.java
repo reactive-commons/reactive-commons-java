@@ -15,9 +15,9 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 public class EventBusConfig {
 
     @Bean
-    public DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props) {
+    public DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props, BrokerConfig config) {
         final String exchangeName = props.getDomainEventsExchangeName();
         sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
-        return new RabbitDomainEventBus(sender, exchangeName);
+        return new RabbitDomainEventBus(sender, exchangeName, config);
     }
 }

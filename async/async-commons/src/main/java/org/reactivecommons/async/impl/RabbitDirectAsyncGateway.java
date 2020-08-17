@@ -9,7 +9,6 @@ import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.UnicastProcessor;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.time.Duration;
@@ -28,6 +27,9 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     private final ReactiveMessageSender sender;
     private final String exchange;
     private final MessageConverter converter;
+    private final boolean persistentCommands;
+    private final boolean persistentQueries;
+    private final Duration replyTimeout;
 
 
     public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange, MessageConverter converter) {
@@ -36,36 +38,35 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         this.sender = sender;
         this.exchange = exchange;
         this.converter = converter;
-
+        this.persistentCommands = config.isPersistentCommands();
+        this.persistentQueries = config.isPersistentQueries();
+        this.replyTimeout = config.getReplyTimeout();
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
-        return sender.sendWithConfirm(command, exchange, targetName, Collections.emptyMap());
+        return sender.sendWithConfirm(command, exchange, targetName, Collections.emptyMap(), persistentCommands);
     }
 
     public <T> Flux<OutboundMessageResult> sendCommands(Flux<Command<T>> commands, String targetName) {
-        return sender.sendWithConfirm2(commands, exchange, targetName, Collections.emptyMap());
+        return sender.sendWithConfirmBatch(commands, exchange, targetName, Collections.emptyMap(), persistentCommands);
     }
 
-    public <T> Mono<Void> sendCommandsNoConfirm(Flux<Command<T>> commands, String targetName) {
-        return sender.sendNoConfirm(commands, exchange, targetName, Collections.emptyMap());
-    }
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
         final Mono<R> replyHolder = router.register(correlationID)
-            .timeout(Duration.ofSeconds(15))
-            .flatMap(s -> fromCallable(() -> (R)converter.readValue(s, type)));
+            .timeout(replyTimeout)
+            .flatMap(s -> fromCallable(() -> converter.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
         headers.put(REPLY_ID, config.getRoutingKey());
         headers.put(SERVED_QUERY_ID, query.getResource());
         headers.put(CORRELATION_ID, correlationID);
 
-        return sender.sendWithConfirm(query, exchange, targetName + ".query", headers).then(replyHolder);
+        return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries).then(replyHolder);
     }
 
 }

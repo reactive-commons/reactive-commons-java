@@ -8,6 +8,7 @@ import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -29,12 +30,6 @@ public class DirectAsyncGatewayConfig {
         final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, listener, props.getReplyQueue());
         replyListener.startListening(config.getRoutingKey());
         return replyListener;
-    }
-
-
-    @Bean
-    public BrokerConfig brokerConfig() {
-        return new BrokerConfig();
     }
 
 

@@ -3,10 +3,7 @@ package org.reactivecommons.async.impl.communications;
 import com.rabbitmq.client.AMQP;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.exceptions.SendFailureNoAckException;
-import reactor.core.publisher.Flux;
-import reactor.core.publisher.Mono;
-import reactor.core.publisher.MonoSink;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.*;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.Sender;
@@ -16,6 +13,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
 import static org.reactivecommons.async.impl.Headers.SOURCE_APPLICATION;
@@ -26,14 +24,15 @@ public class ReactiveMessageSender {
     private final String sourceApplication;
     private final MessageConverter messageConverter;
     private final TopologyCreator topologyCreator;
-    private final UnicastProcessor<MyOutboundMessage> processor = UnicastProcessor.create();
-    private final UnicastProcessor<MyOutboundMessage> processor2 = UnicastProcessor.create();
-    private final UnicastProcessor<MyOutboundMessage> processor3 = UnicastProcessor.create();
-    private final UnicastProcessor<MyOutboundMessage> processor4 = UnicastProcessor.create();
-    private final UnicastProcessor<MyOutboundMessage> processors[] = new UnicastProcessor[]{processor, processor2, processor3, processor4};
-    private final ExecutorService executorService = new ThreadPoolExecutor(12, 256,
-        60L, TimeUnit.SECONDS,
-        new SynchronousQueue<Runnable>());
+
+    private final int numberOfSenderSubscriptions = 4;
+    private final CopyOnWriteArrayList<FluxSink<MyOutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
+
+    private volatile FluxSink<OutboundMessage> fluxSinkNoConfirm;
+    private final AtomicLong counter = new AtomicLong();
+
+    private final ExecutorService executorService = Executors.newFixedThreadPool(13, r -> new Thread(r, "RMessageSender1-" + counter.getAndIncrement()));
+    private final ExecutorService executorService2 = Executors.newFixedThreadPool(13, r -> new Thread(r, "RMessageSender2-" + counter.getAndIncrement()));
 
 
     public ReactiveMessageSender(Sender sender, String sourceApplication, MessageConverter messageConverter, TopologyCreator topologyCreator) {
@@ -41,39 +40,38 @@ public class ReactiveMessageSender {
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
-        sender.sendWithTypedPublishConfirms(processor).doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
-            final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
-            executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
-        }).subscribe();
 
-        sender.sendWithTypedPublishConfirms(processor2).doOnNext(outboundMessageResult -> {
-            final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
-            executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
-        }).subscribe();
+        for (int i = 0; i < numberOfSenderSubscriptions; ++i) {
+            final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
+            sender.sendWithTypedPublishConfirms(messageSource).doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
+                final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
+                executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
+            }).subscribe();
+        }
 
-        sender.sendWithTypedPublishConfirms(processor3).doOnNext(outboundMessageResult -> {
-            final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
-            executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
-        }).subscribe();
+        final Flux<OutboundMessage> messageSourceNoConfirm = Flux.create(fluxSink -> {
+            this.fluxSinkNoConfirm = fluxSink;
+        });
+        sender.send(messageSourceNoConfirm).subscribe();
 
-        sender.sendWithTypedPublishConfirms(processor4).doOnNext(outboundMessageResult -> {
-            final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
-            executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
-        }).subscribe();
     }
 
-
-    public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey, Map<String, Object> headers) {
+    public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
         return Mono.create(monoSink -> {
             Consumer<Boolean> notifier = new AckNotifier(monoSink);
-            final MyOutboundMessage outboundMessage = toOutboundMessage(message, exchange, routingKey, headers, notifier);
-            final int idx = (int)(System.currentTimeMillis() % processors.length);
-            processors[idx].onNext(outboundMessage);
+            final MyOutboundMessage outboundMessage = toOutboundMessage(message, exchange, routingKey, headers, notifier, persistent);
+            executorService2.submit(() -> fluxSinkConfirm.get((int) (System.currentTimeMillis()%numberOfSenderSubscriptions)).next(outboundMessage));
         });
     }
 
-    public <T> Flux<OutboundMessageResult> sendWithConfirm2(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers) {
-        return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers))
+
+    public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
+        fluxSinkNoConfirm.next(toOutboundMessage(message, exchange, routingKey, headers, persistent));
+        return Mono.empty();
+    }
+
+    public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
+        return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
             .as(sender::sendWithPublishConfirms)
             .flatMap(result -> result.isAck() ?
                 Mono.empty() :
@@ -98,11 +96,7 @@ public class ReactiveMessageSender {
         }
     }
 
-    public <T> Mono<Void> sendNoConfirm(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers) {
-//        return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers))
-//            .as(sender::send);
-        return null;
-    }
+
 
     static class MyOutboundMessage extends OutboundMessage{
 
@@ -118,19 +112,19 @@ public class ReactiveMessageSender {
         }
     }
 
-    private <T> MyOutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers, Consumer<Boolean> ackNotifier) {
+    private <T> MyOutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers, Consumer<Boolean> ackNotifier, boolean persistent) {
         final Message message = messageConverter.toMessage(object);
-        final AMQP.BasicProperties props = buildMessageProperties(message, headers);
+        final AMQP.BasicProperties props = buildMessageProperties(message, headers, persistent);
         return new MyOutboundMessage(exchange, routingKey, props, message.getBody(), ackNotifier);
     }
 
-    private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers) {
+    private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
         final Message message = messageConverter.toMessage(object);
-        final AMQP.BasicProperties props = buildMessageProperties(message, headers);
+        final AMQP.BasicProperties props = buildMessageProperties(message, headers, persistent);
         return new OutboundMessage(exchange, routingKey, props, message.getBody());
     }
 
-    private AMQP.BasicProperties buildMessageProperties(Message message, Map<String, Object> headers) {
+    private AMQP.BasicProperties buildMessageProperties(Message message, Map<String, Object> headers, boolean persistent) {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
@@ -139,7 +133,7 @@ public class ReactiveMessageSender {
                 .contentType(properties.getContentType())
                 .appId(sourceApplication)
                 .contentEncoding(properties.getContentEncoding())
-                .deliveryMode(2)
+                .deliveryMode(persistent ? 2 : 1)
                 .timestamp(new Date())
                 .messageId(UUID.randomUUID().toString())
                 .headers(baseHeaders).build();

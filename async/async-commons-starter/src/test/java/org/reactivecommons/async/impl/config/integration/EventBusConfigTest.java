@@ -33,7 +33,7 @@ public class EventBusConfigTest {
     public void domainEventBus() {
         final Mono<Void> mono = from(eventBus.emit(new DomainEvent<>("test1", "23", 11)));
         mono.block();
-        verify(sender).sendWithConfirm(any(), eq("domainEvents"), anyString(), any());
+        verify(sender).sendWithConfirm(any(), eq("domainEvents"), anyString(), any(), true);
     }
 
     @Import(EventBusConfig.class)
