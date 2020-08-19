@@ -13,6 +13,17 @@ To include all (API and implementation) (Spring boot Starter):
     dependencies {
       compile 'org.reactivecommons:async-commons-starter:0.6.0-beta'
     }
+
+    //IMPORTANT! if you use the version 0.6.0-beta
+    configurations.all {
+        resolutionStrategy.eachDependency {DependencyResolveDetails details ->
+            if (details.requested.group == 'io.projectreactor.rabbitmq'){
+                details.useVersion('1.5.0-M2')
+                details.because('Upgrade')
+            }
+        }
+    }
+
 ```
 
 To include only domain events API:
