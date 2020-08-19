@@ -129,7 +129,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(60);
+        Assertions.assertThat(microsPerMessage).isLessThan(120);
     }
 
     private Mono<Void> handleTestCPUMessageDelay(Command<DummyMessage> message) {
@@ -192,7 +192,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(1300);
+        Assertions.assertThat(microsPerMessage).isLessThan(2000);
     }
 
     @Test
@@ -216,7 +216,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(1350);
+        Assertions.assertThat(microsPerMessage).isLessThan(2350);
     }
 
     @Test
@@ -240,7 +240,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(1200);
+        Assertions.assertThat(microsPerMessage).isLessThan(2200);
     }
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry initialRegistry) {
