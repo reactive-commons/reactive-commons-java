@@ -27,6 +27,7 @@ jobs:
       - name: Execute jacocoTestReport and Sonar
         env:
           SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./gradlew test jacocoTestReport sonarqube
 #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
       - name: Build with Gradle
