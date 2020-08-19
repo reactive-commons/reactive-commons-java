@@ -103,7 +103,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(35);
+        Assertions.assertThat(microsPerMessage).isLessThan(75);
     }
 
     private Mono<Void> handleTestMessageDelay(Command<DummyMessage> message) {
@@ -216,7 +216,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(2350);
+        Assertions.assertThat(microsPerMessage).isLessThan(4350);
     }
 
     @Test
