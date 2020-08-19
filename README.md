@@ -15,6 +15,10 @@ To include all (API and implementation) (Spring boot Starter):
     }
 
     //IMPORTANT! if you use the version 0.6.0-beta
+    repositories {
+	    ...
+	    maven { url "https://repo.spring.io/milestone" }
+    }
     configurations.all {
         resolutionStrategy.eachDependency {DependencyResolveDetails details ->
             if (details.requested.group == 'io.projectreactor.rabbitmq'){
