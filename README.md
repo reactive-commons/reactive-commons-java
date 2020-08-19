@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/reactive-commons/reactive-commons-java.svg?branch=master)](https://travis-ci.org/reactive-commons/reactive-commons-java)
+![](https://github.com/reactive-commons/reactive-commons-java/workflows/reactive-commons-ci-cd/badge.svg)
 # reactive-commons-java
 The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and practices that make the foundation of a reactive microservices architecture.
 
@@ -11,7 +11,7 @@ To include all (API and implementation) (Spring boot Starter):
 ```groovy
 
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:0.5.0'
+      compile 'org.reactivecommons:async-commons-starter:0.6.0-beta'
     }
 ```
 
@@ -19,7 +19,7 @@ To include only domain events API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:domain-events-api:0.5.0'
+      compile 'org.reactivecommons:domain-events-api:0.6.0-beta'
     }
 ```
 
@@ -27,7 +27,7 @@ To include only async commons API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-api:0.5.0'
+      compile 'org.reactivecommons:async-commons-api:0.6.0-beta'
     }
 ```
 
@@ -60,19 +60,7 @@ public class DomainEvent<T> {
         this.data = data;
     }
 
-    public String getName() {
-        return this.name;
-    }
-
-    public String getEventId() {
-        return this.eventId;
-    }
-
-    public T getData() {
-        return this.data;
-    }
-
-    //... equals, hascode, toString impl..
+    //... getters, equals, hascode, toString impl..
 
 }
 ```
@@ -119,14 +107,27 @@ public class MainApplication {
     }    
     
 }
+
+
 ```
-Don't forget to add the implementation dependency to the main spring boot module:
+
+Don't forget to add the starter bundle to the main spring boot module (application):
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons:0.0.1-alpha1'
+      compile 'org.reactivecommons:async-commons-starter:0.6.0-beta'
     }
 ```
+
+
+Or add the implementation dependency if for any reason you don't want to use the starter:
+
+```groovy
+    dependencies {
+      compile 'org.reactivecommons:async-commons:0.6.0-beta'
+    }
+```
+
 
 ### Domain Event-Listener
 Reactive commons has four types of listeners implemented, available to be registered in the application via the **HandlerRegistry**, each of them is designed to tackle   
@@ -140,18 +141,37 @@ The available event listeners are:
 
 Example Code:
 ```java
-        public HandlerRegistry notificationEvents() {
-            return HandlerRegistry.register()
-                    .listenNotificationEvent("gatewayRouteAdded", message -> {
-                        System.out.println("Refreshing instance");
-                        return Mono.empty();
-                    },GatewayEvent.class);
-        }
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenNotificationEvent("some.event.name", event -> someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
+            .listenEvent("some.event.name2", event -> someBusinessDependency.functionReturningMonoVoid(event), Some.class)    
+            .serveQuery("query.name", query -> someBusinessDependency.findSomething(query), SomeQuery.class)    
+            .handleCommand("command.name", cmd -> someBusinessDependency.handleCommand(cmd), CmdClass.class);    
+    }
+}
 ```
 
-The above code shows how to handle a notification event (Notification event: an event that should be handled by
+The first line below "HandlerRegistry.register()"  shows how to handle a notification event (Notification event: an event that should be handled by
 every running instance of a microservice, e.g: notify to every instance that a configuration setting has changed
   and has to do a hot reload from a persistent source of that data).
+  
+The line ".listenEvent.." shows how to handle a standard event, and event that should be handled only once by some running instance of
+the microservice.
+
+The line ".serveQuery..." shows how to handle a standard request/reply or rpc messages flow.
+
+The line ".handleCommand..." shows how to handle a standard directed command, a message with a delivery guarantee.
 
 ### Request-Reply
 Example Code:
@@ -265,7 +285,7 @@ app.async.global.exchange=exchangeCustomName
 app.async.global.maxLengthBytes=125000000
 ```
 
-* withDLQRetry: Wheter to enable or not the new Retry DLQ Strategy
+* withDLQRetry: Whether to enable or not the new Retry DLQ Strategy
 * retryDelay: Delay retry value in ms
-* maxRetries: Max number of retries in case of error in adition to the one automatic retry per queue.
+* maxRetries: Number of retries in case of error in addition to the one automatic retry per queue.
 
