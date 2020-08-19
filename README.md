@@ -30,6 +30,19 @@ To include all (API and implementation) (Spring boot Starter):
 
 ```
 
+In application.properties
+```
+spring.application.name=MyAppName
+```
+
+Or yaml
+
+```
+spring:
+  application:
+    name: myAppName
+```
+
 To include only domain events API:
 
 ```groovy
