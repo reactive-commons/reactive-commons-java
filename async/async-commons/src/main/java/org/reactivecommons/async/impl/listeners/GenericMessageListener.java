@@ -71,21 +71,25 @@ public abstract class GenericMessageListener {
 
         setUpBindings(messageListener.getTopologyCreator()).thenMany(
                 receiver.consumeManualAck(queueName, consumeOptions)
-                        .transform(this::consumeFaultTolerant)
-                        .transform(this::outerFailureProtection))
+                        .transform(this::consumeFaultTolerant))
                 .subscribe();
     }
 
 
     private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj) {
-        String executorPath = getExecutorPath(msj);
-        final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
-        final Message message = RabbitMessage.fromDelivery(msj);
+        try {
+            String executorPath = getExecutorPath(msj);
+            final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
+            final Message message = RabbitMessage.fromDelivery(msj);
 
-        return defer(() -> handler.apply(message))
+            return defer(() -> handler.apply(message))
                 .transform(enrichPostProcess(message))
                 .transform(logExecution(executorPath))
                 .subscribeOn(scheduler).thenReturn(msj);
+        } catch (Exception e) {
+            log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
+            return Mono.error(e);
+        }
     }
 
     private Function<Mono<Object>, Mono<Object>> logExecution(String executorPath) {
@@ -100,22 +104,6 @@ public abstract class GenericMessageListener {
                         objectType, executorPath, timeElapsed));
             });
         };
-    }
-
-    private <T> Flux<T> outerFailureProtection(Flux<T> messageFlux) {
-        return messageFlux.onErrorContinue(t -> true, (throwable, elem) -> {
-            if (elem instanceof AcknowledgableDelivery) {
-                try {
-                    String messageID = ((AcknowledgableDelivery) elem).getProperties().getMessageId();
-                    log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", messageID));
-                    requeueOrAck((AcknowledgableDelivery) elem, throwable).subscribe();
-                } catch (Exception e) {
-                    log.log(Level.SEVERE, "Error returning message in failure!", e);
-                }
-            } else {
-                throw new RuntimeException(throwable);
-            }
-        });
     }
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
