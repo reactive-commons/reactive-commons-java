@@ -118,7 +118,7 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         String messageID = msj.getProperties().getMessageId();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s: %s", messageID, err.toString()));
+            log.log(Level.SEVERE, format("Error encounter while processing message %s: %s", messageID, err.toString()), err);
             log.warning(format("Message %s Headers: %s", messageID, msj.getProperties().getHeaders().toString()));
             log.warning(format("Message %s Body: %s", messageID, new String(msj.getBody())));
         } catch (Exception e) {
