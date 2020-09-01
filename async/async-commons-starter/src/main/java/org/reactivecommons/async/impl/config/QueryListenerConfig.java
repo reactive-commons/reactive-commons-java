@@ -7,6 +7,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
 import org.reactivecommons.async.impl.listeners.ApplicationQueryListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -34,6 +35,17 @@ public class QueryListenerConfig {
 
         listener.startListener();
 
+        return listener;
+    }
+
+    @Bean
+    public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
+                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+        final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+                appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
+                messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),
+                asyncProps.getDomain().getEvents().getMaxLengthBytes(), discardNotifier);
+        listener.startListener();
         return listener;
     }
 }
