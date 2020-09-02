@@ -1,0 +1,126 @@
+== Reactive Commons API
+
+[[api-guide-overview]]
+=== Overview
+
+This section describes the reactive API for producing and consuming messages using Reactive Commons.
+There are three main classes in Reactive Commons:
+
+. `HandlerRegistry` for listening to events and commands messages and for registering their respective handlers.
+. `DomainEventBus` for emiting events to an event bus 
+. `DirectAsyncGateway` for emiting commands to an event bus 
+
+The project uses https://github.com/reactor/reactor-core[Reactor Core] to expose a https://github.com/reactive-streams/reactive-streams-jvm["Reactive Streams"] API.
+
+=== Semantic Messages Classes
+
+Reactice Commons has 2 classes that represent events or commands, it give it a semantic meaning for a message. So, let talks about DomainEvent and Command classes .
+
+==== DomainEvent<T>
+
+This class let you represent a Event in the system. It accepts a generic class that will be the information to transport for that event, a eventId and a name for the event. The structure for a DomainEvent is:
+
+[source,java]
+--------
+package org.reactivecommons.api.domain;
+
+public class DomainEvent<T> {
+    private final String name;
+    private final String eventId;
+    private final T data;
+
+    public DomainEvent(String name, String eventId, T data) {
+        this.name = name;
+        this.eventId = eventId;
+        this.data = data;
+    }
+
+    //... getters, equals, hascode, toString impl..
+
+}
+--------
+
+==== Command<T>
+
+An other basic structure is the Command class. This class let you represent a Command/Request in the system. It accepts a generic class that will be the information for that command, a eventId and a name for that event. The structure for a DomainEvent is:
+
+[source,java]
+--------
+package org.reactivecommons.api.domain;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+@AllArgsConstructor
+public class Command<T> {
+    private final String name;
+    private final String commandId;
+    private final T data;
+}
+--------
+
+=== Reactive Commons - Sending Events and Commands
+
+Outbound messages are sent to an event bus using `DomainEventBus` or `DirectAsyncGateway` classes. If you are using Spring Boot, you can have a Main class like this:
+
+[source,java]
+--------
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDomainEventBus
+public class MainApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MainApplication.class, args);
+    }
+    
+    @Bean
+    public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+        return new ManageTasksUseCase(tasks, eventBus);
+    }    
+    
+}
+--------
+
+The @EnableDomainEventBus annotation enable to the application to emit Events to the System. This annotation create a EnableDomainEventBus Bean, so you can use it for emit events. This interface looks like:
+
+[source,java]
+--------
+package org.reactivecommons.api.domain;
+
+import org.reactivestreams.Publisher;
+
+public interface DomainEventBus {
+    <T> Publisher<Void> emit(DomainEvent<T> event);
+}
+--------
+
+The emit method recive a DomainEvent<T> class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a Mono or a Flux object. So, for example, if you want to send a UserRegistered event to the system ,you have to us
+
+
+[source,java]
+--------
+
+public class AnyUseCase {
+
+  private DomainEventBus eventBus;
+
+  public ManageTasksUseCase( DomainEventBus eventBus) {
+    this.eventBus = eventBus;
+  }
+
+  public Mono<TaskToDo> doSomething(String name, String description) {
+      return doSomething()
+        .flatMap(task -> emitCreatedEvent(task).thenReturn(task));
+  }
+
+  private Mono<Void> emitCreatedEvent(EventClass event) {
+      return Mono.from(eventBus.emit(new DomainEvent<>("name.event", uuid(), event)));
+  }
+  //...
+}
+--------

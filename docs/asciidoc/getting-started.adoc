@@ -1,0 +1,165 @@
+== Getting Started
+
+[[Requirements]]
+=== Requirements
+
+You need Java JRE installed (Java 8 or later).
+
+You also need to install RabbitMQ. Follow the
+https://www.rabbitmq.com/download.html[instructions from the website].
+Note you should use RabbitMQ 3.6.x or later.
+
+=== Quick Start
+
+This quick start tutorial sets up a single node RabbitMQ and runs the sample reactive
+sender and consumer using Reactive Commons.
+
+==== Start RabbitMQ
+
+Start RabbitMQ on your local machine with all the defaults (e.g. AMQP port is 5672).
+
+==== Sample Spring Boot Application
+
+The Spring Boot sample publishes and cosumes messages with the `DomainEventBus`. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.
+
+To build your own application using the Reactive Commons API,
+you need to include a dependency to Reactive Commons.
+
+[source,groovy,subs="attributes,specialcharacters"]
+--------
+  dependencies {
+    compile "org.reactivecommons:async-commons-starter:{appversion}"
+  }
+--------
+
+Also you need to include the name for your app in the application.properties:
+[source]
+--------
+spring.application.name=MyAppName
+--------
+Or yaml
+[source, yaml]
+--------
+spring:
+  application:
+    name: myAppName
+--------
+
+The https://github.com/reactor/reactor-rabbitmq/blob/master/reactor-rabbitmq-samples/src/main/java/reactor/rabbitmq/samples/SpringBootSample.java[`SpringBootSample`]
+code is on GitHub.
+
+===== DomainEventBus
+
+You must enable DomainEventBus with the @EnableDomainEventBus annotation. It give you a bean DomainEventBus, which let you, to emit and listen messages like DomainEvent type.
+
+===== DomainEvent Class
+The DomainEvent class has the following structure:
+
+[source,java]
+--------
+package org.reactivecommons.api.domain;
+
+public class DomainEvent<T> {
+    private final String name;
+    private final String eventId;
+    private final T data;
+
+    public DomainEvent(String name, String eventId, T data) {
+        this.name = name;
+        this.eventId = eventId;
+        this.data = data;
+    }
+
+    //... getters, equals, hascode, toString impl..
+
+}
+--------
+
+A Main application may looks like: 
+
+[source,java]
+--------
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDomainEventBus
+public class MainApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MainApplication.class, args);
+    }
+    
+    @Bean
+    public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+        return new ManageTasksUseCase(tasks, eventBus);
+    }    
+    
+}
+--------
+
+Where the ManageTasksUseCase expose some use cases of the domain.
+
+[source,java]
+--------
+
+public class ManageTasksUseCase {
+
+  private TaskToDoRepository tasks;
+  private DomainEventBus eventBus;
+
+  public ManageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+    this.tasks = tasks;
+    this.eventBus = eventBus;
+  }
+
+  public Mono<TaskToDo> createNew(String name, String description) {
+      return uuid()
+          .flatMap(id -> TaskToDoFactory.createTask(id, name, description))
+          .flatMap(tasks::save)
+          .flatMap(task -> emitCreatedEvent(task).thenReturn(task));
+  }
+
+  private Mono<Void> emitCreatedEvent(TaskToDo task) {
+      return Mono.from(eventBus.emit(new DomainEvent<>("task.created", task.getId(), task)));
+  }
+  //...
+}
+--------
+
+===== HandlerRegistry
+Reactive commons has four types of listeners implemented, available to be registered in the application via the HandlerRegistry, each of them is designed to tackle common requirements for listeners in event based applications and abstracts the behavior of event flow in every situation .
+
+A simple sample is:
+
+[source,java]
+--------
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenEvent("task.created", event -> someBusinessDependency.functionReturningMonoVoid(event), EventClass.class);
+    }
+}
+--------
+
+[#versioning]
+==== Versioning
+
+Reactive Commons used https://semver.org/
+
+Reactive Commons uses a `MAJOR.MINOR.PATCH` scheme, whereby an increment in:
+
+* MAJOR version when you make incompatible API changes,
+* MINOR version when you add functionality in a backwards compatible manner, and
+* PATCH version when you make backwards compatible bug fixes.
+Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.

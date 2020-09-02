@@ -1,0 +1,44 @@
+== Overview
+
+=== Reactive Commons
+
+The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and practices that make the foundation of a reactive microservices architecture.
+
+Even though the main purpose is to provide such abstractions in a mostly generic way such abstractions would be of little use without a concrete implementation so we provide some implementations in a best effors maner that aim to be easy to change, personalize and extend.
+
+The first approach to this work was to release a very simple abstractions and a corresponding implementation over asyncronous message driven communication between microservices build on top of project-reactor and spring boot.
+
+=== Project Reactor
+
+https://projectreactor.io[Reactor] is a highly optimized reactive library for
+building efficient, non-blocking applications on the JVM based on the
+https://github.com/reactive-streams/reactive-streams-jvm[Reactive Streams Specification].
+Reactor based applications can sustain very high throughput message rates
+and operate with a very low memory footprint,
+making it suitable for building efficient event-driven applications using
+the microservices architecture.
+
+Reactor implements two publishers
+https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html[Flux<T>] and
+https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html[Mono<T>],
+both of which support non-blocking back-pressure.
+This enables exchange of data between threads with well-defined memory usage,
+avoiding unnecessary intermediate buffering or blocking.
+
+=== Reactive API for Event Mechanism
+
+Reactive Commons is a reactive API for asyncronous message driven communication based on Reactor.
+Reactive Commons API enables messages to be published over RabbitMQ or SNS/SQS and consumed from those products using functional APIs with non-blocking back-pressure and low overheads.
+This enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating with other systems to provide an end-to-end reactive system.
+
+When we talk about asyncronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events and Commands.
+
+==== Events - Pub/Sub
+Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want to notify to its subscriptors. Events represents facts in the past, so events are not intentions or requests of anything in  present, for example: "UserRegistered", "NotificationSent".
+
+Events are the most important topic in a Publish-Subscribe system, because this element let us to notify a many stakeholders in a specific event. An other benefit is system is decouple, because you can add more subscriber to the system without modify some component. 
+
+==== Commands
+Commands represent a intention for doing something, that intention must to be doing by the domain context with that responsibility. An example of a command may be:  "registerUser", "sendNotification".
+
+==== Request / Reply
