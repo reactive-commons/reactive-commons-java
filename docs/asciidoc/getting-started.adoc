@@ -1,4 +1,8 @@
+[[GettingStarted]]
 == Getting Started
+
+This quick start tutorial sets up a single node RabbitMQ and runs the sample reactive sender and consumer using Reactive Commons.
+
 
 [[Requirements]]
 === Requirements
@@ -7,12 +11,6 @@ You need Java JRE installed (Java 8 or later).
 
 You also need to install RabbitMQ. Follow the
 https://www.rabbitmq.com/download.html[instructions from the website].
-Note you should use RabbitMQ 3.6.x or later.
-
-=== Quick Start
-
-This quick start tutorial sets up a single node RabbitMQ and runs the sample reactive
-sender and consumer using Reactive Commons.
 
 ==== Start RabbitMQ
 
@@ -37,7 +35,7 @@ Also you need to include the name for your app in the application.properties:
 --------
 spring.application.name=MyAppName
 --------
-Or yaml
+Or yaml format
 [source, yaml]
 --------
 spring:
@@ -45,12 +43,9 @@ spring:
     name: myAppName
 --------
 
-The https://github.com/reactor/reactor-rabbitmq/blob/master/reactor-rabbitmq-samples/src/main/java/reactor/rabbitmq/samples/SpringBootSample.java[`SpringBootSample`]
-code is on GitHub.
-
 ===== DomainEventBus
 
-You must enable DomainEventBus with the @EnableDomainEventBus annotation. It give you a bean DomainEventBus, which let you, to emit and listen messages like DomainEvent type.
+You must enable DomainEventBus with the @EnableDomainEventBus annotation. It give you a DomainEventBus bean for emitting and listenning messages.
 
 ===== DomainEvent Class
 The DomainEvent class has the following structure:
@@ -63,15 +58,7 @@ public class DomainEvent<T> {
     private final String name;
     private final String eventId;
     private final T data;
-
-    public DomainEvent(String name, String eventId, T data) {
-        this.name = name;
-        this.eventId = eventId;
-        this.data = data;
-    }
-
     //... getters, equals, hascode, toString impl..
-
 }
 --------
 

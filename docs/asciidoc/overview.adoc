@@ -28,17 +28,19 @@ avoiding unnecessary intermediate buffering or blocking.
 === Reactive API for Event Mechanism
 
 Reactive Commons is a reactive API for asyncronous message driven communication based on Reactor.
-Reactive Commons API enables messages to be published over RabbitMQ or SNS/SQS and consumed from those products using functional APIs with non-blocking back-pressure and low overheads.
-This enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating with other systems to provide an end-to-end reactive system.
+Reactive Commons API enables messages to be published over a event bus like RabbitMQ or SNS/SQS and consumed using functional APIs with non-blocking back-pressure and low overheads.
+It enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating it with other systems to provide an end-to-end reactive system.
 
-When we talk about asyncronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events and Commands.
+When we talk about asyncronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events, Commands and Queries.
 
 ==== Events - Pub/Sub
-Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want to notify to its subscriptors. Events represents facts in the past, so events are not intentions or requests of anything in  present, for example: "UserRegistered", "NotificationSent".
+Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want to notify to its subscribers. Events represents facts that nobody can change, so events are not intentions or requests of anything, An example may be and UserRegistered or a NotificationSent.
 
-Events are the most important topic in a Publish-Subscribe system, because this element let us to notify a many stakeholders in a specific event. An other benefit is system is decouple, because you can add more subscriber to the system without modify some component. 
+Events are the most important topic in a Publish-Subscribe system, because this element let's notify a many stakeholders in a specific event. An other benefit is the system is decouple, because you can add more subscriber to the system without modify some component. 
 
 ==== Commands
-Commands represent a intention for doing something, that intention must to be doing by the domain context with that responsibility. An example of a command may be:  "registerUser", "sendNotification".
+Commands represent a intention for doing something, that intention must to be done by the domain context with that responsibility. An example of a command may be:  "registerUser" or "sendNotification".
 
 ==== Request / Reply
+
+Queries represent a intention for getting information about something, that query must to be processed by the domain context with that responsibility and that context must respond with the information requested throught request/reply pattern. An example of a query may be:  "UserInfo".
