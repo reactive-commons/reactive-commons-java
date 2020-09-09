@@ -24,3 +24,6 @@ include::new.adoc[]
 = Reference Documentation
 include::api-guide.adoc[]
 // ======================================================================================
+
+// Command to HTML export
+// asciidoctor -a linkcss -a stylesheet=asciidoctor.css -a toc2 -a stylesdir=./stylesheets index.asciidoc
