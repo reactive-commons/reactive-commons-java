@@ -14,11 +14,11 @@ The project uses https://github.com/reactor/reactor-core[Reactor Core] to expose
 
 === Semantic Messages Classes
 
-Reactice Commons has 2 classes that represent events or commands, it give it a semantic meaning for a message. So, let talks about DomainEvent and Command classes .
+Reactice Commons has 3 classes that represent events, commands or queries, giving a semantic meaning for a message. So, let's talk about DomainEvent and Command classes .
 
 ==== DomainEvent<T>
 
-This class let you represent a Event in the system. It accepts a generic class that will be the information to transport for that event, a eventId and a name for the event. The structure for a DomainEvent is:
+:This class lets you represent a Event in the system. It accepts a generic class that will be the information to transport for that event, a eventId and a name for the event. The structure for a DomainEvent is
 
 [source,java]
 --------
@@ -42,7 +42,7 @@ public class DomainEvent<T> {
 
 ==== Command<T>
 
-An other basic structure is the Command class. This class let you represent a Command/Request in the system. It accepts a generic class that will be the information for that command, a eventId and a name for that event. The structure for a DomainEvent is:
+An other basic structure is the Command class. This class lets you represent a Command in the system. It accepts a generic class that will be the information for that command, a commandId and a name for that event. The structure for a Command is:
 
 [source,java]
 --------
@@ -61,7 +61,21 @@ public class Command<T> {
 }
 --------
 
-=== Reactive Commons - Sending Events and Commands
+==== AsyncQuery<T>
+
+An other basic structure is the AsyncQuery class. This class lets you represent a Query in the system. It accepts a generic class that will be the information for that query and a name for that resoruce. The structure is:
+
+
+[source,java]
+--------
+@Data
+public class AsyncQuery<T> {
+    private final String resource;
+    private final T queryData;
+}
+--------
+
+=== Reactive Commons - Sending Events, Commands and Request/Reply messages
 
 Outbound messages are sent to an event bus using `DomainEventBus` or `DirectAsyncGateway` classes. If you are using Spring Boot, you can have a Main class like this:
 
@@ -73,6 +87,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
 @EnableDomainEventBus
+@EnableDirectAsyncGateway
 public class MainApplication {
     public static void main(String[] args) {
         SpringApplication.run(MainApplication.class, args);
@@ -86,7 +101,9 @@ public class MainApplication {
 }
 --------
 
-The @EnableDomainEventBus annotation enable to the application to emit Events to the System. This annotation create a EnableDomainEventBus Bean, so you can use it for emit events. This interface looks like:
+==== DomainEventBus
+
+The @EnableDomainEventBus annotation enable to the application to emit Events to the System. This annotation create a EnableDomainEventBus bean, so you can use it for emitting events. This interface looks like:
 
 [source,java]
 --------
@@ -99,28 +116,209 @@ public interface DomainEventBus {
 }
 --------
 
-The emit method recive a DomainEvent<T> class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a Mono or a Flux object. So, for example, if you want to send a UserRegistered event to the system ,you have to us
-
+The emit method recive a DomainEvent<T> class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a mono object. So, for example, if you want to send a UserRegistered event to the system ,you can do this:
 
 [source,java]
 --------
 
 public class AnyUseCase {
 
-  private DomainEventBus eventBus;
+  private DomainEventBus eventBus; // Injected
 
-  public ManageTasksUseCase( DomainEventBus eventBus) {
-    this.eventBus = eventBus;
-  }
-
-  public Mono<TaskToDo> doSomething(String name, String description) {
-      return doSomething()
-        .flatMap(task -> emitCreatedEvent(task).thenReturn(task));
-  }
-
-  private Mono<Void> emitCreatedEvent(EventClass event) {
-      return Mono.from(eventBus.emit(new DomainEvent<>("name.event", uuid(), event)));
+  private Mono<Void> emitCreatedEvent(UserRegistered event) {
+      return Mono.from(eventBus.emit(new DomainEvent<>("user.registered", uuid(), event)));
   }
   //...
+}
+--------
+
+==== DirectAsyncGateway - Commands
+
+If you want to send Commands to the system, the @EnableDirectAsyncGateway annotation enable to the application to emit Commands to the System. This annotation create a DirectAsyncGateway bean, so you can use it for emitting commands. This interface looks like:
+
+[source,java]
+--------
+public interface DirectAsyncGateway {
+    <T> Mono<Void> sendCommand(Command<T> command, String targetName);
+    <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
+}
+--------
+
+The sendCommand method recive a Command<T> class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a mono object. So, for example, if you want to send a UserRegister command to the "target.name" component ,you can do this:
+
+[source,java]
+--------
+
+public class AnyUseCase {
+
+  private DirectAsyncGateway gateway; // Injected
+
+  private Mono<Void> emitCreatedEvent(UserRegister command) {
+      return gateway.sendCommand(new Command<>("user.register", uuid(), command), "target.name") // Continue reactive flow
+  }
+  //...
+}
+--------
+
+The second parameter for sendCommand method is the name of the target component for that command, It's the name stablished in the properties file of Spring "application.properties" in the "spring.application.name" field. 
+
+[NOTE] 
+you don't need this parameter in the emit method of DomainEventBus class, because an event is a fact for cero or more subscribers.
+
+==== DirectAsyncGateway - Request/Reply
+
+The DirectAsyncGateway class has another method called "requestReply", this method lets you to send a query and wait for an answer for that query. The method will respond you in a reacive way with a Publisher, like a mono object with the generic data. So, for example, if you want to send a query with QueryUser data, to the "target.name" component and recive an User object response, you can do this:
+
+[source,java]
+--------
+
+public class AnyUseCase {
+
+  private DirectAsyncGateway gateway; // Injected
+
+  private Mono<User> query(QueryUser query) {
+      return gateway.requestReply(new AsyncQuery<>("query.name", query), "target.name", User.class);
+  }
+  //...
+}
+--------
+
+=== Reactive Commons - Listening for Events, Commands and Query messages
+
+==== HandlerRegistry
+
+Inbound messages are listened from an event bus using `HandlerRegistry` class. The @EnableMessageListeners annotation enable you to listen messages like Events, Commands or Queries. You have to create a HandlerRegistry object, so you can register handlers for specifc messages.
+
+[source,java]
+--------
+@SpringBootApplication
+@EnableMessageListeners
+public class MainApplication {
+   ...    
+}
+--------
+
+The HandlerRegistry implements builder patter, so each time you use some method, it will return a HanlderRegistry object. HanlderRegistry has the following methods:
+
+* listenEvent: It lets listen for an event 
+* serveQuery: It lets listen for a query 
+* handleCommand: It lets listen for a command 
+
+===== HandlerRegistry - listenEvent
+
+listenEvent method lets you register a handler for a specific event. It has the next signature:
+
+[source,java]
+--------
+HandlerRegistry listenEvent(String eventName, EventHandler<T> fn, Class<T> eventClass)
+--------
+
+Where the EventHandler interface signature is:
+
+[source,java]
+--------
+public interface EventHandler<T> extends GenericHandler<Void, DomainEvent<T>> {
+}
+--------
+
+[NOTE] 
+The return type of the EventHandler is Void
+
+So, for example, if your application want react to user.registered event, you can define a handler for that event like this:
+
+[source,java]
+--------
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry eventMessages() {
+        return HandlerRegistry.register()
+            .listenEvent("user.registered", event -> someBusinessDependency.functionReturningMonoVoid(event), UserRegistered.class)       
+    }
+}
+--------
+
+===== HandlerRegistry - handleCommand
+
+handleCommand method lets you register a handler for a specific command. It has the next signature:
+
+[source,java]
+--------
+HandlerRegistry handleCommand(String commandName, CommandHandler<T> fn, Class<T> commandClass)
+--------
+
+Where the CommandHandler interface signature is:
+
+[source,java]
+--------
+public interface CommandHandler<T> extends GenericHandler<Void, Command<T>> {
+}
+--------
+[NOTE] 
+The return type of the CommandHandler is Void
+
+So, for example, if your application want react to user.register command, you can define a handler for that command like this:
+
+[source,java]
+--------
+@Bean
+public HandlerRegistry commandMessages() {
+    return HandlerRegistry.register()
+        .handleCommand("user.register", cmd -> someBusinessDependency.handleCommand(cmd), UserRegister.class);          
+}
+--------
+
+===== HandlerRegistry - serveQuery
+
+serveQuery method lets you register a handler for a specific query. It has the next signature:
+
+[source,java]
+--------
+HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass)
+--------
+
+Where the QueryHandler interface signature is:
+
+[source,java]
+--------
+public interface QueryHandler<T, C> extends GenericHandler<T, C> {
+}
+--------
+[NOTE] 
+The return type of the QueryHandler is a generic C
+
+For example, if your application want react to user.information query, you can define a handler for that query like this:
+
+[source,java]
+--------
+  @Bean
+  public HandlerRegistry queryMessages() {
+      return HandlerRegistry.register()
+          .serveQuery("user.information", query -> someBusinessDependency.findSomething(query), SomeQuery.class);         
+  }
+--------
+
+TIP: Remember HandlerRegistry use builder pattern, So, you can build a chain of listener for each message:
+
+[source,java]
+--------
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenNotificationEvent("some.event.name", event -> someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
+            .listenEvent("some.event.name2", event -> someBusinessDependency.functionReturningMonoVoid(event), Some.class)    
+            .serveQuery("query.name", query -> someBusinessDependency.findSomething(query), SomeQuery.class)    
+            .handleCommand("command.name", cmd -> someBusinessDependency.handleCommand(cmd), CmdClass.class);    
+    }
 }
 --------
