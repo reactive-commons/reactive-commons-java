@@ -1,0 +1,14 @@
+== New & Noteworthy
+
+[[new]]
+
+=== What's new in Reactive Commons 1.0
+
+* Introduction of the Reactive Commons API (DomainEvent, Command, DynamicRegistry, HandlerRegistry and DirectAsyncGateway classes/interfaces )
+* Support for request/reply pattern
+* Support for Direct Commands pattern
+* Support for Event pattern
+* Exception handling
+* Support for RabbitMQ 
+* Support for SNS/SQS 
+
