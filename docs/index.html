@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="generator" content="Asciidoctor 2.0.10">
+<meta name="author" content="Daniel Bustamante Ospina">
+<title>Reactive Commons Reference Guide</title>
+<link rel="stylesheet" href="./stylesheets/asciidoctor.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+</head>
+<body class="book toc2 toc-left">
+<div id="header">
+<h1>Reactive Commons Reference Guide</h1>
+<div class="details">
+<span id="author" class="author">Daniel Bustamante Ospina</span><br>
+<span id="revdate">0.6.2</span>
+</div>
+<div id="toc" class="toc2">
+<div id="toctitle">Table of Contents</div>
+<ul class="sectlevel0">
+<li><a href="#_introduction">Introduction</a>
+<ul class="sectlevel1">
+<li><a href="#_overview">1. Overview</a>
+<ul class="sectlevel2">
+<li><a href="#_reactive_commons">1.1. Reactive Commons</a></li>
+<li><a href="#_project_reactor">1.2. Project Reactor</a></li>
+<li><a href="#_reactive_api_for_event_mechanism">1.3. Reactive API for Event Mechanism</a>
+<ul class="sectlevel3">
+<li><a href="#_events_pubsub">1.3.1. Events - Pub/Sub</a></li>
+<li><a href="#_commands">1.3.2. Commands</a></li>
+<li><a href="#_request_reply">1.3.3. Request / Reply</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#GettingStarted">2. Getting Started</a>
+<ul class="sectlevel2">
+<li><a href="#Requirements">2.1. Requirements</a>
+<ul class="sectlevel3">
+<li><a href="#_start_rabbitmq">2.1.1. Start RabbitMQ</a></li>
+<li><a href="#_sample_spring_boot_application">2.1.2. Sample Spring Boot Application</a>
+<ul class="sectlevel4">
+<li><a href="#_domaineventbus">DomainEventBus</a></li>
+<li><a href="#_domainevent_class">DomainEvent Class</a></li>
+<li><a href="#_handlerregistry">HandlerRegistry</a></li>
+</ul>
+</li>
+<li><a href="#versioning">2.1.3. Versioning</a></li>
+</ul>
+</li>
+<li><a href="#new">2.2. What&#8217;s new in Reactive Commons 1.0</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a href="#_reference_documentation">Reference Documentation</a>
+<ul class="sectlevel1">
+<li><a href="#_reactive_commons_api">3. Reactive Commons API</a>
+<ul class="sectlevel2">
+<li><a href="#api-guide-overview">3.1. Overview</a></li>
+<li><a href="#_semantic_messages_classes">3.2. Semantic Messages Classes</a>
+<ul class="sectlevel3">
+<li><a href="#_domaineventt">3.2.1. DomainEvent&lt;T&gt;</a></li>
+<li><a href="#_commandt">3.2.2. Command&lt;T&gt;</a></li>
+<li><a href="#_asyncqueryt">3.2.3. AsyncQuery&lt;T&gt;</a></li>
+</ul>
+</li>
+<li><a href="#_reactive_commons_sending_events_commands_and_requestreply_messages">3.3. Reactive Commons - Sending Events, Commands and Request/Reply messages</a>
+<ul class="sectlevel3">
+<li><a href="#_domaineventbus_2">3.3.1. DomainEventBus</a></li>
+<li><a href="#_directasyncgateway_commands">3.3.2. DirectAsyncGateway - Commands</a></li>
+<li><a href="#_directasyncgateway_requestreply">3.3.3. DirectAsyncGateway - Request/Reply</a></li>
+</ul>
+</li>
+<li><a href="#_reactive_commons_listening_for_events_commands_and_query_messages">3.4. Reactive Commons - Listening for Events, Commands and Query messages</a>
+<ul class="sectlevel3">
+<li><a href="#_handlerregistry_2">3.4.1. HandlerRegistry</a>
+<ul class="sectlevel4">
+<li><a href="#_handlerregistry_listenevent">HandlerRegistry - listenEvent</a></li>
+<li><a href="#_handlerregistry_handlecommand">HandlerRegistry - handleCommand</a></li>
+<li><a href="#_handlerregistry_servequery">HandlerRegistry - serveQuery</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+<div id="content">
+<h1 id="_introduction" class="sect0">Introduction</h1>
+<div class="sect1">
+<h2 id="_overview">1. Overview</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="_reactive_commons">1.1. Reactive Commons</h3>
+<div class="paragraph">
+<p>The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and practices that make the foundation of a reactive microservices architecture.</p>
+</div>
+<div class="paragraph">
+<p>Even though the main purpose is to provide such abstractions in a mostly generic way such abstractions would be of little use without a concrete implementation so we provide some implementations in a best effors maner that aim to be easy to change, personalize and extend.</p>
+</div>
+<div class="paragraph">
+<p>The first approach to this work was to release a very simple abstractions and a corresponding implementation over asyncronous message driven communication between microservices build on top of project-reactor and spring boot.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_project_reactor">1.2. Project Reactor</h3>
+<div class="paragraph">
+<p><a href="https://projectreactor.io">Reactor</a> is a highly optimized reactive library for
+building efficient, non-blocking applications on the JVM based on the
+<a href="https://github.com/reactive-streams/reactive-streams-jvm">Reactive Streams Specification</a>.
+Reactor based applications can sustain very high throughput message rates
+and operate with a very low memory footprint,
+making it suitable for building efficient event-driven applications using
+the microservices architecture.</p>
+</div>
+<div class="paragraph">
+<p>Reactor implements two publishers
+<a href="https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Flux.html">Flux&lt;T&gt;</a> and
+<a href="https://projectreactor.io/docs/core/release/api/reactor/core/publisher/Mono.html">Mono&lt;T&gt;</a>,
+both of which support non-blocking back-pressure.
+This enables exchange of data between threads with well-defined memory usage,
+avoiding unnecessary intermediate buffering or blocking.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_reactive_api_for_event_mechanism">1.3. Reactive API for Event Mechanism</h3>
+<div class="paragraph">
+<p>Reactive Commons is a reactive API for asyncronous message driven communication based on Reactor.
+Reactive Commons API enables messages to be published over a event bus like RabbitMQ or SNS/SQS and consumed using functional APIs with non-blocking back-pressure and low overheads.
+It enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating it with other systems to provide an end-to-end reactive system.</p>
+</div>
+<div class="paragraph">
+<p>When we talk about asyncronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events, Commands and Queries.</p>
+</div>
+<div class="sect3">
+<h4 id="_events_pubsub">1.3.1. Events - Pub/Sub</h4>
+<div class="paragraph">
+<p>Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want to notify to its subscribers. Events represents facts that nobody can change, so events are not intentions or requests of anything, An example may be and UserRegistered or a NotificationSent.</p>
+</div>
+<div class="paragraph">
+<p>Events are the most important topic in a Publish-Subscribe system, because this element let&#8217;s notify a many stakeholders in a specific event. An other benefit is the system is decouple, because you can add more subscriber to the system without modify some component.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_commands">1.3.2. Commands</h4>
+<div class="paragraph">
+<p>Commands represent a intention for doing something, that intention must to be done by the domain context with that responsibility. An example of a command may be:  "registerUser" or "sendNotification".</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_request_reply">1.3.3. Request / Reply</h4>
+<div class="paragraph">
+<p>Queries represent a intention for getting information about something, that query must to be processed by the domain context with that responsibility and that context must respond with the information requested throught request/reply pattern. An example of a query may be:  "UserInfo".</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="GettingStarted">2. Getting Started</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>This quick start tutorial sets up a single node RabbitMQ and runs the sample reactive sender and consumer using Reactive Commons.</p>
+</div>
+<div class="sect2">
+<h3 id="Requirements">2.1. Requirements</h3>
+<div class="paragraph">
+<p>You need Java JRE installed (Java 8 or later).</p>
+</div>
+<div class="paragraph">
+<p>You also need to install RabbitMQ. Follow the
+<a href="https://www.rabbitmq.com/download.html">instructions from the website</a>.</p>
+</div>
+<div class="sect3">
+<h4 id="_start_rabbitmq">2.1.1. Start RabbitMQ</h4>
+<div class="paragraph">
+<p>Start RabbitMQ on your local machine with all the defaults (e.g. AMQP port is 5672).</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_sample_spring_boot_application">2.1.2. Sample Spring Boot Application</h4>
+<div class="paragraph">
+<p>The Spring Boot sample publishes and cosumes messages with the <code>DomainEventBus</code>. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.</p>
+</div>
+<div class="paragraph">
+<p>To build your own application using the Reactive Commons API,
+you need to include a dependency to Reactive Commons.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="groovy">  dependencies {
+    compile "org.reactivecommons:async-commons-starter:0.6.2"
+  }</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Also you need to include the name for your app in the application.properties:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code>spring.application.name=MyAppName</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Or yaml format</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="yaml">spring:
+  application:
+    name: myAppName</code></pre>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_domaineventbus">DomainEventBus</h5>
+<div class="paragraph">
+<p>You must enable DomainEventBus with the @EnableDomainEventBus annotation. It give you a DomainEventBus bean for emitting and listenning messages.</p>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_domainevent_class">DomainEvent Class</h5>
+<div class="paragraph">
+<p>The DomainEvent class has the following structure:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">package org.reactivecommons.api.domain;
+
+public class DomainEvent&lt;T&gt; {
+    private final String name;
+    private final String eventId;
+    private final T data;
+    //... getters, equals, hascode, toString impl..
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A Main application may looks like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDomainEventBus
+public class MainApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MainApplication.class, args);
+    }
+
+    @Bean
+    public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+        return new ManageTasksUseCase(tasks, eventBus);
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where the ManageTasksUseCase expose some use cases of the domain.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public class ManageTasksUseCase {
+
+  private TaskToDoRepository tasks;
+  private DomainEventBus eventBus;
+
+  public ManageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+    this.tasks = tasks;
+    this.eventBus = eventBus;
+  }
+
+  public Mono&lt;TaskToDo&gt; createNew(String name, String description) {
+      return uuid()
+          .flatMap(id -&gt; TaskToDoFactory.createTask(id, name, description))
+          .flatMap(tasks::save)
+          .flatMap(task -&gt; emitCreatedEvent(task).thenReturn(task));
+  }
+
+  private Mono&lt;Void&gt; emitCreatedEvent(TaskToDo task) {
+      return Mono.from(eventBus.emit(new DomainEvent&lt;&gt;("task.created", task.getId(), task)));
+  }
+  //...
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_handlerregistry">HandlerRegistry</h5>
+<div class="paragraph">
+<p>Reactive commons has four types of listeners implemented, available to be registered in the application via the HandlerRegistry, each of them is designed to tackle common requirements for listeners in event based applications and abstracts the behavior of event flow in every situation .</p>
+</div>
+<div class="paragraph">
+<p>A simple sample is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.beans.factory.annotation.Autowired;
+
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenEvent("task.created", event -&gt; someBusinessDependency.functionReturningMonoVoid(event), EventClass.class);
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="versioning">2.1.3. Versioning</h4>
+<div class="paragraph">
+<p>Reactive Commons used <a href="https://semver.org/" class="bare">semver.org/</a></p>
+</div>
+<div class="paragraph">
+<p>Reactive Commons uses a <code>MAJOR.MINOR.PATCH</code> scheme, whereby an increment in:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>MAJOR version when you make incompatible API changes,</p>
+</li>
+<li>
+<p>MINOR version when you add functionality in a backwards compatible manner, and</p>
+</li>
+<li>
+<p>PATCH version when you make backwards compatible bug fixes.
+Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format.
+== New &amp; Noteworthy</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="new">2.2. What&#8217;s new in Reactive Commons 1.0</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Introduction of the Reactive Commons API (DomainEvent, Command, DynamicRegistry, HandlerRegistry and DirectAsyncGateway classes/interfaces )</p>
+</li>
+<li>
+<p>Support for request/reply pattern</p>
+</li>
+<li>
+<p>Support for Direct Commands pattern</p>
+</li>
+<li>
+<p>Support for Event pattern</p>
+</li>
+<li>
+<p>Exception handling</p>
+</li>
+<li>
+<p>Support for RabbitMQ</p>
+</li>
+<li>
+<p>Support for SNS/SQS</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<h1 id="_reference_documentation" class="sect0">Reference Documentation</h1>
+<div class="sect1">
+<h2 id="_reactive_commons_api">3. Reactive Commons API</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="api-guide-overview">3.1. Overview</h3>
+<div class="paragraph">
+<p>This section describes the reactive API for producing and consuming messages using Reactive Commons.
+There are three main classes in Reactive Commons:</p>
+</div>
+<div class="olist arabic">
+<ol class="arabic">
+<li>
+<p><code>HandlerRegistry</code> for listening to events and commands messages and for registering their respective handlers.</p>
+</li>
+<li>
+<p><code>DomainEventBus</code> for emiting events to an event bus</p>
+</li>
+<li>
+<p><code>DirectAsyncGateway</code> for emiting commands to an event bus</p>
+</li>
+</ol>
+</div>
+<div class="paragraph">
+<p>The project uses <a href="https://github.com/reactor/reactor-core">Reactor Core</a> to expose a <a href="https://github.com/reactive-streams/reactive-streams-jvm">"Reactive Streams"</a> API.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_semantic_messages_classes">3.2. Semantic Messages Classes</h3>
+<div class="paragraph">
+<p>Reactice Commons has 3 classes that represent events, commands or queries, giving a semantic meaning for a message. So, let&#8217;s talk about DomainEvent and Command classes .</p>
+</div>
+<div class="sect3">
+<h4 id="_domaineventt">3.2.1. DomainEvent&lt;T&gt;</h4>
+<div class="paragraph">
+<p>:This class lets you represent a Event in the system. It accepts a generic class that will be the information to transport for that event, a eventId and a name for the event. The structure for a DomainEvent is</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">package org.reactivecommons.api.domain;
+
+public class DomainEvent&lt;T&gt; {
+    private final String name;
+    private final String eventId;
+    private final T data;
+
+    public DomainEvent(String name, String eventId, T data) {
+        this.name = name;
+        this.eventId = eventId;
+        this.data = data;
+    }
+
+    //... getters, equals, hascode, toString impl..
+
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_commandt">3.2.2. Command&lt;T&gt;</h4>
+<div class="paragraph">
+<p>An other basic structure is the Command class. This class lets you represent a Command in the system. It accepts a generic class that will be the information for that command, a commandId and a name for that event. The structure for a Command is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">package org.reactivecommons.api.domain;
+
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+
+@Data
+@AllArgsConstructor
+public class Command&lt;T&gt; {
+    private final String name;
+    private final String commandId;
+    private final T data;
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_asyncqueryt">3.2.3. AsyncQuery&lt;T&gt;</h4>
+<div class="paragraph">
+<p>An other basic structure is the AsyncQuery class. This class lets you represent a Query in the system. It accepts a generic class that will be the information for that query and a name for that resoruce. The structure is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@Data
+public class AsyncQuery&lt;T&gt; {
+    private final String resource;
+    private final T queryData;
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_reactive_commons_sending_events_commands_and_requestreply_messages">3.3. Reactive Commons - Sending Events, Commands and Request/Reply messages</h3>
+<div class="paragraph">
+<p>Outbound messages are sent to an event bus using <code>DomainEventBus</code> or <code>DirectAsyncGateway</code> classes. If you are using Spring Boot, you can have a Main class like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+@SpringBootApplication
+@EnableDomainEventBus
+@EnableDirectAsyncGateway
+public class MainApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(MainApplication.class, args);
+    }
+
+    @Bean
+    public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
+        return new ManageTasksUseCase(tasks, eventBus);
+    }
+
+}</code></pre>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_domaineventbus_2">3.3.1. DomainEventBus</h4>
+<div class="paragraph">
+<p>The @EnableDomainEventBus annotation enable to the application to emit Events to the System. This annotation create a EnableDomainEventBus bean, so you can use it for emitting events. This interface looks like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">package org.reactivecommons.api.domain;
+
+import org.reactivestreams.Publisher;
+
+public interface DomainEventBus {
+    &lt;T&gt; Publisher&lt;Void&gt; emit(DomainEvent&lt;T&gt; event);
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The emit method recive a DomainEvent&lt;T&gt; class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a mono object. So, for example, if you want to send a UserRegistered event to the system ,you can do this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public class AnyUseCase {
+
+  private DomainEventBus eventBus; // Injected
+
+  private Mono&lt;Void&gt; emitCreatedEvent(UserRegistered event) {
+      return Mono.from(eventBus.emit(new DomainEvent&lt;&gt;("user.registered", uuid(), event)));
+  }
+  //...
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_directasyncgateway_commands">3.3.2. DirectAsyncGateway - Commands</h4>
+<div class="paragraph">
+<p>If you want to send Commands to the system, the @EnableDirectAsyncGateway annotation enable to the application to emit Commands to the System. This annotation create a DirectAsyncGateway bean, so you can use it for emitting commands. This interface looks like:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public interface DirectAsyncGateway {
+    &lt;T&gt; Mono&lt;Void&gt; sendCommand(Command&lt;T&gt; command, String targetName);
+    &lt;T, R&gt; Mono&lt;R&gt; requestReply(AsyncQuery&lt;T&gt; query, String targetName, Class&lt;R&gt; type);
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The sendCommand method recive a Command&lt;T&gt; class where you can publish information to the system. The method will respond you in a reacive way with a Publisher, like a mono object. So, for example, if you want to send a UserRegister command to the "target.name" component ,you can do this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public class AnyUseCase {
+
+  private DirectAsyncGateway gateway; // Injected
+
+  private Mono&lt;Void&gt; emitCreatedEvent(UserRegister command) {
+      return gateway.sendCommand(new Command&lt;&gt;("user.register", uuid(), command), "target.name") // Continue reactive flow
+  }
+  //...
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The second parameter for sendCommand method is the name of the target component for that command, It&#8217;s the name stablished in the properties file of Spring "application.properties" in the "spring.application.name" field.</p>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+you don&#8217;t need this parameter in the emit method of DomainEventBus class, because an event is a fact for cero or more subscribers.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="_directasyncgateway_requestreply">3.3.3. DirectAsyncGateway - Request/Reply</h4>
+<div class="paragraph">
+<p>The DirectAsyncGateway class has another method called "requestReply", this method lets you to send a query and wait for an answer for that query. The method will respond you in a reacive way with a Publisher, like a mono object with the generic data. So, for example, if you want to send a query with QueryUser data, to the "target.name" component and recive an User object response, you can do this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public class AnyUseCase {
+
+  private DirectAsyncGateway gateway; // Injected
+
+  private Mono&lt;User&gt; query(QueryUser query) {
+      return gateway.requestReply(new AsyncQuery&lt;&gt;("query.name", query), "target.name", User.class);
+  }
+  //...
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="_reactive_commons_listening_for_events_commands_and_query_messages">3.4. Reactive Commons - Listening for Events, Commands and Query messages</h3>
+<div class="sect3">
+<h4 id="_handlerregistry_2">3.4.1. HandlerRegistry</h4>
+<div class="paragraph">
+<p>Inbound messages are listened from an event bus using <code>HandlerRegistry</code> class. The @EnableMessageListeners annotation enable you to listen messages like Events, Commands or Queries. You have to create a HandlerRegistry object, so you can register handlers for specifc messages.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@SpringBootApplication
+@EnableMessageListeners
+public class MainApplication {
+   ...
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The HandlerRegistry implements builder patter, so each time you use some method, it will return a HanlderRegistry object. HanlderRegistry has the following methods:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>listenEvent: It lets listen for an event</p>
+</li>
+<li>
+<p>serveQuery: It lets listen for a query</p>
+</li>
+<li>
+<p>handleCommand: It lets listen for a command</p>
+</li>
+</ul>
+</div>
+<div class="sect4">
+<h5 id="_handlerregistry_listenevent">HandlerRegistry - listenEvent</h5>
+<div class="paragraph">
+<p>listenEvent method lets you register a handler for a specific event. It has the next signature:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">HandlerRegistry listenEvent(String eventName, EventHandler&lt;T&gt; fn, Class&lt;T&gt; eventClass)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where the EventHandler interface signature is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public interface EventHandler&lt;T&gt; extends GenericHandler&lt;Void, DomainEvent&lt;T&gt;&gt; {
+}</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The return type of the EventHandler is Void
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>So, for example, if your application want react to user.registered event, you can define a handler for that event like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry eventMessages() {
+        return HandlerRegistry.register()
+            .listenEvent("user.registered", event -&gt; someBusinessDependency.functionReturningMonoVoid(event), UserRegistered.class)
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_handlerregistry_handlecommand">HandlerRegistry - handleCommand</h5>
+<div class="paragraph">
+<p>handleCommand method lets you register a handler for a specific command. It has the next signature:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">HandlerRegistry handleCommand(String commandName, CommandHandler&lt;T&gt; fn, Class&lt;T&gt; commandClass)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where the CommandHandler interface signature is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public interface CommandHandler&lt;T&gt; extends GenericHandler&lt;Void, Command&lt;T&gt;&gt; {
+}</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The return type of the CommandHandler is Void
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>So, for example, if your application want react to user.register command, you can define a handler for that command like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@Bean
+public HandlerRegistry commandMessages() {
+    return HandlerRegistry.register()
+        .handleCommand("user.register", cmd -&gt; someBusinessDependency.handleCommand(cmd), UserRegister.class);
+}</code></pre>
+</div>
+</div>
+</div>
+<div class="sect4">
+<h5 id="_handlerregistry_servequery">HandlerRegistry - serveQuery</h5>
+<div class="paragraph">
+<p>serveQuery method lets you register a handler for a specific query. It has the next signature:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">HandlerRegistry serveQuery(String resource, QueryHandler&lt;T, R&gt; handler, Class&lt;R&gt; queryClass)</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Where the QueryHandler interface signature is:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">public interface QueryHandler&lt;T, C&gt; extends GenericHandler&lt;T, C&gt; {
+}</code></pre>
+</div>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+The return type of the QueryHandler is a generic C
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>For example, if your application want react to user.information query, you can define a handler for that query like this:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">  @Bean
+  public HandlerRegistry queryMessages() {
+      return HandlerRegistry.register()
+          .serveQuery("user.information", query -&gt; someBusinessDependency.findSomething(query), SomeQuery.class);
+  }</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+Remember HandlerRegistry use builder pattern, So, you can build a chain of listener for each message:
+</td>
+</tr>
+</table>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenNotificationEvent("some.event.name", event -&gt; someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
+            .listenEvent("some.event.name2", event -&gt; someBusinessDependency.functionReturningMonoVoid(event), Some.class)
+            .serveQuery("query.name", query -&gt; someBusinessDependency.findSomething(query), SomeQuery.class)
+            .handleCommand("command.name", cmd -&gt; someBusinessDependency.handleCommand(cmd), CmdClass.class);
+    }
+}</code></pre>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div id="footer">
+<div id="footer-text">
+Last updated 2020-09-23 23:17:36 -0500
+</div>
+</div>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/run_prettify.min.js"></script>
+</body>
+</html>
