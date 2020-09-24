@@ -64,7 +64,7 @@ public class RabbitDirectAsyncGatewayTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(50);
+        Assertions.assertThat(microsPerMessage).isLessThan(150);
     }
 
     private ReactiveMessageSender getReactiveMessageSender() {
