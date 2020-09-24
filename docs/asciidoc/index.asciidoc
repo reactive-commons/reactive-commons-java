@@ -1,7 +1,7 @@
 = Reactive Commons Reference Guide
 Daniel Bustamante Ospina
 // version is automatically set in doc.gradle, no need to change it here
-:appversion: 1.0.0.BUILD-SNAPSHOT
+:appversion: 0.6.1
 ifndef::host-github[:ext-relative: {outfilesuffix}]
 {appversion}
 :doctype: book
