@@ -9,6 +9,7 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @ConfigurationProperties(prefix = "spring.rabbitmq")
 public class RabbitProperties {
@@ -923,12 +924,15 @@ public class RabbitProperties {
         private String parseUsernameAndPassword(String input) {
             if (input.contains("@")) {
                 String[] split = StringUtils.split(input, "@");
+                if (split == null) return input;
                 String creds = split[0];
                 input = split[1];
                 split = StringUtils.split(creds, ":");
-                this.username = split[0];
-                if (split.length > 0) {
-                    this.password = split[1];
+                if (split != null) {
+                    this.username = split[0];
+                    if (split.length > 1) {
+                        this.password = split[1];
+                    }
                 }
             }
             return input;
