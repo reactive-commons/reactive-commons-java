@@ -1,18 +1,23 @@
 package sample;
 
+import org.reactivecommons.async.api.AsyncQuery;
+import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import org.reactivecommons.async.impl.ReplyCommandSender;
 
 @Service
-public class MemberRegistrySender extends ReplyCommandSender {
+public class MemberRegistrySender  {
     private static final String REGISTER_MEMBER = "serveQuery.register.member";
 
+    @Autowired
+    private DirectAsyncGateway asyncGateway;
+
     public Mono<MemberRegisteredEvent> registerMember(AddMemberCommand command){
-        return sendCommand(command, REGISTER_MEMBER, MemberRegisteredEvent.class);
+        AsyncQuery<AddMemberCommand> asyncQuery = new AsyncQuery<>(REGISTER_MEMBER, command);
+        return asyncGateway.requestReply(asyncQuery, target(), MemberRegisteredEvent.class);
     }
 
-    @Override
     protected String target() {
         return "Receiver2";
     }
