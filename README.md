@@ -318,6 +318,7 @@ app.async.direct.maxLengthBytes=125000000
 ```
 app.async.global.exchange=exchangeCustomName
 app.async.global.maxLengthBytes=125000000
+app.async.maxConcurrency=20
 ```
 
 * withDLQRetry: Whether to enable or not the new Retry DLQ Strategy
