@@ -17,8 +17,8 @@ public class HandlerResolver {
     private final Map<String , RegisteredEventListener> eventNotificationListeners;
 
     @SuppressWarnings("unchecked")
-    public <T, R> RegisteredQueryHandler<T, R> getQueryHandler(String path) {
-        return (RegisteredQueryHandler<T, R>) queryHandlers.get(path);
+    public <T> RegisteredQueryHandler<T> getQueryHandler(String path) {
+        return (RegisteredQueryHandler<T>) queryHandlers.get(path);
     }
 
     @SuppressWarnings("unchecked")

@@ -2,21 +2,21 @@ package org.reactivecommons.async.impl.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.api.handlers.QueryExecutor;
+import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.impl.DiscardNotifier;
-import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.Headers;
-import org.reactivecommons.async.impl.QueryExecutor;
+import org.reactivecommons.async.impl.*;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Signal;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
-import reactor.rabbitmq.QueueSpecification;
 
 import java.util.HashMap;
 import java.util.Optional;
@@ -41,7 +41,10 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private final Optional<Integer> maxLengthBytes;
 
 
-    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, ReactiveMessageSender sender, String directExchange, MessageConverter converter, String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
+    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
+                                    ReactiveMessageSender sender, String directExchange, MessageConverter converter,
+                                    String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay,
+                                    Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
         super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query");
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
@@ -53,17 +56,27 @@ public class ApplicationQueryListener extends GenericMessageListener {
         this.maxLengthBytes = maxLengthBytes;
     }
 
-
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredQueryHandler<Object, Object> handler1 = handlerResolver.getQueryHandler(executorPath);
-        if (handler1 == null) {
+        final RegisteredQueryHandler<Object> handler = handlerResolver.getQueryHandler(executorPath);
+        if (handler == null) {
             return message -> Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
         }
-        final Class<?> handlerClass = (Class<?>) handler1.getQueryClass();
+        final Class<?> handlerClass = handler.getQueryClass();
         Function<Message, Object> messageConverter = msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
-        final QueryExecutor executor = new QueryExecutor(handler1.getHandler(), messageConverter);
+        final QueryExecutor<Object, Object> executor = buildQueryExecutor(handler.getHandler(), messageConverter);
         return executor::execute;
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private QueryExecutor<Object, Object> buildQueryExecutor(Object handler, Function<Message, Object> converter) {
+        QueryExecutor executor;
+        if (handler instanceof QueryHandler) {
+            executor = new QueryDirectExecutor<Object, Object>((QueryHandler) handler, converter);
+        } else {
+            executor = new QueryDelegateExecutor<Object>((QueryHandlerDelegate) handler, converter);
+        }
+        return executor;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -94,6 +107,9 @@ public class ApplicationQueryListener extends GenericMessageListener {
             if (signal.isOnError()) {
                 return Mono.error(ofNullable(signal.getThrowable()).orElseGet(RuntimeException::new));
             }
+            if (signal.isOnComplete()) {
+                return Mono.empty();
+            }
 
             final String replyID = msg.getProperties().getHeaders().get(REPLY_ID).toString();
             final String correlationID = msg.getProperties().getHeaders().get(CORRELATION_ID).toString();
@@ -104,7 +120,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
                 headers.put(Headers.COMPLETION_ONLY_SIGNAL, TRUE.toString());
             }
 
-            return sender.sendNoConfirm(signal.get(),replyExchange, replyID, headers, false);
+            return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
         });
     }
 }

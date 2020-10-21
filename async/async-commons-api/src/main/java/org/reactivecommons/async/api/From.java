@@ -1,7 +1,9 @@
 package org.reactivecommons.async.api;
 
+import lombok.Data;
+
+@Data
 public class From {
-    //String getCorrelationID();
-    //String getReplyID();
-    ///...
+    private String replyID;
+    private String correlationID;
 }
