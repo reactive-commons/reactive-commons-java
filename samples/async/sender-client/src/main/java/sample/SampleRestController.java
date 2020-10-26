@@ -20,7 +20,7 @@ public class SampleRestController {
     private DirectAsyncGateway directAsyncGateway;
     private final String queryName = "query1";
     private final String queryName2 = "query2";
-    private final String target = "Receiver-Perf";
+    private final String target = "receiver";
 
     private final WebClient webClient = WebClient.builder().build();
 

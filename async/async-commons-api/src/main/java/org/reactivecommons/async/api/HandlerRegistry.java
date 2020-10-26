@@ -10,6 +10,7 @@ import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
@@ -58,11 +59,11 @@ public class HandlerRegistry {
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, handler, queryClass));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
         return this;
     }
 
-    public <R> HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<R> handler, Class<R> queryClass) {
+    public <R> HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass) {
         handlers.add(new RegisteredQueryHandler<>(resource, handler, queryClass));
         return this;
     }
