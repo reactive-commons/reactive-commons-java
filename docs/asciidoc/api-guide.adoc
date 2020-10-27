@@ -219,6 +219,10 @@ Where the EventHandler interface signature is:
 --------
 public interface EventHandler<T> extends GenericHandler<Void, DomainEvent<T>> {
 }
+
+public interface GenericHandler<T, M> {
+    Mono<T> handle(M message);
+}
 --------
 
 [NOTE]
@@ -256,6 +260,10 @@ Where the CommandHandler interface signature is:
 [source,java]
 --------
 public interface CommandHandler<T> extends GenericHandler<Void, Command<T>> {
+}
+
+public interface GenericHandler<T, M> {
+    Mono<T> handle(M message);
 }
 --------
 [NOTE]

@@ -1,17 +1,17 @@
 = Reactive Commons Reference Guide
 Daniel Bustamante Ospina
 // version is automatically set in doc.gradle, no need to change it here
-:appversion: 0.6.2
+:appversion: 0.6.2-ignored-value
 ifndef::host-github[:ext-relative: {outfilesuffix}]
-{appversion}
 :doctype: book
-:toc:
+:toc: left
 :toclevels: 4
 :source-highlighter: prettify
 :numbered:
 :icons: font
 :hide-uri-scheme:
-:imagesdir: images
+:stylesheet: stylesheets/asciidoctor.css
+:linkcss:
 
 :github-repo: reactive-commons
 :github-code: https://github.com/{github-repo}
