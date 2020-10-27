@@ -34,7 +34,7 @@ asciidoctor {
     sources {
         include 'index.asciidoc'
     }
-    outputDir file('build/docs')
+    outputDir file('docs')
 }
 
 apply from: './main.gradle'

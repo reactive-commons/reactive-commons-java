@@ -75,7 +75,7 @@ dependencies {
     compile project(":async-commons-api")
     compile project(":domain-events-api")
 
-    api 'io.projectreactor:reactor-core'
+    compileOnly 'io.projectreactor:reactor-core'
     api ("io.projectreactor.rabbitmq:reactor-rabbitmq")
     api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
