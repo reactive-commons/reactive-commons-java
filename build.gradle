@@ -13,6 +13,7 @@ buildscript {
 plugins {
     id 'jacoco'
     id "org.sonarqube" version "3.0"
+    id 'org.asciidoctor.jvm.convert' version '3.1.0'
 }
 
 sonarqube {
@@ -21,6 +22,19 @@ sonarqube {
         property "sonar.organization", "reactive-commons"
         property "sonar.host.url", "https://sonarcloud.io"
     }
+}
+
+repositories {
+    jcenter()
+}
+
+asciidoctor {
+    sourceDir file('docs/asciidoc')
+    baseDir file('docs/asciidoc')
+    sources {
+        include 'index.asciidoc'
+    }
+    outputDir file('docs')
 }
 
 apply from: './main.gradle'

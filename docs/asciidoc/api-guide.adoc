@@ -7,8 +7,8 @@ This section describes the reactive API for producing and consuming messages usi
 There are three main classes in Reactive Commons:
 
 . `HandlerRegistry` for listening to events and commands messages and for registering their respective handlers.
-. `DomainEventBus` for emiting events to an event bus 
-. `DirectAsyncGateway` for emiting commands to an event bus 
+. `DomainEventBus` for emiting events to an event bus
+. `DirectAsyncGateway` for emiting commands to an event bus
 
 The project uses https://github.com/reactor/reactor-core[Reactor Core] to expose a https://github.com/reactive-streams/reactive-streams-jvm["Reactive Streams"] API.
 
@@ -92,12 +92,12 @@ public class MainApplication {
     public static void main(String[] args) {
         SpringApplication.run(MainApplication.class, args);
     }
-    
+
     @Bean
     public ManageTasksUseCase manageTasksUseCase(TaskToDoRepository tasks, DomainEventBus eventBus) {
         return new ManageTasksUseCase(tasks, eventBus);
-    }    
-    
+    }
+
 }
 --------
 
@@ -141,6 +141,7 @@ If you want to send Commands to the system, the @EnableDirectAsyncGateway annota
 public interface DirectAsyncGateway {
     <T> Mono<Void> sendCommand(Command<T> command, String targetName);
     <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
+    <T> Mono<Void> reply(T response, From from);
 }
 --------
 
@@ -160,9 +161,9 @@ public class AnyUseCase {
 }
 --------
 
-The second parameter for sendCommand method is the name of the target component for that command, It's the name stablished in the properties file of Spring "application.properties" in the "spring.application.name" field. 
+The second parameter for sendCommand method is the name of the target component for that command, It's the name stablished in the properties file of Spring "application.properties" in the "spring.application.name" field.
 
-[NOTE] 
+[NOTE]
 you don't need this parameter in the emit method of DomainEventBus class, because an event is a fact for cero or more subscribers.
 
 ==== DirectAsyncGateway - Request/Reply
@@ -194,15 +195,15 @@ Inbound messages are listened from an event bus using `HandlerRegistry` class. T
 @SpringBootApplication
 @EnableMessageListeners
 public class MainApplication {
-   ...    
+   ...
 }
 --------
 
 The HandlerRegistry implements builder patter, so each time you use some method, it will return a HanlderRegistry object. HanlderRegistry has the following methods:
 
-* listenEvent: It lets listen for an event 
-* serveQuery: It lets listen for a query 
-* handleCommand: It lets listen for a command 
+* listenEvent: It lets listen for an event
+* serveQuery: It lets listen for a query
+* handleCommand: It lets listen for a command
 
 ===== HandlerRegistry - listenEvent
 
@@ -219,9 +220,13 @@ Where the EventHandler interface signature is:
 --------
 public interface EventHandler<T> extends GenericHandler<Void, DomainEvent<T>> {
 }
+
+public interface GenericHandler<T, M> {
+    Mono<T> handle(M message);
+}
 --------
 
-[NOTE] 
+[NOTE]
 The return type of the EventHandler is Void
 
 So, for example, if your application want react to user.registered event, you can define a handler for that event like this:
@@ -237,7 +242,7 @@ public class SomeConfigurationClass {
     @Bean
     public HandlerRegistry eventMessages() {
         return HandlerRegistry.register()
-            .listenEvent("user.registered", event -> someBusinessDependency.functionReturningMonoVoid(event), UserRegistered.class)       
+            .listenEvent("user.registered", event -> someBusinessDependency.functionReturningMonoVoid(event), UserRegistered.class)
     }
 }
 --------
@@ -257,8 +262,12 @@ Where the CommandHandler interface signature is:
 --------
 public interface CommandHandler<T> extends GenericHandler<Void, Command<T>> {
 }
+
+public interface GenericHandler<T, M> {
+    Mono<T> handle(M message);
+}
 --------
-[NOTE] 
+[NOTE]
 The return type of the CommandHandler is Void
 
 So, for example, if your application want react to user.register command, you can define a handler for that command like this:
@@ -268,17 +277,19 @@ So, for example, if your application want react to user.register command, you ca
 @Bean
 public HandlerRegistry commandMessages() {
     return HandlerRegistry.register()
-        .handleCommand("user.register", cmd -> someBusinessDependency.handleCommand(cmd), UserRegister.class);          
+        .handleCommand("user.register", cmd -> someBusinessDependency.handleCommand(cmd), UserRegister.class);
 }
 --------
 
 ===== HandlerRegistry - serveQuery
 
-serveQuery method lets you register a handler for a specific query. It has the next signature:
+serveQuery method lets you register a handler for a specific query. It has the next signatures:
 
 [source,java]
 --------
 HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass)
+
+HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass)
 --------
 
 Where the QueryHandler interface signature is:
@@ -287,8 +298,22 @@ Where the QueryHandler interface signature is:
 --------
 public interface QueryHandler<T, C> extends GenericHandler<T, C> {
 }
+
+public interface GenericHandler<T, M> {
+    Mono<T> handle(M message);
+}
 --------
-[NOTE] 
+
+The QueryHandlerDelegate interface signature is:
+
+[source,java]
+--------
+public interface QueryHandlerDelegate<T, M> {
+    Mono<T> handle(From from, M message);
+}
+--------
+
+[NOTE]
 The return type of the QueryHandler is a generic C
 
 For example, if your application want react to user.information query, you can define a handler for that query like this:
@@ -298,8 +323,29 @@ For example, if your application want react to user.information query, you can d
   @Bean
   public HandlerRegistry queryMessages() {
       return HandlerRegistry.register()
-          .serveQuery("user.information", query -> someBusinessDependency.findSomething(query), SomeQuery.class);         
+          .serveQuery("user.information", query -> someBusinessDependency.findSomething(query), SomeQuery.class);
   }
+--------
+
+[NOTE]
+The return type of the QueryHandlerDelegate should be Void
+
+This second interface allows the request / reply pattern not to have to be resolved in the same flow. For example,
+when the execution of a task is requested, and it can be processed by a group of workers, who leave the result in a database. There is another group of workers who are in charge of listening to the changes in the database and responding to that request. In this scenario, the process who receives the request is not the same process who responds to it. That is the usage scenario for QueryHandlerDelegate:
+
+[source,java]
+--------
+  @Bean
+  public HandlerRegistry queryMessages() {
+      return HandlerRegistry.register()
+          .serveQuery("report.create", (from, query) -> someTask.startReportProcess(from, query), SomeQuery.class);
+  }
+--------
+When the report creation task is completed, the process responsible of responding should call the reply method of DirectAsyncGateway passing the from object like this:
+
+[source,java]
+--------
+  gateway.reply(response, from)
 --------
 
 TIP: Remember HandlerRegistry use builder pattern, So, you can build a chain of listener for each message:
@@ -316,9 +362,9 @@ public class SomeConfigurationClass {
     public HandlerRegistry notificationEvents() {
         return HandlerRegistry.register()
             .listenNotificationEvent("some.event.name", event -> someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
-            .listenEvent("some.event.name2", event -> someBusinessDependency.functionReturningMonoVoid(event), Some.class)    
-            .serveQuery("query.name", query -> someBusinessDependency.findSomething(query), SomeQuery.class)    
-            .handleCommand("command.name", cmd -> someBusinessDependency.handleCommand(cmd), CmdClass.class);    
+            .listenEvent("some.event.name2", event -> someBusinessDependency.functionReturningMonoVoid(event), Some.class)
+            .serveQuery("query.name", query -> someBusinessDependency.findSomething(query), SomeQuery.class)
+            .handleCommand("command.name", cmd -> someBusinessDependency.handleCommand(cmd), CmdClass.class);
     }
 }
 --------

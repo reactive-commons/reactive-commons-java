@@ -19,13 +19,21 @@ public class SampleRestController {
     @Autowired
     private DirectAsyncGateway directAsyncGateway;
     private final String queryName = "query1";
-    private final String target = "Receiver-Perf";
+    private final String queryName2 = "query2";
+    private final String target = "receiver";
 
     private final WebClient webClient = WebClient.builder().build();
 
     @PostMapping(path = "/sample", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleService(@RequestBody Call call) {
         AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        return directAsyncGateway.requestReply(query, target, RespQuery1.class);
+    }
+
+    @PostMapping(path = "/sample2", consumes = MediaType.APPLICATION_JSON_VALUE, produces =
+            MediaType.APPLICATION_JSON_VALUE)
+    public Mono<RespQuery1> sampleServiceDelegate(@RequestBody Call call) {
+        AsyncQuery<?> query = new AsyncQuery<>(queryName2, call);
         return directAsyncGateway.requestReply(query, target, RespQuery1.class);
     }
 

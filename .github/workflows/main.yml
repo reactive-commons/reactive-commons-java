@@ -4,11 +4,11 @@ on:
   push:
     branches:
       - master
-  
+
   pull_request:
     branches:
       - master
-  
+
   release:
     types: [created]
 
@@ -49,12 +49,26 @@ jobs:
 #      - name: Execute jacocoTestReport
 #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
       - name: Build with Gradle
-        run: ./gradlew build --refresh-dependencies --no-daemon --continue
+        run: ./gradlew build asciidoctor --refresh-dependencies --no-daemon --continue
+      - name: Generate Changelog
+        uses: heinrichreimer/github-changelog-generator-action@v2.1.1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Push Docs and Changelog
+        uses: github-actions-x/commit@v2.7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          push-branch: 'master'
+          commit-message: 'Automatic docs and changelog generation'
+          force-add: 'true'
+          files: CHANGELOG.md docs/
+          name: ${{ github.actor }}
+          email: ${{ github.actor }}@users.noreply.github.com
 #      - name: Push codeCoverage to Codecov
 #        run: bash <(curl -s https://codecov.io/bash)
       - name: Echo credentials
         run: echo "bintrayUser=${{secrets.BINTRAY_USER}}" >> gradle.properties
       - name: Echo credentials Key
-        run: echo "bintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties     
+        run: echo "bintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties
       - name: Publish plugin
         run: ./gradlew bintrayUpload

@@ -16,7 +16,6 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
-import reactor.rabbitmq.QueueSpecification;
 
 import java.util.HashMap;
 import java.util.Optional;
@@ -41,7 +40,10 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private final Optional<Integer> maxLengthBytes;
 
 
-    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, ReactiveMessageSender sender, String directExchange, MessageConverter converter, String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
+    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
+                                    ReactiveMessageSender sender, String directExchange, MessageConverter converter,
+                                    String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay,
+                                    Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
         super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query");
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
@@ -53,16 +55,15 @@ public class ApplicationQueryListener extends GenericMessageListener {
         this.maxLengthBytes = maxLengthBytes;
     }
 
-
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredQueryHandler<Object, Object> handler1 = handlerResolver.getQueryHandler(executorPath);
-        if (handler1 == null) {
+        final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
+        if (handler == null) {
             return message -> Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
         }
-        final Class<?> handlerClass = (Class<?>) handler1.getQueryClass();
+        final Class<?> handlerClass = handler.getQueryClass();
         Function<Message, Object> messageConverter = msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
-        final QueryExecutor executor = new QueryExecutor(handler1.getHandler(), messageConverter);
+        final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.getHandler(), messageConverter);
         return executor::execute;
     }
 
@@ -94,17 +95,16 @@ public class ApplicationQueryListener extends GenericMessageListener {
             if (signal.isOnError()) {
                 return Mono.error(ofNullable(signal.getThrowable()).orElseGet(RuntimeException::new));
             }
+            if (signal.isOnComplete()) {
+                return Mono.empty();
+            }
 
             final String replyID = msg.getProperties().getHeaders().get(REPLY_ID).toString();
             final String correlationID = msg.getProperties().getHeaders().get(CORRELATION_ID).toString();
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
 
-            if (!signal.hasValue()) {
-                headers.put(Headers.COMPLETION_ONLY_SIGNAL, TRUE.toString());
-            }
-
-            return sender.sendNoConfirm(signal.get(),replyExchange, replyID, headers, false);
+            return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
         });
     }
 }

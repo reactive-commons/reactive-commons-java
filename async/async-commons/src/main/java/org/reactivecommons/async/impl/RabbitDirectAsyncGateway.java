@@ -3,6 +3,7 @@ package org.reactivecommons.async.impl;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.BrokerConfig;
 import org.reactivecommons.async.impl.converters.MessageConverter;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import static java.lang.Boolean.TRUE;
 import static org.reactivecommons.async.impl.Headers.*;
 import static reactor.core.publisher.Mono.fromCallable;
 
@@ -32,7 +34,8 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     private final Duration replyTimeout;
 
 
-    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender, String exchange, MessageConverter converter) {
+    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender,
+                                    String exchange, MessageConverter converter) {
         this.config = config;
         this.router = router;
         this.sender = sender;
@@ -58,8 +61,8 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
         final Mono<R> replyHolder = router.register(correlationID)
-            .timeout(replyTimeout)
-            .flatMap(s -> fromCallable(() -> converter.readValue(s, type)));
+                .timeout(replyTimeout)
+                .flatMap(s -> fromCallable(() -> converter.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();
         headers.put(REPLY_ID, config.getRoutingKey());
@@ -67,6 +70,18 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         headers.put(CORRELATION_ID, correlationID);
 
         return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries).then(replyHolder);
+    }
+
+    @Override
+    public <T> Mono<Void> reply(T response, From from) {
+        final HashMap<String, Object> headers = new HashMap<>();
+        headers.put(CORRELATION_ID, from.getCorrelationID());
+
+        if (response == null) {
+            headers.put(Headers.COMPLETION_ONLY_SIGNAL, TRUE.toString());
+        }
+
+        return sender.sendNoConfirm(response, "globalReply", from.getReplyID(), headers, false);
     }
 
 }
