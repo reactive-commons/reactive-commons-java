@@ -18,7 +18,7 @@ To include all (API and implementation) (Spring boot Starter):
 ```groovy
 
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:0.6.2'
+      compile 'org.reactivecommons:async-commons-starter:<version-here>'
     }
 
     //IMPORTANT! if you use the version 0.6.x
@@ -54,7 +54,7 @@ To include only domain events API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:domain-events-api:0.6.2'
+      compile 'org.reactivecommons:domain-events-api:<version-here>'
     }
 ```
 
@@ -62,7 +62,7 @@ To include only async commons API:
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-api:0.6.2'
+      compile 'org.reactivecommons:async-commons-api:<version-here>'
     }
 ```
 
@@ -150,7 +150,7 @@ Don't forget to add the starter bundle to the main spring boot module (applicati
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:0.6.2'
+      compile 'org.reactivecommons:async-commons-starter:<version-here>'
     }
 ```
 
@@ -159,7 +159,7 @@ Or add the implementation dependency if for any reason you don't want to use the
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons:0.6.2'
+      compile 'org.reactivecommons:async-commons:<version-here>'
     }
 ```
 

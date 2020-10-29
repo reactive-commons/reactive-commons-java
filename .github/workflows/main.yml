@@ -18,22 +18,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up JDK 1.8
+        with:
+          fetch-depth: 0
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: 1.8
+          java-version: 11
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-      - name: Execute jacocoTestReport and Sonar
+      - name: Execute build test jacocoTestReport and sonar analysis
+        if: endsWith(github.REF, '/master') == true
         env:
-          SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew test jacocoTestReport sonarqube
-#        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
-      - name: Build with Gradle
-        run: ./gradlew build --refresh-dependencies --no-daemon --continue
-#      - name: Push codeCoverage to Codecov
-#        run: bash <(curl -s https://codecov.io/bash)
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue
+      - name: Execute build test jacocoTestReport pull request
+        if: endsWith(github.REF, '/merge') == true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue
 
   release:
     if: github.event_name == 'release'
@@ -54,6 +58,11 @@ jobs:
         uses: heinrichreimer/github-changelog-generator-action@v2.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          pullRequests: true
+          prWoLabels: true
+          issues: true
+          issuesWoLabels: true
+          stripGeneratorNotice: true
       - name: Push Docs and Changelog
         uses: github-actions-x/commit@v2.7
         with:
