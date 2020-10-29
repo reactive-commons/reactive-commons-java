@@ -24,11 +24,15 @@ jobs:
           java-version: 1.8
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
+      - name: Extract branch name
+        shell: bash
+        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        id: extract_branch
       - name: Execute build test jacocoTestReport and Sonar
         env:
           SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue
+        run: ./gradlew build test jacocoTestReport sonarqube -Dsonar.branch=${{ steps.extract_branch.outputs.branch }} --refresh-dependencies --no-daemon --continue
 #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
 #      - name: Push codeCoverage to Codecov
 #        run: bash <(curl -s https://codecov.io/bash)
