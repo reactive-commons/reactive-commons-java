@@ -51,7 +51,7 @@ jobs:
           -Dsonar.pullrequest.branch=${{ github.HEAD_REF }}
           -Dsonar.pullrequest.base=${{ github.BASE_REF }}
           -Dsonar.pullrequest.github.repository=${{ github.repository }}
-          --refresh-dependencies --no-daemon --continue
+          --refresh-dependencies --no-daemon --continue --stacktrace
 #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
 #      - name: Push codeCoverage to Codecov
 #        run: bash <(curl -s https://codecov.io/bash)
