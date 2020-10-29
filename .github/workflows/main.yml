@@ -54,6 +54,11 @@ jobs:
         uses: heinrichreimer/github-changelog-generator-action@v2.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          pullRequests: true
+          prWoLabels: true
+          issues: true
+          issuesWoLabels: true
+          stripGeneratorNotice: true
       - name: Push Docs and Changelog
         uses: github-actions-x/commit@v2.7
         with:
