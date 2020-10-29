@@ -35,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
         with:
-          ref: ${{ github.HEAD_REF }}
+          fetch-depth: 0
       - name: Retrieve entire repository history
         run: git fetch --prune --unshallow
       - name: Set up JDK 11
