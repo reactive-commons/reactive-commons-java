@@ -14,31 +14,46 @@ on:
 
 jobs:
   build:
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && endsWith(github.ref, '/master') == true
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - name: Set up JDK 8
-        uses: actions/setup-java@v1
-        with:
-          java-version: 8
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      - name: Execute build test and jacocoTestReport
-        run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue
       - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
           java-version: 11
-      - name: Extract branch name
-        shell: bash
-        run: echo "##[set-output name=branch;]$(echo ${GITHUB_REF##*/})"
-        id: extract_branch
-      - name: Run Sonar analysis
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Execute build test and jacocoTestReport
         env:
-          SONAR_TOKEN: ${{secrets.SONAR_TOKEN}}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./gradlew sonarqube -Dsonar.branch=${{ steps.extract_branch.outputs.branch }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue
+  build_pull_request:
+    if: github.event_name != 'release' && endsWith(github.REF, '/merge') == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          ref: ${{ github.HEAD_REF }}
+      - name: Retrieve entire repository history
+        run: git fetch --prune --unshallow
+      - name: Set up JDK 11
+        uses: actions/setup-java@v1
+        with:
+          java-version: 11
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+      - name: Execute build test and jacocoTestReport
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: ./gradlew build test jacocoTestReport sonarqube
+          -Dsonar.pullrequest.key=${{ github.event.number }}
+          -Dsonar.pullrequest.branch=${{ github.HEAD_REF }}
+          -Dsonar.pullrequest.base=${{ github.BASE_REF }}
+          -Dsonar.pullrequest.github.repository=${{ github.repository }}
+          --refresh-dependencies --no-daemon --continue
 #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
 #      - name: Push codeCoverage to Codecov
 #        run: bash <(curl -s https://codecov.io/bash)
