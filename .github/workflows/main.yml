@@ -31,18 +31,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue --stacktrace
-      - name: Execute build test jacocoTestReport and sonar analysis for pull request
+        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue
+      - name: Execute build test jacocoTestReport pull request
         if: endsWith(github.REF, '/merge') == true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew build test jacocoTestReport sonarqube
-          -Dsonar.pullrequest.key=${{ github.event.number }}
-          -Dsonar.pullrequest.branch=${{ github.HEAD_REF }}
-          -Dsonar.pullrequest.base=${{ github.BASE_REF }}
-          -Dsonar.pullrequest.github.repository=${{ github.repository }}
-          --refresh-dependencies --no-daemon --continue --stacktrace
+        run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue
 
   release:
     if: github.event_name == 'release'
