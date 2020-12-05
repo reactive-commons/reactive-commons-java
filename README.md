@@ -29,7 +29,7 @@ To include all (API and implementation) (Spring boot Starter):
     configurations.all {
         resolutionStrategy.eachDependency {DependencyResolveDetails details ->
             if (details.requested.group == 'io.projectreactor.rabbitmq'){
-                details.useVersion('1.5.0-M2')
+                details.useVersion('1.5.0')
                 details.because('Upgrade')
             }
         }

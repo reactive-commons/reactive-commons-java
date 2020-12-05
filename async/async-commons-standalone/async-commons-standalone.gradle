@@ -72,5 +72,5 @@ bintray {
 }
 
 dependencies {
-    compile project(":async-commons")
+    api project(":async-commons")
 }

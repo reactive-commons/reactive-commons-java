@@ -72,8 +72,8 @@ bintray {
 }
 
 dependencies {
-    compile project(":async-commons-api")
-    compile project(":domain-events-api")
+    api project(":async-commons-api")
+    api project(":domain-events-api")
 
     compileOnly 'io.projectreactor:reactor-core'
     api ("io.projectreactor.rabbitmq:reactor-rabbitmq")

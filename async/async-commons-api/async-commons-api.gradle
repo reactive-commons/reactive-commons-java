@@ -72,7 +72,7 @@ bintray {
 }
 
 dependencies {
-    compile project(":domain-events-api")
+    api project(":domain-events-api")
     compileOnly 'io.projectreactor:reactor-core'
     testImplementation 'io.projectreactor:reactor-test'
 }
