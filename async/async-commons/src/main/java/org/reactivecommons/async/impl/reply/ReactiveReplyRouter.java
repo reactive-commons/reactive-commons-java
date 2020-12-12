@@ -24,11 +24,8 @@ public class ReactiveReplyRouter {
         }
     }
 
-    public <E> void routeError(String correlationID, String data) {
-        final UnicastProcessor<Message> processor = processors.remove(correlationID);
-        if (processor != null) {
-            processor.onError(new RuntimeException(data));
-        }
+    public void deregister(String correlationID){
+        processors.remove(correlationID);
     }
 
     public void routeEmpty(String correlationID) {

@@ -17,6 +17,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.TimeoutException;
 
 import static java.lang.Boolean.TRUE;
 import static org.reactivecommons.async.impl.Headers.*;
@@ -62,6 +63,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
         final Mono<R> replyHolder = router.register(correlationID)
                 .timeout(replyTimeout)
+                .doOnError(TimeoutException.class, e -> router.deregister(correlationID))
                 .flatMap(s -> fromCallable(() -> converter.readValue(s, type)));
 
         Map<String, Object> headers = new HashMap<>();

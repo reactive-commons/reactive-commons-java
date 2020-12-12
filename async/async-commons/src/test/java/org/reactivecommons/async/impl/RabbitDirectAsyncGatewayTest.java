@@ -28,11 +28,13 @@ import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
 import reactor.util.concurrent.Queues;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -56,6 +58,25 @@ public class RabbitDirectAsyncGatewayTest {
 
     public void init(ReactiveMessageSender sender) {
         asyncGateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter);
+    }
+
+    @Test
+    public void shouldReleaseRouterResourcesOnTimeout(){
+        BrokerConfig config = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
+        asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter);
+        when(router.register(anyString())).thenReturn(Mono.never());
+        when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+            .thenReturn(Mono.empty());
+
+        AsyncQuery<String> query = new AsyncQuery<>("some.query", "data");
+        asyncGateway.requestReply(query, "some.target", String.class)
+            .as(StepVerifier::create)
+            .expectError(TimeoutException.class)
+            .verify();
+
+        ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
+        verify(router).register(captor.capture());
+        verify(router).deregister(captor.getValue());
     }
 
     @Test
