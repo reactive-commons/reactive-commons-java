@@ -15,6 +15,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
 import org.reactivecommons.async.impl.listeners.ApplicationNotificationListener;
@@ -45,25 +46,26 @@ public class MessageListenersConfig {
 
     @Bean //TODO: move to own config (QueryListenerConfig)
     public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
         final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
                 messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),
-                asyncProps.getDomain().getEvents().getMaxLengthBytes(), discardNotifier);
+                asyncProps.getDomain().getEvents().getMaxLengthBytes(), discardNotifier, errorReporter);
         listener.startListener();
         return listener;
     }
 
     @Bean
     public ApplicationNotificationListener eventNotificationListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                                     ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+                                                                     ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
         final ApplicationNotificationListener listener = new ApplicationNotificationListener(
                 receiver,
                 asyncProps.getDomain().getEvents().getExchange(),
                 asyncProps.getNotificationProps().getQueueName(appName),
                 resolver,
                 messageConverter,
-                discardNotifier);
+                discardNotifier,
+                errorReporter);
         listener.startListener();
         return listener;
     }
@@ -71,11 +73,12 @@ public class MessageListenersConfig {
     @Bean //TODO: move to own config (QueryListenerConfig)
     public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver,
                                                   ReactiveMessageSender sender, ReactiveMessageListener rlistener,
-                                                  DiscardNotifier discardNotifier) {
+                                                  DiscardNotifier discardNotifier,
+                                                  CustomErrorReporter errorReporter) {
         final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
                 appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
                 asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(), asyncProps.getGlobal().getMaxLengthBytes(), discardNotifier);
+                asyncProps.getRetryDelay(), asyncProps.getGlobal().getMaxLengthBytes(), discardNotifier, errorReporter);
         listener.startListener();
         return listener;
     }
@@ -83,10 +86,11 @@ public class MessageListenersConfig {
     @Bean
     public ApplicationCommandListener applicationCommandListener(ReactiveMessageListener listener,
                                                                  HandlerResolver resolver, MessageConverter converter,
-                                                                 DiscardNotifier discardNotifier) {
+                                                                 DiscardNotifier discardNotifier,
+                                                                 CustomErrorReporter errorReporter) {
         ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
                 asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier);
+                asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier, errorReporter);
         commandListener.startListener();
         return commandListener;
     }

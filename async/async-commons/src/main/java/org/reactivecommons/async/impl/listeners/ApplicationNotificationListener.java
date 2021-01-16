@@ -11,6 +11,7 @@ import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -35,8 +36,9 @@ public class ApplicationNotificationListener extends GenericMessageListener {
                                            String queueName,
                                            HandlerResolver handlerResolver,
                                            MessageConverter messageConverter,
-                                           DiscardNotifier discardNotifier) {
-        super(queueName,receiver,false,1,discardNotifier,"event");
+                                           DiscardNotifier discardNotifier,
+                                           CustomErrorReporter errorReporter) {
+        super(queueName,receiver,false,1,discardNotifier,"event", errorReporter);
         this.resolver = handlerResolver;
         this.messageConverter = messageConverter;
         this.exchangeName = exchangeName;
@@ -77,5 +79,10 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     protected String getExecutorPath(AcknowledgableDelivery message) {
         return message.getEnvelope()
                 .getRoutingKey();
+    }
+
+    @Override
+    protected Object parseMessageForReporter(Message msj) {
+        return messageConverter.readDomainEventStructure(msj);
     }
 }

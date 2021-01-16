@@ -16,6 +16,8 @@ public interface MessageConverter {
     <T> T readValue(Message message, Class<T> valueClass);
 
     <T> Command<T> readCommandStructure(Message message);
+    <T> DomainEvent<T> readDomainEventStructure(Message message);
+    <T> AsyncQuery<T> readAsyncQueryStructure(Message message);
 
     Message toMessage(Object object);
 

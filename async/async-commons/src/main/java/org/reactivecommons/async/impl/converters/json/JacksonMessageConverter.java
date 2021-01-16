@@ -67,14 +67,25 @@ public class JacksonMessageConverter implements MessageConverter {
         }
     }
 
-    //TODO: pull definition up to interface
+    @Override
+    @SuppressWarnings("unchecked")
     public <T> Command<T> readCommandStructure(Message message) {
-        try {
-            final CommandJson commandJson = objectMapper.readValue(message.getBody(), CommandJson.class);
-            return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T)commandJson.getData());
-        } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
-        }
+        final CommandJson commandJson = readValue(message, CommandJson.class);
+        return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T)commandJson.getData());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> DomainEvent<T> readDomainEventStructure(Message message) {
+        final DomainEventJson eventJson = readValue(message, DomainEventJson.class);
+        return new DomainEvent<>(eventJson.getName(), eventJson.getEventId(), (T)eventJson.getData());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public <T> AsyncQuery<T> readAsyncQueryStructure(Message message) {
+        final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
+        return new AsyncQuery<>(asyncQueryJson.getResource(), (T)asyncQueryJson.getQueryData());
     }
 
     @Override

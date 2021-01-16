@@ -6,6 +6,7 @@ import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,10 +26,11 @@ public class CommandListenersConfig {
     @Bean
     public ApplicationCommandListener applicationCommandListener(ReactiveMessageListener listener,
                                                                  HandlerResolver resolver, MessageConverter converter,
-                                                                 DiscardNotifier discardNotifier) {
+                                                                 DiscardNotifier discardNotifier,
+                                                                 CustomErrorReporter errorReporter) {
         ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
                 asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier);
+                asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier, errorReporter);
 
         commandListener.startListener();
 

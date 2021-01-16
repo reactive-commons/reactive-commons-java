@@ -12,6 +12,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
@@ -43,8 +44,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
     public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
                                     ReactiveMessageSender sender, String directExchange, MessageConverter converter,
                                     String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay,
-                                    Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
-        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query");
+                                    Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
+        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.converter = converter;
@@ -106,6 +107,11 @@ public class ApplicationQueryListener extends GenericMessageListener {
 
             return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
         });
+    }
+
+    @Override
+    protected Object parseMessageForReporter(Message msj) {
+        return converter.readAsyncQueryStructure(msj);
     }
 }
 

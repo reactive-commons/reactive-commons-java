@@ -3,7 +3,6 @@ package org.reactivecommons.async.impl.listeners;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.*;
-import lombok.Data;
 import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
@@ -23,22 +22,21 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.UnicastProcessor;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
-import java.io.IOException;
 import java.math.BigInteger;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static reactor.core.publisher.Flux.range;
 
@@ -55,6 +53,9 @@ public class ApplicationCommandListenerPerfTest {
     @Mock
     private DiscardNotifier discardNotifier;
 
+    @Mock
+    private CustomErrorReporter errorReporter;
+
     private StubGenericMessageListener messageListener;
     private static final CountDownLatch latch = new CountDownLatch(12 + 1);
 
@@ -66,7 +67,6 @@ public class ApplicationCommandListenerPerfTest {
     @Before
     public void init() {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-
     }
 
     private Mono<Void> handleTestMessage(Command<DummyMessage> message) {
@@ -88,9 +88,9 @@ public class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
             .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
 
         messageListener.startListener();
         final long init = System.currentTimeMillis();
@@ -115,9 +115,9 @@ public class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
             .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -178,9 +178,9 @@ public class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 250, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -202,9 +202,9 @@ public class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -226,9 +226,9 @@ public class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -297,8 +297,8 @@ public class ApplicationCommandListenerPerfTest {
 
     class StubGenericMessageListener extends ApplicationCommandListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter) {
-            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true,  10, 10, Optional.empty(), discardNotifier);
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomErrorReporter errorReporter) {
+            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true,  10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
 
         @Override

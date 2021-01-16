@@ -12,21 +12,21 @@ public interface CustomErrorReporter {
     String EVENT_CLASS = "org.reactivecommons.api.domain.DomainEvent";
     String QUERY_CLASS = "org.reactivecommons.async.api.AsyncQuery";
 
-    default Mono<Void> reportError(Throwable ex, Message rawMessage, Object message) {
+    default Mono<Void> reportError(Throwable ex, Message rawMessage, Object message, boolean redelivered) {
         switch (message.getClass().getName()){
             case COMMAND_CLASS:
-                return reportError(ex, rawMessage, (Command<?>) message);
+                return reportError(ex, rawMessage, (Command<?>) message, redelivered);
             case EVENT_CLASS:
-                return reportError(ex, rawMessage, (DomainEvent<?>) message);
+                return reportError(ex, rawMessage, (DomainEvent<?>) message, redelivered);
             case QUERY_CLASS:
-                return reportError(ex, rawMessage, (AsyncQuery<?>) message);
+                return reportError(ex, rawMessage, (AsyncQuery<?>) message, redelivered);
             default:
                 return Mono.empty();
         }
     }
 
-    Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message);
-    Mono<Void> reportError(Throwable ex, Message rawMessage, DomainEvent<?> message);
-    Mono<Void> reportError(Throwable ex, Message rawMessage, AsyncQuery<?> message);
+    Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered);
+    Mono<Void> reportError(Throwable ex, Message rawMessage, DomainEvent<?> message, boolean redelivered);
+    Mono<Void> reportError(Throwable ex, Message rawMessage, AsyncQuery<?> message, boolean redelivered);
 
 }

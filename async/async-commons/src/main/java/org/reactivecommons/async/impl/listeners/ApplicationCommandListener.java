@@ -12,6 +12,7 @@ import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
@@ -32,8 +33,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
     private final Optional<Integer> maxLengthBytes;
 
     //TODO: change large constructor parameters number
-    public ApplicationCommandListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, String directExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier) {
-        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "command");
+    public ApplicationCommandListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, String directExchange, MessageConverter messageConverter, boolean withDLQRetry, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
+        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "command", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;
@@ -72,6 +73,11 @@ public class ApplicationCommandListener extends GenericMessageListener {
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         final Command<Object> command = messageConverter.readCommandStructure(RabbitMessage.fromDelivery(msj));
         return command.getName();
+    }
+
+    @Override
+    protected Object parseMessageForReporter(Message message){
+        return messageConverter.readCommandStructure(message);
     }
 
 

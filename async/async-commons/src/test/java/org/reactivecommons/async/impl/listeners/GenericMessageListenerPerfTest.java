@@ -16,6 +16,7 @@ import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -35,6 +36,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.class)
@@ -50,6 +52,9 @@ public class GenericMessageListenerPerfTest {
     @Mock
     private DiscardNotifier discardNotifier;
 
+    @Mock
+    private CustomErrorReporter errorReporter;
+
     private StubGenericMessageListener messageListener;
 
     private static final int messageCount = 40000;
@@ -57,8 +62,9 @@ public class GenericMessageListenerPerfTest {
 
     @Before
     public void init() {
+//        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command");
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", errorReporter);
     }
 
 
@@ -131,8 +137,8 @@ public class GenericMessageListenerPerfTest {
 
     class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType) {
-            super(queueName, listener, useDLQRetries, maxRetries, discardNotifier, objectType);
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomErrorReporter errorReporter) {
+            super(queueName, listener, useDLQRetries, maxRetries, discardNotifier, objectType, errorReporter);
         }
 
         @Override
@@ -143,6 +149,11 @@ public class GenericMessageListenerPerfTest {
         @Override
         protected String getExecutorPath(AcknowledgableDelivery msj) {
             return "test-path";
+        }
+
+        @Override
+        protected Object parseMessageForReporter(Message msj) {
+            return null;
         }
     }
 }

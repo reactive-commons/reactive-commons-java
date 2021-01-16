@@ -4,15 +4,15 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.api.DefaultCommandHandler;
-import org.reactivecommons.async.api.DefaultQueryHandler;
-import org.reactivecommons.async.api.DynamicRegistry;
-import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.*;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.impl.*;
+import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
@@ -22,6 +22,7 @@ import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -136,6 +137,27 @@ public class RabbitMqConfig {
     @ConditionalOnMissingBean
     public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, ReactiveMessageSender sender, BrokerConfigProps props) {
         return new RabbitDiscardNotifier(domainEventBus(sender, props), objectMapperSupplier.get());
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CustomErrorReporter reactiveCommonsCustomErrorReporter() {
+        return new CustomErrorReporter() {
+            @Override
+            public Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered) {
+                return Mono.empty();
+            }
+
+            @Override
+            public Mono<Void> reportError(Throwable ex, Message rawMessage, DomainEvent<?> message, boolean redelivered) {
+                return Mono.empty();
+            }
+
+            @Override
+            public Mono<Void> reportError(Throwable ex, Message rawMessage, AsyncQuery<?> message, boolean redelivered) {
+                return Mono.empty();
+            }
+        };
     }
 
     private DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props) {

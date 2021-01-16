@@ -18,6 +18,7 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
@@ -43,6 +44,10 @@ public class ApplicationQueryListenerTest {
     private DiscardNotifier discardNotifier;
     @Mock
     private TopologyCreator topologyCreator;
+
+    @Mock
+    private CustomErrorReporter errorReporter;
+
     @Mock
     private ReactiveMessageListener reactiveMessageListener;
     private GenericMessageListener genericMessageListener;
@@ -50,6 +55,7 @@ public class ApplicationQueryListenerTest {
     @SuppressWarnings("rawtypes")
     @Before
     public void init() {
+//        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         when(reactiveMessageListener.getReceiver()).thenReturn(receiver);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
         Map<String, RegisteredQueryHandler> handlers = new HashMap<>();
@@ -60,7 +66,7 @@ public class ApplicationQueryListenerTest {
                 (from, message) -> handler.handle(message), SampleClass.class));
         HandlerResolver resolver = new HandlerResolver(handlers, null, null, null);
         genericMessageListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
-                "directExchange", messageConverter, "replyExchange", false, 1, 100, maxLengthBytes, discardNotifier);
+                "directExchange", messageConverter, "replyExchange", false, 1, 100, maxLengthBytes, discardNotifier, errorReporter);
     }
 
     @Test

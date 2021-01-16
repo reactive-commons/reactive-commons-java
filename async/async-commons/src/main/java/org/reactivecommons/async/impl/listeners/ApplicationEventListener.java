@@ -1,8 +1,6 @@
 package org.reactivecommons.async.impl.listeners;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.rabbitmq.client.AMQP;
-import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.impl.DiscardNotifier;
@@ -13,6 +11,7 @@ import org.reactivecommons.async.impl.EventExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.utils.matcher.KeyMatcher;
 import org.reactivecommons.async.impl.utils.matcher.Matcher;
 import reactor.core.publisher.Flux;
@@ -20,7 +19,6 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
-import reactor.rabbitmq.QueueSpecification;
 
 import java.util.Optional;
 import java.util.Set;
@@ -51,8 +49,9 @@ public class ApplicationEventListener extends GenericMessageListener {
                                     boolean withDLQRetry, 
                                     long maxRetries, int retryDelay, 
                                     Optional<Integer> maxLengthBytes, 
-                                    DiscardNotifier discardNotifier) {
-        super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event");
+                                    DiscardNotifier discardNotifier,
+                                    CustomErrorReporter errorReporter) {
+        super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;
@@ -99,6 +98,11 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         return msj.getEnvelope().getRoutingKey();
+    }
+
+    @Override
+    protected Object parseMessageForReporter(Message msj) {
+        return messageConverter.readDomainEventStructure(msj);
     }
 
 }

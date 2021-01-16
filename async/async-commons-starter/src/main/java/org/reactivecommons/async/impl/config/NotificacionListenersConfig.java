@@ -6,7 +6,7 @@ import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
+import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationNotificationListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,14 +25,15 @@ public class NotificacionListenersConfig {
 
     @Bean
     public ApplicationNotificationListener eventNotificationListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                                     ReactiveMessageListener receiver, DiscardNotifier discardNotifier) {
+                                                                     ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
         final ApplicationNotificationListener listener = new ApplicationNotificationListener(
                 receiver,
                 asyncProps.getDomain().getEvents().getExchange(),
                 asyncProps.getNotificationProps().getQueueName(appName),
                 resolver,
                 messageConverter,
-                discardNotifier);
+                discardNotifier,
+                errorReporter);
         listener.startListener();
         return listener;
     }
