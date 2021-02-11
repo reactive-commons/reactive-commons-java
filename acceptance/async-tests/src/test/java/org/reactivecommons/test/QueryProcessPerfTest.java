@@ -1,9 +1,7 @@
 package org.reactivecommons.test;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.reactivecommons.api.domain.Command;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
@@ -15,13 +13,11 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.test.context.junit4.SpringRunner;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,7 +27,6 @@ import java.util.stream.IntStream;
 import static reactor.core.publisher.Flux.range;
 
 @SpringBootTest
-@RunWith(SpringRunner.class)
 public class QueryProcessPerfTest {
 
     private static final String QUERY_NAME = "app.command.test";
@@ -53,10 +48,10 @@ public class QueryProcessPerfTest {
 
         final long init = System.currentTimeMillis();
         messages
-            .flatMap(dummyMessageAsyncQuery -> gateway.requestReply(dummyMessageAsyncQuery, appName, DummyMessage.class)
-                .doOnNext(s -> semaphore.release())
-            )
-            .subscribe();
+                .flatMap(dummyMessageAsyncQuery -> gateway.requestReply(dummyMessageAsyncQuery, appName, DummyMessage.class)
+                        .doOnNext(s -> semaphore.release())
+                )
+                .subscribe();
         semaphore.acquire(messageCount);
         final long end = System.currentTimeMillis();
 
@@ -65,11 +60,11 @@ public class QueryProcessPerfTest {
     }
 
     private void assertMessageThroughput(long total, long messageCount, int reqMicrosPerMessage) {
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        System.out.println("Throughput: " + Math.round(messageCount/(total/1000.0)) + " Msg/Seg");
+        System.out.println("Throughput: " + Math.round(messageCount / (total / 1000.0)) + " Msg/Seg");
         Assertions.assertThat(microsPerMessage).isLessThan(reqMicrosPerMessage);
     }
 
@@ -83,7 +78,7 @@ public class QueryProcessPerfTest {
     @SpringBootApplication
     @EnableDirectAsyncGateway
     @EnableMessageListeners
-    static class App{
+    static class App {
         public static void main(String[] args) {
             SpringApplication.run(App.class, args);
         }
@@ -92,7 +87,7 @@ public class QueryProcessPerfTest {
         public HandlerRegistry registry() {
             final HandlerRegistry registry = range(0, 20).reduce(HandlerRegistry.register(), (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
             return registry
-                .serveQuery(QUERY_NAME, this::handleSimple, DummyMessage.class);
+                    .serveQuery(QUERY_NAME, this::handleSimple, DummyMessage.class);
         }
 
         private Mono<DummyMessage> handleSimple(DummyMessage message) {

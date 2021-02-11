@@ -2,8 +2,8 @@ package org.reactivecommons.async.impl.config;
 
 import com.rabbitmq.client.AMQP;
 import org.assertj.core.api.Assertions;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
@@ -34,7 +34,7 @@ public class NotificacionListenersConfigTest {
     private final CustomErrorReporter customErrorReporter = mock(CustomErrorReporter.class);
     private final Receiver receiver = mock(Receiver.class);
 
-    @Before
+    @BeforeEach
     public void init() {
         when(handlerResolver.getEventListeners()).thenReturn(Collections.emptyList());
         when(creator.bind(any(BindingSpecification.class))).thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
@@ -52,7 +52,7 @@ public class NotificacionListenersConfigTest {
     @Test
     public void eventNotificationListener() {
         final ApplicationNotificationListener applicationEventListener = config.
-            eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customErrorReporter);
+                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customErrorReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();
     }
 }

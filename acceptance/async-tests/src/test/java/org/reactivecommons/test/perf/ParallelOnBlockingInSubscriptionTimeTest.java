@@ -1,8 +1,7 @@
 package org.reactivecommons.test.perf;
 
-import org.junit.Ignore;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Disabled;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
@@ -29,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.empty;
 
 @SpringBootTest
-@RunWith(SpringRunner.class)
 public class ParallelOnBlockingInSubscriptionTimeTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand2";
@@ -46,27 +44,28 @@ public class ParallelOnBlockingInSubscriptionTimeTest {
     private String commandId = ThreadLocalRandom.current().nextInt() + "";
     private Long data = ThreadLocalRandom.current().nextLong();
 
-    @Test @Ignore
+    @Test
+    @Disabled
     public void commandShouldBeHandledInParallel() throws InterruptedException {
         Flux.range(0, 12).flatMap(i -> {
-            Command<Long> command = new Command<>(COMMAND_NAME, commandId+1, data+1);
+            Command<Long> command = new Command<>(COMMAND_NAME, commandId + 1, data + 1);
             return gateway.sendCommand(command, appName);
         }).subscribe();
 
         final long init = System.currentTimeMillis();
 
         final Flux<Command<Long>> results = listener.take(12).collectList()
-            .timeout(Duration.ofMillis(1500))
-            .flatMapMany(Flux::fromIterable);
+                .timeout(Duration.ofMillis(1500))
+                .flatMapMany(Flux::fromIterable);
 
         StepVerifier.create(results).assertNext(cmd -> {
             assertThat(cmd.getName()).isEqualTo(COMMAND_NAME);
         })
-            .expectNextCount(11)
-            .verifyComplete();
+                .expectNextCount(11)
+                .verifyComplete();
 
         final long total = System.currentTimeMillis() - init;
-        out.println("Test duration: " +total);
+        out.println("Test duration: " + total);
         assertThat(total).isLessThan(1500);
 
         //Give some time to finish messages ack
@@ -74,19 +73,18 @@ public class ParallelOnBlockingInSubscriptionTimeTest {
     }
 
 
-
     @SpringBootApplication
     @EnableDirectAsyncGateway
     @EnableMessageListeners
-    static class App{
+    static class App {
         public static void main(String[] args) {
             SpringApplication.run(App.class, args);
         }
 
         @Bean
-        public HandlerRegistry registry(UnicastProcessor<Command<Long>>  listener) {
+        public HandlerRegistry registry(UnicastProcessor<Command<Long>> listener) {
             return HandlerRegistry.register()
-                .handleCommand(COMMAND_NAME, handle(listener), Long.class);
+                    .handleCommand(COMMAND_NAME, handle(listener), Long.class);
         }
 
         @Bean

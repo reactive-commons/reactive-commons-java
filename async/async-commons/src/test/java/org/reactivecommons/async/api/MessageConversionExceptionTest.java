@@ -1,6 +1,7 @@
 package org.reactivecommons.async.api;
 
-import org.junit.Test;
+
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.impl.exceptions.MessageConversionException;
 
 import static org.assertj.core.api.Assertions.assertThat;

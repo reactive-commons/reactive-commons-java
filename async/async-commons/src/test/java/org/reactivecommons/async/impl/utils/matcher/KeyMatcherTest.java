@@ -1,18 +1,20 @@
 package org.reactivecommons.async.impl.utils.matcher;
 
-import org.junit.Before;
-import org.junit.Test;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
 
 public class KeyMatcherTest {
     private KeyMatcher keyMatcher;
     private Set<String> listeners;
 
-    @Before
+    @BeforeEach
     public void init() {
         keyMatcher =  new KeyMatcher();
         listeners = new HashSet<>();

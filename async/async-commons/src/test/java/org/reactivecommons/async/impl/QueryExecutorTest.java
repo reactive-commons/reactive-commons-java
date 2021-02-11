@@ -1,11 +1,11 @@
 package org.reactivecommons.async.impl;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.helpers.SampleClass;
@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class QueryExecutorTest {
     @Mock
     private QueryHandlerDelegate<Void, SampleClass> queryHandlerDelegate;
@@ -30,8 +30,8 @@ public class QueryExecutorTest {
     private Function<Message, SampleClass> converter;
     private QueryExecutor<Void, SampleClass> executor;
 
-    @Before
-    public void setup() {
+    @BeforeEach
+    public void setUp() {
         executor = new QueryExecutor<>(queryHandlerDelegate, converter);
     }
 

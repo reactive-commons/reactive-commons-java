@@ -1,7 +1,6 @@
 package org.reactivecommons.test;
 
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -27,7 +26,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.*;
 
 @SpringBootTest
-@RunWith(SpringRunner.class)
 public class SimpleDirectCommunicationTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand";
