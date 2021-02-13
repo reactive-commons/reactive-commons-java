@@ -1,12 +1,12 @@
 package org.reactivecommons.async.impl;
 
 import com.rabbitmq.client.AMQP.Queue.BindOk;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -24,7 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 import static reactor.core.publisher.Mono.just;
 
-@RunWith(MockitoJUnitRunner.class)
+
+@ExtendWith(MockitoExtension.class)
 public class DynamicRegistryImpTest {
 
     private HandlerResolver resolver;
@@ -37,13 +38,15 @@ public class DynamicRegistryImpTest {
 
     private DynamicRegistryImp registry;
 
-    @Before
-    public void init() {
+
+    @BeforeEach
+    @SuppressWarnings("rawtypes")
+    void setUp() {
         Map<String, RegisteredCommandHandler> commandHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener> eventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler> queryHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener> notificationEventListeners = new ConcurrentHashMap<>();
-        resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers,notificationEventListeners);
+        resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers, notificationEventListeners);
         when(props.getDomainEventsExchangeName()).thenReturn("domainEx");
         when(props.getEventsQueue()).thenReturn("events.queue");
         registry = new DynamicRegistryImp(resolver, topologyCreator, props);
@@ -83,7 +86,5 @@ public class DynamicRegistryImpTest {
         probe.assertWasSubscribed();
 
     }
-
-
 
 }

@@ -3,11 +3,11 @@ package org.reactivecommons.async.impl;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Data;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.From;
@@ -44,7 +44,7 @@ import static org.mockito.Mockito.*;
 import static org.reactivecommons.async.impl.Headers.*;
 
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class RabbitDirectAsyncGatewayTest {
 
     private final BrokerConfig config = new BrokerConfig();
@@ -61,18 +61,18 @@ public class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    public void shouldReleaseRouterResourcesOnTimeout(){
+    public void shouldReleaseRouterResourcesOnTimeout() {
         BrokerConfig config = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
         asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter);
         when(router.register(anyString())).thenReturn(Mono.never());
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
-            .thenReturn(Mono.empty());
+                .thenReturn(Mono.empty());
 
         AsyncQuery<String> query = new AsyncQuery<>("some.query", "data");
         asyncGateway.requestReply(query, "some.target", String.class)
-            .as(StepVerifier::create)
-            .expectError(TimeoutException.class)
-            .verify();
+                .as(StepVerifier::create)
+                .expectError(TimeoutException.class)
+                .verify();
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
         verify(router).register(captor.capture());

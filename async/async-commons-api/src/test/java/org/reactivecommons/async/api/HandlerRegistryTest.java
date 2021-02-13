@@ -1,7 +1,8 @@
 package org.reactivecommons.async.api;
 
 import lombok.Data;
-import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.handlers.CommandHandler;
@@ -60,19 +61,25 @@ public class HandlerRegistryTest {
         }).hasSize(1);
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void handleCommandWithoutTypeShouldFail() {
-        registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty());
+        Assertions.assertThrows(
+                RuntimeException.class,
+                () -> registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty()));
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void listenEventWithoutTypeShouldFail() {
-        registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty());
+        Assertions.assertThrows(
+                RuntimeException.class,
+                () -> registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty()));
     }
 
-    @Test(expected = RuntimeException.class)
+    @Test
     public void handleQueryWithoutTypeShouldFail() {
-        registry.serveQuery(name, (SomeDataClass query) -> Mono.empty());
+        Assertions.assertThrows(
+                RuntimeException.class,
+                () -> registry.serveQuery(name, (SomeDataClass query) -> Mono.empty()));
     }
 
     @Test

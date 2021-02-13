@@ -1,6 +1,6 @@
 package org.reactivecommons.async.impl.ext;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;

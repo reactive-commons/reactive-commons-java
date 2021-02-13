@@ -36,26 +36,19 @@ subprojects {
         testCompileOnly 'org.projectlombok:lombok'
     }
 
-    configurations.all {
-
-        resolutionStrategy.eachDependency {DependencyResolveDetails details ->
-            if (details.requested.group == 'io.projectreactor.rabbitmq'){
-                details.useVersion("${reactorRabbitVersion}")
-                details.because('Upgrade')
-            }
-        }
-    }
-
-
     jacocoTestReport {
         reports {
             xml.enabled true
         }
     }
 
+    test {
+        useJUnitPlatform()
+    }
+
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}"
+            mavenBom "org.springframework.boot:spring-boot-dependencies:$springBootVersion"
         }
     }
 }

@@ -2,10 +2,10 @@ package org.reactivecommons.async.impl.config;
 
 import com.rabbitmq.client.AMQP;
 import org.assertj.core.api.Assertions;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
@@ -16,7 +16,10 @@ import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.Receiver;
 
 import java.lang.reflect.Field;
 
@@ -24,7 +27,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class CommandListenersConfigTest {
 
 
@@ -38,7 +41,7 @@ public class CommandListenersConfigTest {
     private final CustomErrorReporter customErrorReporter = mock(CustomErrorReporter.class);
     private final Receiver receiver = mock(Receiver.class);
 
-    @Before
+    @BeforeEach
     public void init() throws NoSuchFieldException, IllegalAccessException {
         final Field appName = CommandListenersConfig.class.getDeclaredField("appName");
         appName.setAccessible(true);
@@ -55,11 +58,11 @@ public class CommandListenersConfigTest {
     @Test
     public void applicationCommandListener() {
         final ApplicationCommandListener commandListener = config.applicationCommandListener(
-            listener,
-            handlerResolver,
-            messageConverter,
-            discardNotifier,
-            customErrorReporter
+                listener,
+                handlerResolver,
+                messageConverter,
+                discardNotifier,
+                customErrorReporter
         );
         Assertions.assertThat(commandListener).isNotNull();
     }

@@ -1,8 +1,8 @@
 package org.reactivecommons.async.impl.utils.matcher;
 
 import org.assertj.core.api.Assertions;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
@@ -21,8 +21,8 @@ public class KeyMatcherPerformanceWildcardTest {
     private List<String> testResultList;
 
 
-    @Before
-    public void init() {
+    @BeforeEach
+    public void setUp() {
         ClassLoader classLoader = getClass().getClassLoader();
         File file = new File(classLoader.getResource("wildcard_names_for_matching.txt").getFile());
         File file2 = new File(classLoader.getResource("concrete_names_for_matching.txt").getFile());

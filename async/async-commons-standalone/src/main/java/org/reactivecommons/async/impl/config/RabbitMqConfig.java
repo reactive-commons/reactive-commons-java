@@ -5,13 +5,12 @@ import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.*;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.logging.Level;
@@ -63,13 +62,11 @@ public class RabbitMqConfig {
     }
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
-        final Scheduler senderScheduler = Schedulers.newElastic(name + "_scheduler");
         return Mono.fromCallable(() -> factory.newConnection(name))
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
                 )
-                .retryBackoff(Long.MAX_VALUE, Duration.ofMillis(300), Duration.ofMillis(3000))
-                .subscribeOn(senderScheduler)
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(300)))
                 .cache();
     }
 

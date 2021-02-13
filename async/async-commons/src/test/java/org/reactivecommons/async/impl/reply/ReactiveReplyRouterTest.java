@@ -1,6 +1,6 @@
 package org.reactivecommons.async.impl.reply;
 
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.reactivecommons.async.impl.communications.Message;
 import reactor.core.publisher.Mono;

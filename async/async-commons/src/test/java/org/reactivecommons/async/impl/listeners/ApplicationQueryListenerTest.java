@@ -1,10 +1,10 @@
 package org.reactivecommons.async.impl.listeners;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.helpers.SampleClass;
@@ -32,7 +32,7 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.*;
 import static reactor.core.publisher.Mono.*;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class ApplicationQueryListenerTest {
     private final MessageConverter messageConverter =
             new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
@@ -53,8 +53,8 @@ public class ApplicationQueryListenerTest {
     private GenericMessageListener genericMessageListener;
 
     @SuppressWarnings("rawtypes")
-    @Before
-    public void init() {
+    @BeforeEach
+    public void setUp() {
 //        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         when(reactiveMessageListener.getReceiver()).thenReturn(receiver);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);

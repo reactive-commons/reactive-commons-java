@@ -2,21 +2,23 @@ package org.reactivecommons.async.impl.listeners;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rabbitmq.client.*;
+import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Delivery;
+import com.rabbitmq.client.Envelope;
 import org.assertj.core.api.Assertions;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.MockitoJUnitRunner;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
@@ -40,7 +42,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static reactor.core.publisher.Flux.range;
 
-@RunWith(MockitoJUnitRunner.class)
+@ExtendWith(MockitoExtension.class)
 public class ApplicationCommandListenerPerfTest {
 
 
@@ -64,8 +66,8 @@ public class ApplicationCommandListenerPerfTest {
     private MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     private ReactiveMessageListener reactiveMessageListener;
 
-    @Before
-    public void init() {
+    @BeforeEach
+    public void setUp() {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
     }
 
@@ -86,7 +88,7 @@ public class ApplicationCommandListenerPerfTest {
     @Test
     public void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
-            .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
+                .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
@@ -99,7 +101,7 @@ public class ApplicationCommandListenerPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
@@ -113,7 +115,7 @@ public class ApplicationCommandListenerPerfTest {
     @Test
     public void shouldProcessAsyncMessagesConcurrent() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
-            .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
+                .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
@@ -125,7 +127,7 @@ public class ApplicationCommandListenerPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
@@ -158,13 +160,13 @@ public class ApplicationCommandListenerPerfTest {
     }
 
     private void liveLock(int delay) {
-        for (long end = System.currentTimeMillis() + delay;System.currentTimeMillis() < end;);
+        for (long end = System.currentTimeMillis() + delay; System.currentTimeMillis() < end; ) ;
     }
 
     private static BigInteger makeHardWork() {
         final long number = ThreadLocalRandom.current().nextLong(100) + 2700;
         BigInteger fact = new BigInteger("1");
-        for(long i=1;i<=number;i++){
+        for (long i = 1; i <= number; i++) {
             fact = fact.multiply(BigInteger.valueOf(i));
         }
         return fact;
@@ -174,7 +176,7 @@ public class ApplicationCommandListenerPerfTest {
     @Test
     public void shouldProcessCPUMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
-            .handleCommand("app.command.test", this::handleTestCPUMessageDelay, DummyMessage.class)
+                .handleCommand("app.command.test", this::handleTestCPUMessageDelay, DummyMessage.class)
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 250, 250);
@@ -188,7 +190,7 @@ public class ApplicationCommandListenerPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
@@ -198,7 +200,7 @@ public class ApplicationCommandListenerPerfTest {
     @Test
     public void shouldProcessCPUWorkMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
-            .handleCommand("app.command.test", this::handleTestCPUWorkMessageDelay, DummyMessage.class)
+                .handleCommand("app.command.test", this::handleTestCPUWorkMessageDelay, DummyMessage.class)
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
@@ -212,7 +214,7 @@ public class ApplicationCommandListenerPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
@@ -222,7 +224,7 @@ public class ApplicationCommandListenerPerfTest {
     @Test
     public void shouldProcessPasiveBlockingMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
-            .handleCommand("app.command.test", this::handleTestPassiveBlockMessageDelay, DummyMessage.class)
+                .handleCommand("app.command.test", this::handleTestPassiveBlockMessageDelay, DummyMessage.class)
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
@@ -236,7 +238,7 @@ public class ApplicationCommandListenerPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        final double microsPerMessage =  ((total+0.0)/messageCount)*1000;
+        final double microsPerMessage = ((total + 0.0) / messageCount) * 1000;
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
@@ -246,7 +248,7 @@ public class ApplicationCommandListenerPerfTest {
     private HandlerResolver createHandlerResolver(final HandlerRegistry initialRegistry) {
         final HandlerRegistry registry = range(0, 20).reduce(initialRegistry, (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
         final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registry.getCommandHandlers().stream()
-            .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll);
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll);
         return new HandlerResolver(null, null, commandHandlers, null) {
             @Override
             @SuppressWarnings("unchecked")
@@ -279,26 +281,26 @@ public class ApplicationCommandListenerPerfTest {
 
     private AMQP.BasicProperties createProps() {
         return new AMQP.BasicProperties(
-            "application/json",
-            "UTF-8",
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "3242",
-            null,
-            null,
-            null,
-            null,
-            null);
+                "application/json",
+                "UTF-8",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "3242",
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomErrorReporter errorReporter) {
-            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true,  10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, 10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
 
         @Override
