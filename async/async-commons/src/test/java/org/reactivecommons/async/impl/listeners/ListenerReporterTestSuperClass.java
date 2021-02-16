@@ -61,7 +61,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected void assertContinueAfterSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source) throws InterruptedException {
         final HandlerResolver handlerResolver = createHandlerResolver(handlerRegistry);
         when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class), any(Boolean.class)))
-            .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
+                .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
 
         messageListener = createMessageListener(handlerResolver);
 
@@ -79,7 +79,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected void assertSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source) throws InterruptedException {
         final HandlerResolver handlerResolver = createHandlerResolver(handlerRegistry);
         when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class), any(Boolean.class)))
-            .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
+                .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
 
         messageListener = createMessageListener(handlerResolver);
 
@@ -95,13 +95,13 @@ public abstract class ListenerReporterTestSuperClass {
         assertThat(throwableCaptor.getValue().getMessage()).isEqualTo("testEx");
     }
 
-    protected  <T> Flux<AcknowledgableDelivery> createSource(Function<T, String> routeExtractor, T... events)  {
+    protected <T> Flux<AcknowledgableDelivery> createSource(Function<T, String> routeExtractor, T... events) {
         final List<AcknowledgableDelivery> list = Stream.of(events).map(value -> {
             final String data = valueAsString(value);
             final AMQP.BasicProperties props = new AMQP.BasicProperties().builder()
-                .messageId("unitTestMessage"+value)
-                .headers(Collections.singletonMap(Headers.SERVED_QUERY_ID, routeExtractor.apply(value)))
-                .build();
+                    .messageId("unitTestMessage" + value)
+                    .headers(Collections.singletonMap(Headers.SERVED_QUERY_ID, routeExtractor.apply(value)))
+                    .build();
 
             final Envelope envelope = new Envelope(new Random().nextInt(), true, "exchange", routeExtractor.apply(value));
             final Delivery delivery = new Delivery(envelope, props, data.getBytes());
@@ -114,24 +114,26 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener> eventHandlers = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredQueryHandler> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
-        final Map<String, RegisteredCommandHandler> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> eventHandlers = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> dynamicEventsHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
+        final Map<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
-            new ConcurrentHashMap<>(queryHandlers),
-            new ConcurrentHashMap<>(eventHandlers),
-            new ConcurrentHashMap<>(commandHandlers),
-            new ConcurrentHashMap<>(notificationHandlers));
+                new ConcurrentHashMap<>(queryHandlers),
+                new ConcurrentHashMap<>(eventHandlers),
+                new ConcurrentHashMap<>(notificationHandlers),
+                new ConcurrentHashMap<>(dynamicEventsHandlers),
+                new ConcurrentHashMap<>(commandHandlers));
     }
 
-    private Flux<AcknowledgableDelivery> createSource(DomainEvent<DummyMessage> ...events)  {
+    private Flux<AcknowledgableDelivery> createSource(DomainEvent<DummyMessage>... events) {
         final List<AcknowledgableDelivery> list = Stream.of(events).map(value -> {
             final String data = valueAsString(value);
             final AMQP.BasicProperties props = new AMQP.BasicProperties().builder()
-                .messageId("unitTestMessage"+value)
-                .headers(new HashMap<>())
-                .build();
+                    .messageId("unitTestMessage" + value)
+                    .headers(new HashMap<>())
+                    .build();
 
             final Envelope envelope = new Envelope(new Random().nextInt(), true, "exchange", value.getName());
             final Delivery delivery = new Delivery(envelope, props, data.getBytes());
@@ -144,7 +146,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected String valueAsString(Object o) {
         try {
             return mapper.writeValueAsString(o);
-        }catch (JsonProcessingException e){
+        } catch (JsonProcessingException e) {
             throw new RuntimeException(e);
         }
     }

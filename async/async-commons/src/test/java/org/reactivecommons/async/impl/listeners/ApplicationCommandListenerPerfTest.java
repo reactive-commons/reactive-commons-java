@@ -247,9 +247,9 @@ public class ApplicationCommandListenerPerfTest {
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry initialRegistry) {
         final HandlerRegistry registry = range(0, 20).reduce(initialRegistry, (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
-        final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registry.getCommandHandlers().stream()
+        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream()
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll);
-        return new HandlerResolver(null, null, commandHandlers, null) {
+        return new HandlerResolver(null, null, null, null, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
             public RegisteredCommandHandler<Object> getCommandHandler(String path) {

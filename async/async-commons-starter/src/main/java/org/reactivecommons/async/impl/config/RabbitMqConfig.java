@@ -75,17 +75,17 @@ public class RabbitMqConfig {
         final PropertyMapper map = PropertyMapper.get();
 
         map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
-            .to(channelPoolOptions::maxCacheSize);
+                .to(channelPoolOptions::maxCacheSize);
 
         final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
-            senderConnection,
-            channelPoolOptions
+                senderConnection,
+                channelPoolOptions
         );
 
         return new SenderOptions()
-            .channelPool(channelPool)
-            .resourceManagementChannelMono(channelPool.getChannelMono()
-                .transform(Utils::cache));
+                .channelPool(channelPool)
+                .resourceManagementChannelMono(channelPool.getChannelMono()
+                        .transform(Utils::cache));
     }
 
     @Bean
@@ -180,32 +180,39 @@ public class RabbitMqConfig {
     public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
 
-        final ConcurrentMap<String, RegisteredQueryHandler> handlers = registries
+        final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getHandlers().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener> eventListeners = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventListeners = registries
                 .values().stream()
                 .flatMap(r -> r.getEventListeners().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> dynamicEventHandlers = registries
+                .values().stream()
+                .flatMap(r -> r.getDynamicEventsHandlers().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getCommandHandlers().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener> eventNotificationListener = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventNotificationListener = registries
                 .values()
                 .stream()
                 .flatMap(r -> r.getEventNotificationListener().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(handlers, eventListeners, commandHandlers, eventNotificationListener) {
+        return new HandlerResolver(queryHandlers, eventListeners, eventNotificationListener,
+                dynamicEventHandlers, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {

@@ -58,13 +58,13 @@ public class ApplicationQueryListenerTest {
 //        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         when(reactiveMessageListener.getReceiver()).thenReturn(receiver);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
-        Map<String, RegisteredQueryHandler> handlers = new HashMap<>();
+        Map<String, RegisteredQueryHandler<?, ?>> handlers = new HashMap<>();
         handlers.put("queryDelegate", new RegisteredQueryHandler<Void, SampleClass>("queryDelegate",
                 (from, message) -> empty(), SampleClass.class));
         QueryHandler<String, SampleClass> handler = (message) -> just("OK");
         handlers.put("queryDirect", new RegisteredQueryHandler<>("queryDirect",
                 (from, message) -> handler.handle(message), SampleClass.class));
-        HandlerResolver resolver = new HandlerResolver(handlers, null, null, null);
+        HandlerResolver resolver = new HandlerResolver(handlers, null, null, null, null);
         genericMessageListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
                 "directExchange", messageConverter, "replyExchange", false, 1, 100, maxLengthBytes, discardNotifier, errorReporter);
     }

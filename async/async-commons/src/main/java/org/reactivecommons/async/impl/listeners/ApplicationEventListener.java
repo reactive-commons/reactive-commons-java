@@ -20,6 +20,7 @@ import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
 
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -39,16 +40,14 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final Matcher keyMatcher;
 
 
-    
-
-    public ApplicationEventListener(ReactiveMessageListener receiver, 
-                                    String queueName, 
-                                    HandlerResolver resolver, 
-                                    String eventsExchange, 
-                                    MessageConverter messageConverter, 
-                                    boolean withDLQRetry, 
-                                    long maxRetries, int retryDelay, 
-                                    Optional<Integer> maxLengthBytes, 
+    public ApplicationEventListener(ReactiveMessageListener receiver,
+                                    String queueName,
+                                    HandlerResolver resolver,
+                                    String eventsExchange,
+                                    MessageConverter messageConverter,
+                                    boolean withDLQRetry,
+                                    long maxRetries, int retryDelay,
+                                    Optional<Integer> maxLengthBytes,
                                     DiscardNotifier discardNotifier,
                                     CustomErrorReporter errorReporter) {
         super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event", errorReporter);
@@ -64,11 +63,11 @@ public class ApplicationEventListener extends GenericMessageListener {
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         if (withDLQRetry) {
             final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic"));
-            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(ExchangeSpecification.exchange(eventsExchange+".DLQ").durable(true).type("topic"));
+            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(ExchangeSpecification.exchange(eventsExchange + ".DLQ").durable(true).type("topic"));
             final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(queueName, eventsExchange, retryDelay, maxLengthBytes);
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, eventsExchange+".DLQ", maxLengthBytes);
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, eventsExchange + ".DLQ", maxLengthBytes);
             final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners()).flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange, listener.getPath(), queueName)));
-            final Flux<AMQP.Queue.BindOk> bindingDLQ = fromIterable(resolver.getEventListeners()).flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange+".DLQ", listener.getPath(), queueName + ".DLQ")));
+            final Flux<AMQP.Queue.BindOk> bindingDLQ = fromIterable(resolver.getEventListeners()).flatMap(listener -> creator.bind(BindingSpecification.binding(eventsExchange + ".DLQ", listener.getPath(), queueName + ".DLQ")));
             return declareExchange.then(declareExchangeDLQ).then(declareQueue).then(declareDLQ).thenMany(bindings).thenMany(bindingDLQ).then();
         } else {
             final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners())
@@ -82,18 +81,27 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final Set<String> listenerKeys = resolver.getEventListeners()
-                .stream()
-                .map(RegisteredEventListener::getPath)
-                .collect(Collectors.toSet());
-        final String matchedKey = keyMatcher.match(listenerKeys, executorPath);
-        final RegisteredEventListener<Object> handler = resolver.getEventListener(matchedKey);
+        final String matchedKey = keyMatcher.match(resolver.getToListenEventNames(), executorPath);
+        final RegisteredEventListener<Object> handler = getEventListener(matchedKey);
+
         final Class<Object> eventClass = handler.getInputClass();
         Function<Message, DomainEvent<Object>> converter = msj -> messageConverter.readDomainEvent(msj, eventClass);
+
         final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);
+
         return msj -> executor
                 .execute(msj)
                 .cast(Object.class);
+    }
+
+    private RegisteredEventListener<Object> getEventListener(String matchedKey) {
+        RegisteredEventListener<Object> eventListener = resolver.getEventListener(matchedKey);
+
+        if (eventListener == null) {
+            return resolver.getDynamicEventsHandler(matchedKey);
+        }
+
+        return eventListener;
     }
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {

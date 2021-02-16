@@ -36,6 +36,48 @@ public class HandlerRegistryTest {
     }
 
     @Test
+    void shouldRegisterDynamicEventsHandlerWithTypeInference() {
+        SomeEventHandler eventHandler = new SomeEventHandler();
+
+        String eventNamePattern = "a.*";
+
+        HandlerRegistry resultRegistry = registry.handleDynamicEvents(eventNamePattern, eventHandler);
+        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
+                new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
+
+        assertThat(registry.getDynamicEventsHandlers())
+                .anySatisfy(registeredEventListener -> {
+            assertThat(registeredEventListener)
+                    .usingRecursiveComparison()
+                    .isEqualTo(expectedRegisteredEventListener);
+        });
+
+        assertThat(resultRegistry)
+                .isSameAs(registry);
+    }
+
+    @Test
+    void shouldRegisterDynamicEventsHandler() {
+        SomeEventHandler eventHandler = new SomeEventHandler();
+
+        String eventNamePattern = "a.*";
+
+        HandlerRegistry resultRegistry = registry.handleDynamicEvents(eventNamePattern, eventHandler, SomeDataClass.class);
+        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
+                new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
+
+        assertThat(registry.getDynamicEventsHandlers())
+                .anySatisfy(registeredEventListener -> {
+                    assertThat(registeredEventListener)
+                            .usingRecursiveComparison()
+                            .isEqualTo(expectedRegisteredEventListener);
+                });
+
+        assertThat(resultRegistry)
+                .isSameAs(registry);
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void listenEvent() {
         EventHandler<SomeDataClass> handler = mock(EventHandler.class);

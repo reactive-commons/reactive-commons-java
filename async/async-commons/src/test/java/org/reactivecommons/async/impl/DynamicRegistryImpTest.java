@@ -1,5 +1,6 @@
 package org.reactivecommons.async.impl;
 
+import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.AMQP.Queue.BindOk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,26 +37,28 @@ public class DynamicRegistryImpTest {
     @Mock
     private IBrokerConfigProps props;
 
-    private DynamicRegistryImp registry;
+    private DynamicRegistryImp dynamicRegistry;
 
 
     @BeforeEach
     @SuppressWarnings("rawtypes")
     void setUp() {
-        Map<String, RegisteredCommandHandler> commandHandlers = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener> eventListeners = new ConcurrentHashMap<>();
-        Map<String, RegisteredQueryHandler> queryHandlers = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener> notificationEventListeners = new ConcurrentHashMap<>();
-        resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers, notificationEventListeners);
+        Map<String, RegisteredCommandHandler<?>> commandHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?>> eventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?>> notificationEventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?>> dynamicEventsHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
+        resolver = new HandlerResolver(queryHandlers, eventListeners, notificationEventListeners,
+                dynamicEventsHandlers, commandHandlers);
         when(props.getDomainEventsExchangeName()).thenReturn("domainEx");
         when(props.getEventsQueue()).thenReturn("events.queue");
-        registry = new DynamicRegistryImp(resolver, topologyCreator, props);
+        dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
     }
 
     @Test
     public void registerEventListener() {
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
-        registry.listenEvent("event1", message -> Mono.empty(), Long.class);
+        dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
         final RegisteredEventListener<Object> listener = resolver.getEventListener("event1");
         assertThat(listener).isNotNull();
@@ -66,7 +69,7 @@ public class DynamicRegistryImpTest {
         ArgumentCaptor<BindingSpecification> captor = ArgumentCaptor.forClass(BindingSpecification.class);
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
 
-        registry.listenEvent("event1", message -> Mono.empty(), Long.class);
+        dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
         verify(topologyCreator).bind(captor.capture());
         final BindingSpecification binding = captor.getValue();
@@ -80,11 +83,62 @@ public class DynamicRegistryImpTest {
         PublisherProbe<BindOk> probe = PublisherProbe.of(just(mock(BindOk.class)));
         when(topologyCreator.bind(any())).thenReturn(probe.mono());
 
-        Mono<Void> result = registry.listenEvent("event1", message -> Mono.empty(), Long.class);
+        Mono<Void> result = dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
         StepVerifier.create(result).verifyComplete();
         probe.assertWasSubscribed();
 
     }
+
+    @Test
+    void shouldBindDomainEventsToEventsQueueUsingEventName() {
+        ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
+                ArgumentCaptor.forClass(BindingSpecification.class);
+
+        PublisherProbe<AMQP.Queue.BindOk> topologyCreatorProbe = PublisherProbe.empty();
+
+        when(topologyCreator.bind(bindingSpecificationCaptor.capture()))
+                .thenReturn(topologyCreatorProbe.mono());
+
+        String eventName = "a.b.c";
+        BindingSpecification bindingSpecification =
+                BindingSpecification.binding("domainEx", eventName, "events.queue");
+
+        StepVerifier.create(dynamicRegistry.startListeningEvent(eventName))
+                .expectComplete()
+                .verify();
+
+        assertThat(bindingSpecificationCaptor.getValue())
+                .usingRecursiveComparison()
+                .isEqualTo(bindingSpecification);
+
+        topologyCreatorProbe.assertWasSubscribed();
+    }
+
+    @Test
+    void shouldUnbindDomainEventsToEventsQueueUsingEventName() {
+        ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
+                ArgumentCaptor.forClass(BindingSpecification.class);
+
+        PublisherProbe<AMQP.Queue.UnbindOk> topologyCreatorProbe = PublisherProbe.empty();
+
+        when(topologyCreator.unbind(bindingSpecificationCaptor.capture()))
+                .thenReturn(topologyCreatorProbe.mono());
+
+        String eventName = "a.b.c";
+        BindingSpecification bindingSpecification =
+                BindingSpecification.binding("domainEx", eventName, "events.queue");
+
+        StepVerifier.create(dynamicRegistry.stopListeningEvent(eventName))
+                .expectComplete()
+                .verify();
+
+        assertThat(bindingSpecificationCaptor.getValue())
+                .usingRecursiveComparison()
+                .isEqualTo(bindingSpecification);
+
+        topologyCreatorProbe.assertWasSubscribed();
+    }
+
 
 }
