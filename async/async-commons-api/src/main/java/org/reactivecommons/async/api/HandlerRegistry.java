@@ -10,7 +10,6 @@ import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import reactor.core.publisher.Mono;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
@@ -20,28 +19,38 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class HandlerRegistry {
 
-    private final List<RegisteredQueryHandler> handlers = new CopyOnWriteArrayList<>();
-    private final List<RegisteredEventListener> eventListeners = new CopyOnWriteArrayList<>();
-    private final List<RegisteredCommandHandler> commandHandlers = new CopyOnWriteArrayList<>();
-    private final List<RegisteredEventListener> eventNotificationListener = new CopyOnWriteArrayList<>();
+    private final List<RegisteredEventListener<?>> eventListeners = new CopyOnWriteArrayList<>();
+    private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
+    private final List<RegisteredEventListener<?>> dynamicEventsHandlers = new CopyOnWriteArrayList<>();
+
+    private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
+    private final List<RegisteredCommandHandler<?>> commandHandlers = new CopyOnWriteArrayList<>();
 
     public static HandlerRegistry register() {
         return new HandlerRegistry();
     }
 
-    public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> fn, Class<T> eventClass) {
-        eventListeners.add(new RegisteredEventListener<>(eventName, fn, eventClass));
+    public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler, Class<T> eventClass) {
+        eventListeners.add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler) {
-        eventListeners.add(new RegisteredEventListener<>(eventName, handler, inferGenericParameterType(handler)));
+        return listenEvent(eventName, handler, inferGenericParameterType(handler));
+    }
+
+    public <T> HandlerRegistry listenNotificationEvent(String eventName, EventHandler<T> handler, Class<T> eventClass) {
+        eventNotificationListener.add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
 
-    public <T> HandlerRegistry listenNotificationEvent(String eventName, EventHandler<T> fn, Class<T> eventClass) {
-        eventNotificationListener.add(new RegisteredEventListener<>(eventName, fn, eventClass));
+    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler, Class<T> eventClass) {
+        dynamicEventsHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
         return this;
+    }
+
+    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler) {
+        return handleDynamicEvents(eventNamePattern, handler, inferGenericParameterType(handler));
     }
 
     public <T> HandlerRegistry handleCommand(String commandName, CommandHandler<T> fn, Class<T> commandClass) {
