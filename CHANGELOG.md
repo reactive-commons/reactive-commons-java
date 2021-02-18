@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.0-beta4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta4) (2021-02-18)
+
+**Closed issues:**
+
+- Dynamic listeners registry [\#48](https://github.com/reactive-commons/reactive-commons-java/issues/48)
+
+**Merged pull requests:**
+
+- feat: dynamic events handlers [\#51](https://github.com/reactive-commons/reactive-commons-java/pull/51)
+- chore: upgrade dependencies [\#50](https://github.com/reactive-commons/reactive-commons-java/pull/50)
+
+## [1.0.0-beta3](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta3) (2020-12-12)
+
 ## [1.0.0-beta2](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta2) (2020-12-05)
 
 **Merged pull requests:**
