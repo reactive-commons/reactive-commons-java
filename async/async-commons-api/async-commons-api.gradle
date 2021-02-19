@@ -18,7 +18,7 @@ def pomConfig = {
         developer {
             id "danielbustamante"
             name "Daniel Bustamante Ospina"
-            email "daniel.bustamante@sofka.com.co"
+            email "danibust@bancolombia.com.co"
         }
     }
 
