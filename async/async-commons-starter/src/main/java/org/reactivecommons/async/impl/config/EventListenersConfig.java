@@ -30,7 +30,7 @@ public class EventListenersConfig {
         final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
                 messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),asyncProps.getDomain().getEvents().getMaxLengthBytes(),
-                discardNotifier, errorReporter);
+                discardNotifier, errorReporter, appName);
 
         listener.startListener();
 

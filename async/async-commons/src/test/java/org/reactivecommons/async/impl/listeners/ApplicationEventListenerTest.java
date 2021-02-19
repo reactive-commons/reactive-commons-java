@@ -44,7 +44,7 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
 
     class StubGenericMessageListener extends ApplicationEventListener {
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, "", messageConverter, true, 10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(reactiveMessageListener, "queueName", handlerResolver, "", messageConverter, true, 10, 10, Optional.empty(), discardNotifier, errorReporter, "");
         }
 
         @Override
