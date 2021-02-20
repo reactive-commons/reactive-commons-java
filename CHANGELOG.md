@@ -1,5 +1,7 @@
 # Changelog
 
+## [1.0.0-beta5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta5) (2021-02-20)
+
 ## [1.0.0-beta4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta4) (2021-02-18)
 
 **Closed issues:**
