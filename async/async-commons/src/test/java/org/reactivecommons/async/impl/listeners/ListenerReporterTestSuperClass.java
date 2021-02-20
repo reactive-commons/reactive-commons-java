@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
+import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -23,9 +24,7 @@ import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplie
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
-import reactor.rabbitmq.AcknowledgableDelivery;
-import reactor.rabbitmq.ConsumeOptions;
-import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.*;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -41,13 +40,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 import static reactor.core.publisher.Mono.empty;
+import static reactor.core.publisher.Mono.just;
 
 public abstract class ListenerReporterTestSuperClass {
 
     private final ObjectMapper mapper = new ObjectMapper();
 
     private final Receiver receiver = mock(Receiver.class);
-    private final TopologyCreator topologyCreator = mock(TopologyCreator.class);
+    protected final TopologyCreator topologyCreator = mock(TopologyCreator.class);
     protected final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
     protected final MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     protected final CustomErrorReporter errorReporter = mock(CustomErrorReporter.class);
@@ -57,6 +57,13 @@ public abstract class ListenerReporterTestSuperClass {
     protected final Semaphore successSemaphore = new Semaphore(0);
     protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
 
+    @BeforeEach
+    public void init() {
+        Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class))).thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
+        Mockito.when(topologyCreator.declareDLQ(any(String.class), any(String.class), any(Integer.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+        Mockito.when(topologyCreator.declareQueue(any(String.class), any(String.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+        Mockito.when(topologyCreator.bind(any(BindingSpecification.class))).thenReturn(just(mock(AMQP.Queue.BindOk.class)));
+    }
 
     protected void assertContinueAfterSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source) throws InterruptedException {
         final HandlerResolver handlerResolver = createHandlerResolver(handlerRegistry);

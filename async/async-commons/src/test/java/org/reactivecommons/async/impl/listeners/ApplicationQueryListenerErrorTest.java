@@ -7,13 +7,11 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
-import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
 import static org.mockito.Mockito.mock;
-import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
@@ -47,11 +45,6 @@ public class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuper
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
             super(reactiveMessageListener, "queueName", handlerResolver, mock(ReactiveMessageSender.class), "exchange", messageConverter, "exchange", true, 10L, 100, Optional.of(1), discardNotifier, errorReporter);
-        }
-
-        @Override
-        protected Mono<Void> setUpBindings(TopologyCreator creator) {
-            return empty(); //Do Nothing
         }
 
     }

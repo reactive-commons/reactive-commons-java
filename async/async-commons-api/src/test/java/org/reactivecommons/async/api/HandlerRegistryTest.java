@@ -78,6 +78,13 @@ public class HandlerRegistryTest {
     }
 
     @Test
+    public void shouldRegisterNotificationEventListener() {
+        registry.listenNotificationEvent(name, message -> Mono.empty(), SomeDataClass.class);
+        assertThat(registry.getEventNotificationListener()).anySatisfy(listener ->
+            assertThat(listener.getPath()).isEqualTo(name));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void listenEvent() {
         EventHandler<SomeDataClass> handler = mock(EventHandler.class);

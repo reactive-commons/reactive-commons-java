@@ -6,14 +6,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 import java.util.UUID;
 
-import static reactor.core.publisher.Mono.empty;
-import static reactor.core.publisher.Mono.error;
+import static reactor.core.publisher.Mono.*;
 
 @ExtendWith(MockitoExtension.class)
 public class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass{
@@ -47,11 +45,5 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
             super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,  10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
-
-        @Override
-        protected Mono<Void> setUpBindings(TopologyCreator creator) {
-            return empty(); //Do Nothing
-        }
-
     }
 }

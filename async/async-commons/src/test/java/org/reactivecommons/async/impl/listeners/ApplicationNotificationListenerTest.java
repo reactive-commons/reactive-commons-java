@@ -1,24 +1,34 @@
 package org.reactivecommons.async.impl.listeners;
 
+import com.rabbitmq.client.AMQP;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.QueueSpecification;
 
 import java.util.UUID;
 
-import static reactor.core.publisher.Mono.empty;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static reactor.core.publisher.Mono.error;
+import static reactor.core.publisher.Mono.just;
 
 @ExtendWith(MockitoExtension.class)
 public class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass {
 
     private DomainEvent<DummyMessage> event1 = new DomainEvent<>("app.event.test", UUID.randomUUID().toString(), new DummyMessage());
     private DomainEvent<DummyMessage> event2 = new DomainEvent<>("app.event.test2", UUID.randomUUID().toString(), new DummyMessage());
+
+    @BeforeEach
+    public void initCreator() {
+        Mockito.when(topologyCreator.declare(any(QueueSpecification.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+    }
 
     @Test
     public void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
@@ -45,11 +55,6 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
             super(reactiveMessageListener, "exchange", "queue", handlerResolver, messageConverter, discardNotifier, errorReporter);
-        }
-
-        @Override
-        protected Mono<Void> setUpBindings(TopologyCreator creator) {
-            return empty(); //Do Nothing
         }
 
     }
