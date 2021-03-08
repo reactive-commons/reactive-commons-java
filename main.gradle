@@ -1,30 +1,14 @@
 subprojects {
-    apply plugin: "java"
-    apply plugin: "jacoco"
+    apply plugin: 'java-library'
+    apply plugin: 'jacoco'
     apply plugin: 'io.spring.dependency-management'
 
     sourceCompatibility = JavaVersion.VERSION_1_8
- 
-    task sourcesJar(type: Jar, dependsOn: classes) {
-        classifier = 'sources'
-        from sourceSets.main.allSource
-    }
-
-    javadoc.failOnError = false
-    task javadocJar(type: Jar, dependsOn: javadoc) {
-        classifier = 'javadoc'
-        from javadoc.destinationDir
-    }
-
-    artifacts {
-        archives sourcesJar
-        archives javadocJar
-    }
 
     repositories {
         mavenCentral()
-        maven { url "https://repo.spring.io/snapshot" }
-        maven { url "https://repo.spring.io/milestone" }
+        maven { url 'https://repo.spring.io/snapshot' }
+        maven { url 'https://repo.spring.io/milestone' }
     }
 
     dependencies {
@@ -49,6 +33,89 @@ subprojects {
     dependencyManagement {
         imports {
             mavenBom "org.springframework.boot:spring-boot-dependencies:$springBootVersion"
+        }
+    }
+
+    if (toPublish.split(',').contains(it.name)) {
+        apply plugin: 'com.jfrog.bintray'
+        apply plugin: 'maven-publish'
+        apply plugin: 'signing'
+        ext {
+            groupId = 'org.reactivecommons'
+            pomConfig = {
+                licenses {
+                    license {
+                        name 'The Apache Software License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id 'danielbustamante'
+                        name 'Daniel Bustamante Ospina'
+                        email 'danibust@bancolombia.com.co'
+                    }
+                }
+                scm {
+                    url 'git@github.com:reactive-commons/reactive-commons-java.git'
+                }
+            }
+        }
+
+        group groupId
+
+        task sourcesJar(type: Jar, dependsOn: classes) {
+            classifier 'sources'
+            from sourceSets.main.allJava
+        }
+
+        task javadocJar(type: Jar, dependsOn: javadoc) {
+            classifier = 'javadoc'
+            from javadoc.destinationDir
+        }
+
+        tasks.withType(GenerateModuleMetadata) {
+            enabled = false
+        }
+
+        publishing {
+            publications {
+                mavenJava(MavenPublication) {
+                    from components.java
+
+                    artifact sourcesJar
+                    artifact javadocJar
+
+                    groupId = groupId
+                    artifactId = artifactId
+                    version = project.property('version')
+
+                    pom.withXml {
+                        def root = asNode()
+                        root.appendNode('description', artifactDescription)
+                        root.appendNode('name', artifactId)
+                        root.appendNode('url', 'http://reactivecommons.org')
+                        root.children().last() + pomConfig
+                    }
+                }
+            }
+            repositories {
+                maven {
+                    name = 'OSSRH'
+                    url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+                    credentials {
+                        username = System.getenv('MAVEN_USERNAME')
+                        password = System.getenv('MAVEN_PASSWORD')
+                    }
+                }
+            }
+        }
+
+        if (project.hasProperty('signing.keyId')) {
+            signing {
+                sign publishing.publications.mavenJava
+            }
         }
     }
 }
