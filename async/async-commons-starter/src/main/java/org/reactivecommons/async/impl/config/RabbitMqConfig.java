@@ -20,7 +20,7 @@ import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
 import org.reactivecommons.async.parent.converters.MessageConverter;
 import org.reactivecommons.async.parent.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.parent.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import org.reactivecommons.async.parent.config.BrokerConfig;

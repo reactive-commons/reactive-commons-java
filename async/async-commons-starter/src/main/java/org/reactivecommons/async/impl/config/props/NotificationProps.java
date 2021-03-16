@@ -2,7 +2,7 @@ package org.reactivecommons.async.impl.config.props;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.impl.utils.NameGenerator;
+import org.reactivecommons.async.parent.utils.NameGenerator;
 
 import java.util.concurrent.atomic.AtomicReference;
 

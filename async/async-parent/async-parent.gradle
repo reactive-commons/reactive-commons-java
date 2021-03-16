@@ -13,7 +13,10 @@ repositories {
 }
 
 dependencies {
-    api project(":async-commons")
+    api project(":async-commons-api")
+    api project(":domain-events-api")
 
+    compileOnly 'io.projectreactor:reactor-core'
+    api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
 }

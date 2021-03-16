@@ -79,7 +79,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         headers.put(CORRELATION_ID, from.getCorrelationID());
 
         if (response == null) {
-            headers.put(Headers.COMPLETION_ONLY_SIGNAL, TRUE.toString());
+            headers.put(COMPLETION_ONLY_SIGNAL, TRUE.toString());
         }
 
         return sender.sendNoConfirm(response, "globalReply", from.getReplyID(), headers, false);

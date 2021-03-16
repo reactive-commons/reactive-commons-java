@@ -21,7 +21,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.parent.converters.MessageConverter;
 import org.reactivecommons.async.parent.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.*;

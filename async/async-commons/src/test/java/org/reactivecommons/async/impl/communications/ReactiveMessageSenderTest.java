@@ -10,7 +10,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;

@@ -6,7 +6,7 @@ import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.parent.converters.json.ObjectMapperSupplier;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.*;

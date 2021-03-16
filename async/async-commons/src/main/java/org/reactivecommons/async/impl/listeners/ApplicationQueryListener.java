@@ -22,7 +22,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import static java.util.Optional.ofNullable;
-import static org.reactivecommons.async.impl.Headers.*;
+import static org.reactivecommons.async.parent.Headers.*;
 
 @Log
 //TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos

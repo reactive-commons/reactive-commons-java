@@ -9,7 +9,7 @@ import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
 
-import static org.reactivecommons.async.impl.Headers.*;
+import static org.reactivecommons.async.parent.Headers.*;
 import static reactor.rabbitmq.ResourcesSpecification.*;
 
 @Log

@@ -17,7 +17,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.parent.converters.MessageConverter;
 import org.reactivecommons.async.parent.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.Receiver;
