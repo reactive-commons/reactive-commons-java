@@ -4,7 +4,7 @@ import com.rabbitmq.client.AMQP;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;

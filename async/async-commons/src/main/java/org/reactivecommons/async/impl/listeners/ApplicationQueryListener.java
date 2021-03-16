@@ -3,10 +3,9 @@ package org.reactivecommons.async.impl.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.Headers;
-import org.reactivecommons.async.impl.QueryExecutor;
+import org.reactivecommons.async.parent.QueryExecutor;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
@@ -22,7 +21,6 @@ import java.util.HashMap;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static java.lang.Boolean.TRUE;
 import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.impl.Headers.*;
 

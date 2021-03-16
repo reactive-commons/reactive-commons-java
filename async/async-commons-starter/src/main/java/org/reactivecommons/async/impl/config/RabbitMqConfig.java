@@ -23,6 +23,7 @@ import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplie
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

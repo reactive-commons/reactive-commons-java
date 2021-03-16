@@ -16,7 +16,7 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
-import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;

@@ -12,7 +12,7 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
