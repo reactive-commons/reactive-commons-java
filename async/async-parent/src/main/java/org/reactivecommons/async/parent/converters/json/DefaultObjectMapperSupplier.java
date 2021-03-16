@@ -1,4 +1,4 @@
-package org.reactivecommons.async.parent.converters.json;
+package org.reactivecommons.async.impl.converters.json;
 
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
