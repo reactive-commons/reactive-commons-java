@@ -1,4 +1,4 @@
-package org.reactivecommons.async.impl.config;
+package org.reactivecommons.async.parent.config;
 
 import java.time.Duration;
 import java.util.UUID;

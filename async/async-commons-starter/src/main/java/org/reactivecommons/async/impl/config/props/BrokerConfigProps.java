@@ -2,14 +2,11 @@ package org.reactivecommons.async.impl.config.props;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.impl.config.IBrokerConfigProps;
+import org.reactivecommons.async.parent.config.IBrokerConfigProps;
 import org.reactivecommons.async.impl.utils.NameGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.util.Base64Utils;
 
-import java.nio.ByteBuffer;
-import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
 

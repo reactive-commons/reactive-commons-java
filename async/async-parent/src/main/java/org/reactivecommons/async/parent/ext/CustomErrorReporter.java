@@ -1,9 +1,9 @@
-package org.reactivecommons.async.impl.ext;
+package org.reactivecommons.async.parent.ext;
 
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 import reactor.core.publisher.Mono;
 
 public interface CustomErrorReporter {

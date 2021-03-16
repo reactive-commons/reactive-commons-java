@@ -1,4 +1,4 @@
-package org.reactivecommons.async.impl.converters.json;
+package org.reactivecommons.async.parent.converter.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -6,7 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.parent.converters.json.JacksonMessageConverter;
 
 import java.io.IOException;
 import java.util.Date;

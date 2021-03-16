@@ -1,10 +1,11 @@
-package org.reactivecommons.async.impl.ext;
+package org.reactivecommons.async.parent.ext;
 
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.PublisherProbe;
@@ -67,7 +68,7 @@ public class CustomErrorReporterTest {
             .verifyComplete();
     }
 
-    class TestCustomReporter implements CustomErrorReporter{
+    class TestCustomReporter implements CustomErrorReporter {
         @Override
         public Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered) {
             return commandProbe.mono();

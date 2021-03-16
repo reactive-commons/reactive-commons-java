@@ -3,9 +3,10 @@ package org.reactivecommons.async.impl.config;
 import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
-import org.reactivecommons.async.impl.converters.MessageConverter;
+import org.reactivecommons.async.parent.converters.MessageConverter;
 import org.reactivecommons.async.impl.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.parent.config.BrokerConfig;
 
 import java.nio.ByteBuffer;
 import java.util.Base64;

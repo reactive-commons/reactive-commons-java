@@ -1,7 +1,7 @@
 package org.reactivecommons.async.helpers;
 
 import org.reactivecommons.async.impl.RabbitMessage;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 
 import static org.reactivecommons.async.impl.Headers.*;
 

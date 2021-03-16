@@ -7,11 +7,11 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener
 import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.EventExecutor;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.parent.converters.MessageConverter;
+import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;

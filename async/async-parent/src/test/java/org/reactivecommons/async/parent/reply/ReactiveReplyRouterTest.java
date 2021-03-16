@@ -2,7 +2,7 @@ package org.reactivecommons.async.parent.reply;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 

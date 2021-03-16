@@ -2,7 +2,7 @@ package org.reactivecommons.async.impl;
 
 import com.rabbitmq.client.Delivery;
 import lombok.Data;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 
 import java.util.HashMap;
 import java.util.Map;

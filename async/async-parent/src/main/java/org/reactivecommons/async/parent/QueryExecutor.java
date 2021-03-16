@@ -3,7 +3,7 @@ package org.reactivecommons.async.parent;
 
 import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 import reactor.core.publisher.Mono;
 
 import java.util.function.Function;

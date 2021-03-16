@@ -1,4 +1,4 @@
-package org.reactivecommons.async.impl.config;
+package org.reactivecommons.async.parent.config;
 
 public interface IBrokerConfigProps {
     String getEventsQueue();

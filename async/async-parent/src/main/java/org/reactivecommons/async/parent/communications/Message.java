@@ -1,4 +1,4 @@
-package org.reactivecommons.async.impl.communications;
+package org.reactivecommons.async.parent.communications;
 
 import java.util.Map;
 

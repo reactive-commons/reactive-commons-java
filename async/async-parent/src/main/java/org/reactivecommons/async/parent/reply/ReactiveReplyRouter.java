@@ -1,6 +1,6 @@
 package org.reactivecommons.async.parent.reply;
 
-import org.reactivecommons.async.impl.communications.Message;
+import org.reactivecommons.async.parent.communications.Message;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.UnicastProcessor;
 import reactor.util.concurrent.Queues;

@@ -1,7 +1,7 @@
 package org.reactivecommons.async.impl;
 
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
-import org.reactivecommons.async.impl.config.BrokerConfig;
+import org.reactivecommons.async.parent.config.BrokerConfig;
 import reactor.core.publisher.Mono;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;

@@ -1,4 +1,4 @@
-package org.reactivecommons.async.impl.converters.json;
+package org.reactivecommons.async.parent.converter.json;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
