@@ -25,6 +25,7 @@ import org.reactivecommons.async.parent.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.parent.ext.CustomErrorReporter;
 import org.reactivecommons.async.parent.config.BrokerConfig;
 import org.reactivecommons.async.parent.config.IBrokerConfigProps;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;

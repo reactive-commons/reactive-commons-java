@@ -9,7 +9,7 @@ import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.helpers.SampleClass;
 import org.reactivecommons.async.helpers.TestStubs;
-import org.reactivecommons.async.impl.DiscardNotifier;
+import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.parent.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
