@@ -10,7 +10,7 @@ on:
       - master
 
   release:
-    types: [created]
+    types: [ created ]
 
 jobs:
   build:
@@ -50,8 +50,8 @@ jobs:
           java-version: 1.8
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
-#      - name: Execute jacocoTestReport
-#        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
+      #      - name: Execute jacocoTestReport
+      #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
       - name: Build with Gradle
         run: ./gradlew build asciidoctor --refresh-dependencies --no-daemon --continue
       - name: Generate Changelog
@@ -73,11 +73,13 @@ jobs:
           files: CHANGELOG.md docs/
           name: ${{ github.actor }}
           email: ${{ github.actor }}@users.noreply.github.com
-#      - name: Push codeCoverage to Codecov
-#        run: bash <(curl -s https://codecov.io/bash)
-      - name: Echo credentials
-        run: echo "bintrayUser=${{secrets.BINTRAY_USER}}" >> gradle.properties
-      - name: Echo credentials Key
-        run: echo "bintrayApiKey=${{secrets.BINTRAY_KEY}}" >> gradle.properties && cat gradle.properties
-      - name: Publish plugin
-        run: ./gradlew bintrayUpload
+      #      - name: Push codeCoverage to Codecov
+      #        run: bash <(curl -s https://codecov.io/bash)
+      - name: Prepare gpg key
+        run: |
+          echo "${{secrets.SIGNING_KEY_FILE}}" | base64 -d > ~/.gradle/secring.gpg
+      - name: Publish Libraries
+        run: ./gradlew publish -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_KEY_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg)
+        env:
+          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
+          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
