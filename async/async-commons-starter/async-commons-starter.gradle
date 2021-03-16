@@ -73,7 +73,7 @@ bintray {
 }
 
 dependencies {
-    api project(":async-commons")
+    api project(":async-rabbit")
     compileOnly('org.springframework.boot:spring-boot-starter')
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'

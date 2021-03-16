@@ -38,12 +38,12 @@ publishing {
                 classifier "javadoc"
             }
             groupId 'org.reactivecommons'
-            artifactId 'async-commons-standalone'
+            artifactId 'async-rabbit'
             version project.property('version')
             pom.withXml {
                 def root = asNode()
-                root.appendNode('description', 'Async Commons Standalone Config')
-                root.appendNode('name', 'async-commons-standalone')
+                root.appendNode('description', 'Async Commons')
+                root.appendNode('name', 'async-rabbit')
                 root.appendNode('url', 'https://site_for_lib.tld')
                 root.children().last() + pomConfig
             }
@@ -72,5 +72,12 @@ bintray {
 }
 
 dependencies {
-    api project(":async-rabbit")
+    api project(":async-commons-api")
+    api project(":domain-events-api")
+    api project(":async-commons")
+
+    compileOnly 'io.projectreactor:reactor-core'
+    api ("io.projectreactor.rabbitmq:reactor-rabbitmq")
+    api 'com.fasterxml.jackson.core:jackson-databind'
+    testImplementation 'io.projectreactor:reactor-test'
 }
