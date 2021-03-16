@@ -1,0 +1,19 @@
+plugins {
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+}
+
+test.onlyIf { true }
+
+repositories {
+    // Use jcenter for resolving dependencies.
+    // You can declare any Maven/Ivy/file repository here.
+    jcenter()
+}
+
+dependencies {
+    api project(":async-commons")
+
+    testImplementation 'io.projectreactor:reactor-test'
+}
