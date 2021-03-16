@@ -17,7 +17,7 @@ import org.reactivecommons.async.impl.config.BrokerConfig;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;

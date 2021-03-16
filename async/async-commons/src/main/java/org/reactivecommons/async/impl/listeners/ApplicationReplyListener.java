@@ -4,7 +4,7 @@ import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
 import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;

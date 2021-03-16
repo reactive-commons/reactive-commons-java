@@ -7,7 +7,7 @@ import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.BrokerConfig;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
