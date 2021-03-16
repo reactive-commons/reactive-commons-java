@@ -8,8 +8,8 @@ import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
-import static org.reactivecommons.async.impl.Headers.CORRELATION_ID;
-import static org.reactivecommons.async.impl.Headers.REPLY_ID;
+import static org.reactivecommons.async.parent.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.parent.Headers.REPLY_ID;
 
 public class QueryExecutor<T, M> {
     private final QueryHandlerDelegate<T, M> queryHandler;

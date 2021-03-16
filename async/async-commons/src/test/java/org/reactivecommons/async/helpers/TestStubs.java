@@ -3,7 +3,7 @@ package org.reactivecommons.async.helpers;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.parent.communications.Message;
 
-import static org.reactivecommons.async.impl.Headers.*;
+import static org.reactivecommons.async.parent.Headers.*;
 
 public class TestStubs {
 

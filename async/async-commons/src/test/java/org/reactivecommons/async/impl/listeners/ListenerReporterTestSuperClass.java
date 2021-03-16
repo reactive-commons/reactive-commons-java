@@ -15,7 +15,7 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.parent.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.Headers;
+import org.reactivecommons.async.parent.Headers;
 import org.reactivecommons.async.parent.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;

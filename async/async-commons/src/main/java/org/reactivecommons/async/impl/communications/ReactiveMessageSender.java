@@ -17,7 +17,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static org.reactivecommons.async.impl.Headers.SOURCE_APPLICATION;
+import static org.reactivecommons.async.parent.Headers.SOURCE_APPLICATION;
 
 public class ReactiveMessageSender {
 

@@ -11,7 +11,7 @@ import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
-
+import static org.reactivecommons.async.parent.Headers.*;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -20,7 +20,6 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import static java.lang.Boolean.TRUE;
-import static org.reactivecommons.async.impl.Headers.*;
 import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
