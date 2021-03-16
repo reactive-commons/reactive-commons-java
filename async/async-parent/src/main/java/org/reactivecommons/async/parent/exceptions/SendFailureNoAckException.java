@@ -1,4 +1,4 @@
-package org.reactivecommons.async.parent.exceptions;
+package org.reactivecommons.async.impl.exceptions;
 
 public class SendFailureNoAckException extends RuntimeException {
     public SendFailureNoAckException(String message) {
