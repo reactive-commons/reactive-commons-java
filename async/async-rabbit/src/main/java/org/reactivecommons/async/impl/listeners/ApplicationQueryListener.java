@@ -3,15 +3,15 @@ package org.reactivecommons.async.impl.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.parent.DiscardNotifier;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.parent.communications.Message;
-import org.reactivecommons.async.parent.QueryExecutor;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.QueryExecutor;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.ext.CustomErrorReporter;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
@@ -22,7 +22,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import static java.util.Optional.ofNullable;
-import static org.reactivecommons.async.parent.Headers.*;
+import static org.reactivecommons.async.commons.Headers.*;
 
 @Log
 //TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos

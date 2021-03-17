@@ -4,7 +4,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.impl.RabbitDomainEventBus;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
-import org.reactivecommons.async.parent.config.BrokerConfig;
+import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;

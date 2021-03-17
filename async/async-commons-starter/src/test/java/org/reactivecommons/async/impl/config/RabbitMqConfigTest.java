@@ -6,8 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.parent.communications.Message;
-import org.reactivecommons.async.parent.ext.CustomErrorReporter;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.ext.CustomErrorReporter;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 

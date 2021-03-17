@@ -6,9 +6,9 @@ import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.parent.communications.Message;
-import org.reactivecommons.async.parent.exceptions.MessageConversionException;
-import org.reactivecommons.async.parent.DiscardNotifier;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;

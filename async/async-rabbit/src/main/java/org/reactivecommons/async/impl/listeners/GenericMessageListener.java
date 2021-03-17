@@ -2,13 +2,13 @@ package org.reactivecommons.async.impl.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
-import org.reactivecommons.async.parent.DiscardNotifier;
-import org.reactivecommons.async.parent.FallbackStrategy;
+import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.impl.RabbitMessage;
-import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.parent.ext.CustomErrorReporter;
+import org.reactivecommons.async.commons.ext.CustomErrorReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;

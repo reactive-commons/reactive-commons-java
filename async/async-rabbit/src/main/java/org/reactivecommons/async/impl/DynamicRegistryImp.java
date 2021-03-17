@@ -6,7 +6,7 @@ import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.parent.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 

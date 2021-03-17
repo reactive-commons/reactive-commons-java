@@ -1,9 +1,9 @@
 package org.reactivecommons.async.helpers;
 
 import org.reactivecommons.async.impl.RabbitMessage;
-import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.commons.communications.Message;
 
-import static org.reactivecommons.async.parent.Headers.*;
+import static org.reactivecommons.async.commons.Headers.*;
 
 public class TestStubs {
 

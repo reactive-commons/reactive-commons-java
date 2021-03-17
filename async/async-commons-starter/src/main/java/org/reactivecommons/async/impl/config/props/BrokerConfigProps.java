@@ -2,8 +2,8 @@ package org.reactivecommons.async.impl.config.props;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.parent.config.IBrokerConfigProps;
-import org.reactivecommons.async.parent.utils.NameGenerator;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.utils.NameGenerator;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 

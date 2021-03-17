@@ -7,9 +7,9 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.impl.RabbitMessage;
-import org.reactivecommons.async.parent.communications.Message;
-import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.exceptions.MessageConversionException;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 
 import java.io.IOException;
 import java.nio.charset.Charset;

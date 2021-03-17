@@ -4,12 +4,12 @@ import lombok.extern.java.Log;
 import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
 
-import static org.reactivecommons.async.parent.Headers.*;
+import static org.reactivecommons.async.commons.Headers.*;
 import static reactor.rabbitmq.ResourcesSpecification.*;
 
 @Log

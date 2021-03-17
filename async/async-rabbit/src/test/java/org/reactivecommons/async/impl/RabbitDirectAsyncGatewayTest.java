@@ -11,13 +11,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.From;
-import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
-import org.reactivecommons.async.parent.config.BrokerConfig;
-import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.converters.json.DefaultObjectMapperSupplier;
+import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.parent.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -41,7 +41,7 @@ import java.util.stream.IntStream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
-import static org.reactivecommons.async.parent.Headers.*;
+import static org.reactivecommons.async.commons.Headers.*;
 
 
 @ExtendWith(MockitoExtension.class)

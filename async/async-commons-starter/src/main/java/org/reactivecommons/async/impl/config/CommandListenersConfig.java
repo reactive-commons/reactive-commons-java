@@ -1,12 +1,12 @@
 package org.reactivecommons.async.impl.config;
 
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.parent.DiscardNotifier;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
-import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.ext.CustomErrorReporter;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomErrorReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;

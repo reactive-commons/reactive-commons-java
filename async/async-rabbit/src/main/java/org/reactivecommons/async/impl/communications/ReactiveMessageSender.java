@@ -1,9 +1,9 @@
 package org.reactivecommons.async.impl.communications;
 
 import com.rabbitmq.client.AMQP;
-import org.reactivecommons.async.parent.converters.MessageConverter;
-import org.reactivecommons.async.parent.exceptions.SendFailureNoAckException;
-import org.reactivecommons.async.parent.communications.Message;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
+import org.reactivecommons.async.commons.communications.Message;
 import reactor.core.publisher.*;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
@@ -17,7 +17,7 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static org.reactivecommons.async.parent.Headers.SOURCE_APPLICATION;
+import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
 public class ReactiveMessageSender {
 
