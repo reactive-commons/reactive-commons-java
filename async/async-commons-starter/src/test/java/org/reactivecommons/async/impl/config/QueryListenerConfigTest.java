@@ -11,7 +11,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationQueryListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,7 +32,7 @@ public class QueryListenerConfigTest {
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);
     private final MessageConverter messageConverter = mock(MessageConverter.class);
     private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    private final CustomErrorReporter customErrorReporter = mock(CustomErrorReporter.class);
+    private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
     private final ReactiveMessageSender sender = mock(ReactiveMessageSender.class);
 
@@ -53,7 +53,7 @@ public class QueryListenerConfigTest {
 
     @Test
     public void queryListener() {
-        final ApplicationQueryListener queryListener = config.queryListener(messageConverter, handlerResolver, sender, listener, discardNotifier, customErrorReporter);
+        final ApplicationQueryListener queryListener = config.queryListener(messageConverter, handlerResolver, sender, listener, discardNotifier, customReporter);
         Assertions.assertThat(queryListener).isNotNull();
     }
 }

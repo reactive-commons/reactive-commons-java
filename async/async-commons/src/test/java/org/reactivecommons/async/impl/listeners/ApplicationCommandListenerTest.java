@@ -11,6 +11,9 @@ import reactor.core.publisher.Mono;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.longThat;
+import static org.mockito.Mockito.verify;
 import static reactor.core.publisher.Mono.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -24,6 +27,14 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
         final HandlerRegistry registry = HandlerRegistry.register()
             .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
+    }
+
+    @Test
+    public void shouldSendErrorMetricToCustomErrorReporter() throws InterruptedException {
+        final HandlerRegistry registry = HandlerRegistry.register()
+            .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+        assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
+        verify(errorReporter).reportMetric(eq("command"), eq("app.command.test"), longThat(time -> time > 0 ), eq(false));
     }
 
     @Test

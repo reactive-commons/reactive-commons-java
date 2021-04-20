@@ -7,7 +7,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.ReactiveMessageSender;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationQueryListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -28,7 +28,7 @@ public class QueryListenerConfig {
     public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver,
                                                   ReactiveMessageSender sender, ReactiveMessageListener rlistener,
                                                   DiscardNotifier discardNotifier,
-                                                  CustomErrorReporter errorReporter) {
+                                                  CustomReporter errorReporter) {
         final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
                 appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
                 asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),

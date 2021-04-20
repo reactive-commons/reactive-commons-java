@@ -23,7 +23,7 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.*;
@@ -55,7 +55,7 @@ public class ApplicationCommandListenerPerfTest {
     private DiscardNotifier discardNotifier;
 
     @Mock
-    private CustomErrorReporter errorReporter;
+    private CustomReporter errorReporter;
 
     private StubGenericMessageListener messageListener;
     private static final CountDownLatch latch = new CountDownLatch(12 + 1);
@@ -302,7 +302,7 @@ public class ApplicationCommandListenerPerfTest {
 
     class StubGenericMessageListener extends ApplicationCommandListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomErrorReporter errorReporter) {
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomReporter errorReporter) {
             super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, 10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
 

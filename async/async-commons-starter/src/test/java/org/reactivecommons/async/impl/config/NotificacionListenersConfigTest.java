@@ -10,7 +10,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationNotificationListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -31,7 +31,7 @@ public class NotificacionListenersConfigTest {
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);
     private final MessageConverter messageConverter = mock(MessageConverter.class);
     private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    private final CustomErrorReporter customErrorReporter = mock(CustomErrorReporter.class);
+    private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
 
     @BeforeEach
@@ -52,7 +52,7 @@ public class NotificacionListenersConfigTest {
     @Test
     public void eventNotificationListener() {
         final ApplicationNotificationListener applicationEventListener = config.
-                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customErrorReporter);
+                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();
     }
 }

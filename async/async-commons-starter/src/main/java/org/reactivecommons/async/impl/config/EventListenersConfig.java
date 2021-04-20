@@ -6,7 +6,7 @@ import org.reactivecommons.async.impl.HandlerResolver;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationEventListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -25,7 +25,7 @@ public class EventListenersConfig {
 
     @Bean
     public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomErrorReporter errorReporter) {
+                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomReporter errorReporter) {
 
         final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                 appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),

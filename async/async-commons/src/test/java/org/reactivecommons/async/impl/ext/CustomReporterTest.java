@@ -14,7 +14,7 @@ import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 
-public class CustomErrorReporterTest {
+public class CustomReporterTest {
 
     private final PublisherProbe<Void> commandProbe = PublisherProbe.empty();
     private final PublisherProbe<Void> eventProbe = PublisherProbe.empty();
@@ -67,7 +67,7 @@ public class CustomErrorReporterTest {
             .verifyComplete();
     }
 
-    class TestCustomReporter implements CustomErrorReporter{
+    class TestCustomReporter implements CustomReporter {
         @Override
         public Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered) {
             return commandProbe.mono();

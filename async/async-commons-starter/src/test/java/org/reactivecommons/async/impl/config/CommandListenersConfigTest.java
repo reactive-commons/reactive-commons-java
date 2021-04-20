@@ -12,7 +12,7 @@ import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.reactivecommons.async.impl.listeners.ApplicationCommandListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -38,7 +38,7 @@ public class CommandListenersConfigTest {
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);
     private final MessageConverter messageConverter = mock(MessageConverter.class);
     private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    private final CustomErrorReporter customErrorReporter = mock(CustomErrorReporter.class);
+    private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
 
     @BeforeEach
@@ -62,7 +62,7 @@ public class CommandListenersConfigTest {
                 handlerResolver,
                 messageConverter,
                 discardNotifier,
-                customErrorReporter
+            customReporter
         );
         Assertions.assertThat(commandListener).isNotNull();
     }

@@ -18,7 +18,7 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
@@ -46,7 +46,7 @@ public class ApplicationQueryListenerTest {
     private TopologyCreator topologyCreator;
 
     @Mock
-    private CustomErrorReporter errorReporter;
+    private CustomReporter errorReporter;
 
     @Mock
     private ReactiveMessageListener reactiveMessageListener;

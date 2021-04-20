@@ -7,7 +7,7 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.impl.communications.Message;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -46,7 +46,7 @@ public class RabbitMqConfigTest {
 
     @Test
     public void shouldCreateDefaultErrorReporter() {
-        final CustomErrorReporter errorReporter = config.reactiveCommonsCustomErrorReporter();
+        final CustomReporter errorReporter = config.reactiveCommonsCustomErrorReporter();
         assertThat(errorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(Command.class), true)).isNotNull();
         assertThat(errorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(DomainEvent.class), true)).isNotNull();
         assertThat(errorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(AsyncQuery.class), true)).isNotNull();
@@ -54,10 +54,10 @@ public class RabbitMqConfigTest {
 
     @Test
     public void shouldGenerateDefaultReeporter() {
-        final CustomErrorReporter customErrorReporter = config.reactiveCommonsCustomErrorReporter();
-        final Mono<Void> r1 = customErrorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(Command.class), true);
-        final Mono<Void> r2 = customErrorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(DomainEvent.class), true);
-        final Mono<Void> r3 = customErrorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(AsyncQuery.class), true);
+        final CustomReporter customReporter = config.reactiveCommonsCustomErrorReporter();
+        final Mono<Void> r1 = customReporter.reportError(mock(Throwable.class), mock(Message.class), mock(Command.class), true);
+        final Mono<Void> r2 = customReporter.reportError(mock(Throwable.class), mock(Message.class), mock(DomainEvent.class), true);
+        final Mono<Void> r3 = customReporter.reportError(mock(Throwable.class), mock(Message.class), mock(AsyncQuery.class), true);
 
         assertThat(r1).isNotNull();
         assertThat(r2).isNotNull();

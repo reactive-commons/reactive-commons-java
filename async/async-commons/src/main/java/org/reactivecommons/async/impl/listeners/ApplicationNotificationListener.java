@@ -11,7 +11,7 @@ import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -37,7 +37,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
                                            HandlerResolver handlerResolver,
                                            MessageConverter messageConverter,
                                            DiscardNotifier discardNotifier,
-                                           CustomErrorReporter errorReporter) {
+                                           CustomReporter errorReporter) {
         super(queueName,receiver,false,1,discardNotifier,"event", errorReporter);
         this.resolver = handlerResolver;
         this.messageConverter = messageConverter;

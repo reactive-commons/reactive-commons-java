@@ -16,7 +16,7 @@ import org.reactivecommons.async.impl.DiscardNotifier;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -53,7 +53,7 @@ public class GenericMessageListenerPerfTest {
     private DiscardNotifier discardNotifier;
 
     @Mock
-    private CustomErrorReporter errorReporter;
+    private CustomReporter errorReporter;
 
     private StubGenericMessageListener messageListener;
 
@@ -137,7 +137,7 @@ public class GenericMessageListenerPerfTest {
 
     class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomErrorReporter errorReporter) {
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter errorReporter) {
             super(queueName, listener, useDLQRetries, maxRetries, discardNotifier, objectType, errorReporter);
         }
 

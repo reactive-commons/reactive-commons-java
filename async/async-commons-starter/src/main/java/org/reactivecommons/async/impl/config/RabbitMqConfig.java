@@ -22,7 +22,7 @@ import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.impl.converters.json.ObjectMapperSupplier;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -141,8 +141,8 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public CustomErrorReporter reactiveCommonsCustomErrorReporter() {
-        return new CustomErrorReporter() {
+    public CustomReporter reactiveCommonsCustomErrorReporter() {
+        return new CustomReporter() {
             @Override
             public Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered) {
                 return Mono.empty();

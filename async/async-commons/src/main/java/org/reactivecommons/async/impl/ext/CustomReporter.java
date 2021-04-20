@@ -6,7 +6,7 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.impl.communications.Message;
 import reactor.core.publisher.Mono;
 
-public interface CustomErrorReporter {
+public interface CustomReporter {
 
     String COMMAND_CLASS = "org.reactivecommons.api.domain.Command";
     String EVENT_CLASS = "org.reactivecommons.api.domain.DomainEvent";
@@ -23,6 +23,9 @@ public interface CustomErrorReporter {
             default:
                 return Mono.empty();
         }
+    }
+
+    default void reportMetric(String type, String handlerPath, Long duration, boolean success) {
     }
 
     Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered);

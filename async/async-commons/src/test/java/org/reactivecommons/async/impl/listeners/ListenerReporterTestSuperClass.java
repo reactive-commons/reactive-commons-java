@@ -22,7 +22,7 @@ import org.reactivecommons.async.impl.communications.TopologyCreator;
 import org.reactivecommons.async.impl.converters.MessageConverter;
 import org.reactivecommons.async.impl.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.*;
 
@@ -50,7 +50,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected final TopologyCreator topologyCreator = mock(TopologyCreator.class);
     protected final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
     protected final MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
-    protected final CustomErrorReporter errorReporter = mock(CustomErrorReporter.class);
+    protected final CustomReporter errorReporter = mock(CustomReporter.class);
     private GenericMessageListener messageListener;
 
     protected final Semaphore semaphore = new Semaphore(0);
@@ -132,22 +132,6 @@ public abstract class ListenerReporterTestSuperClass {
                 new ConcurrentHashMap<>(notificationHandlers),
                 new ConcurrentHashMap<>(dynamicEventsHandlers),
                 new ConcurrentHashMap<>(commandHandlers));
-    }
-
-    private Flux<AcknowledgableDelivery> createSource(DomainEvent<DummyMessage>... events) {
-        final List<AcknowledgableDelivery> list = Stream.of(events).map(value -> {
-            final String data = valueAsString(value);
-            final AMQP.BasicProperties props = new AMQP.BasicProperties().builder()
-                    .messageId("unitTestMessage" + value)
-                    .headers(new HashMap<>())
-                    .build();
-
-            final Envelope envelope = new Envelope(new Random().nextInt(), true, "exchange", value.getName());
-            final Delivery delivery = new Delivery(envelope, props, data.getBytes());
-            return new AcknowledgableDelivery(delivery, new ChannelDummy(), null);
-        }).collect(Collectors.toList());
-
-        return Flux.fromIterable(new ArrayList<>(list));
     }
 
     protected String valueAsString(Object o) {

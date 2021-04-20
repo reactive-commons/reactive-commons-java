@@ -8,7 +8,7 @@ import org.reactivecommons.async.impl.RabbitMessage;
 import org.reactivecommons.async.impl.communications.Message;
 import org.reactivecommons.async.impl.communications.ReactiveMessageListener;
 import org.reactivecommons.async.impl.communications.TopologyCreator;
-import org.reactivecommons.async.impl.ext.CustomErrorReporter;
+import org.reactivecommons.async.impl.ext.CustomReporter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -45,10 +45,10 @@ public abstract class GenericMessageListener {
     private final long maxRetries;
     private final DiscardNotifier discardNotifier;
     private final String objectType;
-    private final CustomErrorReporter errorReporter;
+    private final CustomReporter customReporter;
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                  long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomErrorReporter errorReporter) {
+                                  long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter customReporter) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
@@ -56,7 +56,7 @@ public abstract class GenericMessageListener {
         this.useDLQRetries = useDLQRetries;
         this.discardNotifier = discardNotifier;
         this.objectType = objectType;
-        this.errorReporter = errorReporter;
+        this.customReporter = customReporter;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -81,15 +81,15 @@ public abstract class GenericMessageListener {
     }
 
 
-    private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj) {
+    private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         try {
-            String executorPath = getExecutorPath(msj);
+            final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
             final Message message = RabbitMessage.fromDelivery(msj);
 
             return defer(() -> handler.apply(message))
                 .transform(enrichPostProcess(message))
-                .transform(logExecution(executorPath))
+                .doOnSuccess(o -> logExecution(executorPath, initTime, true))
                 .subscribeOn(scheduler).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
@@ -97,26 +97,40 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private Function<Mono<Object>, Mono<Object>> logExecution(String executorPath) {
-        return objectMono -> {
-            Instant beforeExecutionTime = Instant.now();
+    private void logExecution(String executorPath, Instant initTime, boolean success) {
+        try {
+            final Instant afterExecutionTime = Instant.now();
+            final long timeElapsed = Duration.between(initTime, afterExecutionTime).toMillis();
+            doLogExecution(executorPath, timeElapsed);
+            customReporter.reportMetric(objectType, executorPath, timeElapsed, success);
+        }catch (Exception e){
+            log.log(Level.WARNING, "Unable to send execution metrics!", e);
+        }
 
-            return objectMono.doOnTerminate(() -> {
-                Instant afterExecutionTime = Instant.now();
-                long timeElapsed = Duration.between(beforeExecutionTime, afterExecutionTime).toMillis();
+    }
 
-                log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
-                        objectType, executorPath, timeElapsed));
-            });
-        };
+    private void reportErrorMetric(AcknowledgableDelivery msj, Instant initTime) {
+        String executorPath;
+        try {
+            executorPath = getExecutorPath(msj);
+        }catch (Exception e){
+            executorPath = "unknown";
+        }
+        logExecution(executorPath, initTime, false);
+    }
+
+    private void doLogExecution(String executorPath, long timeElapsed) {
+        log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
+            objectType, executorPath, timeElapsed));
     }
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
-        return messageFlux.flatMap(msj ->
-                        handle(msj)
-                                .doOnSuccess(AcknowledgableDelivery::ack)
-                                .onErrorResume(err -> requeueOrAck(msj, err))
-                , messageListener.getMaxConcurrency());
+        return messageFlux.flatMap(msj -> {
+            final Instant init = Instant.now();
+            return handle(msj, init)
+                .doOnSuccess(AcknowledgableDelivery::ack)
+                .onErrorResume(err -> requeueOrAck(msj, err, init));
+        }, messageListener.getMaxConcurrency());
     }
 
 
@@ -152,10 +166,11 @@ public abstract class GenericMessageListener {
         return identity();
     }
 
-    private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err) {
+    private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, Instant init) {
         final long retryNumber = getRetryNumber(msj);
         final Message rabbitMessage = RabbitMessage.fromDelivery(msj);
         final boolean redeliver = msj.getEnvelope().isRedeliver();
+        reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
         if ((redeliver || retryNumber > 0) && useDLQRetries) {
             if (retryNumber >= maxRetries) {
@@ -176,7 +191,7 @@ public abstract class GenericMessageListener {
 
     private void sendErrorToCustomReporter(final Throwable err, final Message message, final boolean redelivered){
         try {
-            errorReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
+            customReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
                 .subscribeOn(errorReporterScheduler)
                 .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
                 .subscribe();
