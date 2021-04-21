@@ -197,7 +197,7 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(2000);
+        Assertions.assertThat(microsPerMessage).isLessThan(5000);
     }
 
     @Test
