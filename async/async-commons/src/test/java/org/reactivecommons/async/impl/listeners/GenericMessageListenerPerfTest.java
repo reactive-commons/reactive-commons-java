@@ -83,7 +83,7 @@ public class GenericMessageListenerPerfTest {
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
         if (System.getProperty("env.ci") == null) {
-            Assertions.assertThat(microsPerMessage).isLessThan(5);
+            Assertions.assertThat(microsPerMessage).isLessThan(65);
         }
     }
 
