@@ -5,14 +5,13 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.EventHandler;
-import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
-import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
+import org.reactivecommons.async.rabbit.config.annotations.EnableDomainEventBus;
+import org.reactivecommons.async.rabbit.config.annotations.EnableMessageListeners;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import org.springframework.test.context.junit4.SpringRunner;
 import reactor.core.publisher.UnicastProcessor;
 import reactor.test.StepVerifier;
 

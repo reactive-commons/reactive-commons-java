@@ -81,7 +81,7 @@ Outbound messages are sent to an event bus using `DomainEventBus` or `DirectAsyn
 
 [source,java]
 --------
-import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import EnableDomainEventBus;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

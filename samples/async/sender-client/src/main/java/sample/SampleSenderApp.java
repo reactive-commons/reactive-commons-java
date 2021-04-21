@@ -1,17 +1,14 @@
 package sample;
 
 import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
-import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
-import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
+import org.reactivecommons.async.rabbit.config.annotations.EnableDirectAsyncGateway;
+import org.reactivecommons.async.rabbit.config.annotations.EnableDomainEventBus;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
