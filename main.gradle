@@ -28,6 +28,10 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        if (System.getProperty("env.ci").equals("true")){
+            systemProperty "env.ci", System.getProperty("env.ci")
+        }
+
     }
 
     dependencyManagement {

@@ -31,13 +31,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue
+        run: ./gradlew build test jacocoTestReport sonarqube --refresh-dependencies --no-daemon --continue -Denv.ci=true
       - name: Execute build test jacocoTestReport pull request
         if: endsWith(github.REF, '/merge') == true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue
+        run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue -Denv.ci=true
 
   release:
     if: github.event_name == 'release'
@@ -53,7 +53,7 @@ jobs:
       #      - name: Execute jacocoTestReport
       #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
       - name: Build with Gradle
-        run: ./gradlew build asciidoctor --refresh-dependencies --no-daemon --continue
+        run: ./gradlew build asciidoctor --refresh-dependencies --no-daemon --continue -Denv.ci=true
       - name: Generate Changelog
         uses: heinrichreimer/github-changelog-generator-action@v2.1.1
         with:
@@ -79,7 +79,7 @@ jobs:
         run: |
           echo "${{secrets.SIGNING_KEY_FILE}}" | base64 -d > ~/.gradle/secring.gpg
       - name: Publish Libraries
-        run: ./gradlew publish -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_KEY_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg)
+        run: ./gradlew publish -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_KEY_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) -Denv.ci=true
         env:
           MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
           MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}

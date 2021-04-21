@@ -108,7 +108,9 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(75);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(75);
+        }
     }
 
     private Mono<Void> handleTestMessageDelay(Command<DummyMessage> message) {
@@ -134,7 +136,9 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(120);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(120);
+        }
     }
 
     private Mono<Void> handleTestCPUMessageDelay(Command<DummyMessage> message) {
@@ -197,7 +201,9 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(5000);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(2000);
+        }
     }
 
     @Test
@@ -221,7 +227,9 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(8350);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(4350);
+        }
     }
 
     @Test
@@ -245,7 +253,9 @@ public class ApplicationCommandListenerPerfTest {
         System.out.println("Message count: " + messageCount);
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
-        Assertions.assertThat(microsPerMessage).isLessThan(2200);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(2200);
+        }
     }
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry initialRegistry) {

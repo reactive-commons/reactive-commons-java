@@ -88,7 +88,9 @@ public class DirectGatewayPerfTest {
         System.out.println("Total Execution Time: " + total + "ms");
         System.out.println("Microseconds per message: " + microsPerMessage + "us");
         System.out.println("Throughput: " + Math.round(messageCount / (total / 1000.0)) + " Msg/Seg");
-        Assertions.assertThat(microsPerMessage).isLessThan(reqMicrosPerMessage);
+        if (System.getProperty("env.ci") == null) {
+            Assertions.assertThat(microsPerMessage).isLessThan(reqMicrosPerMessage);
+        }
     }
 
     private Flux<Command<DummyMessage>> createMessages(int count) {
