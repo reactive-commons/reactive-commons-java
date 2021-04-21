@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
+
+## [1.0.0-beta7](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7) (2021-04-21)
+
+**Merged pull requests:**
+
+- Publish to maven central [\#54](https://github.com/reactive-commons/reactive-commons-java/pull/54)
+
 ## [1.0.0-beta5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta5) (2021-02-20)
 
 ## [1.0.0-beta4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta4) (2021-02-18)
@@ -39,6 +47,7 @@
 **Merged pull requests:**
 
 - Asciidoc Documentation [\#45](https://github.com/reactive-commons/reactive-commons-java/pull/45)
+- Adds event notification listener [\#39](https://github.com/reactive-commons/reactive-commons-java/pull/39)
 
 ## [0.6.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-beta) (2020-08-25)
 
@@ -66,10 +75,6 @@
 ## [0.5.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/0.5.2-beta) (2020-07-20)
 
 ## [0.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/0.5.0) (2020-06-08)
-
-**Merged pull requests:**
-
-- Adds event notification listener [\#39](https://github.com/reactive-commons/reactive-commons-java/pull/39)
 
 ## [0.4.7](https://github.com/reactive-commons/reactive-commons-java/tree/0.4.7) (2020-05-21)
 
