@@ -2,13 +2,11 @@ package org.reactivecommons.async.rabbit.converters.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
-
 
 import java.io.IOException;
 import java.util.Date;
@@ -47,7 +45,7 @@ public class JacksonMessageConverterTest {
         Date date = new Date();
         final Message message = converter.toMessage(new SampleClass("35", "name1", date));
         final SampleClass value = converter.readValue(message, SampleClass.class);
-        Assertions.assertThat(value).extracting(SampleClass::getId, SampleClass::getName, SampleClass::getDate)
+        assertThat(value).extracting(SampleClass::getId, SampleClass::getName, SampleClass::getDate)
                 .containsExactly("35", "name1", date);
     }
 
@@ -83,7 +81,7 @@ public class JacksonMessageConverterTest {
     @Test
     public void shouldConvertToQueryStructure() {
         final SampleClass data = new SampleClass("35", "sample1", new Date());
-        final Message message = converter.toMessage(new AsyncQuery<>("query.name",  data));
+        final Message message = converter.toMessage(new AsyncQuery<>("query.name", data));
         final AsyncQuery<Object> query = converter.readAsyncQueryStructure(message);
 
         assertThat(query.getQueryData()).isInstanceOf(JsonNode.class);

@@ -66,7 +66,7 @@ A Main application may looks like:
 
 [source,java]
 --------
-import EnableDomainEventBus;
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 

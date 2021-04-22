@@ -125,7 +125,7 @@ public class ManageTasksUseCase {
 Then enable this feature in a Configuration class and inject implementation:
 
 ```java
-import EnableDomainEventBus;
+import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
