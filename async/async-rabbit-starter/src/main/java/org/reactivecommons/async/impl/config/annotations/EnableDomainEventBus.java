@@ -1,6 +1,6 @@
-package org.reactivecommons.async.rabbit.config.annotations;
+package org.reactivecommons.async.impl.config.annotations;
 
-import org.reactivecommons.async.rabbit.config.DirectAsyncGatewayConfig;
+import org.reactivecommons.async.rabbit.config.EventBusConfig;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -10,9 +10,9 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 @Documented
-@Import(DirectAsyncGatewayConfig.class)
+@Import(EventBusConfig.class)
 @Configuration
-public @interface EnableDirectAsyncGateway {
+public @interface EnableDomainEventBus {
 }
 
 

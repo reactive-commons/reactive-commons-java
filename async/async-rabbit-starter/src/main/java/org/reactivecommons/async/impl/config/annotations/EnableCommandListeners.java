@@ -1,6 +1,6 @@
-package org.reactivecommons.async.rabbit.config.annotations;
+package org.reactivecommons.async.impl.config.annotations;
 
-import org.reactivecommons.async.rabbit.config.EventBusConfig;
+import org.reactivecommons.async.rabbit.config.CommandListenersConfig;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -10,9 +10,9 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 @Documented
-@Import(EventBusConfig.class)
+@Import(CommandListenersConfig.class)
 @Configuration
-public @interface EnableDomainEventBus {
+public @interface EnableCommandListeners {
 }
 
 

@@ -1,4 +1,4 @@
-package org.reactivecommons.async.rabbit.config.annotations;
+package org.reactivecommons.async.impl.config.annotations;
 
 import org.reactivecommons.async.rabbit.config.CommandListenersConfig;
 import org.reactivecommons.async.rabbit.config.EventListenersConfig;
