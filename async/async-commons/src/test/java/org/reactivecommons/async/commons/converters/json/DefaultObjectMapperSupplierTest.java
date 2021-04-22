@@ -1,9 +1,8 @@
-package org.reactivecommons.async.commons.converter.json;
+package org.reactivecommons.async.commons.converters.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.Getter;
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 
 import java.io.IOException;
 import java.util.Date;
