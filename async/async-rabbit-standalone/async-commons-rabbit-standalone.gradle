@@ -1,5 +1,5 @@
 ext {
-    artifactId = 'async-commons-standalone'
+    artifactId = 'async-commons-rabbit-standalone'
     artifactDescription = 'Async Commons Standalone Config'
 }
 

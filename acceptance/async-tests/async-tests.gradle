@@ -1,5 +1,5 @@
 dependencies {
-    compile project(":async-commons-starter")
+    compile project(":async-commons-rabbit-starter")
     compile('org.springframework.boot:spring-boot-starter')
 }
 

@@ -1,5 +1,5 @@
 ext {
-    artifactId = 'async-commons-starter'
+    artifactId = 'async-commons-rabbit-starter'
     artifactDescription = 'Async Commons Starter'
 }
 
