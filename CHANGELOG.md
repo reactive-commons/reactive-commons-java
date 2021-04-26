@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
+
+**Merged pull requests:**
+
+- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
+
 ## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
 
 ## [1.0.0-beta7](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7) (2021-04-21)
@@ -31,10 +37,6 @@
 
 ## [1.0.0-beta1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta1) (2020-10-28)
 
-**Merged pull requests:**
-
-- Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
-
 ## [0.6.2-Release](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-Release) (2020-09-24)
 
 ## [0.6.2](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2) (2020-09-24)
@@ -47,7 +49,6 @@
 **Merged pull requests:**
 
 - Asciidoc Documentation [\#45](https://github.com/reactive-commons/reactive-commons-java/pull/45)
-- Adds event notification listener [\#39](https://github.com/reactive-commons/reactive-commons-java/pull/39)
 
 ## [0.6.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-beta) (2020-08-25)
 
@@ -69,12 +70,15 @@
 
 **Merged pull requests:**
 
-- updates contiperf version, fixes performance test [\#43](https://github.com/reactive-commons/reactive-commons-java/pull/43)
 - Feature/listeners matching [\#42](https://github.com/reactive-commons/reactive-commons-java/pull/42)
 
 ## [0.5.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/0.5.2-beta) (2020-07-20)
 
 ## [0.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/0.5.0) (2020-06-08)
+
+**Merged pull requests:**
+
+- Adds event notification listener [\#39](https://github.com/reactive-commons/reactive-commons-java/pull/39)
 
 ## [0.4.7](https://github.com/reactive-commons/reactive-commons-java/tree/0.4.7) (2020-05-21)
 
@@ -104,6 +108,8 @@
 
 **Merged pull requests:**
 
+- Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
+- updates contiperf version, fixes performance test [\#43](https://github.com/reactive-commons/reactive-commons-java/pull/43)
 - fix: set resourceManagementChannelMono from channelPool [\#36](https://github.com/reactive-commons/reactive-commons-java/pull/36)
 - CI CD Pipelines [\#34](https://github.com/reactive-commons/reactive-commons-java/pull/34)
 - License MIT attached [\#33](https://github.com/reactive-commons/reactive-commons-java/pull/33)
