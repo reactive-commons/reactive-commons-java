@@ -3,7 +3,7 @@ package org.reactivecommons.test;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.impl.RabbitDirectAsyncGateway;
+import org.reactivecommons.async.rabbit.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;

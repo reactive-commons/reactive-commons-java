@@ -1,0 +1,13 @@
+ext {
+    artifactId = 'async-commons-rabbit-starter'
+    artifactDescription = 'Async Commons Starter'
+}
+
+dependencies {
+    api project(':async-rabbit')
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.projectreactor:reactor-test'
+}

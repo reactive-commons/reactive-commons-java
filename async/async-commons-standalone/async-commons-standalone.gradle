@@ -1,8 +1,0 @@
-ext {
-    artifactId = 'async-commons-standalone'
-    artifactDescription = 'Async Commons Standalone Config'
-}
-
-dependencies {
-    api project(':async-commons')
-}

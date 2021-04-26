@@ -1,8 +1,8 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
-    compile project(":async-commons-starter")
-//    compile 'org.reactivecommons:async-commons-starter:0.0.5-beta2'
+    compile project(":async-commons-rabbit-starter")
+//    compile 'org.reactivecommons:async-commons-starter:1.0.0-beta7'
     compile('org.springframework.boot:spring-boot-starter')
     runtime('org.springframework.boot:spring-boot-devtools')
 }
