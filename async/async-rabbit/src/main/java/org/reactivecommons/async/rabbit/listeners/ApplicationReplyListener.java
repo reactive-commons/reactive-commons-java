@@ -1,10 +1,13 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import com.rabbitmq.client.Delivery;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import reactor.core.publisher.Flux;
 import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
@@ -19,6 +22,7 @@ public class ApplicationReplyListener {
     private final Receiver receiver;
     private final TopologyCreator creator;
     private final String queueName;
+    private volatile Flux<Delivery> deliveryFlux;
 
     public ApplicationReplyListener(ReactiveReplyRouter router, ReactiveMessageListener listener, String queueName) {
         this.router = router;
@@ -28,7 +32,7 @@ public class ApplicationReplyListener {
     }
 
     public void startListening(String routeKey) {
-        creator.declare(exchange("globalReply").type("topic").durable(true))
+        deliveryFlux = creator.declare(exchange("globalReply").type("topic").durable(true))
             .then(creator.declare(queue(queueName).durable(false).autoDelete(true).exclusive(true)))
             .then(creator.bind(binding("globalReply", routeKey, queueName)))
             .thenMany(receiver.consumeAutoAck(queueName).doOnNext(delivery -> {
@@ -43,6 +47,13 @@ public class ApplicationReplyListener {
                 } catch (Exception e) {
                     log.log(Level.SEVERE, "Error in reply reception", e);
                 }
-            })).subscribe();
+            }));
+        onTerminate();
+    }
+
+
+    private void onTerminate() {
+        deliveryFlux.doOnTerminate(this::onTerminate)
+            .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 }
