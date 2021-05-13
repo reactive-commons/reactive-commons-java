@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
+
+**Merged pull requests:**
+
+- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
+
 ## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
 
 ## [1.0.0-beta7](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7) (2021-04-21)
