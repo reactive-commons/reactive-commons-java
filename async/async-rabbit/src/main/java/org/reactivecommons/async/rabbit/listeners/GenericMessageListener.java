@@ -5,6 +5,7 @@ import com.rabbitmq.client.Delivery;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
+import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -86,29 +87,8 @@ public abstract class GenericMessageListener {
     }
 
     private void onTerminate() {
-        log.info("Hard Subscription 2 to " + this.getClass().getName());
-        messageFlux.doOnTerminate(this::onTerminate).subscribe(new BaseSubscriber<Delivery>() {
-
-            @Override
-            protected void hookOnComplete() {
-                log.warning("##On Complete Hook!!");
-            }
-
-            @Override
-            protected void hookOnError(Throwable throwable) {
-                log.log(Level.SEVERE, "##Hook On Error!!", throwable);
-            }
-
-            @Override
-            protected void hookOnCancel() {
-                log.warning("##On Cancel Hook!!");
-            }
-
-            @Override
-            protected void hookFinally(SignalType type) {
-                log.warning("##On Finally Hook!! " + type.name());
-            }
-        });
+        messageFlux.doOnTerminate(this::onTerminate)
+            .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 
 

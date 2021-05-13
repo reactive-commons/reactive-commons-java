@@ -1,22 +1,18 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.Delivery;
-import com.rabbitmq.client.UnblockedCallback;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
-import org.reactivestreams.Subscription;
-import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.SignalType;
 import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
 
 import static org.reactivecommons.async.commons.Headers.*;
-import static reactor.core.publisher.Signal.subscribe;
 import static reactor.rabbitmq.ResourcesSpecification.*;
 
 @Log
@@ -52,37 +48,12 @@ public class ApplicationReplyListener {
                     log.log(Level.SEVERE, "Error in reply reception", e);
                 }
             }));
-        //deliveryFlux.subscribe();
         onTerminate();
     }
 
 
     private void onTerminate() {
-        deliveryFlux.doOnTerminate(this::onTerminate).subscribe(new BaseSubscriber<Delivery>() {
-            @Override
-            protected void hookOnNext(Delivery value) {
-                log.info("#On NextHook");
-            }
-
-            @Override
-            protected void hookOnComplete() {
-                log.warning("#On Complete Hook!!");
-            }
-
-            @Override
-            protected void hookOnError(Throwable throwable) {
-                log.log(Level.SEVERE, "#Hook On Error!!", throwable);
-            }
-
-            @Override
-            protected void hookOnCancel() {
-                log.warning("#On Cancel Hook!!");
-            }
-
-            @Override
-            protected void hookFinally(SignalType type) {
-                log.warning("#On Finally Hook!! " + type.name());
-            }
-        });
+        deliveryFlux.doOnTerminate(this::onTerminate)
+            .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 }
