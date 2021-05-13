@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Delivery;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -9,8 +10,10 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -46,6 +49,7 @@ public abstract class GenericMessageListener {
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
+    private volatile Flux<AcknowledgableDelivery> messageFlux;
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                   long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter customReporter) {
@@ -74,10 +78,37 @@ public abstract class GenericMessageListener {
         ConsumeOptions consumeOptions = new ConsumeOptions();
         consumeOptions.qos(messageListener.getPrefetchCount());
 
-        setUpBindings(messageListener.getTopologyCreator()).thenMany(
-                receiver.consumeManualAck(queueName, consumeOptions)
-                        .transform(this::consumeFaultTolerant))
-                .subscribe();
+        this.messageFlux = setUpBindings(messageListener.getTopologyCreator()).thenMany(
+            receiver.consumeManualAck(queueName, consumeOptions)
+                .transform(this::consumeFaultTolerant));
+        onTerminate();
+
+    }
+
+    private void onTerminate() {
+        log.info("Hard Subscription 2 to " + this.getClass().getName());
+        messageFlux.doOnTerminate(this::onTerminate).subscribe(new BaseSubscriber<Delivery>() {
+
+            @Override
+            protected void hookOnComplete() {
+                log.warning("##On Complete Hook!!");
+            }
+
+            @Override
+            protected void hookOnError(Throwable throwable) {
+                log.log(Level.SEVERE, "##Hook On Error!!", throwable);
+            }
+
+            @Override
+            protected void hookOnCancel() {
+                log.warning("##On Cancel Hook!!");
+            }
+
+            @Override
+            protected void hookFinally(SignalType type) {
+                log.warning("##On Finally Hook!! " + type.name());
+            }
+        });
     }
 
 

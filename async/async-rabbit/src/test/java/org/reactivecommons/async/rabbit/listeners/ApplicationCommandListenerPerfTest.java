@@ -32,12 +32,14 @@ import java.math.BigInteger;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static reactor.core.publisher.Flux.defer;
 import static reactor.core.publisher.Flux.range;
 import static reactor.core.publisher.Mono.just;
 
@@ -95,7 +97,14 @@ public class ApplicationCommandListenerPerfTest {
         );
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        final AtomicBoolean flag = new AtomicBoolean(true);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenAnswer(invocation -> defer(() -> {
+            if (flag.getAndSet(false)) {
+                return messageFlux;
+            } else {
+                return Flux.never();
+            }
+        }));
 
         messageListener.startListener();
         final long init = System.currentTimeMillis();
@@ -124,7 +133,14 @@ public class ApplicationCommandListenerPerfTest {
         );
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        final AtomicBoolean flag = new AtomicBoolean(true);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenAnswer(invocation -> defer(() -> {
+            if (flag.getAndSet(false)) {
+                return messageFlux;
+            } else {
+                return Flux.never();
+            }
+        }));
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -189,7 +205,14 @@ public class ApplicationCommandListenerPerfTest {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 250, 250);
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        final AtomicBoolean flag = new AtomicBoolean(true);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenAnswer(invocation -> defer(() -> {
+            if (flag.getAndSet(false)) {
+                return messageFlux;
+            } else {
+                return Flux.never();
+            }
+        }));
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -215,7 +238,14 @@ public class ApplicationCommandListenerPerfTest {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        final AtomicBoolean flag = new AtomicBoolean(true);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenAnswer(invocation -> defer(() -> {
+            if (flag.getAndSet(false)) {
+                return messageFlux;
+            } else {
+                return Flux.never();
+            }
+        }));
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
@@ -241,7 +271,14 @@ public class ApplicationCommandListenerPerfTest {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
         messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        final AtomicBoolean flag = new AtomicBoolean(true);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenAnswer(invocation -> defer(() -> {
+            if (flag.getAndSet(false)) {
+                return messageFlux;
+            } else {
+                return Flux.never();
+            }
+        }));
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();

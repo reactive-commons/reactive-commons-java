@@ -1,23 +1,32 @@
 package sample;
 
-import lombok.AllArgsConstructor;
+import com.rabbitmq.client.ConnectionFactory;
+import lombok.Builder;
 import lombok.Data;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
+import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
+import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
-import static org.reactivecommons.async.api.HandlerRegistry.register;
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
+import java.util.Map;
+import java.util.logging.Level;
+
+import static reactor.core.publisher.Mono.delay;
 import static reactor.core.publisher.Mono.just;
 
 @SpringBootApplication
@@ -30,81 +39,70 @@ public class SampleReceiverApp {
         SpringApplication.run(SampleReceiverApp.class, args);
     }
 
-    //@Bean
-    public HandlerRegistry handlerRegistry(MemberReceiver receiver) {
-        return register()
-                .serveQuery("serveQuery.register.member", receiver)
-                .serveQuery("serveQuery.register.member.new", new QueryHandler<MemberRegisteredEvent,
-                        AddMemberCommand>() {
-                    @Override
-                    public Mono<MemberRegisteredEvent> handle(AddMemberCommand command) {
-                        return just(new MemberRegisteredEvent("42", 69));
-                    }
-                })
-                .serveQuery("test.query", message -> {
-                    return Mono.error(new RuntimeException("Falla Generada Query"));
-                }, AddMemberCommand.class);
+    private ConnectionRabbitProperties rabbitProperties(){
+        return ConnectionRabbitProperties.builder()
+            .hostname("b-8b1e2880-30bd-4124-b765-220854289b87.mq.us-east-1.amazonaws.com")
+            .username("user")
+            .password("userrszthwco")
+            .port(5671)
+            .virtualhost("/")
+            .ssl(true)
+            .build();
     }
 
-    @Bean
-    public HandlerRegistry handlerRegistrySubs(DirectAsyncGateway gateway) {
-        return HandlerRegistry.register()
-                .serveQuery("query1", message -> {
-                    log.info("resolving from direct query");
-                    return just(new RespQuery1("Ok", message));
-                }, Call.class)
-                .serveQuery("query2", (from, message) -> {
-                    log.info("resolving from delegate query");
-                    return gateway.reply(new RespQuery1("Ok", message), from).then();
-                }, Call.class);
-    }
-
-    //@Bean
-    public HandlerRegistry handlerRegistryForEmpty(EmptyReceiver emptyReceiver) {
-        return register()
-                .serveQuery("serveQuery.empty", emptyReceiver);
-    }
-
-    //@Bean
-    public HandlerRegistry eventListeners(SampleUseCase useCase) {
-        return register()
-                .listenEvent("persona.registrada", useCase::reactToPersonaEvent, MemberRegisteredEvent.class);
-    }
-
-    @Bean
-    public SampleUseCase sampleUseCase(DomainEventBus eventBus) {
-        return new SampleUseCase(eventBus);
-    }
-
-    @Data
-    @AllArgsConstructor
-    static class RespQuery1 {
-        private String response;
-        private Call request;
-    }
-
-    @Data
-    @AllArgsConstructor
-    static class Call {
-        private String name;
-        private String phone;
-    }
-
-    @Data
-    @AllArgsConstructor
-    static class CallResponse {
-        private String message;
-        private Integer code;
-    }
-
-    @RequiredArgsConstructor
-    public static class SampleUseCase {
-        private final DomainEventBus eventBus;
-
-        Mono<Void> reactToPersonaEvent(DomainEvent<MemberRegisteredEvent> event) {
-            return Mono.from(eventBus.emit(new DomainEvent<>("persona.procesada", "213", event.getData())))
-                    .doOnSuccess(_v -> System.out.println("Persona procesada"));
+    private void configureSsl(ConnectionFactory connectionFactory) {
+        try {
+            connectionFactory.useSslProtocol();
+        } catch (NoSuchAlgorithmException | KeyManagementException exception) {
+            log.log(Level.SEVERE, exception.getMessage(), exception);
         }
     }
 
+    @Bean
+    public CommandLineRunner runner(DirectAsyncGateway gateway) {
+        return args -> {
+            Flux.interval(Duration.ofSeconds(3)).flatMap(l -> {
+                AsyncQuery<Map> query = new AsyncQuery<>("query", Map.of("type", "query"));
+                return gateway.requestReply(query, "", Map.class);
+            });
+
+        };
+    }
+
+    @Bean
+    public HandlerRegistry registry() {
+        return HandlerRegistry.register()
+            .serveQuery("query", message -> delay(Duration.ofMillis(500)).thenReturn(message), Map.class)
+            .handleCommand("command", message -> just(message).log().then(), Map.class)
+            .listenEvent("event", message -> just(message).log().then(), Map.class)
+            .listenNotificationEvent("event1", message -> just(message).log().then(), Map.class)
+            ;
+    }
+
+    @Bean
+    @Primary
+    public ConnectionFactoryProvider connection(){
+        ConnectionRabbitProperties properties = rabbitProperties();
+        final ConnectionFactory factory = new ConnectionFactory();
+        PropertyMapper map = PropertyMapper.get();
+        map.from(properties::getHostname).whenNonNull().to(factory::setHost);
+        map.from(properties::getPort).to(factory::setPort);
+        map.from(properties::getUsername).whenNonNull().to(factory::setUsername);
+        map.from(properties::getPassword).whenNonNull().to(factory::setPassword);
+        map.from(properties::getVirtualhost).whenNonNull().to(factory::setVirtualHost);
+        map.from(properties::isSsl).whenTrue().as(ssl -> factory).to(this::configureSsl);
+        System.out.println("RabbitMQ configured!!");
+        return () -> factory;
+    }
+
+    @Data
+    @Builder
+    static class ConnectionRabbitProperties {
+        private String virtualhost;
+        private String hostname;
+        private String username;
+        private String password;
+        private Integer port;
+        private boolean ssl;
+    }
 }
