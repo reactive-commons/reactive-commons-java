@@ -23,6 +23,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.*;
 
@@ -30,6 +31,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -39,6 +41,7 @@ import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static reactor.core.publisher.Flux.defer;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
@@ -90,8 +93,7 @@ public abstract class ListenerReporterTestSuperClass {
 
         messageListener = createMessageListener(handlerResolver);
 
-        Flux<AcknowledgableDelivery> messageFlux = source;
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        TestUtils.instructSafeReceiverMock(receiver, source);
 
         messageListener.startListener();
 
