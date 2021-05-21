@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.0-beta9](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta9) (2021-05-21)
+
+**Fixes:**
+
+- Recover exclusive queues on mirrored queues for RabbitMQ Clusters
+
 ## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
 
 **Merged pull requests:**

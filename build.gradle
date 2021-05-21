@@ -26,6 +26,10 @@ sonarqube {
     }
 }
 
+repositories {
+    mavenCentral()
+}
+
 asciidoctor {
     sourceDir file('docs/asciidoc')
     baseDir file('docs/asciidoc')
