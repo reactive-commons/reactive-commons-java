@@ -11,7 +11,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.stream.Collectors;
 
-public class KeyMatcherPerformanceWildcardTest {
+class KeyMatcherPerformanceWildcardTest {
 
 
     Map<String, String> candidates = new HashMap<>();

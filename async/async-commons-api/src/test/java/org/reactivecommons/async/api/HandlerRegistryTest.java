@@ -17,7 +17,7 @@ import reactor.core.publisher.Mono;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
-public class HandlerRegistryTest {
+class HandlerRegistryTest {
 
     private HandlerRegistry registry = HandlerRegistry.register();
     private String name = "some.event";

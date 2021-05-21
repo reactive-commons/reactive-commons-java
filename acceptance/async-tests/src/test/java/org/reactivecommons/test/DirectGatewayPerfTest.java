@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 @SpringBootTest
-public class DirectGatewayPerfTest {
+class DirectGatewayPerfTest {
 
     private static final String COMMAND_NAME = "app.command.test";
     private static final int messageCount = 40000;

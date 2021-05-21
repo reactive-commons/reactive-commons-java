@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.delay;
 
 @SpringBootTest
-public class SimpleCommandHandlePerfTest {
+class SimpleCommandHandlePerfTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand3";
 

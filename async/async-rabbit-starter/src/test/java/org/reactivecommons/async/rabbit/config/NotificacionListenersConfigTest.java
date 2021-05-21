@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class NotificacionListenersConfigTest {
+class NotificacionListenersConfigTest {
 
     private final AsyncProps props = new AsyncProps();
     private final NotificacionListenersConfig config = new NotificacionListenersConfig(props);

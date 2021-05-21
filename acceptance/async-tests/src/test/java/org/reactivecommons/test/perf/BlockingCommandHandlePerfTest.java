@@ -26,7 +26,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.*;
 
 @SpringBootTest
-public class BlockingCommandHandlePerfTest {
+class BlockingCommandHandlePerfTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand1";
 

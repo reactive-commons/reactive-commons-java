@@ -45,7 +45,7 @@ import static reactor.core.publisher.Flux.range;
 import static reactor.core.publisher.Mono.just;
 
 @ExtendWith(MockitoExtension.class)
-public class ApplicationCommandListenerPerfTest {
+class ApplicationCommandListenerPerfTest {
 
 
     @Mock

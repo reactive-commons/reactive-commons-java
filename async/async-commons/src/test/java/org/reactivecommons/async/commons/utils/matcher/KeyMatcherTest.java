@@ -10,7 +10,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
-public class KeyMatcherTest {
+class KeyMatcherTest {
     private KeyMatcher keyMatcher;
     private Set<String> listeners;
 

@@ -6,7 +6,7 @@ import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class MessageConversionExceptionTest {
+class MessageConversionExceptionTest {
 
     @Test
     void shouldConstructProperly(){

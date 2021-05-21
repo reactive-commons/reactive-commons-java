@@ -27,7 +27,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.empty;
 
 @SpringBootTest
-public class ParallelOnBlockingInSubscriptionTimeTest {
+class ParallelOnBlockingInSubscriptionTimeTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand2";
 

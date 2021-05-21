@@ -13,7 +13,7 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class JacksonMessageConverterTest {
+class JacksonMessageConverterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final JacksonMessageConverter converter = new JacksonMessageConverter(objectMapper);

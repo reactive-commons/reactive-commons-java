@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.*;
 
 @SpringBootTest
-public class SimpleEventNotificationTest {
+class SimpleEventNotificationTest {
 
     private static final String EVENT_NAME = "simpleTestEvent";
 

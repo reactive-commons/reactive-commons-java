@@ -9,7 +9,7 @@ import reactor.test.StepVerifier;
 import java.time.Duration;
 import java.util.UUID;
 
-public class ReactiveReplyRouterTest {
+class ReactiveReplyRouterTest {
 
     private ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
 

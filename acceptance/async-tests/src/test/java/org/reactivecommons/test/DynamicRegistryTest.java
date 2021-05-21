@@ -22,7 +22,7 @@ import static reactor.core.publisher.Mono.from;
 import static reactor.core.publisher.Mono.fromRunnable;
 
 @SpringBootTest
-public class DynamicRegistryTest {
+class DynamicRegistryTest {
 
     @Autowired
     private DomainEventBus eventBus;

@@ -14,7 +14,7 @@ import java.util.Map;
 
 import static org.mockito.Mockito.mock;
 
-public class CustomReporterTest {
+class CustomReporterTest {
 
     private final PublisherProbe<Void> commandProbe = PublisherProbe.empty();
     private final PublisherProbe<Void> eventProbe = PublisherProbe.empty();

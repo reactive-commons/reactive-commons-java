@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.SignalType;
 
 
-public class LoggerSubscriberTest {
+class LoggerSubscriberTest {
 
     private final LoggerSubscriber<String> subscriber = new LoggerSubscriber<>("testFlow");
 

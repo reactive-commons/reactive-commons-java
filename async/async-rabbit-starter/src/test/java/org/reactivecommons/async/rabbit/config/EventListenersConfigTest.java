@@ -22,7 +22,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class EventListenersConfigTest {
+class EventListenersConfigTest {
 
     private final AsyncProps props = new AsyncProps();
     private final EventListenersConfig config = new EventListenersConfig(props);

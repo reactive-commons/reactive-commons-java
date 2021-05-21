@@ -26,7 +26,7 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
-public class ReactiveMessageSenderTest {
+class ReactiveMessageSenderTest {
 
     private final String sourceApplication = "TestApp";
 

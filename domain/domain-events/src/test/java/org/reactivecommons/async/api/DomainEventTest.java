@@ -5,7 +5,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class DomainEventTest {
+class DomainEventTest {
 
     DomainEvent<String> event = new DomainEvent<>("testEvent", "id", "data");
 

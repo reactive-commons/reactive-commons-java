@@ -24,7 +24,7 @@ import java.util.concurrent.Semaphore;
 import static reactor.core.publisher.Flux.range;
 
 @SpringBootTest
-public class CommandsProcessPerfTest {
+class CommandsProcessPerfTest {
 
     private static final String COMMAND_NAME = "app.command.test";
     private static final int messageCount = 40000;

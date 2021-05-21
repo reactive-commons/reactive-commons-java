@@ -9,7 +9,7 @@ import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-public class DefaultObjectMapperSupplierTest {
+class DefaultObjectMapperSupplierTest {
 
     private final DefaultObjectMapperSupplier defaultObjectMapperSupplier = new DefaultObjectMapperSupplier();
 

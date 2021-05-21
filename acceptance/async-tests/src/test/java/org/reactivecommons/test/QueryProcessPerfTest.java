@@ -27,7 +27,7 @@ import java.util.stream.IntStream;
 import static reactor.core.publisher.Flux.range;
 
 @SpringBootTest
-public class QueryProcessPerfTest {
+class QueryProcessPerfTest {
 
     private static final String QUERY_NAME = "app.command.test";
     private static final int messageCount = 40000;

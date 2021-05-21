@@ -25,7 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static reactor.core.publisher.Mono.*;
 
 @SpringBootTest
-public class SimpleDirectCommunicationTest {
+class SimpleDirectCommunicationTest {
 
     private static final String COMMAND_NAME = "simpleTestCommand";
 

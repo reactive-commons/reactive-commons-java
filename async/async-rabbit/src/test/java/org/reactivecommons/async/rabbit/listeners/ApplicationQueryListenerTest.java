@@ -35,7 +35,7 @@ import static org.mockito.Mockito.*;
 import static reactor.core.publisher.Mono.*;
 
 @ExtendWith(MockitoExtension.class)
-public class ApplicationQueryListenerTest {
+class ApplicationQueryListenerTest {
     private final MessageConverter messageConverter =
             new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     @Mock

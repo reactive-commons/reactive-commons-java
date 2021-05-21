@@ -46,7 +46,7 @@ import static org.reactivecommons.async.commons.Headers.*;
 
 
 @ExtendWith(MockitoExtension.class)
-public class RabbitDirectAsyncGatewayTest {
+class RabbitDirectAsyncGatewayTest {
 
     private final BrokerConfig config = new BrokerConfig();
     private final Semaphore semaphore = new Semaphore(0);

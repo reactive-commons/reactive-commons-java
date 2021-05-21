@@ -29,7 +29,7 @@ import static reactor.core.publisher.Mono.just;
 
 
 @ExtendWith(MockitoExtension.class)
-public class DynamicRegistryImpTest {
+class DynamicRegistryImpTest {
 
     private HandlerResolver resolver;
 

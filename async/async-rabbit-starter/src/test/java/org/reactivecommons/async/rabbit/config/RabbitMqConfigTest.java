@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class RabbitMqConfigTest {
+class RabbitMqConfigTest {
 
     RabbitMqConfig config = new RabbitMqConfig(null);
 

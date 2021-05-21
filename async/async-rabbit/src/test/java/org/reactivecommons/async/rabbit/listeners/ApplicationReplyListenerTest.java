@@ -125,12 +125,7 @@ class ApplicationReplyListenerTest {
         Map<String, Object> headers = new HashMap<>();
         headers.put(CORRELATION_ID, correlationId);
 
-        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-                .headers(headers)
-                .build();
-
-        Envelope envelope = new Envelope(1234L, true, EXCHANGE, ROUTE_KEY);
-        Delivery delivery = new Delivery(envelope, properties, "content".getBytes());
+        Delivery delivery = buildDeliveryWithHeaders(headers);
 
         instructConsumerMock(Flux.just(delivery), Flux.never());
 
@@ -148,12 +143,7 @@ class ApplicationReplyListenerTest {
         headers.put(CORRELATION_ID, correlationId);
         headers.put(COMPLETION_ONLY_SIGNAL, true);
 
-        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
-                .headers(headers)
-                .build();
-
-        Envelope envelope = new Envelope(1234L, true, EXCHANGE, ROUTE_KEY);
-        Delivery delivery = new Delivery(envelope, properties, null);
+        Delivery delivery = buildDeliveryWithHeaders(headers);
 
         instructConsumerMock(Flux.just(delivery), Flux.never());
 
@@ -163,10 +153,20 @@ class ApplicationReplyListenerTest {
                 .routeEmpty(correlationId);
     }
 
+    private Delivery buildDeliveryWithHeaders(Map<String, Object> headers) {
+        AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
+                .headers(headers)
+                .build();
+
+        Envelope envelope = new Envelope(1234L, true, EXCHANGE, ROUTE_KEY);
+        return new Delivery(envelope, properties, null);
+    }
+
     private void instructConsumerMock(Flux<Delivery> initialSource, Flux<Delivery> newSource) {
         AtomicReference<Flux<Delivery>> sourceReference = new AtomicReference<>(initialSource);
 
         when(receiver.consumeAutoAck(REPLY_QUEUE))
                 .thenAnswer(invocation -> Flux.defer(() -> sourceReference.getAndSet(newSource)));
     }
+
 }
