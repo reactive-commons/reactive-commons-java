@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.0-beta10](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta10) (2021-05-21)
+
+**Merged pull requests:**
+
+- Update gradle.properties [\#58](https://github.com/reactive-commons/reactive-commons-java/pull/58)
+
 ## [1.0.0-beta9](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta9) (2021-05-21)
 
 **Closed issues:**
