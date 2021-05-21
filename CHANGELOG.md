@@ -2,9 +2,9 @@
 
 ## [1.0.0-beta9](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta9) (2021-05-21)
 
-**Fixes:**
+**Closed issues:**
 
-- Recover exclusive queues on mirrored queues for RabbitMQ Clusters
+- Dropped messages listener [\#20](https://github.com/reactive-commons/reactive-commons-java/issues/20)
 
 ## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
 
@@ -43,6 +43,10 @@
 
 ## [1.0.0-beta1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta1) (2020-10-28)
 
+**Merged pull requests:**
+
+- Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
+
 ## [0.6.2-Release](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-Release) (2020-09-24)
 
 ## [0.6.2](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2) (2020-09-24)
@@ -76,6 +80,7 @@
 
 **Merged pull requests:**
 
+- updates contiperf version, fixes performance test [\#43](https://github.com/reactive-commons/reactive-commons-java/pull/43)
 - Feature/listeners matching [\#42](https://github.com/reactive-commons/reactive-commons-java/pull/42)
 
 ## [0.5.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/0.5.2-beta) (2020-07-20)
@@ -114,8 +119,6 @@
 
 **Merged pull requests:**
 
-- Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
-- updates contiperf version, fixes performance test [\#43](https://github.com/reactive-commons/reactive-commons-java/pull/43)
 - fix: set resourceManagementChannelMono from channelPool [\#36](https://github.com/reactive-commons/reactive-commons-java/pull/36)
 - CI CD Pipelines [\#34](https://github.com/reactive-commons/reactive-commons-java/pull/34)
 - License MIT attached [\#33](https://github.com/reactive-commons/reactive-commons-java/pull/33)
