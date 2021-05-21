@@ -35,7 +35,7 @@ public class DirectGatewayPerfTest {
 
 
     @Test
-    public void shouldSendInOptimalTime() throws InterruptedException {
+    void shouldSendInOptimalTime() throws InterruptedException {
         final Flux<Command<DummyMessage>> messages = createMessages(messageCount);
         final Flux<Void> target = messages.flatMap(dummyMessageCommand ->
                 gateway.sendCommand(dummyMessageCommand, appName)
@@ -50,17 +50,17 @@ public class DirectGatewayPerfTest {
     }
 
     @Test
-    public void shouldSendBatchInOptimalTime4Channels() throws InterruptedException {
+    void shouldSendBatchInOptimalTime4Channels() throws InterruptedException {
         shouldSendBatchInOptimalTimeNChannels(4);
     }
 
     @Test
-    public void shouldSendBatchInOptimalTime2Channels() throws InterruptedException {
+    void shouldSendBatchInOptimalTime2Channels() throws InterruptedException {
         shouldSendBatchInOptimalTimeNChannels(2);
     }
 
     @Test
-    public void shouldSendBatchInOptimalTime1Channel() throws InterruptedException {
+    void shouldSendBatchInOptimalTime1Channel() throws InterruptedException {
         shouldSendBatchInOptimalTimeNChannels(1);
     }
 

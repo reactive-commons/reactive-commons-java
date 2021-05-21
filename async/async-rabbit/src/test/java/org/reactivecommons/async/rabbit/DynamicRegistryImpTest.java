@@ -58,7 +58,7 @@ public class DynamicRegistryImpTest {
     }
 
     @Test
-    public void registerEventListener() {
+    void registerEventListener() {
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
         dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
@@ -67,7 +67,7 @@ public class DynamicRegistryImpTest {
     }
 
     @Test
-    public void declareBindingWhenRegisterEventListener() {
+    void declareBindingWhenRegisterEventListener() {
         ArgumentCaptor<BindingSpecification> captor = ArgumentCaptor.forClass(BindingSpecification.class);
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
 
@@ -81,7 +81,7 @@ public class DynamicRegistryImpTest {
     }
 
     @Test
-    public void subscribeToResultWhenRegisterEventListener() {
+    void subscribeToResultWhenRegisterEventListener() {
         PublisherProbe<BindOk> probe = PublisherProbe.of(just(mock(BindOk.class)));
         when(topologyCreator.bind(any())).thenReturn(probe.mono());
 

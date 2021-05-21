@@ -43,7 +43,7 @@ public class BlockingCommandHandlePerfTest {
     private Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
-    public void commandShouldBeHandledInParallel() throws InterruptedException {
+    void commandShouldBeHandledInParallel() throws InterruptedException {
         Flux.range(0, 12).flatMap(i -> {
             Command<Long> command = new Command<>(COMMAND_NAME, commandId + 1, data + 1);
             return gateway.sendCommand(command, appName);

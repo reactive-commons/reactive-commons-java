@@ -4,6 +4,7 @@ buildscript {
         maven { url 'https://repo.spring.io/milestone' }
         maven { url 'https://repo.spring.io/snapshot' }
     }
+
     dependencies {
         classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
         classpath("com.github.ben-manes:gradle-versions-plugin:$gradleVersionsVersion")
@@ -23,10 +24,6 @@ sonarqube {
         property 'sonar.organization', 'reactive-commons'
         property 'sonar.host.url', 'https://sonarcloud.io'
     }
-}
-
-repositories {
-    jcenter()
 }
 
 asciidoctor {

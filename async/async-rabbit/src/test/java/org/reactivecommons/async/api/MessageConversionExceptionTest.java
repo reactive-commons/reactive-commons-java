@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class MessageConversionExceptionTest {
 
     @Test
-    public void shouldConstructProperly(){
+    void shouldConstructProperly(){
         String message = "some message";
         Throwable cause = new RuntimeException();
 

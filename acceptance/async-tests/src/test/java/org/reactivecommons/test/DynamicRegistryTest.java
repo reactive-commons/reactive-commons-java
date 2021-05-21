@@ -34,7 +34,7 @@ public class DynamicRegistryTest {
     private String appName;
 
     @Test
-    public void shouldReceiveResponse() {
+    void shouldReceiveResponse() {
         UnicastProcessor<String> result = UnicastProcessor.create();
         EventHandler<String> fn = message -> fromRunnable(() -> result.onNext(message.getData()));
 

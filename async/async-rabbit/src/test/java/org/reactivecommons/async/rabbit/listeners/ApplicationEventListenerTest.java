@@ -20,14 +20,14 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
     private DomainEvent<DummyMessage> event2 = new DomainEvent<>("app.event.test2", UUID.randomUUID().toString(), new DummyMessage());
 
     @Test
-    public void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
+    void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
                 .listenEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(DomainEvent::getName, event1));
     }
 
     @Test
-    public void shouldContinueAfterReportError() throws InterruptedException {
+    void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
                 .listenEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
                 .listenEvent("app.event.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);

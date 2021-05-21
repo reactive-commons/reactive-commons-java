@@ -55,14 +55,14 @@ public class ReactiveMessageSenderTest {
 
 
     @Test
-    public void sendWithConfirmEmptyNullMessage() {
+    void sendWithConfirmEmptyNullMessage() {
         final Mono<Void> voidMono = messageSender.sendWithConfirm(null, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
     }
 
     @Test
-    public void sendWithConfirmSomeMessage() {
+    void sendWithConfirmSomeMessage() {
         SomeClass some = new SomeClass("42", "Daniel", new Date());
         final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>(), true);
 

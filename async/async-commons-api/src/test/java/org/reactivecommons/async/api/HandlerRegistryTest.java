@@ -23,7 +23,7 @@ public class HandlerRegistryTest {
     private String name = "some.event";
 
     @Test
-    public void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed() {
+    void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed() {
         SomeEventHandler eventHandler = new SomeEventHandler();
 
         registry.listenEvent(name, eventHandler);
@@ -78,7 +78,7 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void shouldRegisterNotificationEventListener() {
+    void shouldRegisterNotificationEventListener() {
         registry.listenNotificationEvent(name, message -> Mono.empty(), SomeDataClass.class);
         assertThat(registry.getEventNotificationListener()).anySatisfy(listener ->
             assertThat(listener.getPath()).isEqualTo(name));
@@ -98,7 +98,7 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void handleCommandWithTypeInference() {
+    void handleCommandWithTypeInference() {
         SomeCommandHandler handler = new SomeCommandHandler();
 
         registry.handleCommand(name, handler);
@@ -111,28 +111,28 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void handleCommandWithoutTypeShouldFail() {
+    void handleCommandWithoutTypeShouldFail() {
         Assertions.assertThrows(
                 RuntimeException.class,
                 () -> registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty()));
     }
 
     @Test
-    public void listenEventWithoutTypeShouldFail() {
+    void listenEventWithoutTypeShouldFail() {
         Assertions.assertThrows(
                 RuntimeException.class,
                 () -> registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty()));
     }
 
     @Test
-    public void handleQueryWithoutTypeShouldFail() {
+    void handleQueryWithoutTypeShouldFail() {
         Assertions.assertThrows(
                 RuntimeException.class,
                 () -> registry.serveQuery(name, (SomeDataClass query) -> Mono.empty()));
     }
 
     @Test
-    public void handleCommandWithLambda() {
+    void handleCommandWithLambda() {
         registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty(), SomeDataClass.class);
 
         assertThat(registry.getCommandHandlers()).anySatisfy(registered -> {
@@ -144,7 +144,7 @@ public class HandlerRegistryTest {
 
 
     @Test
-    public void serveQueryWithLambda() {
+    void serveQueryWithLambda() {
         registry.serveQuery(name, message -> Mono.empty(), SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
@@ -153,7 +153,7 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void serveQueryWithTypeInference() {
+    void serveQueryWithTypeInference() {
         QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
         registry.serveQuery(name, handler);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
@@ -164,7 +164,7 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void serveQueryDelegate() {
+    void serveQueryDelegate() {
         QueryHandlerDelegate<Void, SomeDataClass> handler = new SomeQueryHandlerDelegate();
         registry.serveQuery(name, handler, SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
@@ -174,7 +174,7 @@ public class HandlerRegistryTest {
     }
 
     @Test
-    public void serveQueryDelegateWithLambda() {
+    void serveQueryDelegateWithLambda() {
         registry.serveQuery(name, (from, message) -> Mono.empty(), SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)

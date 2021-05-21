@@ -62,7 +62,7 @@ public class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    public void shouldReleaseRouterResourcesOnTimeout() {
+    void shouldReleaseRouterResourcesOnTimeout() {
         BrokerConfig config = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
         asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter);
         when(router.register(anyString())).thenReturn(Mono.never());
@@ -81,7 +81,7 @@ public class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    public void shouldSendInOptimalTime() throws InterruptedException {
+    void shouldSendInOptimalTime() throws InterruptedException {
         init(getReactiveMessageSender());
 
         int messageCount = 40000;

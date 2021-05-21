@@ -43,7 +43,7 @@ public class QueryProcessPerfTest {
 
 
     @Test
-    public void serveQueryPerformanceTest() throws InterruptedException {
+    void serveQueryPerformanceTest() throws InterruptedException {
         final Flux<AsyncQuery<DummyMessage>> messages = createMessages(messageCount);
 
         final long init = System.currentTimeMillis();

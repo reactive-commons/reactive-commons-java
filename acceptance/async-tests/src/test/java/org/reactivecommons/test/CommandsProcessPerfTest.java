@@ -39,7 +39,7 @@ public class CommandsProcessPerfTest {
 
 
     @Test
-    public void commandShouldArrive() throws InterruptedException {
+    void commandShouldArrive() throws InterruptedException {
         final long init_p = System.currentTimeMillis();
         createMessages(messageCount);
         final long end_p = System.currentTimeMillis() - init_p;

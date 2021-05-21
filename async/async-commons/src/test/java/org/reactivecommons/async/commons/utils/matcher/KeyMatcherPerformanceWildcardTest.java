@@ -40,7 +40,7 @@ public class KeyMatcherPerformanceWildcardTest {
     }
 
     @Test
-    public void keyMatcherLookupShouldPerformInLessThan30Micros() {
+    void keyMatcherLookupShouldPerformInLessThan30Micros() {
         final int size = testList.size();
         final long init = System.currentTimeMillis();
         for (int i = 0; i< size*10; ++i){

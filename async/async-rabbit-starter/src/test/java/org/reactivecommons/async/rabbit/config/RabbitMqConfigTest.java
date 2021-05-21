@@ -25,7 +25,7 @@ public class RabbitMqConfigTest {
     RabbitMqConfig config = new RabbitMqConfig(null);
 
     @Test
-    public void retryInitialConnection() throws IOException, TimeoutException {
+    void retryInitialConnection() throws IOException, TimeoutException {
         final String connectionType = "sender";
         final String appName = "appName";
         final String connectionName = "appName sender";
@@ -45,7 +45,7 @@ public class RabbitMqConfigTest {
     }
 
     @Test
-    public void shouldCreateDefaultErrorReporter() {
+    void shouldCreateDefaultErrorReporter() {
         final CustomReporter errorReporter = config.reactiveCommonsCustomErrorReporter();
         assertThat(errorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(Command.class), true)).isNotNull();
         assertThat(errorReporter.reportError(mock(Throwable.class), mock(Message.class), mock(DomainEvent.class), true)).isNotNull();
@@ -53,7 +53,7 @@ public class RabbitMqConfigTest {
     }
 
     @Test
-    public void shouldGenerateDefaultReeporter() {
+    void shouldGenerateDefaultReeporter() {
         final CustomReporter customReporter = config.reactiveCommonsCustomErrorReporter();
         final Mono<Void> r1 = customReporter.reportError(mock(Throwable.class), mock(Message.class), mock(Command.class), true);
         final Mono<Void> r2 = customReporter.reportError(mock(Throwable.class), mock(Message.class), mock(DomainEvent.class), true);

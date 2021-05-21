@@ -24,7 +24,7 @@ public class CustomReporterTest {
     private final Message rawMessage = mock(Message.class);
 
     @Test
-    public void reportErrorCommand() {
+    void reportErrorCommand() {
         final Command<Object> message = new Command<>("", "", null);
 
         assertReportError(message);
@@ -33,7 +33,7 @@ public class CustomReporterTest {
     }
 
     @Test
-    public void testReportErrorEvent() {
+    void testReportErrorEvent() {
         final DomainEvent<Object> message = new DomainEvent<>("", "", null);
 
         assertReportError(message);
@@ -42,7 +42,7 @@ public class CustomReporterTest {
     }
 
     @Test
-    public void testReportErrorQuery() {
+    void testReportErrorQuery() {
         final AsyncQuery<Object> message = new AsyncQuery<>("", null);
 
         assertReportError(message);
@@ -51,7 +51,7 @@ public class CustomReporterTest {
     }
 
     @Test
-    public void shouldIgnoreUnknownMessageType() {
+    void shouldIgnoreUnknownMessageType() {
         final Map<?,?> message = new HashMap<>();
 
         assertReportError(message);

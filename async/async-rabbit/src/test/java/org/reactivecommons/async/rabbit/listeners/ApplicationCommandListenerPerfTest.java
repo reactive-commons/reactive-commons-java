@@ -92,7 +92,7 @@ public class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    public void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
+    void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
@@ -121,7 +121,7 @@ public class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    public void shouldProcessAsyncMessagesConcurrent() throws JsonProcessingException, InterruptedException {
+    void shouldProcessAsyncMessagesConcurrent() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
@@ -184,7 +184,7 @@ public class ApplicationCommandListenerPerfTest {
 
 
     @Test
-    public void shouldProcessCPUMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessCPUMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestCPUMessageDelay, DummyMessage.class)
         );
@@ -212,7 +212,7 @@ public class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    public void shouldProcessCPUWorkMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessCPUWorkMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestCPUWorkMessageDelay, DummyMessage.class)
         );
@@ -240,7 +240,7 @@ public class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    public void shouldProcessPasiveBlockingMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessPasiveBlockingMessagesInParallel() throws JsonProcessingException, InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestPassiveBlockMessageDelay, DummyMessage.class)
         );

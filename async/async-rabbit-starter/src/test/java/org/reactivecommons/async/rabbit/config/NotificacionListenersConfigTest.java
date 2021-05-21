@@ -50,7 +50,7 @@ public class NotificacionListenersConfigTest {
     }
 
     @Test
-    public void eventNotificationListener() {
+    void eventNotificationListener() {
         final ApplicationNotificationListener applicationEventListener = config.
                 eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();

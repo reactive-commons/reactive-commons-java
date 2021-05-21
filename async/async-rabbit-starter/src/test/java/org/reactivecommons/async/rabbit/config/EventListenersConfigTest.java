@@ -50,7 +50,7 @@ public class EventListenersConfigTest {
     }
 
     @Test
-    public void eventListener() {
+    void eventListener() {
         final ApplicationEventListener eventListener = config.eventListener(
                 handlerResolver,
                 messageConverter,

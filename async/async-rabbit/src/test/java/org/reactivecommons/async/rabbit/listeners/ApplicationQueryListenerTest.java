@@ -72,7 +72,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldExecuteDelegateHandler() {
+    void shouldExecuteDelegateHandler() {
         Function<Message, Mono<Object>> handler = genericMessageListener.rawMessageHandler("queryDelegate");
         Message message = TestStubs.mockMessage();
         Mono<Object> result = handler.apply(message);
@@ -82,7 +82,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldExecuteDirectHandler() {
+    void shouldExecuteDirectHandler() {
         Function<Message, Mono<Object>> handler = genericMessageListener.rawMessageHandler("queryDirect");
         Message message = TestStubs.mockMessage();
         Mono<Object> result = handler.apply(message);
@@ -93,7 +93,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldHandleErrorWhenNoQueryHandler() {
+    void shouldHandleErrorWhenNoQueryHandler() {
         Function<Message, Mono<Object>> handler = genericMessageListener.rawMessageHandler("nonExistent");
         Message message = TestStubs.mockMessage();
         Mono<Object> result = handler.apply(message);
@@ -103,7 +103,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldNotRespondQueryEnrichPostProcess() {
+    void shouldNotRespondQueryEnrichPostProcess() {
         Message message = spy(TestStubs.mockMessage());
         Function<Mono<Object>, Mono<Object>> handler = genericMessageListener.enrichPostProcess(message);
         Mono<Object> result = handler.apply(empty());
@@ -115,7 +115,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldRespondQueryEnrichPostProcess() {
+    void shouldRespondQueryEnrichPostProcess() {
         Message message = spy(TestStubs.mockMessage());
         Function<Mono<Object>, Mono<Object>> handler = genericMessageListener.enrichPostProcess(message);
         Mono<Object> result = handler.apply(just("OK"));
@@ -128,7 +128,7 @@ public class ApplicationQueryListenerTest {
     }
 
     @Test
-    public void shouldHandleErrorWhenEnrichPostProcessSignalError() {
+    void shouldHandleErrorWhenEnrichPostProcessSignalError() {
         Message message = TestStubs.mockMessage();
         Function<Mono<Object>, Mono<Object>> handler = genericMessageListener.enrichPostProcess(message);
         String errorMessage = "Error";

@@ -14,7 +14,7 @@ public class ReactiveReplyRouterTest {
     private ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
 
     @Test
-    public void shouldRouteReply(){
+    void shouldRouteReply(){
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 
@@ -28,7 +28,7 @@ public class ReactiveReplyRouterTest {
     }
 
     @Test
-    public void shouldRouteEmptyResponse(){
+    void shouldRouteEmptyResponse(){
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 
@@ -39,7 +39,7 @@ public class ReactiveReplyRouterTest {
     }
 
     @Test
-    public void shouldDeRegisterProcessor(){
+    void shouldDeRegisterProcessor(){
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 

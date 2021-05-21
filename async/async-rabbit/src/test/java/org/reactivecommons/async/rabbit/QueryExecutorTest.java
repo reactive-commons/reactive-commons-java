@@ -37,7 +37,7 @@ public class QueryExecutorTest {
     }
 
     @Test
-    public void shouldExecute() {
+    void shouldExecute() {
         ArgumentCaptor<From> fromCaptor = ArgumentCaptor.forClass(From.class);
         ArgumentCaptor<SampleClass> sampleClassCaptor = ArgumentCaptor.forClass(SampleClass.class);
         Message message = TestStubs.mockMessage();

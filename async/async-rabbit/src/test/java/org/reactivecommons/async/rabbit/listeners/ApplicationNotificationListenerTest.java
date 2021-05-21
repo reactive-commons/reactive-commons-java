@@ -31,14 +31,14 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
     }
 
     @Test
-    public void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
+    void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
                 .listenNotificationEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(DomainEvent::getName, event1));
     }
 
     @Test
-    public void shouldContinueAfterReportError() throws InterruptedException {
+    void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
                 .listenNotificationEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
                 .listenNotificationEvent("app.event.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);

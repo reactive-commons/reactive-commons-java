@@ -82,8 +82,8 @@ public abstract class GenericMessageListener {
         this.messageFlux = setUpBindings(messageListener.getTopologyCreator()).thenMany(
             receiver.consumeManualAck(queueName, consumeOptions)
                 .transform(this::consumeFaultTolerant));
-        onTerminate();
 
+        onTerminate();
     }
 
     private void onTerminate() {

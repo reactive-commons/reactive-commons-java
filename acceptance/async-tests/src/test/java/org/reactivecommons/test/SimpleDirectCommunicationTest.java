@@ -42,7 +42,7 @@ public class SimpleDirectCommunicationTest {
     private Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
-    public void commandShouldArrive() {
+    void commandShouldArrive() {
         Command<Long> command = new Command<>(COMMAND_NAME, commandId, data);
         gateway.sendCommand(command, appName).subscribe();
 
@@ -53,7 +53,7 @@ public class SimpleDirectCommunicationTest {
     }
 
     @Test
-    public void shouldReceiveResponse() {
+    void shouldReceiveResponse() {
         final Mono<Integer> reply = gateway.requestReply(new AsyncQuery<>("double", 42), appName, Integer.class);
         StepVerifier.create(reply.timeout(Duration.ofSeconds(15)))
             .expectNext(42*2)

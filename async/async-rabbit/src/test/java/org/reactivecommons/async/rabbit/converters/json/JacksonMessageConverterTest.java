@@ -19,13 +19,13 @@ public class JacksonMessageConverterTest {
     private final JacksonMessageConverter converter = new JacksonMessageConverter(objectMapper);
 
     @Test
-    public void toMessage() {
+    void toMessage() {
         final Message message = converter.toMessage(new SampleClass("42", "Daniel", new Date()));
         assertThat(new String(message.getBody())).contains("42").contains("Daniel");
     }
 
     @Test
-    public void toMessageWhenDataIsNull() throws IOException {
+    void toMessageWhenDataIsNull() throws IOException {
         final Message message = converter.toMessage(null);
 
         final JsonNode jsonNode = objectMapper.readTree(message.getBody());
@@ -33,7 +33,7 @@ public class JacksonMessageConverterTest {
     }
 
     @Test
-    public void toMessageWhenDataIsEmpty() throws IOException {
+    void toMessageWhenDataIsEmpty() throws IOException {
         final Message message = converter.toMessage("");
 
         final JsonNode jsonNode = objectMapper.readTree(message.getBody());
@@ -41,7 +41,7 @@ public class JacksonMessageConverterTest {
     }
 
     @Test
-    public void readValue() {
+    void readValue() {
         Date date = new Date();
         final Message message = converter.toMessage(new SampleClass("35", "name1", date));
         final SampleClass value = converter.readValue(message, SampleClass.class);
@@ -50,14 +50,14 @@ public class JacksonMessageConverterTest {
     }
 
     @Test
-    public void readValueString() {
+    void readValueString() {
         final Message message = converter.toMessage("Hi!");
         final String value = converter.readValue(message, String.class);
         assertThat(value).isEqualTo("Hi!");
     }
 
     @Test
-    public void shouldConvertToCommandStructure() {
+    void shouldConvertToCommandStructure() {
         final SampleClass data = new SampleClass("35", "name1", new Date());
         final Message message = converter.toMessage(new Command<>("cmd.name", "42", data));
         final Command<Object> command = converter.readCommandStructure(message);
@@ -67,7 +67,7 @@ public class JacksonMessageConverterTest {
     }
 
     @Test
-    public void shouldConvertToDomainEventStructure() {
+    void shouldConvertToDomainEventStructure() {
         final SampleClass data = new SampleClass("35", "name1", new Date());
         final Message message = converter.toMessage(new DomainEvent<>("event.name", "42", data));
         final DomainEvent<Object> event = converter.readDomainEventStructure(message);
@@ -79,7 +79,7 @@ public class JacksonMessageConverterTest {
     }
 
     @Test
-    public void shouldConvertToQueryStructure() {
+    void shouldConvertToQueryStructure() {
         final SampleClass data = new SampleClass("35", "sample1", new Date());
         final Message message = converter.toMessage(new AsyncQuery<>("query.name", data));
         final AsyncQuery<Object> query = converter.readAsyncQueryStructure(message);

@@ -56,7 +56,7 @@ public class CommandListenersConfigTest {
     }
 
     @Test
-    public void applicationCommandListener() {
+    void applicationCommandListener() {
         final ApplicationCommandListener commandListener = config.applicationCommandListener(
                 listener,
                 handlerResolver,

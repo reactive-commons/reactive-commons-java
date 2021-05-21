@@ -23,14 +23,14 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
     private final Command<DummyMessage> command2 = new Command<>("app.command.test2", UUID.randomUUID().toString(), new DummyMessage());
 
     @Test
-    public void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
+    void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
             .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
     }
 
     @Test
-    public void shouldSendErrorMetricToCustomErrorReporter() throws InterruptedException {
+    void shouldSendErrorMetricToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
             .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
@@ -38,7 +38,7 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
     }
 
     @Test
-    public void shouldContinueAfterReportError() throws InterruptedException {
+    void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
             .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
             .handleCommand("app.command.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);

@@ -21,14 +21,14 @@ public class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuper
     private AsyncQuery<DummyMessage> event2 = new AsyncQuery<>("app.query.test2", new DummyMessage());
 
     @Test
-    public void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
+    void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
                 .serveQuery("app.query.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(AsyncQuery::getResource, event1));
     }
 
     @Test
-    public void shouldContinueAfterReportError() throws InterruptedException {
+    void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
                 .serveQuery("app.query.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
                 .serveQuery("app.query.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);

@@ -9,22 +9,22 @@ public class LoggerSubscriberTest {
     private final LoggerSubscriber<String> subscriber = new LoggerSubscriber<>("testFlow");
 
     @Test
-    public void shouldPrintOnCancelMessage() {
+    void shouldPrintOnCancelMessage() {
         subscriber.hookOnCancel();
     }
 
     @Test
-    public void shouldPrintOnErrorMessage() {
+    void shouldPrintOnErrorMessage() {
         subscriber.hookOnError(new RuntimeException());
     }
 
     @Test
-    public void shouldPrintOnFinallyMessage() {
+    void shouldPrintOnFinallyMessage() {
         subscriber.hookFinally(SignalType.ON_ERROR);
     }
 
     @Test
-    public void shouldPrintOnCompleteMessage() {
+    void shouldPrintOnCompleteMessage() {
         subscriber.hookOnComplete();
     }
 

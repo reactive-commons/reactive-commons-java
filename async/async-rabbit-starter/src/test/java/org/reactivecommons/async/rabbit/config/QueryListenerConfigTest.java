@@ -52,7 +52,7 @@ public class QueryListenerConfigTest {
     }
 
     @Test
-    public void queryListener() {
+    void queryListener() {
         final ApplicationQueryListener queryListener = config.queryListener(messageConverter, handlerResolver, sender, listener, discardNotifier, customReporter);
         Assertions.assertThat(queryListener).isNotNull();
     }

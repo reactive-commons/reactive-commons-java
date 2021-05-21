@@ -14,7 +14,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 public class RabbitMessageTest {
 
     @Test
-    public void shouldCreateFromDelivery() {
+    void shouldCreateFromDelivery() {
         Envelope env = new Envelope(2, false, "exchange", "routeKey");
         Map<String, Object> headers = new HashMap<>();
         AMQP.BasicProperties props = new AMQP.BasicProperties.Builder().contentType("content").contentEncoding("utf8").headers(headers).build();

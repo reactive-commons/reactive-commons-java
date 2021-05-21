@@ -38,7 +38,7 @@ public class KeyMatcherPerformanceManualTest {
     }
 
     @Test
-    public void keyMatcherLookupShouldPerformInLessThan1_5Micros() {
+    void keyMatcherLookupShouldPerformInLessThan1_5Micros() {
         final int size = testList.size();
         final long init = System.currentTimeMillis();
         for (int i = 0; i < size * 10; ++i) {

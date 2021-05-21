@@ -35,7 +35,7 @@ public class SimpleEventNotificationTest {
     private Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
-    public void shouldReceiveEvent() throws InterruptedException {
+    void shouldReceiveEvent() throws InterruptedException {
         DomainEvent<?> event = new DomainEvent<>(EVENT_NAME, eventId, data);
         from(eventBus.emit(event)).subscribe();
         StepVerifier.create(listener.take(1)).assertNext(evt ->

@@ -27,56 +27,56 @@ public class KeyMatcherTest {
     }
 
     @Test
-    public void matchNonExistentFirstLevel() {
+    void matchNonExistentFirstLevel() {
         String nonExistentTarget = "A.X";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
         assertEquals("A.*", match);
     }
 
     @Test
-    public void matchExistentFirstLevel() {
+    void matchExistentFirstLevel() {
         String existentTarget = "A.B";
         final String match = keyMatcher.match(listeners, existentTarget);
         assertEquals("A.B", match);
     }
 
     @Test
-    public void matchNonExistentSecondLevel() {
+    void matchNonExistentSecondLevel() {
         String nonExistentTarget = "A.B.X";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
         assertEquals("A.B.*", match);
     }
 
     @Test
-    public void matchExistentSecondLevel() {
+    void matchExistentSecondLevel() {
         String existentTarget = "A.B.C";
         final String match = keyMatcher.match(listeners, existentTarget);
         assertEquals("A.B.C", match);
     }
 
     @Test
-    public void matchNonExistentThirdLevel() {
+    void matchNonExistentThirdLevel() {
         String nonExistentTarget = "A.B.X.D";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
         assertEquals("A.B.*.D", match);
     }
 
     @Test
-    public void matchExistentThirdLevel() {
+    void matchExistentThirdLevel() {
         String existentTarget = "A.B.C.D";
         final String match = keyMatcher.match(listeners, existentTarget);
         assertEquals("A.B.C.D", match);
     }
 
     @Test
-    public void matchDefaultForNonExistent() {
+    void matchDefaultForNonExistent() {
         String nonExistentTarget = "A.W.X.Y.Z";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
         assertEquals("A.*", match);
     }
 
     @Test
-    public void matchDefaultForNonExistentSecondLevel() {
+    void matchDefaultForNonExistentSecondLevel() {
         String nonExistentTarget = "A.B.X.Y.Z";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
         assertEquals("A.B.*", match);

@@ -69,7 +69,7 @@ public class GenericMessageListenerPerfTest {
 
 
     @Test
-    public void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
+    void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
         when(receiver.consumeManualAck(Mockito.anyString(), Mockito.any(ConsumeOptions.class))).thenReturn(messageFlux);
         final long init = System.currentTimeMillis();
@@ -88,7 +88,7 @@ public class GenericMessageListenerPerfTest {
     }
 
     @Test
-    public void referenceTime() throws JsonProcessingException, InterruptedException {
+    void referenceTime() throws JsonProcessingException, InterruptedException {
         Flux<AcknowledgableDelivery> fakeSource = createSource(1);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 

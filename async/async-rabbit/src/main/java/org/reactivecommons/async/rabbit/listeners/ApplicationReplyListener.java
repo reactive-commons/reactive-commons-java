@@ -48,12 +48,13 @@ public class ApplicationReplyListener {
                     log.log(Level.SEVERE, "Error in reply reception", e);
                 }
             }));
+
         onTerminate();
     }
-
 
     private void onTerminate() {
         deliveryFlux.doOnTerminate(this::onTerminate)
             .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
+
 }
