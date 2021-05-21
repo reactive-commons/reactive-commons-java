@@ -1,5 +1,5 @@
 ![](https://github.com/reactive-commons/reactive-commons-java/workflows/reactive-commons-ci-cd/badge.svg)
-[![Reactor RabbitMQ](https://maven-badges.herokuapp.com/maven-central/org.reactivecommons/async-commons-starter/badge.svg)](https://mvnrepository.com/artifact/org.reactivecommons/async-commons-starter)
+[![Reactor RabbitMQ](https://maven-badges.herokuapp.com/maven-central/org.reactivecommons/async-commons-rabbit-starter/badge.svg)](https://mvnrepository.com/artifact/org.reactivecommons/async-commons-rabbit-starter)
 # reactive-commons-java
 The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and practices that make the foundation of a reactive microservices architecture.
 
@@ -18,7 +18,7 @@ To include all (API and implementation) (Spring boot Starter):
 ```groovy
 
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:<version-here>'
+      compile 'org.reactivecommons:async-commons-rabbit-starter:<version-here>'
     }
 
     //IMPORTANT! if you use the version 0.6.x
@@ -150,7 +150,7 @@ Don't forget to add the starter bundle to the main spring boot module (applicati
 
 ```groovy
     dependencies {
-      compile 'org.reactivecommons:async-commons-starter:<version-here>'
+      compile 'org.reactivecommons:async-commons-rabbit-starter:<version-here>'
     }
 ```
 
