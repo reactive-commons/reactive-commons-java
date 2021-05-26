@@ -32,7 +32,8 @@ public class QueryListenerConfig {
         final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
                 appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
                 asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(),asyncProps.getGlobal().getMaxLengthBytes(),  discardNotifier, errorReporter);
+                asyncProps.getRetryDelay(),asyncProps.getGlobal().getMaxLengthBytes(),
+                asyncProps.getDirect().isDiscardTimeoutQueries(),  discardNotifier, errorReporter);
 
         listener.startListener();
 

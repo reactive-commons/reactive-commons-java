@@ -7,7 +7,7 @@ public final class Headers {
     public static final String COMPLETION_ONLY_SIGNAL = "x-empty-completion";
     public static final String SERVED_QUERY_ID = "x-serveQuery-id";
     public static final String SOURCE_APPLICATION = "sourceApplication";
-    public static final String SIGNAL_TYPE = "x-signal-type";
+    public static final String REPLY_TIMEOUT_MILLIS = "x-reply-timeout-millis";
 
 
     private Headers() {
