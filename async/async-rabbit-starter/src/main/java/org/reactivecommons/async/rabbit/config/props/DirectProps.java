@@ -13,4 +13,6 @@ public class DirectProps {
 
     private Optional<Integer> maxLengthBytes = Optional.empty();
 
+    private boolean discardTimeoutQueries = false;
+
 }

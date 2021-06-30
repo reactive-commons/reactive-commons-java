@@ -80,28 +80,27 @@ public abstract class GenericMessageListener {
         consumeOptions.qos(messageListener.getPrefetchCount());
 
         this.messageFlux = setUpBindings(messageListener.getTopologyCreator()).thenMany(
-            receiver.consumeManualAck(queueName, consumeOptions)
-                .transform(this::consumeFaultTolerant));
+                receiver.consumeManualAck(queueName, consumeOptions)
+                        .transform(this::consumeFaultTolerant));
 
         onTerminate();
     }
 
     private void onTerminate() {
         messageFlux.doOnTerminate(this::onTerminate)
-            .subscribe(new LoggerSubscriber<>(getClass().getName()));
+                .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 
-
-    private Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
+    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         try {
             final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
             final Message message = RabbitMessage.fromDelivery(msj);
 
             return defer(() -> handler.apply(message))
-                .transform(enrichPostProcess(message))
-                .doOnSuccess(o -> logExecution(executorPath, initTime, true))
-                .subscribeOn(scheduler).thenReturn(msj);
+                    .transform(enrichPostProcess(message))
+                    .doOnSuccess(o -> logExecution(executorPath, initTime, true))
+                    .subscribeOn(scheduler).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
             return Mono.error(e);
@@ -114,7 +113,7 @@ public abstract class GenericMessageListener {
             final long timeElapsed = Duration.between(initTime, afterExecutionTime).toMillis();
             doLogExecution(executorPath, timeElapsed);
             customReporter.reportMetric(objectType, executorPath, timeElapsed, success);
-        }catch (Exception e){
+        } catch (Exception e) {
             log.log(Level.WARNING, "Unable to send execution metrics!", e);
         }
 
@@ -124,7 +123,7 @@ public abstract class GenericMessageListener {
         String executorPath;
         try {
             executorPath = getExecutorPath(msj);
-        }catch (Exception e){
+        } catch (Exception e) {
             executorPath = "unknown";
         }
         logExecution(executorPath, initTime, false);
@@ -132,15 +131,15 @@ public abstract class GenericMessageListener {
 
     private void doLogExecution(String executorPath, long timeElapsed) {
         log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
-            objectType, executorPath, timeElapsed));
+                objectType, executorPath, timeElapsed));
     }
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
         return messageFlux.flatMap(msj -> {
             final Instant init = Instant.now();
             return handle(msj, init)
-                .doOnSuccess(AcknowledgableDelivery::ack)
-                .onErrorResume(err -> requeueOrAck(msj, err, init));
+                    .doOnSuccess(AcknowledgableDelivery::ack)
+                    .onErrorResume(err -> requeueOrAck(msj, err, init));
         }, messageListener.getMaxConcurrency());
     }
 
@@ -200,13 +199,13 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private void sendErrorToCustomReporter(final Throwable err, final Message message, final boolean redelivered){
+    private void sendErrorToCustomReporter(final Throwable err, final Message message, final boolean redelivered) {
         try {
             customReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
-                .subscribeOn(errorReporterScheduler)
-                .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
-                .subscribe();
-        }catch (Throwable t){
+                    .subscribeOn(errorReporterScheduler)
+                    .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
+                    .subscribe();
+        } catch (Throwable t) {
             log.log(Level.WARNING, "Error in scheduler when sending error to external reporter", t);
         }
     }

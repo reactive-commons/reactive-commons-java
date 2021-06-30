@@ -4,14 +4,14 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.From;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
-import static org.reactivecommons.async.commons.Headers.*;
+
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
@@ -20,6 +20,7 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import static java.lang.Boolean.TRUE;
+import static org.reactivecommons.async.commons.Headers.*;
 import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
@@ -69,8 +70,10 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         headers.put(REPLY_ID, config.getRoutingKey());
         headers.put(SERVED_QUERY_ID, query.getResource());
         headers.put(CORRELATION_ID, correlationID);
+        headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
 
-        return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries).then(replyHolder);
+        return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
+                .then(replyHolder);
     }
 
     @Override

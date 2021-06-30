@@ -44,7 +44,9 @@ public class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuper
     class StubGenericMessageListener extends ApplicationQueryListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, mock(ReactiveMessageSender.class), "exchange", messageConverter, "exchange", true, 10L, 100, Optional.of(1), discardNotifier, errorReporter);
+            super(reactiveMessageListener, "queueName", handlerResolver, mock(ReactiveMessageSender.class),
+                    "exchange", messageConverter, "exchange", true, 10L,
+                    100, Optional.of(1), true, discardNotifier, errorReporter);
         }
 
     }
