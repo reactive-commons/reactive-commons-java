@@ -11,7 +11,14 @@ import org.reactivecommons.async.api.*;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
+import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
@@ -21,14 +28,7 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
-import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
-import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.config.BrokerConfig;
-import org.reactivecommons.async.commons.config.IBrokerConfigProps;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -41,6 +41,8 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.*;
 import reactor.util.retry.Retry;
 
+import java.security.KeyManagementException;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -115,7 +117,8 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties) {
+    public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties)
+            throws NoSuchAlgorithmException, KeyManagementException {
         final ConnectionFactory factory = new ConnectionFactory();
         PropertyMapper map = PropertyMapper.get();
         map.from(properties::determineHost).whenNonNull().to(factory::setHost);
@@ -124,6 +127,9 @@ public class RabbitMqConfig {
         map.from(properties::determinePassword).whenNonNull().to(factory::setPassword);
         map.from(properties::determineVirtualHost).whenNonNull().to(factory::setVirtualHost);
         factory.useNio();
+        if (properties.getSsl() != null && properties.getSsl().isEnabled()) {
+            factory.useSslProtocol();
+        }
         return () -> factory;
     }
 
