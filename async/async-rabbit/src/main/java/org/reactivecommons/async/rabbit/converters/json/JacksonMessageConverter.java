@@ -6,13 +6,15 @@ import lombok.Data;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.rabbit.RabbitMessage;
 
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 
 public class JacksonMessageConverter implements MessageConverter {
     private static final String ENCODING = Charset.defaultCharset().name();
@@ -28,7 +30,7 @@ public class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {
         try {
-            final AsyncQueryJson asyncQueryJson = objectMapper.readValue(message.getBody(), AsyncQueryJson.class);
+            final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
             final T value = objectMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
             return new AsyncQuery<>(asyncQueryJson.getResource(), value);
         } catch (IOException e) {
@@ -39,7 +41,7 @@ public class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> DomainEvent<T> readDomainEvent(Message message, Class<T> bodyClass) {
         try {
-            final DomainEventJson domainEventJson = objectMapper.readValue(message.getBody(), DomainEventJson.class);
+            final DomainEventJson domainEventJson = readValue(message, DomainEventJson.class);
             final T value = objectMapper.treeToValue(domainEventJson.getData(), bodyClass);
             return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
         } catch (IOException e) {
@@ -50,7 +52,7 @@ public class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> Command<T> readCommand(Message message, Class<T> bodyClass) {
         try {
-            final CommandJson commandJson = objectMapper.readValue(message.getBody(), CommandJson.class);
+            final CommandJson commandJson = readValue(message, CommandJson.class);
             final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
             return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
         } catch (IOException e) {
@@ -61,7 +63,9 @@ public class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> T readValue(Message message, Class<T> valueClass) {
         try {
-            return objectMapper.readValue(message.getBody(), valueClass);
+            byte[] utf8Body = ensureEncoding(message.getBody(), message.getProperties().getContentEncoding(),
+                    StandardCharsets.UTF_8.name());
+            return objectMapper.readValue(utf8Body, valueClass);
         } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }
@@ -71,21 +75,21 @@ public class JacksonMessageConverter implements MessageConverter {
     @SuppressWarnings("unchecked")
     public <T> Command<T> readCommandStructure(Message message) {
         final CommandJson commandJson = readValue(message, CommandJson.class);
-        return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T)commandJson.getData());
+        return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T) commandJson.getData());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> DomainEvent<T> readDomainEventStructure(Message message) {
         final DomainEventJson eventJson = readValue(message, DomainEventJson.class);
-        return new DomainEvent<>(eventJson.getName(), eventJson.getEventId(), (T)eventJson.getData());
+        return new DomainEvent<>(eventJson.getName(), eventJson.getEventId(), (T) eventJson.getData());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> AsyncQuery<T> readAsyncQueryStructure(Message message) {
         final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
-        return new AsyncQuery<>(asyncQueryJson.getResource(), (T)asyncQueryJson.getQueryData());
+        return new AsyncQuery<>(asyncQueryJson.getResource(), (T) asyncQueryJson.getQueryData());
     }
 
     @Override
@@ -94,8 +98,7 @@ public class JacksonMessageConverter implements MessageConverter {
         try {
             String jsonString = this.objectMapper.writeValueAsString(object);
             bytes = jsonString.getBytes(ENCODING);
-        }
-        catch (IOException e) {
+        } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
@@ -103,6 +106,14 @@ public class JacksonMessageConverter implements MessageConverter {
         props.setContentEncoding(ENCODING);
         props.setContentLength(bytes.length);
         return new RabbitMessage(bytes, props);
+    }
+
+    private byte[] ensureEncoding(byte[] data, String fromEncoding, String toEncoding)
+            throws UnsupportedEncodingException {
+        if (fromEncoding.equalsIgnoreCase(toEncoding)) {
+            return data;
+        }
+        return new String(data, fromEncoding).getBytes(toEncoding);
     }
 
     @Data

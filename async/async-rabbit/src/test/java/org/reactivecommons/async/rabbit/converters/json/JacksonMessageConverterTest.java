@@ -7,6 +7,8 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.rabbit.RabbitMessage;
 
 import java.io.IOException;
 import java.util.Date;
@@ -88,6 +90,36 @@ class JacksonMessageConverterTest {
         assertThat(query.getResource()).isEqualTo("query.name");
         final JsonNode jsonNode = (JsonNode) query.getQueryData();
         assertThat(jsonNode.findValue("name").asText()).isEqualTo("sample1");
+    }
+
+    @Test
+    void shouldNotFailWhenOriginCharsetIsNotUTF8() {
+        // Arrange
+        final String name = "example with word containing tilde áéíóúñ";
+        final SampleClass data = new SampleClass("35", name, new Date());
+        final Message message = sampleEncodedMessage(new AsyncQuery<>("query.name", data), "windows-1252");
+        // Act
+        final AsyncQuery<Object> query = converter.readAsyncQueryStructure(message);
+        // Assert
+        assertThat(query.getQueryData()).isInstanceOf(JsonNode.class);
+        assertThat(query.getResource()).isEqualTo("query.name");
+        final JsonNode jsonNode = (JsonNode) query.getQueryData();
+        assertThat(jsonNode.findValue("name").asText()).isEqualTo(name);
+    }
+
+    private Message sampleEncodedMessage(Object object, String encoding) {
+        byte[] bytes;
+        try {
+            String jsonString = this.objectMapper.writeValueAsString(object);
+            bytes = jsonString.getBytes(encoding);
+        } catch (IOException e) {
+            throw new MessageConversionException("Failed to convert Message content", e);
+        }
+        RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
+        props.setContentType("application/json");
+        props.setContentEncoding(encoding);
+        props.setContentLength(bytes.length);
+        return new RabbitMessage(bytes, props);
     }
 
 }
