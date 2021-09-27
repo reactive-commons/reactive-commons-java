@@ -12,12 +12,9 @@ import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 public class JacksonMessageConverter implements MessageConverter {
-    private static final String ENCODING = Charset.defaultCharset().name();
     private static final String CONTENT_TYPE = "application/json";
 
     private final ObjectMapper objectMapper;
@@ -63,9 +60,7 @@ public class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> T readValue(Message message, Class<T> valueClass) {
         try {
-            byte[] utf8Body = ensureEncoding(message.getBody(), message.getProperties().getContentEncoding(),
-                    StandardCharsets.UTF_8.name());
-            return objectMapper.readValue(utf8Body, valueClass);
+            return objectMapper.readValue(message.getBody(), valueClass);
         } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }
@@ -97,23 +92,15 @@ public class JacksonMessageConverter implements MessageConverter {
         byte[] bytes;
         try {
             String jsonString = this.objectMapper.writeValueAsString(object);
-            bytes = jsonString.getBytes(ENCODING);
+            bytes = jsonString.getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
             throw new MessageConversionException("Failed to convert Message content", e);
         }
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
         props.setContentType(CONTENT_TYPE);
-        props.setContentEncoding(ENCODING);
+        props.setContentEncoding(StandardCharsets.UTF_8.name());
         props.setContentLength(bytes.length);
         return new RabbitMessage(bytes, props);
-    }
-
-    private byte[] ensureEncoding(byte[] data, String fromEncoding, String toEncoding)
-            throws UnsupportedEncodingException {
-        if (fromEncoding.equalsIgnoreCase(toEncoding)) {
-            return data;
-        }
-        return new String(data, fromEncoding).getBytes(toEncoding);
     }
 
     @Data
