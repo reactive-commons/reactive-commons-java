@@ -53,6 +53,10 @@ public class SampleReceiverApp {
                     log.info("resolving from direct query");
                     return just(new RespQuery1("Ok", message));
                 }, Call.class)
+                .serveQuery("sample.query.*", message -> {
+                    log.info("resolving from direct query");
+                    return just(new RespQuery1("Ok", message));
+                }, Call.class)
                 .serveQuery("query2", (from, message) -> {
                     log.info("resolving from delegate query");
                     return gateway.reply(new RespQuery1("Ok", message), from).then();

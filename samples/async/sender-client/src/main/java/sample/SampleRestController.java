@@ -30,6 +30,12 @@ public class SampleRestController {
         return directAsyncGateway.requestReply(query, target, RespQuery1.class);
     }
 
+    @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<RespQuery1> sampleServices(@RequestBody Call call) {
+        AsyncQuery<?> query = new AsyncQuery<>("sample.query.any.that.matches", call);
+        return directAsyncGateway.requestReply(query, target, RespQuery1.class);
+    }
+
     @PostMapping(path = "/sample2", consumes = MediaType.APPLICATION_JSON_VALUE, produces =
             MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleServiceDelegate(@RequestBody Call call) {
@@ -41,11 +47,11 @@ public class SampleRestController {
     public Mono<RespQuery1> sampleServiceHttp(@RequestBody Call call) {
         DummyQuery dummyQuery = new DummyQuery(queryName, call);
         final Mono<RespQuery1> response = webClient.post().uri("http://127.0.0.1:4004/sample_destination")
-            .contentType(MediaType.APPLICATION_JSON)
-            .bodyValue(dummyQuery)
-            .accept(MediaType.APPLICATION_JSON)
-            .retrieve()
-            .bodyToMono(RespQuery1.class);
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(dummyQuery)
+                .accept(MediaType.APPLICATION_JSON)
+                .retrieve()
+                .bodyToMono(RespQuery1.class);
         return response;
     }
 
@@ -74,7 +80,7 @@ public class SampleRestController {
     @Data
     @AllArgsConstructor
     @NoArgsConstructor
-    static class DummyQuery{
+    static class DummyQuery {
         private String resource;
         private Call call;
     }

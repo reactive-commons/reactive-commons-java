@@ -11,10 +11,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.rabbit.DynamicRegistryImp;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.test.StepVerifier;
@@ -52,13 +50,12 @@ class DynamicRegistryImpTest {
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(queryHandlers, eventListeners, notificationEventListeners,
                 dynamicEventsHandlers, commandHandlers);
-        when(props.getDomainEventsExchangeName()).thenReturn("domainEx");
-        when(props.getEventsQueue()).thenReturn("events.queue");
         dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
     }
 
     @Test
     void registerEventListener() {
+        setupMock();
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
         dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
@@ -68,6 +65,7 @@ class DynamicRegistryImpTest {
 
     @Test
     void declareBindingWhenRegisterEventListener() {
+        setupMock();
         ArgumentCaptor<BindingSpecification> captor = ArgumentCaptor.forClass(BindingSpecification.class);
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
 
@@ -82,6 +80,7 @@ class DynamicRegistryImpTest {
 
     @Test
     void subscribeToResultWhenRegisterEventListener() {
+        setupMock();
         PublisherProbe<BindOk> probe = PublisherProbe.of(just(mock(BindOk.class)));
         when(topologyCreator.bind(any())).thenReturn(probe.mono());
 
@@ -94,6 +93,7 @@ class DynamicRegistryImpTest {
 
     @Test
     void shouldBindDomainEventsToEventsQueueUsingEventName() {
+        setupMock();
         ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
                 ArgumentCaptor.forClass(BindingSpecification.class);
 
@@ -119,6 +119,7 @@ class DynamicRegistryImpTest {
 
     @Test
     void shouldUnbindDomainEventsToEventsQueueUsingEventName() {
+        setupMock();
         ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
                 ArgumentCaptor.forClass(BindingSpecification.class);
 
@@ -142,5 +143,19 @@ class DynamicRegistryImpTest {
         topologyCreatorProbe.assertWasSubscribed();
     }
 
+    @Test
+    void serveQueryShouldAddHandler() {
+        dynamicRegistry.serveQuery("dynamic.query", message -> Mono.just(message * 100), Integer.class);
+
+        final RegisteredQueryHandler<Integer, Integer> handler = resolver.getQueryHandler("dynamic.query");
+        StepVerifier.create(handler.getHandler().handle(null, 50))
+                .expectNext(5000)
+                .verifyComplete();
+    }
+
+    private void setupMock(){
+        when(props.getDomainEventsExchangeName()).thenReturn("domainEx");
+        when(props.getEventsQueue()).thenReturn("events.queue");
+    }
 
 }
