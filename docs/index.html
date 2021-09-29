@@ -81,6 +81,7 @@
 <li><a href="#_handlerregistry_listenevent">HandlerRegistry - listenEvent</a></li>
 <li><a href="#_handlerregistry_handlecommand">HandlerRegistry - handleCommand</a></li>
 <li><a href="#_handlerregistry_servequery">HandlerRegistry - serveQuery</a></li>
+<li><a href="#_handlerregistry_patterns">HandlerRegistry - patterns</a></li>
 </ul>
 </li>
 </ul>
@@ -862,6 +863,44 @@ public class SomeConfigurationClass {
 </div>
 </div>
 </div>
+<div class="sect4">
+<h5 id="_handlerregistry_patterns">HandlerRegistry - patterns</h5>
+<div class="paragraph">
+<p>You can also define some handlers with names that contains a wildcard, which will be useful in some cases, for example you can:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="prettyprint highlight"><code data-lang="java">@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenNotificationEvent("some.event.name", event -&gt; someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
+            .listenEvent("some.event.name2", event -&gt; someBusinessDependency.functionReturningMonoVoid(event), Some.class)
+            .serveQuery("*.some.query", query -&gt; someBusinessDependency.findSomething(query), SomeQuery.class)
+            .handleCommand("command.pattern.*", cmd -&gt; someBusinessDependency.handleCommand(cmd), CmdClass.class);
+    }
+}</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+* can be any character sequence, but the fixed words have priority, for example if exists two rules like
+"prefix.*" and "*.*" and receives a name like "prefix.name", handler with "prefix.*" will be called.
+</td>
+</tr>
+</table>
+</div>
+</div>
 </div>
 </div>
 </div>
@@ -870,7 +909,7 @@ public class SomeConfigurationClass {
 <div id="footer">
 <div id="footer-text">
 Version 1.0.0-beta10<br>
-Last updated 2021-09-28 01:24:28 UTC
+Last updated 2021-05-21 16:48:51 -0500
 </div>
 </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.min.css">

@@ -368,3 +368,29 @@ public class SomeConfigurationClass {
     }
 }
 --------
+
+===== HandlerRegistry - patterns
+
+You can also define some handlers with names that contains a wildcard, which will be useful in some cases, for example you can:
+
+[source,java]
+--------
+@Configuration
+public class SomeConfigurationClass {
+
+    @Autowired
+    private ManageTasksUseCase someBusinessDependency;
+
+    @Bean
+    public HandlerRegistry notificationEvents() {
+        return HandlerRegistry.register()
+            .listenNotificationEvent("some.event.name", event -> someBusinessDependency.someFunctionReturningMonoVoid(event), SomeClass.class)
+            .listenEvent("some.event.name2", event -> someBusinessDependency.functionReturningMonoVoid(event), Some.class)
+            .serveQuery("*.some.query", query -> someBusinessDependency.findSomething(query), SomeQuery.class)
+            .handleCommand("command.pattern.*", cmd -> someBusinessDependency.handleCommand(cmd), CmdClass.class);
+    }
+}
+--------
+
+TIP: * can be any character sequence, but the fixed words have priority, for example if exists two rules like
+"prefix.\*" and "*.\*" and receives a name like "prefix.name", handler with "prefix.*" will be called.
