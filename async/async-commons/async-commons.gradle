@@ -10,5 +10,7 @@ dependencies {
     compileOnly 'io.projectreactor:reactor-core'
     api 'io.projectreactor.rabbitmq:reactor-rabbitmq'
     api 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'commons-io:commons-io:2.11.0'
+
     testImplementation 'io.projectreactor:reactor-test'
 }
