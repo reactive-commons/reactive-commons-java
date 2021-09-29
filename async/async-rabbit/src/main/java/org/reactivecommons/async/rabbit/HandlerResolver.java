@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -13,6 +14,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 
+@Log
 @RequiredArgsConstructor
 public class HandlerResolver {
 
@@ -71,6 +73,13 @@ public class HandlerResolver {
 
     void addEventListener(RegisteredEventListener<?> listener) {
         eventListeners.put(listener.getPath(), listener);
+    }
+
+    void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
+        if (handler.getPath().contains("*")) {
+            log.warning("avoid * in dynamic handlers, make sure you have no conflicts with cached patterns");
+        }
+        queryHandlers.put(handler.getPath(), handler);
     }
 
     private <T> Function<String, T> getMatchHandler(Map<String, T> handlers) {

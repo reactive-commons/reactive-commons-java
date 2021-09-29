@@ -4,9 +4,11 @@ package org.reactivecommons.async.rabbit;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.handlers.EventHandler;
+import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 
@@ -24,6 +26,11 @@ public class DynamicRegistryImp implements DynamicRegistry {
 
         return topologyCreator.bind(buildBindingSpecification(eventName))
                 .then();
+    }
+
+    @Override
+    public <T, R> void serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
+        resolver.addQueryHandler(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
     }
 
     @Override
