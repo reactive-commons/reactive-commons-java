@@ -3,17 +3,17 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
+import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.commons.EventExecutor;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
-import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.matcher.KeyMatcher;
 import org.reactivecommons.async.commons.utils.matcher.Matcher;
+import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
+import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -83,8 +83,7 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final String matchedKey = keyMatcher.match(resolver.getToListenEventNames(), executorPath);
-        final RegisteredEventListener<Object> handler = getEventListener(matchedKey);
+        final RegisteredEventListener<Object> handler = resolver.getEventListener(executorPath);
 
         final Class<Object> eventClass = handler.getInputClass();
         Function<Message, DomainEvent<Object>> converter = msj -> messageConverter.readDomainEvent(msj, eventClass);
@@ -94,16 +93,6 @@ public class ApplicationEventListener extends GenericMessageListener {
         return msj -> executor
                 .execute(msj)
                 .cast(Object.class);
-    }
-
-    private RegisteredEventListener<Object> getEventListener(String matchedKey) {
-        RegisteredEventListener<Object> eventListener = resolver.getEventListener(matchedKey);
-
-        if (eventListener == null) {
-            return resolver.getDynamicEventsHandler(matchedKey);
-        }
-
-        return eventListener;
     }
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {
