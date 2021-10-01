@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
@@ -31,6 +32,11 @@ public class DynamicRegistryImp implements DynamicRegistry {
     @Override
     public <T, R> void serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
         resolver.addQueryHandler(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+    }
+
+    @Override
+    public <R> void serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass) {
+        resolver.addQueryHandler(new RegisteredQueryHandler<>(resource, handler, queryClass));
     }
 
     @Override

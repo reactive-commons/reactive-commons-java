@@ -21,8 +21,6 @@ public class HandlerRegistry {
 
     private final List<RegisteredEventListener<?>> eventListeners = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
-    private final List<RegisteredEventListener<?>> dynamicEventsHandlers = new CopyOnWriteArrayList<>();
-
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredCommandHandler<?>> commandHandlers = new CopyOnWriteArrayList<>();
 
@@ -44,11 +42,27 @@ public class HandlerRegistry {
         return this;
     }
 
+    /**
+     * @param eventNamePattern
+     * @param handler
+     * @param eventClass
+     * @param <T>
+     * @return HandlerRegistry
+     * Avoid use this deprecated method please use listenEvent
+     */
+    @Deprecated
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler, Class<T> eventClass) {
-        dynamicEventsHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
-        return this;
+        return listenEvent(eventNamePattern, handler, eventClass);
     }
 
+    /**
+     * @param eventNamePattern
+     * @param handler
+     * @param <T>
+     * @return HandlerRegistry
+     * Avoid use this deprecated method please use listenEvent
+     */
+    @Deprecated
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler) {
         return handleDynamicEvents(eventNamePattern, handler, inferGenericParameterType(handler));
     }

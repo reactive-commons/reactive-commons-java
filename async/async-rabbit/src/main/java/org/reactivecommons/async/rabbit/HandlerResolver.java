@@ -9,9 +9,7 @@ import org.reactivecommons.async.commons.utils.matcher.KeyMatcher;
 import org.reactivecommons.async.commons.utils.matcher.Matcher;
 
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 import java.util.function.Function;
 
 @Log
@@ -21,7 +19,6 @@ public class HandlerResolver {
     private final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers;
     private final Map<String, RegisteredEventListener<?>> eventListeners;
     private final Map<String, RegisteredEventListener<?>> eventNotificationListeners;
-    private final Map<String, RegisteredEventListener<?>> dynamicEventsHandlers;
     private final Map<String, RegisteredCommandHandler<?>> commandHandlers;
     private final Matcher matcher = new KeyMatcher();
 
@@ -39,13 +36,12 @@ public class HandlerResolver {
 
     @SuppressWarnings("unchecked")
     public <T> RegisteredEventListener<T> getEventListener(String path) {
-        return (RegisteredEventListener<T>) eventListeners.get(path);
+        if (eventListeners.containsKey(path)) {
+            return (RegisteredEventListener<T>) eventListeners.get(path);
+        }
+        return (RegisteredEventListener<T>) getMatchHandler(eventListeners).apply(path);
     }
 
-    @SuppressWarnings("unchecked")
-    public <T> RegisteredEventListener<T> getDynamicEventsHandler(String path) {
-        return (RegisteredEventListener<T>) dynamicEventsHandlers.get(path);
-    }
 
     public Collection<RegisteredEventListener<?>> getNotificationListeners() {
         return eventNotificationListeners.values();
@@ -59,16 +55,6 @@ public class HandlerResolver {
 
     public Collection<RegisteredEventListener<?>> getEventListeners() {
         return eventListeners.values();
-    }
-
-    public Set<String> getToListenEventNames() {
-        Set<String> toListenEventNames = new HashSet<>(eventListeners.size() +
-                dynamicEventsHandlers.size());
-
-        toListenEventNames.addAll(eventListeners.keySet());
-        toListenEventNames.addAll(dynamicEventsHandlers.keySet());
-
-        return toListenEventNames;
     }
 
     void addEventListener(RegisteredEventListener<?> listener) {

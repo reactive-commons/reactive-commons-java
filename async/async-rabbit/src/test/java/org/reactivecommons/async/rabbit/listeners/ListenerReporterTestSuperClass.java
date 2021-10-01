@@ -8,21 +8,20 @@ import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.commons.Headers;
 import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
-import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
+import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.*;
@@ -31,7 +30,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -41,7 +39,6 @@ import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
-import static reactor.core.publisher.Flux.defer;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
@@ -125,14 +122,12 @@ public abstract class ListenerReporterTestSuperClass {
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
         final Map<String, RegisteredEventListener<?>> eventHandlers = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredEventListener<?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?>> dynamicEventsHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
         final Map<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),
                 new ConcurrentHashMap<>(notificationHandlers),
-                new ConcurrentHashMap<>(dynamicEventsHandlers),
                 new ConcurrentHashMap<>(commandHandlers));
     }
 

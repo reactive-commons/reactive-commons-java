@@ -18,9 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 class HandlerRegistryTest {
-
-    private HandlerRegistry registry = HandlerRegistry.register();
-    private String name = "some.event";
+    private final HandlerRegistry registry = HandlerRegistry.register();
+    private final String name = "some.event";
 
     @Test
     void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed() {
@@ -28,50 +27,45 @@ class HandlerRegistryTest {
 
         registry.listenEvent(name, eventHandler);
 
-        assertThat(registry.getEventListeners()).anySatisfy(registered -> {
-            assertThat(registered).extracting(RegisteredEventListener::getPath,
-                    RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
-                    .containsExactly(name, SomeDataClass.class, eventHandler);
-        }).hasSize(1);
+        assertThat(registry.getEventListeners())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, SomeDataClass.class, eventHandler)).hasSize(1);
     }
 
     @Test
-    void shouldRegisterDynamicEventsHandlerWithTypeInference() {
+    void shouldRegisterPatternEventHandlerWithTypeInference() {
         SomeEventHandler eventHandler = new SomeEventHandler();
 
         String eventNamePattern = "a.*";
 
-        HandlerRegistry resultRegistry = registry.handleDynamicEvents(eventNamePattern, eventHandler);
+        HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler);
         RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getDynamicEventsHandlers())
-                .anySatisfy(registeredEventListener -> {
-            assertThat(registeredEventListener)
-                    .usingRecursiveComparison()
-                    .isEqualTo(expectedRegisteredEventListener);
-        });
+        assertThat(registry.getEventListeners())
+                .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
+                        .usingRecursiveComparison()
+                        .isEqualTo(expectedRegisteredEventListener));
 
         assertThat(resultRegistry)
                 .isSameAs(registry);
     }
 
     @Test
-    void shouldRegisterDynamicEventsHandler() {
+    void shouldRegisterPatternEventHandler() {
         SomeEventHandler eventHandler = new SomeEventHandler();
 
         String eventNamePattern = "a.*";
 
-        HandlerRegistry resultRegistry = registry.handleDynamicEvents(eventNamePattern, eventHandler, SomeDataClass.class);
+        HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler, SomeDataClass.class);
         RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getDynamicEventsHandlers())
-                .anySatisfy(registeredEventListener -> {
-                    assertThat(registeredEventListener)
-                            .usingRecursiveComparison()
-                            .isEqualTo(expectedRegisteredEventListener);
-                });
+        assertThat(registry.getEventListeners())
+                .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
+                        .usingRecursiveComparison()
+                        .isEqualTo(expectedRegisteredEventListener));
 
         assertThat(resultRegistry)
                 .isSameAs(registry);
@@ -80,8 +74,8 @@ class HandlerRegistryTest {
     @Test
     void shouldRegisterNotificationEventListener() {
         registry.listenNotificationEvent(name, message -> Mono.empty(), SomeDataClass.class);
-        assertThat(registry.getEventNotificationListener()).anySatisfy(listener ->
-            assertThat(listener.getPath()).isEqualTo(name));
+        assertThat(registry.getEventNotificationListener())
+                .anySatisfy(listener -> assertThat(listener.getPath()).isEqualTo(name));
     }
 
     @Test
@@ -90,11 +84,10 @@ class HandlerRegistryTest {
         EventHandler<SomeDataClass> handler = mock(EventHandler.class);
         registry.listenEvent(name, handler, SomeDataClass.class);
 
-        assertThat(registry.getEventListeners()).anySatisfy(registered -> {
-            assertThat(registered).extracting(RegisteredEventListener::getPath,
-                    RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
-                    .containsExactly(name, SomeDataClass.class, handler);
-        }).hasSize(1);
+        assertThat(registry.getEventListeners())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, SomeDataClass.class, handler)).hasSize(1);
     }
 
     @Test
@@ -103,11 +96,10 @@ class HandlerRegistryTest {
 
         registry.handleCommand(name, handler);
 
-        assertThat(registry.getCommandHandlers()).anySatisfy(registered -> {
-            assertThat(registered).extracting(RegisteredCommandHandler::getPath,
-                    RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
-                    .containsExactly(name, SomeDataClass.class, handler);
-        }).hasSize(1);
+        assertThat(registry.getCommandHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
+                        .containsExactly(name, SomeDataClass.class, handler)).hasSize(1);
     }
 
     @Test
@@ -135,21 +127,20 @@ class HandlerRegistryTest {
     void handleCommandWithLambda() {
         registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty(), SomeDataClass.class);
 
-        assertThat(registry.getCommandHandlers()).anySatisfy(registered -> {
-            assertThat(registered).extracting(RegisteredCommandHandler::getPath,
-                    RegisteredCommandHandler::getInputClass)
-                    .containsExactly(name, SomeDataClass.class);
-        }).hasSize(1);
+        assertThat(registry.getCommandHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass)
+                        .containsExactly(name, SomeDataClass.class)).hasSize(1);
     }
 
 
     @Test
     void serveQueryWithLambda() {
         registry.serveQuery(name, message -> Mono.empty(), SomeDataClass.class);
-        assertThat(registry.getHandlers()).anySatisfy(registered -> {
-            assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
-                    .containsExactly(name, SomeDataClass.class);
-        }).hasSize(1);
+        assertThat(registry.getHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
+                        .containsExactly(name, SomeDataClass.class)).hasSize(1);
     }
 
     @Test

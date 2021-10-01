@@ -204,12 +204,6 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener<?>> dynamicEventHandlers = registries
-                .values().stream()
-                .flatMap(r -> r.getDynamicEventsHandlers().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
         final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getCommandHandlers().stream())
@@ -223,8 +217,7 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(queryHandlers, eventListeners, eventNotificationListener,
-                dynamicEventHandlers, commandHandlers) {
+        return new HandlerResolver(queryHandlers, eventListeners, eventNotificationListener, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
