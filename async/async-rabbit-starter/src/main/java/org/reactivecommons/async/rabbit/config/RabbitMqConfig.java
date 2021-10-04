@@ -58,7 +58,7 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
         RabbitProperties.class,
         AsyncProps.class
 })
-@Import(BrokerConfigProps.class)
+@Import({BrokerConfigProps.class, RabbitHealthConfig.class})
 public class RabbitMqConfig {
 
     private static final String LISTENER_TYPE = "listener";
