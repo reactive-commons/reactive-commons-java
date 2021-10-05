@@ -6,8 +6,10 @@ ext {
 dependencies {
     api project(':async-rabbit')
     compileOnly 'org.springframework.boot:spring-boot-starter'
+    compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
 }
