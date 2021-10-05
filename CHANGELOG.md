@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.3) (2021-10-05)
+
+**Merged pull requests:**
+
+- add health indicator [\#64](https://github.com/reactive-commons/reactive-commons-java/pull/64)
+
 ## [1.0.2](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.2) (2021-10-01)
 
 **Merged pull requests:**
