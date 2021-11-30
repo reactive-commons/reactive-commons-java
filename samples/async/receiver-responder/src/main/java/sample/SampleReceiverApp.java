@@ -8,6 +8,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
@@ -49,6 +50,8 @@ public class SampleReceiverApp {
     @Bean
     public HandlerRegistry handlerRegistrySubs(DirectAsyncGateway gateway) {
         return HandlerRegistry.register()
+                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
+                .listenEvent("fixed.event", message -> Mono.empty(), Object.class)
                 .serveQuery("query1", message -> {
                     log.info("resolving from direct query");
                     return just(new RespQuery1("Ok", message));

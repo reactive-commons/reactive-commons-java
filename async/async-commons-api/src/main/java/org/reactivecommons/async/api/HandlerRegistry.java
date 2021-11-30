@@ -20,6 +20,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 public class HandlerRegistry {
 
     private final List<RegisteredEventListener<?>> eventListeners = new CopyOnWriteArrayList<>();
+    private final List<RegisteredEventListener<?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredCommandHandler<?>> commandHandlers = new CopyOnWriteArrayList<>();
@@ -42,27 +43,11 @@ public class HandlerRegistry {
         return this;
     }
 
-    /**
-     * @param eventNamePattern
-     * @param handler
-     * @param eventClass
-     * @param <T>
-     * @return HandlerRegistry
-     * Avoid use this deprecated method please use listenEvent
-     */
-    @Deprecated
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler, Class<T> eventClass) {
-        return listenEvent(eventNamePattern, handler, eventClass);
+        dynamicEventHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
+        return this;
     }
 
-    /**
-     * @param eventNamePattern
-     * @param handler
-     * @param <T>
-     * @return HandlerRegistry
-     * Avoid use this deprecated method please use listenEvent
-     */
-    @Deprecated
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, EventHandler<T> handler) {
         return handleDynamicEvents(eventNamePattern, handler, inferGenericParameterType(handler));
     }

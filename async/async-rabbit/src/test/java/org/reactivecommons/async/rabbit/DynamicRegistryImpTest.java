@@ -45,9 +45,10 @@ class DynamicRegistryImpTest {
     void setUp() {
         Map<String, RegisteredCommandHandler<?>> commandHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener<?>> eventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?>> eventsToBind = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener<?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
-        resolver = new HandlerResolver(queryHandlers, eventListeners, notificationEventListeners, commandHandlers);
+        resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers);
         dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
     }
 

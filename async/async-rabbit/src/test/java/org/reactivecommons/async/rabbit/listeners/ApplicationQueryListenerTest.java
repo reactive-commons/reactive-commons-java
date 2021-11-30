@@ -80,7 +80,7 @@ class ApplicationQueryListenerTest {
         QueryHandler<String, SampleClass> handler = (message) -> just("OK");
         handlers.put("queryDirect", new RegisteredQueryHandler<>("queryDirect",
                 (from, message) -> handler.handle(message), SampleClass.class));
-        HandlerResolver resolver = new HandlerResolver(handlers, null, null, null);
+        HandlerResolver resolver = new HandlerResolver(handlers, null,null, null, null);
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
                 "directExchange", messageConverter, "replyExchange", false,
                 1, 100, maxLengthBytes, true, discardNotifier, errorReporter);

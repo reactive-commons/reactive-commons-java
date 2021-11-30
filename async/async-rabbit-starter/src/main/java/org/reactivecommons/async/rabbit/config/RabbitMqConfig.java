@@ -7,7 +7,11 @@ import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.api.*;
+import org.reactivecommons.async.api.AsyncQuery;
+import org.reactivecommons.async.api.DefaultCommandHandler;
+import org.reactivecommons.async.api.DefaultQueryHandler;
+import org.reactivecommons.async.api.DynamicRegistry;
+import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -38,7 +42,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.ChannelPool;
+import reactor.rabbitmq.ChannelPoolFactory;
+import reactor.rabbitmq.ChannelPoolOptions;
+import reactor.rabbitmq.RabbitFlux;
+import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.ReceiverOptions;
+import reactor.rabbitmq.Sender;
+import reactor.rabbitmq.SenderOptions;
+import reactor.rabbitmq.Utils;
 import reactor.util.retry.Retry;
 
 import java.security.KeyManagementException;
@@ -48,6 +60,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
@@ -198,9 +211,16 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventListeners = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = registries
                 .values().stream()
                 .flatMap(r -> r.getEventListeners().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        // event handlers and dynamic handlers
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = registries
+                .values().stream()
+                .flatMap(r -> Stream.concat(r.getEventListeners().stream(), r.getDynamicEventHandlers().stream()))
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
@@ -217,7 +237,7 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(queryHandlers, eventListeners, eventNotificationListener, commandHandlers) {
+        return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
             public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
