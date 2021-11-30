@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.4) (2021-11-30)
+
+**Closed issues:**
+
+- Actuator shows UP when rabbitmq is down [\#23](https://github.com/reactive-commons/reactive-commons-java/issues/23)
+
+**Merged pull requests:**
+
+- fix event bindings for dynamic events [\#65](https://github.com/reactive-commons/reactive-commons-java/pull/65)
+
 ## [1.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.3) (2021-10-05)
 
 **Merged pull requests:**
