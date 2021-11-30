@@ -9,8 +9,6 @@ import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.utils.matcher.KeyMatcher;
-import org.reactivecommons.async.commons.utils.matcher.Matcher;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -35,7 +33,6 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final boolean withDLQRetry;
     private final int retryDelay;
     private final Optional<Integer> maxLengthBytes;
-    private final Matcher keyMatcher;
     private final String appName;
 
 
@@ -57,7 +54,6 @@ public class ApplicationEventListener extends GenericMessageListener {
         this.eventsExchange = eventsExchange;
         this.messageConverter = messageConverter;
         this.maxLengthBytes = maxLengthBytes;
-        this.keyMatcher = new KeyMatcher();
         this.appName = appName;
     }
 

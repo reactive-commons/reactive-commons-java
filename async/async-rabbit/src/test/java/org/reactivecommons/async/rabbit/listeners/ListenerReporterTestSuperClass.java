@@ -24,9 +24,18 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.Receiver;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -38,7 +47,9 @@ import static java.util.function.Function.identity;
 import static java.util.stream.Collectors.toMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
@@ -120,13 +131,15 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener<?>> eventHandlers = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getEventListeners().stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> eventsToBind = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredEventListener<?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
         final Map<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),
+                new ConcurrentHashMap<>(eventsToBind),
                 new ConcurrentHashMap<>(notificationHandlers),
                 new ConcurrentHashMap<>(commandHandlers));
     }

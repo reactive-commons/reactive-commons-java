@@ -18,6 +18,7 @@ public class HandlerResolver {
 
     private final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers;
     private final Map<String, RegisteredEventListener<?>> eventListeners;
+    private final Map<String, RegisteredEventListener<?>> eventsToBind;
     private final Map<String, RegisteredEventListener<?>> eventNotificationListeners;
     private final Map<String, RegisteredCommandHandler<?>> commandHandlers;
     private final Matcher matcher = new KeyMatcher();
@@ -53,8 +54,9 @@ public class HandlerResolver {
                 .computeIfAbsent(path, getMatchHandler(eventNotificationListeners));
     }
 
+    // Returns only the listenEvent not the handleDynamicEvents
     public Collection<RegisteredEventListener<?>> getEventListeners() {
-        return eventListeners.values();
+        return eventsToBind.values();
     }
 
     void addEventListener(RegisteredEventListener<?> listener) {
