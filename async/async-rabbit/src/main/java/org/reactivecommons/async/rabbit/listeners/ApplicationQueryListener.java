@@ -24,6 +24,7 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Level;
 
+import static java.lang.Boolean.TRUE;
 import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.commons.Headers.*;
 
@@ -138,14 +139,15 @@ public class ApplicationQueryListener extends GenericMessageListener {
             if (signal.isOnError()) {
                 return Mono.error(ofNullable(signal.getThrowable()).orElseGet(RuntimeException::new));
             }
-            if (signal.isOnComplete()) {
-                return Mono.empty();
-            }
 
             final String replyID = msg.getProperties().getHeaders().get(REPLY_ID).toString();
             final String correlationID = msg.getProperties().getHeaders().get(CORRELATION_ID).toString();
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
+
+            if (!signal.hasValue()) {
+                headers.put(COMPLETION_ONLY_SIGNAL, TRUE.toString());
+            }
 
             return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
         });

@@ -8,6 +8,7 @@ import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.AsyncQuery;
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
+import reactor.test.publisher.PublisherProbe;
 
 import java.time.Instant;
 import java.util.Date;
@@ -37,6 +39,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.*;
 import static org.reactivecommons.async.commons.Headers.*;
@@ -80,7 +83,7 @@ class ApplicationQueryListenerTest {
         QueryHandler<String, SampleClass> handler = (message) -> just("OK");
         handlers.put("queryDirect", new RegisteredQueryHandler<>("queryDirect",
                 (from, message) -> handler.handle(message), SampleClass.class));
-        HandlerResolver resolver = new HandlerResolver(handlers, null,null, null, null);
+        HandlerResolver resolver = new HandlerResolver(handlers, null, null, null, null);
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
                 "directExchange", messageConverter, "replyExchange", false,
                 1, 100, maxLengthBytes, true, discardNotifier, errorReporter);
@@ -118,15 +121,26 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
-    void shouldNotRespondQueryEnrichPostProcess() {
-        Message message = spy(TestStubs.mockMessage());
-        Function<Mono<Object>, Mono<Object>> handler = applicationQueryListener.enrichPostProcess(message);
-        Mono<Object> result = handler.apply(empty());
+    @SuppressWarnings("unchecked")
+    void enrichPostProcessShouldPropagateEmptyResponses() {
+        Message message = TestStubs.mockMessage();
+        PublisherProbe<Void> publishProbe = PublisherProbe.empty();
+
+        ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
+
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), headersCaptor.capture(), anyBoolean()))
+                .thenReturn(publishProbe.mono());
+
+        Function<Mono<Object>, Mono<Object>> transformer = applicationQueryListener.enrichPostProcess(message);
+        Mono<Object> result = transformer.apply(empty());
 
         StepVerifier.create(result)
                 .verifyComplete();
 
-        verify(message, times(0)).getProperties();
+        publishProbe.assertWasSubscribed();
+
+        assertThat(headersCaptor.getValue().get(COMPLETION_ONLY_SIGNAL))
+                .isEqualTo("true");
     }
 
     @Test
