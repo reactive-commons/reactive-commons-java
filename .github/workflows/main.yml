@@ -15,7 +15,7 @@ on:
 jobs:
   build:
     if: github.event_name != 'release'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
         with:
@@ -41,7 +41,7 @@ jobs:
 
   release:
     if: github.event_name == 'release'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-18.04
     steps:
       - uses: actions/checkout@v2
       - name: Set up JDK 1.8
