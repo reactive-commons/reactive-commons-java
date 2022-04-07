@@ -121,26 +121,15 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    void enrichPostProcessShouldPropagateEmptyResponses() {
-        Message message = TestStubs.mockMessage();
-        PublisherProbe<Void> publishProbe = PublisherProbe.empty();
-
-        ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
-
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), headersCaptor.capture(), anyBoolean()))
-                .thenReturn(publishProbe.mono());
-
-        Function<Mono<Object>, Mono<Object>> transformer = applicationQueryListener.enrichPostProcess(message);
-        Mono<Object> result = transformer.apply(empty());
+    void shouldNotRespondQueryEnrichPostProcess() {
+        Message message = spy(TestStubs.mockMessage());
+        Function<Mono<Object>, Mono<Object>> handler = applicationQueryListener.enrichPostProcess(message);
+        Mono<Object> result = handler.apply(empty());
 
         StepVerifier.create(result)
                 .verifyComplete();
 
-        publishProbe.assertWasSubscribed();
-
-        assertThat(headersCaptor.getValue().get(COMPLETION_ONLY_SIGNAL))
-                .isEqualTo("true");
+        verify(message, times(0)).getProperties();
     }
 
     @Test

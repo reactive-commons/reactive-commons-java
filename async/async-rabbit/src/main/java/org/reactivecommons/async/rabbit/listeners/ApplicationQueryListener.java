@@ -4,14 +4,14 @@ import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.QueryExecutor;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
@@ -24,9 +24,11 @@ import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Level;
 
-import static java.lang.Boolean.TRUE;
 import static java.util.Optional.ofNullable;
-import static org.reactivecommons.async.commons.Headers.*;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
+import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
 @Log
 //TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos
@@ -139,15 +141,14 @@ public class ApplicationQueryListener extends GenericMessageListener {
             if (signal.isOnError()) {
                 return Mono.error(ofNullable(signal.getThrowable()).orElseGet(RuntimeException::new));
             }
+            if (signal.isOnComplete()) {
+                return Mono.empty();
+            }
 
             final String replyID = msg.getProperties().getHeaders().get(REPLY_ID).toString();
             final String correlationID = msg.getProperties().getHeaders().get(CORRELATION_ID).toString();
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
-
-            if (!signal.hasValue()) {
-                headers.put(COMPLETION_ONLY_SIGNAL, TRUE.toString());
-            }
 
             return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
         });
