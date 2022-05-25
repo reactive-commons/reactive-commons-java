@@ -8,8 +8,9 @@ dependencies {
     api project(":domain-events-api")
     api project(":async-commons")
 
-    compileOnly 'io.projectreactor:reactor-core'
-    api ("io.projectreactor.rabbitmq:reactor-rabbitmq")
+    api 'io.projectreactor:reactor-core'
+    api 'io.projectreactor.rabbitmq:reactor-rabbitmq'
+    api 'com.rabbitmq:amqp-client'
     api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
 }
