@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.5) (2022-05-25)
+
+**Closed issues:**
+
+- Broken behavior: empty responses are not propagated anymore [\#66](https://github.com/reactive-commons/reactive-commons-java/issues/66)
+
+**Merged pull requests:**
+
+- updgrade actions [\#70](https://github.com/reactive-commons/reactive-commons-java/pull/70)
+- add metric to async query operation [\#69](https://github.com/reactive-commons/reactive-commons-java/pull/69)
+- Feature/upgrade spring [\#68](https://github.com/reactive-commons/reactive-commons-java/pull/68)
+- fix: propagate empty response [\#67](https://github.com/reactive-commons/reactive-commons-java/pull/67)
+
 ## [1.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.4) (2021-11-30)
 
 **Closed issues:**
@@ -39,7 +52,6 @@
 **Merged pull requests:**
 
 - ensure utf-8 charset from senders [\#61](https://github.com/reactive-commons/reactive-commons-java/pull/61)
-- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59)
 - Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53)
 
@@ -47,6 +59,7 @@
 
 **Merged pull requests:**
 
+- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Update gradle.properties [\#58](https://github.com/reactive-commons/reactive-commons-java/pull/58)
 
 ## [1.0.0-beta9](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta9) (2021-05-21)
