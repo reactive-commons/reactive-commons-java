@@ -73,7 +73,11 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
 
         return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
-                .then(replyHolder);
+                .then(replyHolder)
+                .name("async_query")
+                .tag("operation", query.getResource())
+                .tag("target", targetName)
+                .metrics();
     }
 
     @Override
