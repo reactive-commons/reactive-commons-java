@@ -64,7 +64,7 @@ jobs:
           issuesWoLabels: true
           stripGeneratorNotice: true
       - name: Push Docs and Changelog
-        uses: github-actions-x/commit@v2.7
+        uses: github-actions-x/commit@v2.9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           push-branch: 'master'
