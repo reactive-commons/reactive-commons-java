@@ -1,0 +1,90 @@
+plugins {
+    id "com.jfrog.bintray" version "1.8.5"
+    id 'java-library'
+    id 'maven'
+    id 'maven-publish'
+}
+
+test.onlyIf { false }
+
+def pomConfig = {
+    licenses {
+        license {
+            name "The Apache Software License, Version 2.0"
+            url "http://www.apache.org/licenses/LICENSE-2.0.txt"
+            distribution "repo"
+        }
+    }
+    developers {
+        developer {
+            id "andmagom"
+            name "Andrés Mauricio Gómez P"
+            email "andmagom@outlook.com"
+        }
+        developer {
+            id "alejobtc"
+            name "Alejandro Betancur Barrientos"
+            email "alejobtc@gmail.com"
+        }
+    }
+
+    scm {
+        url "git@github.com:reactive-commons/reactive-commons-java.git"
+    }
+}
+
+publishing {
+    publications {
+        MyPublication(MavenPublication) {
+            from components.java
+            artifact sourcesJar {
+                classifier "sources"
+            }
+            artifact javadocJar {
+                classifier "javadoc"
+            }
+            groupId 'org.reactivecommons'
+            artifactId 'async-sqs-starter'
+            version project.property('version')
+            pom.withXml {
+                def root = asNode()
+                root.appendNode('description', 'Async SQS Starter')
+                root.appendNode('name', 'async-sqs-starter')
+                root.appendNode('url', 'https://site_for_lib.tld')
+                root.children().last() + pomConfig
+            }
+        }
+    }
+}
+
+bintray {
+    user = project.hasProperty('bintrayUser') ? project.property('bintrayUser') : System.getenv('BINTRAY_USER')
+    key = project.hasProperty('bintrayApiKey') ? project.property('bintrayApiKey') : System.getenv('BINTRAY_API_KEY')
+    publications = ['MyPublication']
+    publish = true
+    pkg {
+        repo = 'maven-artifacts'
+        userOrg = 'reactive-commons'
+        name = 'reactive-commons'
+        licenses = ['Apache-2.0']
+        vcsUrl = 'git@github.com:reactive-commons/reactive-commons-java.git'
+        version {
+            name = project.property('version')
+            desc = 'First version'
+            released  = new Date()
+            vcsTag = project.property('version')
+        }
+    }
+}
+
+dependencies {
+    implementation platform('software.amazon.awssdk:bom:2.13.10')
+    compile project(":async-sqs")
+    api('org.springframework.boot:spring-boot-starter')
+    implementation 'software.amazon.awssdk:sns'
+    implementation 'software.amazon.awssdk:sqs'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.projectreactor:reactor-test'
+}
