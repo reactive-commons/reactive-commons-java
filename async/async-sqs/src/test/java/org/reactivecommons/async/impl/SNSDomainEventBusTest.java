@@ -1,8 +1,7 @@
 package org.reactivecommons.async.impl;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -16,14 +15,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SNSDomainEventBusTest {
   @Mock
   private Sender sender;
   private DomainEventBus domainEventBus;
   private String topicName;
 
-  @Before
+  @BeforeEach
   public void setup() {
     topicName = "topicName";
     domainEventBus = new SNSDomainEventBus(sender, topicName);

@@ -1,9 +1,8 @@
 package org.reactivecommons.async.impl.sns.communications;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -23,7 +22,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SenderTest {
 
   private final String sourceApp = "myAppName";
@@ -32,7 +30,7 @@ public class SenderTest {
   private SnsAsyncClient client;
   private Sender sender;
 
-  @Before
+  @BeforeEach
   public void setup() {
     sender = new Sender(client, sourceApp, arnPrefix);
   }

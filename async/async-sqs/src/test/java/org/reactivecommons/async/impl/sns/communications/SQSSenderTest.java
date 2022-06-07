@@ -1,8 +1,7 @@
 package org.reactivecommons.async.impl.sns.communications;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
@@ -19,7 +18,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SQSSenderTest {
   private final String message = "my string message";
   private final int delaySeconds = 0;
@@ -29,7 +27,7 @@ public class SQSSenderTest {
   private SqsAsyncClient client;
   private SQSSender sender;
 
-  @Before
+  @BeforeEach
   public void setup() {
     sender = new SQSSender(client);
   }
