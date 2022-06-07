@@ -1,8 +1,7 @@
 package org.reactivecommons.async.impl;
 
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 import org.reactivecommons.api.domain.Command;
@@ -15,7 +14,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
-@RunWith(MockitoJUnitRunner.class)
 public class SNSDirectAsyncGatewayTest {
   @Mock
   private Sender sender;
@@ -23,7 +21,7 @@ public class SNSDirectAsyncGatewayTest {
   private String topicTarget;
   private String targetAppName;
 
-  @Before
+  @BeforeEach
   public void setup() {
     topicTarget = "topicTarget";
     targetAppName = "targetAppName";

@@ -2,18 +2,16 @@ package org.reactivecommons.async.impl.handlers;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.junit.Before;
-import org.junit.Test;
-import org.junit.runner.RunWith;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
-import org.mockito.junit.MockitoJUnitRunner;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.impl.HandlerResolver;
-import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.model.SNSEventModel;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -24,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
-@RunWith(MockitoJUnitRunner.class)
 public class ApplicationEventHandlerTest {
   @Mock
   private RegisteredEventListener eventListener;
@@ -34,13 +31,19 @@ public class ApplicationEventHandlerTest {
   private HandlerResolver resolver;
   private MessageConverter messageConverter;
 
-  @Before
+  @BeforeEach
   public void setup() {
-    Map<String, RegisteredCommandHandler> commandHandlers = new ConcurrentHashMap<>();
-    Map<String, RegisteredEventListener> eventListeners = new ConcurrentHashMap<>();
-    Map<String, RegisteredQueryHandler> queryHandlers = new ConcurrentHashMap<>();
-    eventListeners.put("my.event", eventListener);
-    resolver = new HandlerResolver(queryHandlers, eventListeners, commandHandlers);
+    Map<String, RegisteredCommandHandler<?>> commandHandlers = new ConcurrentHashMap<>();
+    Map<String, RegisteredEventListener<?>> eventListeners = new ConcurrentHashMap<>();
+    eventListeners.put("event.name", new RegisteredEventListener<>("event.name", message -> Mono.empty(), String.class));
+    eventListeners.put("event.name2", new RegisteredEventListener<>("event.name2", message -> Mono.empty(), String.class));
+    eventListeners.put("some.*", new RegisteredEventListener<>("some.*", message -> Mono.empty(), String.class));
+    Map<String, RegisteredEventListener<?>> eventsToBind = new ConcurrentHashMap<>();
+    eventsToBind.put("event.name", new RegisteredEventListener<>("event.name", message -> Mono.empty(), String.class));
+    eventsToBind.put("event.name2", new RegisteredEventListener<>("event.name2", message -> Mono.empty(), String.class));
+    Map<String, RegisteredEventListener<?>> notificationEventListeners = new ConcurrentHashMap<>();
+    Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
+    resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers);
     messageConverter = new JacksonMessageConverter(new ObjectMapper());
   }
 

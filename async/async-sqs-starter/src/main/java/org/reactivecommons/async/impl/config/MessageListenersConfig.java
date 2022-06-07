@@ -8,10 +8,11 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.impl.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.impl.Handlers;
 import org.reactivecommons.async.impl.config.props.AsyncProps;
-import org.reactivecommons.async.impl.converters.MessageConverter;
-import org.reactivecommons.async.impl.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.impl.converters.JacksonMessageConverter;
 import org.reactivecommons.async.impl.handlers.ApplicationCommandHandler;
 import org.reactivecommons.async.impl.handlers.ApplicationEventHandler;
 import org.springframework.beans.factory.annotation.Value;
@@ -37,53 +38,51 @@ public class MessageListenersConfig {
 
     @Bean //TODO: move to own config (QueryListenerConfig)
     public ApplicationEventHandler eventListener(HandlerResolver resolver, MessageConverter messageConverter) {
-        final ApplicationEventHandler appListener = new ApplicationEventHandler(resolver, messageConverter);
-
-        return appListener;
+        return new ApplicationEventHandler(resolver, messageConverter);
     }
 
     @Bean
     public ApplicationCommandHandler applicationCommandListener(HandlerResolver resolver, MessageConverter messageConverter) {
-        ApplicationCommandHandler commandListener = new ApplicationCommandHandler(resolver, messageConverter);
-        return commandListener;
+        return new ApplicationCommandHandler(resolver, messageConverter);
     }
 
     @Bean
-    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
+    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler<?> defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
 
-        final ConcurrentMap<String, RegisteredQueryHandler> handlers = registries
+        final ConcurrentMap<String, RegisteredQueryHandler<?,?>> handlers = registries
                 .values().stream()
                 .flatMap(r -> r.getHandlers().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener> eventListeners = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventListeners = registries
                 .values().stream()
                 .flatMap(r -> r.getEventListeners().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredCommandHandler> commandHandlers = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = registries
+                .values().stream()
+                .flatMap(r -> r.getEventListeners().stream())
+                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
+                        ConcurrentHashMap::putAll);
+
+        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getCommandHandlers().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener> notificationHandlers = registries
+        final ConcurrentMap<String, RegisteredEventListener<?>> notificationHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getEventListeners().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        return new HandlerResolver(handlers, eventListeners, commandHandlers, notificationHandlers) {
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
-                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
-            }
-        };
+
+        return new HandlerResolver(handlers, eventListeners, eventsToBind, notificationHandlers, commandHandlers);
+
     }
 
     @Bean

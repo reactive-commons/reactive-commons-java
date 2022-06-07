@@ -1,9 +1,10 @@
 package org.reactivecommons.async.impl.config;
 
 import lombok.RequiredArgsConstructor;
+import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.impl.SNSDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.props.BrokerConfigProps;
-import org.reactivecommons.async.impl.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.impl.sns.communications.Sender;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
