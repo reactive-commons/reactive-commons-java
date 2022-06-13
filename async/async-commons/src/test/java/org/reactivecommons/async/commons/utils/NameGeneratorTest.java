@@ -6,8 +6,6 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class NameGeneratorTest {
 
-    private NameGenerator nameGenerator;
-
     @Test
     void generateNameFromWithoutSuffix() {
         String result = NameGenerator.generateNameFrom("application");
