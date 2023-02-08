@@ -4,5 +4,5 @@ ext {
 }
 
 dependencies {
-    api 'org.reactivestreams:reactive-streams:1.0.3'
+    api 'org.reactivestreams:reactive-streams:1.0.4'
 }

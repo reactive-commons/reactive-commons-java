@@ -1,9 +1,8 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
-    compile project(":async-commons-rabbit-starter")
-    compile group: 'org.springframework.boot', name: 'spring-boot-starter-webflux'
-    compile('org.springframework.boot:spring-boot-starter')
-    compile('org.springframework.boot:spring-boot-starter-actuator')
-    //runtime('org.springframework.boot:spring-boot-devtools')
+    implementation project(':async-commons-rabbit-starter')
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
 }

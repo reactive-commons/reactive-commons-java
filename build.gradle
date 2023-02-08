@@ -6,7 +6,6 @@ buildscript {
     }
 
     dependencies {
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:${springBootVersion}")
         classpath("com.github.ben-manes:gradle-versions-plugin:$gradleVersionsVersion")
     }
 }
@@ -15,6 +14,7 @@ plugins {
     id 'jacoco'
     id 'org.sonarqube' version '3.0'
     id 'org.asciidoctor.jvm.convert' version '3.1.0'
+    id 'org.springframework.boot' version "${springBootVersion}" apply false
 }
 
 sonarqube {

@@ -3,7 +3,8 @@ subprojects {
     apply plugin: 'jacoco'
     apply plugin: 'io.spring.dependency-management'
 
-    sourceCompatibility = JavaVersion.VERSION_1_8
+    sourceCompatibility = JavaVersion.VERSION_11
+    targetCompatibility = JavaVersion.VERSION_17
 
     repositories {
         mavenCentral()
@@ -36,7 +37,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.boot:spring-boot-dependencies:$springBootVersion"
+            mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
         }
     }
 
@@ -121,4 +122,8 @@ subprojects {
             }
         }
     }
+}
+
+tasks.named('wrapper') {
+    gradleVersion = '7.6'
 }

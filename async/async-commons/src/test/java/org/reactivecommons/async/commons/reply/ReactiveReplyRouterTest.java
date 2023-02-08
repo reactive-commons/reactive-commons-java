@@ -11,7 +11,7 @@ import java.util.UUID;
 
 class ReactiveReplyRouterTest {
 
-    private ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
+    private final ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
 
     @Test
     void shouldRouteReply(){

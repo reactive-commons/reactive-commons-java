@@ -1,4 +1,3 @@
 dependencies {
-    compile project(":async-commons-rabbit-starter")
-//    compile 'org.springframework.boot:spring-boot-starter-amqp'
+    implementation project(':async-commons-rabbit-starter')
 }
