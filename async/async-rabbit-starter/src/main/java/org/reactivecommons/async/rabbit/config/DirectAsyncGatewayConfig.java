@@ -25,7 +25,6 @@ public class DirectAsyncGatewayConfig {
 
     @Bean
     public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter, MeterRegistry meterRegistry) throws Exception {
-        System.out.println(meterRegistry.getClass());
         return new RabbitDirectAsyncGateway(config, router, rSender, props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
