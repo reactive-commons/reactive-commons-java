@@ -4,11 +4,12 @@ ext {
 }
 
 dependencies {
-    api project(":async-commons-api")
-    api project(":domain-events-api")
-    api project(":async-commons")
+    api project(':async-commons-api')
+    api project(':domain-events-api')
+    api project(':async-commons')
 
     api 'io.projectreactor:reactor-core'
+    api 'io.projectreactor:reactor-core-micrometer'
     api 'io.projectreactor.rabbitmq:reactor-rabbitmq'
     api 'com.rabbitmq:amqp-client'
     api 'com.fasterxml.jackson.core:jackson-databind'

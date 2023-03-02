@@ -1,6 +1,6 @@
 dependencies {
-    compile project(":async-commons-rabbit-starter")
-    compile('org.springframework.boot:spring-boot-starter')
+    implementation project(':async-commons-rabbit-starter')
+    implementation 'org.springframework.boot:spring-boot-starter'
 }
 
 test.onlyIf { false }

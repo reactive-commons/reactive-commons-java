@@ -2,6 +2,8 @@ package org.reactivecommons.async.rabbit;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.Data;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,22 +14,20 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.rabbit.RabbitDirectAsyncGateway;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.Sinks;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
-import reactor.util.concurrent.Queues;
 
 import java.time.Duration;
 import java.util.List;
@@ -40,9 +40,18 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-import static org.reactivecommons.async.commons.Headers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -55,16 +64,18 @@ class RabbitDirectAsyncGatewayTest {
     private ReactiveReplyRouter router;
     @Mock
     private ReactiveMessageSender senderMock;
+
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     private RabbitDirectAsyncGateway asyncGateway;
 
     public void init(ReactiveMessageSender sender) {
-        asyncGateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter);
+        asyncGateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter, meterRegistry);
     }
 
     @Test
     void shouldReleaseRouterResourcesOnTimeout() {
         BrokerConfig config = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
-        asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter);
+        asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter, meterRegistry);
         when(router.register(anyString())).thenReturn(Mono.never());
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
                 .thenReturn(Mono.empty());
@@ -179,10 +190,9 @@ class RabbitDirectAsyncGatewayTest {
         Message message = mock(Message.class);
         ObjectMapper mapper = new ObjectMapper();
         when(message.getBody()).thenReturn(mapper.writeValueAsString(new DummyMessage()).getBytes());
-        final UnicastProcessor<Message> processor = UnicastProcessor.create(Queues.<Message>one().get());
-        processor.onNext(message);
-        processor.onComplete();
-        when(router.register(anyString())).thenReturn(processor.singleOrEmpty());
+        final Sinks.One<Message> processor = Sinks.one();
+        processor.tryEmitValue(message);
+        when(router.register(anyString())).thenReturn(processor.asMono());
     }
 
     private ReactiveMessageSender getReactiveMessageSender() {

@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -8,6 +9,7 @@ import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
@@ -33,10 +35,11 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     private final boolean persistentCommands;
     private final boolean persistentQueries;
     private final Duration replyTimeout;
+    private final MeterRegistry meterRegistry;
 
 
     public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender,
-                                    String exchange, MessageConverter converter) {
+                                    String exchange, MessageConverter converter, MeterRegistry meterRegistry) {
         this.config = config;
         this.router = router;
         this.sender = sender;
@@ -45,6 +48,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         this.persistentCommands = config.isPersistentCommands();
         this.persistentQueries = config.isPersistentQueries();
         this.replyTimeout = config.getReplyTimeout();
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
@@ -77,7 +81,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                 .name("async_query")
                 .tag("operation", query.getResource())
                 .tag("target", targetName)
-                .metrics();
+                .tap(Micrometer.metrics(meterRegistry));
     }
 
     @Override

@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.config;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import org.reactivecommons.async.rabbit.RabbitDirectAsyncGateway;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
@@ -22,8 +23,9 @@ public class DirectAsyncGatewayConfig {
         this.appName = appName;
     }
 
-    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter);
+    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter,
+                                                             MeterRegistry meterRegistry) throws Exception {
+        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter, meterRegistry);
     }
 
     public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ReactiveMessageListener listener)  {
