@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.0) (2023-03-03)
+
+**Implemented enhancements:**
+
+- Add some unit tests to NameGenerator class [\#73](https://github.com/reactive-commons/reactive-commons-java/issues/73)
+
+**Merged pull requests:**
+
+- update asciidoctor [\#83](https://github.com/reactive-commons/reactive-commons-java/pull/83)
+- Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
+- 73: Updated tests for NameGenerator [\#77](https://github.com/reactive-commons/reactive-commons-java/pull/77)
+
 ## [1.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.5) (2022-05-25)
 
 **Closed issues:**
@@ -27,7 +39,7 @@
 
 **Merged pull requests:**
 
-- add health indicator [\#64](https://github.com/reactive-commons/reactive-commons-java/pull/64)
+- Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59)
 
 ## [1.0.2](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.2) (2021-10-01)
 
@@ -52,14 +64,13 @@
 **Merged pull requests:**
 
 - ensure utf-8 charset from senders [\#61](https://github.com/reactive-commons/reactive-commons-java/pull/61)
-- Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59)
+- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53)
 
 ## [1.0.0-beta10](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta10) (2021-05-21)
 
 **Merged pull requests:**
 
-- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Update gradle.properties [\#58](https://github.com/reactive-commons/reactive-commons-java/pull/58)
 
 ## [1.0.0-beta9](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta9) (2021-05-21)
@@ -72,6 +83,7 @@
 
 **Merged pull requests:**
 
+- add health indicator [\#64](https://github.com/reactive-commons/reactive-commons-java/pull/64)
 - Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
 
 ## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
