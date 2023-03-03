@@ -69,17 +69,19 @@ subprojects {
 
         group groupId
 
-        task sourcesJar(type: Jar, dependsOn: classes) {
+        tasks.register('sourcesJar', Jar) {
+            dependsOn classes
             classifier 'sources'
             from sourceSets.main.allJava
         }
 
-        task javadocJar(type: Jar, dependsOn: javadoc) {
+        tasks.register('javadocJar', Jar) {
+            dependsOn javadoc
             classifier = 'javadoc'
             from javadoc.destinationDir
         }
 
-        tasks.withType(GenerateModuleMetadata) {
+        tasks.withType(GenerateModuleMetadata).configureEach {
             enabled = false
         }
 
