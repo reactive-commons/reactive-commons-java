@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: sender
+  rabbitmq:
+    virtual-host: test
+server:
+  port: 4001
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
