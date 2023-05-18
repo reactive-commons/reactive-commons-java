@@ -1,10 +1,14 @@
 package sample;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -12,6 +16,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.net.URI;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @RestController
 public class SampleRestController {
@@ -25,9 +33,17 @@ public class SampleRestController {
     private final WebClient webClient = WebClient.builder().build();
 
     @PostMapping(path = "/sample", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<RespQuery1> sampleService(@RequestBody Call call) {
-        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
-        return directAsyncGateway.requestReply(query, target, RespQuery1.class);
+    public Mono<CloudEvent> sampleService(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent query = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType(queryName) //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
+
+        return directAsyncGateway.requestReply(query, target, CloudEvent.class);
     }
 
     @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)

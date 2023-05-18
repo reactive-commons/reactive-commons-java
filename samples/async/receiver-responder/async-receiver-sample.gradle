@@ -4,4 +4,5 @@ dependencies {
     implementation project(":async-commons-rabbit-starter")
     implementation 'org.springframework.boot:spring-boot-starter'
     runtimeOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation 'io.cloudevents:cloudevents-core:2.5.0'
 }

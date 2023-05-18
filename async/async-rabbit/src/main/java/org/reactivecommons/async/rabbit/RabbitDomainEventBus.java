@@ -1,7 +1,9 @@
 package org.reactivecommons.async.rabbit;
 
+import io.cloudevents.CloudEvent;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -30,4 +32,8 @@ public class RabbitDomainEventBus implements DomainEventBus {
             .onErrorMap(err -> new RuntimeException("Event send failure: " + event.getName(), err));
     }
 
+    @Override
+    public Publisher<Void> emit(CloudEvent event) {
+        return emit(new DomainEvent<>(event.getType(), event.getId(), event));
+    }
 }
