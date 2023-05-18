@@ -24,13 +24,13 @@ public class DirectAsyncGatewayConfig {
     private final BrokerConfigProps props;
 
     @Bean
-    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter, MeterRegistry meterRegistry) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, rSender, props.getDirectMessagesExchangeName(), converter, meterRegistry);
+    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ConnectionManager manager, MessageConverter converter, MeterRegistry meterRegistry) throws Exception {
+        return new RabbitDirectAsyncGateway(config, router, manager.getSender("app"), props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
     @Bean
-    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ReactiveMessageListener listener) {
-        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, listener, props.getReplyQueue());
+    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ConnectionManager manager) {
+        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener("app"), props.getReplyQueue());
         replyListener.startListening(config.getRoutingKey());
         return replyListener;
     }

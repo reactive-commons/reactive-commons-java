@@ -31,6 +31,9 @@ public class AsyncProps {
     @NestedConfigurationProperty
     private NotificationProps notificationProps = new NotificationProps();
 
+    @NestedConfigurationProperty
+    private Map<String, RabbitProperties> connections = new TreeMap<>();
+
     private Integer maxRetries = 10;
 
     private Integer prefetchCount = 250;

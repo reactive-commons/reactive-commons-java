@@ -4,4 +4,5 @@ import org.reactivestreams.Publisher;
 
 public interface DomainEventBus {
     <T> Publisher<Void> emit(DomainEvent<T> event);
+    <T> Publisher<Void> emit(CloudEvent<T> event);
 }

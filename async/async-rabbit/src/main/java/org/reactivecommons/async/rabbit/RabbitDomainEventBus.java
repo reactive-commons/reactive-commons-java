@@ -30,4 +30,9 @@ public class RabbitDomainEventBus implements DomainEventBus {
             .onErrorMap(err -> new RuntimeException("Event send failure: " + event.getName(), err));
     }
 
+    @Override
+    public <T> Mono<Void> emit(CloudEvent<T> event) {
+        return emit(new DomainEvent(event.getName(), event.getId(), event))
+    }
+
 }

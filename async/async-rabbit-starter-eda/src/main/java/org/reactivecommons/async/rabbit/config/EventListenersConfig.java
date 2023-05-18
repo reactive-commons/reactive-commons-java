@@ -1,17 +1,16 @@
 package org.reactivecommons.async.rabbit.config;
 
 import lombok.RequiredArgsConstructor;
-import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
-import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.listeners.ApplicationEventListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 @Configuration
 @RequiredArgsConstructor
@@ -24,16 +23,27 @@ public class EventListenersConfig {
     private final AsyncProps asyncProps;
 
     @Bean
-    public ApplicationEventListener eventListener(HandlerResolver resolver, MessageConverter messageConverter,
-                                                  ReactiveMessageListener receiver, DiscardNotifier discardNotifier, CustomReporter errorReporter) {
+    public ApplicationEventListener eventListener(MessageConverter messageConverter,
+                                                  ConnectionManager manager, CustomReporter errorReporter) {
+        AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
+        manager.forListener((domain, receiver) -> {
+            final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+                    appName + ".subsEvents",
+                    manager.getHandlerResolver(domain),
+                    asyncProps.getDomain().getEvents().getExchange(),
+                    messageConverter, asyncProps.getWithDLQRetry(),
+                    asyncProps.getMaxRetries(),
+                    asyncProps.getRetryDelay(),
+                    asyncProps.getDomain().getEvents().getMaxLengthBytes(),
+                    manager.getDiscardNotifier(domain),
+                    errorReporter,
+                    appName);
+            if ("app".equals(domain)) {
+                external.set(listener);
+            }
+            listener.startListener();
+        });
 
-        final ApplicationEventListener listener = new ApplicationEventListener(receiver,
-                appName + ".subsEvents", resolver, asyncProps.getDomain().getEvents().getExchange(),
-                messageConverter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(), asyncProps.getRetryDelay(),asyncProps.getDomain().getEvents().getMaxLengthBytes(),
-                discardNotifier, errorReporter, appName);
-
-        listener.startListener();
-
-        return listener;
+        return external.get();
     }
 }

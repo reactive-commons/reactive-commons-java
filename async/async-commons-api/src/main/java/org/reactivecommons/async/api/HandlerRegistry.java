@@ -13,13 +13,14 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class HandlerRegistry {
-
-    private final List<RegisteredEventListener<?>> eventListeners = new CopyOnWriteArrayList<>();
+    private final Map<String, List<RegisteredEventListener<?>>> domainEventListeners = new ConcurrentHashMap<>();
     private final List<RegisteredEventListener<?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
@@ -29,8 +30,15 @@ public class HandlerRegistry {
         return new HandlerRegistry();
     }
 
+    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, EventHandler<T> handler, Class<T> eventClass) {
+        domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
+        .add(new RegisteredEventListener<>(eventName, handler, eventClass));
+        return this;
+    }
+
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler, Class<T> eventClass) {
-        eventListeners.add(new RegisteredEventListener<>(eventName, handler, eventClass));
+        domainEventListeners.computeIfAbsent("app", ignored -> new CopyOnWriteArrayList<>())
+        .add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
 
