@@ -22,6 +22,7 @@ import reactor.core.publisher.Mono;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.reactivecommons.async.api.HandlerRegistry.register;
@@ -57,18 +58,26 @@ public class SampleReceiverApp {
     public HandlerRegistry handlerRegistrySubs(DirectAsyncGateway gateway) {
         return HandlerRegistry.register()
                 .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
-                .listenEvent("fixed.event", message -> Mono.empty(), Object.class)
+                .listenEvent("event", message -> {
+                    log.info(message.getData().toString());
+                    return Mono.empty();
+                }, CloudEvent.class)
+                .handleCommand("command", message -> {
+                    log.info(message.getData().toString());
+                    return Mono.empty();
+                }, CloudEvent.class)
                 .serveQuery("query1", message -> {
                     log.info("resolving from direct query" + message);
+                    Map<String, String> mapData = Map.of("1", "data");
                     CloudEvent response = CloudEventBuilder.v1() //
                             .withId(UUID.randomUUID().toString()) //
                             .withSource(URI.create("https://spring.io/foos"))//
                             .withType("query1.response") //
                             .withTime(OffsetDateTime.now())
-                            .withData("application/json", "result".getBytes())
+                            .withData("application/json", CloudEventBuilderExt.asBytes(mapData))
                             .build();
                     return just(response);
-                }, byte[].class)
+                }, CloudEvent.class)
                 .serveQuery("sample.query.*", message -> {
                     log.info("resolving from direct query");
                     return just(new RespQuery1("Ok", message));

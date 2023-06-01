@@ -94,11 +94,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
-        byte[] serialized = EventFormatProvider
-                .getInstance()
-                .resolveFormat(JsonFormat.CONTENT_TYPE)
-                .serialize(query);
-        return requestReply(new AsyncQuery<>(query.getType(), serialized), targetName, type);
+        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type);
     }
 
     @Override

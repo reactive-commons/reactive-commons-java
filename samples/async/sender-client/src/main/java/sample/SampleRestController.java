@@ -6,6 +6,7 @@ import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
@@ -26,6 +27,9 @@ public class SampleRestController {
 
     @Autowired
     private DirectAsyncGateway directAsyncGateway;
+
+    @Autowired
+    private DomainEventBus domainEventBus;
     private final String queryName = "query1";
     private final String queryName2 = "query2";
     private final String target = "receiver";
@@ -45,7 +49,33 @@ public class SampleRestController {
 
         return directAsyncGateway.requestReply(query, target, CloudEvent.class);
     }
+    @PostMapping(path = "/sample/event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<String> sampleServiceEvent(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent event = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType("event") //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
 
+        return Mono.from(domainEventBus.emit(event)).thenReturn("event");
+    }
+
+    @PostMapping(path = "/sample/command", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<String> sampleServiceCommand(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent command = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType("command") //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
+
+        return directAsyncGateway.sendCommand(command, target).thenReturn("command");
+    }
     @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleServices(@RequestBody Call call) {
         AsyncQuery<?> query = new AsyncQuery<>("sample.query.any.that.matches", call);
