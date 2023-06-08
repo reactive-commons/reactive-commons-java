@@ -1,5 +1,6 @@
 package org.reactivecommons.async.commons.converters;
 
+import io.cloudevents.CloudEvent;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;

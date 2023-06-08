@@ -1,7 +1,9 @@
 package org.reactivecommons.async.rabbit;
 
+import io.cloudevents.CloudEvent;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -31,8 +33,8 @@ public class RabbitDomainEventBus implements DomainEventBus {
     }
 
     @Override
-    public <T> Mono<Void> emit(CloudEvent<T> event) {
-        return emit(new DomainEvent(event.getName(), event.getId(), event))
+    public Publisher<Void> emit(CloudEvent event) {
+        return emit(new DomainEvent<>(event.getType(), event.getId(), event));
     }
 
 }

@@ -1,5 +1,8 @@
 package org.reactivecommons.async.api;
 
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.provider.EventFormatProvider;
+import io.cloudevents.jackson.JsonFormat;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -25,6 +28,7 @@ public class HandlerRegistry {
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredCommandHandler<?>> commandHandlers = new CopyOnWriteArrayList<>();
+
 
     public static HandlerRegistry register() {
         return new HandlerRegistry();
@@ -75,7 +79,21 @@ public class HandlerRegistry {
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        if(queryClass == CloudEvent.class){
+            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+            {
+                CloudEvent query = EventFormatProvider
+                        .getInstance()
+                        .resolveFormat(JsonFormat.CONTENT_TYPE)
+                        .deserialize(message);
+
+                return handler.handle((R) query);
+
+            } , byte[].class));
+        }
+        else{
+            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        }
         return this;
     }
 

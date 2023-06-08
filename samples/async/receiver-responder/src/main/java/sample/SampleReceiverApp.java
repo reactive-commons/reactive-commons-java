@@ -1,5 +1,7 @@
 package sample;
 
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -8,16 +10,21 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
+import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Mono;
+
+import java.net.URI;
+import java.time.OffsetDateTime;
+import java.util.Map;
+import java.util.UUID;
 
 import static org.reactivecommons.async.api.HandlerRegistry.register;
 import static reactor.core.publisher.Mono.just;
@@ -51,10 +58,11 @@ public class SampleReceiverApp {
     @Bean
     public HandlerRegistry handlerRegistrySubs(/*DirectAsyncGateway gateway*/) {
         return HandlerRegistry.register()
+
 //                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
                 .listenEvent("fixed.event", message -> Mono.empty(), Object.class)
                 .listenDomainEvent("accounts", "account.created", message -> Mono.empty(), Object.class)
-                .listenDomainEvent("deposits", "transfer.xxx", message -> Mono.empty(), Object.class);
+                .listenDomainEvent("deposits", "transfer.xxx", message -> Mono.empty(), Object.class)
 //                .serveQuery("query1", message -> {
 //                    log.info("resolving from direct query");
 //                    return just(new RespQuery1("Ok", message));
@@ -67,6 +75,37 @@ public class SampleReceiverApp {
 //                    log.info("resolving from delegate query");
 //                    return gateway.reply(new RespQuery1("Ok", message), from).then();
 //                }, Call.class);
+
+                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
+                .listenEvent("event", message -> {
+                    log.info(message.getData().toString());
+                    return Mono.empty();
+                }, CloudEvent.class)
+                .handleCommand("command", message -> {
+                    log.info(message.getData().toString());
+                    return Mono.empty();
+                }, CloudEvent.class)
+                .serveQuery("query1", message -> {
+                    log.info("resolving from direct query" + message);
+                    Map<String, String> mapData = Map.of("1", "data");
+                    CloudEvent response = CloudEventBuilder.v1() //
+                            .withId(UUID.randomUUID().toString()) //
+                            .withSource(URI.create("https://spring.io/foos"))//
+                            .withType("query1.response") //
+                            .withTime(OffsetDateTime.now())
+                            .withData("application/json", CloudEventBuilderExt.asBytes(mapData))
+                            .build();
+                    return just(response);
+                }, CloudEvent.class)
+                .serveQuery("sample.query.*", message -> {
+                    log.info("resolving from direct query");
+                    return just(new RespQuery1("Ok", message));
+                }, Call.class);
+                /*.serveQuery("query2", (from, message) -> {
+                    log.info("resolving from delegate query");
+                    return gateway.reply(new RespQuery1("Ok", message), from).then();
+                }, Call.class);
+*/
     }
 
     //@Bean
