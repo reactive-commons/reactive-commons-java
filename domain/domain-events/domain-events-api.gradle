@@ -5,4 +5,5 @@ ext {
 
 dependencies {
     api 'org.reactivestreams:reactive-streams:1.0.4'
+    api 'io.cloudevents:cloudevents-api:2.5.0'
 }

@@ -1,5 +1,8 @@
 package org.reactivecommons.async.rabbit;
 
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.provider.EventFormatProvider;
+import io.cloudevents.jackson.JsonFormat;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
@@ -56,6 +59,11 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         return sender.sendWithConfirm(command, exchange, targetName, Collections.emptyMap(), persistentCommands);
     }
 
+    @Override
+    public Mono<Void> sendCommand(CloudEvent command, String targetName) {
+        return sendCommand(new Command<>(command.getType(), command.getId(), command), targetName);
+    }
+
     public <T> Flux<OutboundMessageResult> sendCommands(Flux<Command<T>> commands, String targetName) {
         return sender.sendWithConfirmBatch(commands, exchange, targetName, Collections.emptyMap(), persistentCommands);
     }
@@ -82,6 +90,11 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                 .tag("operation", query.getResource())
                 .tag("target", targetName)
                 .tap(Micrometer.metrics(meterRegistry));
+    }
+
+    @Override
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
+        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type);
     }
 
     @Override

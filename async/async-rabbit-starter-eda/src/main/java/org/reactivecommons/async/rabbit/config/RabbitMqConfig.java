@@ -26,6 +26,7 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
+import org.reactivecommons.async.rabbit.converters.json.JacksonCloudEventMessageConverter;
 import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -156,7 +157,7 @@ public class RabbitMqConfig {
     @Bean
     @ConditionalOnMissingBean
     public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
-        return new JacksonMessageConverter(objectMapperSupplier.get());
+        return new JacksonCloudEventMessageConverter(objectMapperSupplier.get());
     }
 
     @Bean
