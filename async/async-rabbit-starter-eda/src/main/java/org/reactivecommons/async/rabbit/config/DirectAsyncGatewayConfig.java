@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.config;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.RequiredArgsConstructor;
+import org.reactivecommons.async.RabbitEDADirectAsyncGateway;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
@@ -25,7 +26,7 @@ public class DirectAsyncGatewayConfig {
 
     @Bean
     public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ConnectionManager manager, MessageConverter converter, MeterRegistry meterRegistry) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, manager.getSender(DEFAULT_DOMAIN), props.getDirectMessagesExchangeName(), converter, meterRegistry);
+        return new RabbitEDADirectAsyncGateway(config, router, manager, props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
     @Bean
