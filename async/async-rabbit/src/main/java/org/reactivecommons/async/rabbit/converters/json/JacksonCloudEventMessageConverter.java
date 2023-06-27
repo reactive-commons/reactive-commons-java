@@ -21,6 +21,7 @@ import java.util.Base64;
 
 public class JacksonCloudEventMessageConverter implements MessageConverter {
     private static final String CONTENT_TYPE = "application/json";
+    public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
 
     private final ObjectMapper objectMapper;
 
@@ -36,7 +37,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
             T value = extractData(bodyClass, asyncQueryJson.getQueryData());
             return new AsyncQuery<>(asyncQueryJson.getResource(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -49,7 +50,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
 
             return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -60,7 +61,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
             T value = extractData(bodyClass, commandJson.getData());
             return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -77,7 +78,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
             }
             return objectMapper.readValue(message.getBody(), valueClass);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -133,35 +134,29 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
     }
     @Override
     public Message toMessage(Object object) {
-        byte[] bytes;
         if(object instanceof DomainEvent
-                && ((DomainEvent) object).getData() instanceof CloudEvent){
-
+                && ((DomainEvent<?>) object).getData() instanceof CloudEvent){
            return eventToMessage((DomainEvent) object);
 
         }
         if(object instanceof Command
-                && ((Command) object).getData() instanceof CloudEvent){
-
+                && ((Command<?>) object).getData() instanceof CloudEvent){
             return commandToMessage((Command) object);
         }
         if(object instanceof AsyncQuery
-                && ((AsyncQuery) object).getQueryData() instanceof CloudEvent){
-
+                && ((AsyncQuery<?>) object).getQueryData() instanceof CloudEvent){
             return queryToMessage((AsyncQuery) object);
         }
-
         return getRabbitMessage(object);
     }
 
     private RabbitMessage getRabbitMessage(Object object) {
         byte[] bytes;
         try {
-
             String jsonString = this.objectMapper.writeValueAsString(object);
             bytes = jsonString.getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
         props.setContentType(CONTENT_TYPE);

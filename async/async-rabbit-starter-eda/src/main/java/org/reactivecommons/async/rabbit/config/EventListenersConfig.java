@@ -12,6 +12,8 @@ import org.springframework.context.annotation.Import;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+
 @Configuration
 @RequiredArgsConstructor
 @Import(RabbitMqConfig.class)
@@ -38,7 +40,7 @@ public class EventListenersConfig {
                     manager.getDiscardNotifier(domain),
                     errorReporter,
                     appName);
-            if ("app".equals(domain)) {
+            if (DEFAULT_LISTENER.equals(domain)) {
                 external.set(listener);
             }
             listener.startListener();

@@ -16,6 +16,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+
 @Configuration
 @Import(RabbitMqConfig.class)
 @RequiredArgsConstructor
@@ -25,12 +27,12 @@ public class DirectAsyncGatewayConfig {
 
     @Bean
     public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ConnectionManager manager, MessageConverter converter, MeterRegistry meterRegistry) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, manager.getSender("app"), props.getDirectMessagesExchangeName(), converter, meterRegistry);
+        return new RabbitDirectAsyncGateway(config, router, manager.getSender(DEFAULT_LISTENER), props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
     @Bean
     public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ConnectionManager manager) {
-        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener("app"), props.getReplyQueue());
+        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener(DEFAULT_LISTENER), props.getReplyQueue());
         replyListener.startListening(config.getRoutingKey());
         return replyListener;
     }

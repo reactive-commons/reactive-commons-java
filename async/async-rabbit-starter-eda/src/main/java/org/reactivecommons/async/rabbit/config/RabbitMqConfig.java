@@ -52,6 +52,8 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.logging.Level;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+
 @Log
 @Configuration
 @RequiredArgsConstructor
@@ -193,8 +195,8 @@ public class RabbitMqConfig {
 
     @Bean
     public DynamicRegistry dynamicRegistry(ConnectionManager connectionManager, IBrokerConfigProps props) {
-        return new DynamicRegistryImp(connectionManager.getHandlerResolver("app"),
-                connectionManager.getListener("app").getTopologyCreator(), props);
+        return new DynamicRegistryImp(connectionManager.getHandlerResolver(DEFAULT_LISTENER),
+                connectionManager.getListener(DEFAULT_LISTENER).getTopologyCreator(), props);
     }
 
     @Bean

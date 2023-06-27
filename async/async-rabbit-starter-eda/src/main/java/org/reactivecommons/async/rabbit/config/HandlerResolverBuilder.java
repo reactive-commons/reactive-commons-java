@@ -14,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class HandlerResolverBuilder {
 
@@ -21,7 +23,7 @@ public class HandlerResolverBuilder {
                                                 Map<String, HandlerRegistry> registries,
                                                 final DefaultCommandHandler defaultCommandHandler) {
 
-        if ("app".equals(domain)) {
+        if (DEFAULT_LISTENER.equals(domain)) {
             final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
                     .values().stream()
                     .flatMap(r -> r.getHandlers().stream())
@@ -79,7 +81,7 @@ public class HandlerResolverBuilder {
     }
 
     private static Stream<RegisteredEventListener<?>> getDynamics(String domain, HandlerRegistry r) {
-        if ("app".equals(domain)) {
+        if (DEFAULT_LISTENER.equals(domain)) {
             return r.getDynamicEventHandlers().stream();
         }
         return Stream.of();

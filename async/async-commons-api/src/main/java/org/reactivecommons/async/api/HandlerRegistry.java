@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class HandlerRegistry {
+    public static final String DEFAULT_LISTENER = "app";
     private final Map<String, List<RegisteredEventListener<?>>> domainEventListeners = new ConcurrentHashMap<>();
     private final List<RegisteredEventListener<?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
@@ -31,7 +32,9 @@ public class HandlerRegistry {
 
 
     public static HandlerRegistry register() {
-        return new HandlerRegistry();
+        HandlerRegistry instance = new HandlerRegistry();
+        instance.domainEventListeners.put(DEFAULT_LISTENER, new CopyOnWriteArrayList<>());
+        return instance;
     }
 
     public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, EventHandler<T> handler, Class<T> eventClass) {
@@ -41,7 +44,7 @@ public class HandlerRegistry {
     }
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler, Class<T> eventClass) {
-        domainEventListeners.computeIfAbsent("app", ignored -> new CopyOnWriteArrayList<>())
+        domainEventListeners.computeIfAbsent(DEFAULT_LISTENER, ignored -> new CopyOnWriteArrayList<>())
         .add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }

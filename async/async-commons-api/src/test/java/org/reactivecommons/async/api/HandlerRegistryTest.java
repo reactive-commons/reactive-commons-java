@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
 
 class HandlerRegistryTest {
     private final HandlerRegistry registry = HandlerRegistry.register();
@@ -27,7 +28,7 @@ class HandlerRegistryTest {
 
         registry.listenEvent(name, eventHandler);
 
-        assertThat(registry.getEventListeners())
+        assertThat(registry.getDomainEventListeners().get(DEFAULT_LISTENER))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
                         .containsExactly(name, SomeDataClass.class, eventHandler)).hasSize(1);
@@ -43,7 +44,7 @@ class HandlerRegistryTest {
         RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getEventListeners())
+        assertThat(registry.getDomainEventListeners().get(DEFAULT_LISTENER))
                 .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
                         .usingRecursiveComparison()
                         .isEqualTo(expectedRegisteredEventListener));
@@ -62,7 +63,7 @@ class HandlerRegistryTest {
         RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getEventListeners())
+        assertThat(registry.getDomainEventListeners().get(DEFAULT_LISTENER))
                 .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
                         .usingRecursiveComparison()
                         .isEqualTo(expectedRegisteredEventListener));
@@ -84,7 +85,7 @@ class HandlerRegistryTest {
         EventHandler<SomeDataClass> handler = mock(EventHandler.class);
         registry.listenEvent(name, handler, SomeDataClass.class);
 
-        assertThat(registry.getEventListeners())
+        assertThat(registry.getDomainEventListeners().get(DEFAULT_LISTENER))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
                         .containsExactly(name, SomeDataClass.class, handler)).hasSize(1);

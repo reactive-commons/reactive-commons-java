@@ -12,6 +12,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Configuration
@@ -21,12 +22,11 @@ public class EventBusConfig {
     @Bean // app connection
     public DomainEventBus domainEventBus(ConnectionManager manager, BrokerConfigProps props, BrokerConfig config,
                                          ObjectMapperSupplier objectMapperSupplier) {
-        String domain = "app";
-        ReactiveMessageSender sender = manager.getSender(domain);
+        ReactiveMessageSender sender = manager.getSender(DEFAULT_LISTENER);
         final String exchangeName = props.getDomainEventsExchangeName();
         sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
         DomainEventBus domainEventBus = new RabbitDomainEventBus(sender, exchangeName, config);
-        manager.setDiscardNotifier(domain, createDiscardNotifier(domainEventBus, objectMapperSupplier));
+        manager.setDiscardNotifier(DEFAULT_LISTENER, createDiscardNotifier(domainEventBus, objectMapperSupplier));
         return domainEventBus;
     }
 

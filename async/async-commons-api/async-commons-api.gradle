@@ -8,5 +8,4 @@ dependencies {
     compileOnly 'io.projectreactor:reactor-core'
     testImplementation 'io.projectreactor:reactor-test'
     implementation 'io.cloudevents:cloudevents-json-jackson:2.5.0'
-
 }
