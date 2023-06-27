@@ -21,6 +21,7 @@ public class ConnectionManager {
         private final ReactiveMessageListener listener;
         private final ReactiveMessageSender sender;
         private final HandlerResolver handlerResolver;
+        private final ConnectionFactoryProvider provider;
         @Setter
         private DiscardNotifier discardNotifier;
     }
@@ -61,5 +62,8 @@ public class ConnectionManager {
 
     public HandlerResolver getHandlerResolver(String domain) {
         return connections.get(domain).getHandlerResolver();
+    }
+    public ConnectionFactoryProvider getProvider(String domain) {
+        return connections.get(domain).getProvider();
     }
 }

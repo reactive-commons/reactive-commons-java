@@ -6,7 +6,6 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
-import java.util.HashMap;
 import java.util.Map;
 import java.util.TreeMap;
 

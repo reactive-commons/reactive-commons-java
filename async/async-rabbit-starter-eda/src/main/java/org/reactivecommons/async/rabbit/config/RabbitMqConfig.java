@@ -27,7 +27,6 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.JacksonCloudEventMessageConverter;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -52,7 +51,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.logging.Level;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Log
 @Configuration
@@ -72,11 +71,13 @@ public class RabbitMqConfig {
     @Bean
     public ConnectionManager buildConnectionManager(@Value("${spring.application.name}") String appName,
                                                     AsyncProps props,
+                                                    RabbitProperties defaultAppProps,
                                                     MessageConverter converter,
                                                     ApplicationContext context,
                                                     DefaultCommandHandler<?> commandHandler) {
         ConnectionManager connectionManager = new ConnectionManager();
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
+        props.getConnections().computeIfAbsent(DEFAULT_DOMAIN, k -> defaultAppProps);
         props.getConnections()
                 .forEach((domain, properties) -> {
                     ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties);
@@ -195,8 +196,8 @@ public class RabbitMqConfig {
 
     @Bean
     public DynamicRegistry dynamicRegistry(ConnectionManager connectionManager, IBrokerConfigProps props) {
-        return new DynamicRegistryImp(connectionManager.getHandlerResolver(DEFAULT_LISTENER),
-                connectionManager.getListener(DEFAULT_LISTENER).getTopologyCreator(), props);
+        return new DynamicRegistryImp(connectionManager.getHandlerResolver(DEFAULT_DOMAIN),
+                connectionManager.getListener(DEFAULT_DOMAIN).getTopologyCreator(), props);
     }
 
     @Bean

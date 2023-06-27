@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Import;
 
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_LISTENER;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
 @RequiredArgsConstructor
@@ -40,7 +40,7 @@ public class EventListenersConfig {
                     manager.getDiscardNotifier(domain),
                     errorReporter,
                     appName);
-            if (DEFAULT_LISTENER.equals(domain)) {
+            if (DEFAULT_DOMAIN.equals(domain)) {
                 external.set(listener);
             }
             listener.startListener();
