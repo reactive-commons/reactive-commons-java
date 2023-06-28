@@ -29,7 +29,7 @@ public class DirectAsyncGatewayConfig {
         return new RabbitEDADirectAsyncGateway(config, router, manager, props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
-    @Bean
+    @Bean // TODO: Listen replies from n domains if enabled in config
     public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ConnectionManager manager) {
         final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener(DEFAULT_DOMAIN), props.getReplyQueue());
         replyListener.startListening(config.getRoutingKey());

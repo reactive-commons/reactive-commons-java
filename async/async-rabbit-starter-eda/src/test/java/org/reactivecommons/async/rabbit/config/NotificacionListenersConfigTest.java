@@ -5,22 +5,27 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.listeners.ApplicationNotificationListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
+import reactor.rabbitmq.Receiver;
 
 import java.util.Collections;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 class NotificacionListenersConfigTest {
 
@@ -33,6 +38,7 @@ class NotificacionListenersConfigTest {
     private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
+    private final ConnectionManager manager = new ConnectionManager();
 
     @BeforeEach
     public void init() {
@@ -47,12 +53,13 @@ class NotificacionListenersConfigTest {
         when(receiver.consumeManualAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
+        manager.addDomain(DEFAULT_DOMAIN, listener, null, handlerResolver);
     }
 
     @Test
     void eventNotificationListener() {
-        final ApplicationNotificationListener applicationEventListener = config.
-                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customReporter);
+        final ApplicationNotificationListener applicationEventListener =
+                config.eventNotificationListener(manager, messageConverter, customReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();
     }
 }

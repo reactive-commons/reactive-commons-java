@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
@@ -26,6 +25,7 @@ import java.lang.reflect.Field;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @ExtendWith(MockitoExtension.class)
 class CommandListenersConfigTest {
@@ -37,9 +37,9 @@ class CommandListenersConfigTest {
     private final TopologyCreator creator = mock(TopologyCreator.class);
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);
     private final MessageConverter messageConverter = mock(MessageConverter.class);
-    private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
+    private final ConnectionManager manager = new ConnectionManager();
 
     @BeforeEach
     public void init() throws NoSuchFieldException, IllegalAccessException {
@@ -53,17 +53,12 @@ class CommandListenersConfigTest {
         when(receiver.consumeManualAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
+        manager.addDomain(DEFAULT_DOMAIN, listener, null, handlerResolver);
     }
 
     @Test
     void applicationCommandListener() {
-        final ApplicationCommandListener commandListener = config.applicationCommandListener(
-                listener,
-                handlerResolver,
-                messageConverter,
-                discardNotifier,
-                customReporter
-        );
+        final ApplicationCommandListener commandListener = config.applicationCommandListener(manager, messageConverter, customReporter);
         Assertions.assertThat(commandListener).isNotNull();
     }
 }
