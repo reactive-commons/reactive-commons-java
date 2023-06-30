@@ -6,6 +6,8 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -32,6 +34,8 @@ public class AsyncProps {
 
     @NestedConfigurationProperty
     private Map<String, RabbitProperties> connections = new TreeMap<>();
+
+    private List<String> listenRepliesFrom = new ArrayList<>();
 
     private Integer maxRetries = 10;
 

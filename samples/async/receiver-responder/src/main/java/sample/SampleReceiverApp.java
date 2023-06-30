@@ -11,6 +11,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.impl.config.annotations.EnableCommandListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
@@ -31,6 +32,7 @@ import static reactor.core.publisher.Mono.just;
 
 @SpringBootApplication
 @EnableEventListeners
+@EnableCommandListeners
 @EnableDomainEventBus
 @EnableDirectAsyncGateway
 @Log
@@ -60,9 +62,9 @@ public class SampleReceiverApp {
         return HandlerRegistry.register()
 
 //                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
-                .listenEvent("fixed.event", message -> Mono.empty(), Object.class)
-                .listenDomainEvent("accounts", "account.created", message -> Mono.empty(), Object.class)
-                .listenDomainEvent("deposits", "transfer.xxx", message -> Mono.empty(), Object.class)
+//                .listenEvent("fixed.event", message -> Mono.empty(), Object.class)
+//                .listenDomainEvent("accounts", "account.created", message -> Mono.empty(), Object.class)
+//                .listenDomainEvent("deposits", "transfer.xxx", message -> Mono.empty(), Object.class)
 //                .serveQuery("query1", message -> {
 //                    log.info("resolving from direct query");
 //                    return just(new RespQuery1("Ok", message));
@@ -76,11 +78,11 @@ public class SampleReceiverApp {
 //                    return gateway.reply(new RespQuery1("Ok", message), from).then();
 //                }, Call.class);
 
-                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
-                .listenEvent("event", message -> {
-                    log.info(message.getData().toString());
-                    return Mono.empty();
-                }, CloudEvent.class)
+//                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
+//                .listenEvent("event", message -> {
+//                    log.info(message.getData().toString());
+//                    return Mono.empty();
+//                }, CloudEvent.class)
                 .handleCommand("command", message -> {
                     log.info(message.getData().toString());
                     return Mono.empty();
@@ -96,11 +98,11 @@ public class SampleReceiverApp {
                             .withData("application/json", CloudEventBuilderExt.asBytes(mapData))
                             .build();
                     return just(response);
-                }, CloudEvent.class)
-                .serveQuery("sample.query.*", message -> {
-                    log.info("resolving from direct query");
-                    return just(new RespQuery1("Ok", message));
-                }, Call.class);
+                }, CloudEvent.class);
+//                .serveQuery("sample.query.*", message -> {
+//                    log.info("resolving from direct query");
+//                    return just(new RespQuery1("Ok", message));
+//                }, Call.class);
                 /*.serveQuery("query2", (from, message) -> {
                     log.info("resolving from delegate query");
                     return gateway.reply(new RespQuery1("Ok", message), from).then();

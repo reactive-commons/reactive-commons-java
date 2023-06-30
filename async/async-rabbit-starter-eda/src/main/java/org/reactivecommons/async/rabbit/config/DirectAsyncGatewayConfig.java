@@ -8,12 +8,15 @@ import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.RabbitDirectAsyncGateway;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.listeners.ApplicationReplyListener;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
@@ -29,11 +32,22 @@ public class DirectAsyncGatewayConfig {
         return new RabbitEDADirectAsyncGateway(config, router, manager, props.getDirectMessagesExchangeName(), converter, meterRegistry);
     }
 
-    @Bean // TODO: Listen replies from n domains if enabled in config
-    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ConnectionManager manager) {
-        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener(DEFAULT_DOMAIN), props.getReplyQueue());
-        replyListener.startListening(config.getRoutingKey());
-        return replyListener;
+    @Bean
+    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, AsyncProps asyncProps, BrokerConfig config, ConnectionManager manager) {
+        asyncProps.getListenRepliesFrom().add(DEFAULT_DOMAIN);
+        AtomicReference<ApplicationReplyListener> localListener = new AtomicReference<>();
+
+        asyncProps.getListenRepliesFrom().forEach(domain -> {
+
+            final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, manager.getListener(domain), props.getReplyQueue());
+            replyListener.startListening(config.getRoutingKey());
+
+            if (DEFAULT_DOMAIN.equals(domain)) {
+                localListener.set(replyListener);
+            }
+        });
+
+        return localListener.get();
     }
 
     @Bean

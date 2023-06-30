@@ -39,7 +39,7 @@ public class BrokerConfigProps implements IBrokerConfigProps {
     public String getReplyQueue() {
         final String name = replyQueueName.get();
         if (name == null) {
-            final String replyName = NameGenerator.generateNameFrom(appName);
+            final String replyName = NameGenerator.generateNameFrom(appName, "replies");
             if (replyQueueName.compareAndSet(null, replyName)) {
                 return replyName;
             } else {

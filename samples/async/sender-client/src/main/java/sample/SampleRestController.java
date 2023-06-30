@@ -47,7 +47,7 @@ public class SampleRestController {
                 .withData("application/json", CloudEventBuilderExt.asBytes(call))
                 .build();
 
-        return directAsyncGateway.requestReply(query, target, CloudEvent.class);
+        return directAsyncGateway.requestReply(query, target, CloudEvent.class, "accounts");
     }
     @PostMapping(path = "/sample/event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<String> sampleServiceEvent(@RequestBody Call call) throws JsonProcessingException {
@@ -74,7 +74,7 @@ public class SampleRestController {
                 .withData("application/json", CloudEventBuilderExt.asBytes(call))
                 .build();
 
-        return directAsyncGateway.sendCommand(command, target).thenReturn("command");
+        return directAsyncGateway.sendCommand(command, target, "accounts").thenReturn("command");
     }
     @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleServices(@RequestBody Call call) {

@@ -10,8 +10,8 @@ app:
     retry-delay: 1000 # son milisegundos
     connections:
       app:
-        virtualHost: app1
-      accounts:
         virtualHost: domain-a
-      deposits:
-        virtualHost: domain-a
+#      accounts:
+#        virtualHost: domain-a
+#      deposits:
+#        virtualHost: domain-a
