@@ -1,6 +1,6 @@
 ext {
-    artifactId = 'async-commons-rabbit-starter'
-    artifactDescription = 'Async Commons Starter'
+    artifactId = 'async-commons-rabbit-starter-eda'
+    artifactDescription = 'Async Commons Starter EDA'
 }
 
 dependencies {
