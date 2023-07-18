@@ -66,6 +66,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public <T> T readValue(Message message, Class<T> valueClass) {
         try {
             if(valueClass == CloudEvent.class){
