@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
+import io.cloudevents.CloudEvent;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
@@ -22,7 +23,12 @@ import java.util.UUID;
 import java.util.concurrent.TimeoutException;
 
 import static java.lang.Boolean.TRUE;
-import static org.reactivecommons.async.commons.Headers.*;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
+import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
+import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
@@ -53,7 +59,22 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
-        return sender.sendWithConfirm(command, exchange, targetName, Collections.emptyMap(), persistentCommands);
+        return sendCommand(command, targetName, DEFAULT_DOMAIN);
+    }
+
+    @Override
+    public <T> Mono<Void> sendCommand(Command<T> command, String targetName, String domain) {
+        return resolveSender(domain).sendWithConfirm(command, exchange, targetName, Collections.emptyMap(), persistentCommands);
+    }
+
+    @Override
+    public Mono<Void> sendCommand(CloudEvent command, String targetName) {
+        return sendCommand(new Command<>(command.getType(), command.getId(), command), targetName);
+    }
+
+    @Override
+    public Mono<Void> sendCommand(CloudEvent command, String targetName, String domain) {
+        return sendCommand(new Command<>(command.getType(), command.getId(), command), targetName, domain);
     }
 
     public <T> Flux<OutboundMessageResult> sendCommands(Flux<Command<T>> commands, String targetName) {
@@ -63,6 +84,11 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
+        return requestReply(query, targetName, type, DEFAULT_DOMAIN);
+    }
+
+    @Override
+    public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type, String domain) {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
         final Mono<R> replyHolder = router.register(correlationID)
@@ -76,12 +102,22 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         headers.put(CORRELATION_ID, correlationID);
         headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
 
-        return sender.sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
+        return resolveSender(domain).sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
                 .then(replyHolder)
                 .name("async_query")
                 .tag("operation", query.getResource())
                 .tag("target", targetName)
                 .tap(Micrometer.metrics(meterRegistry));
+    }
+
+    @Override
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
+        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type);
+    }
+
+    @Override
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
+        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type, domain);
     }
 
     @Override
@@ -94,6 +130,10 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         }
 
         return sender.sendNoConfirm(response, "globalReply", from.getReplyID(), headers, false);
+    }
+
+    protected ReactiveMessageSender resolveSender(String domain) { // NOSONAR
+        return sender;
     }
 
 }

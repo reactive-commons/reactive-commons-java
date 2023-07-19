@@ -1,6 +1,9 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.provider.EventFormatProvider;
+import io.cloudevents.jackson.JsonFormat;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -149,8 +152,16 @@ public class ApplicationQueryListener extends GenericMessageListener {
             final String correlationID = msg.getProperties().getHeaders().get(CORRELATION_ID).toString();
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
+            Object response = signal.get();
+            if(response instanceof CloudEvent) {
+                byte[] serialized = EventFormatProvider
+                        .getInstance()
+                        .resolveFormat(JsonFormat.CONTENT_TYPE)
+                        .serialize((CloudEvent) response);
+                return sender.sendNoConfirm(serialized, replyExchange, replyID, headers, false);
+            }
 
-            return sender.sendNoConfirm(signal.get(), replyExchange, replyID, headers, false);
+            return sender.sendNoConfirm(response, replyExchange, replyID, headers, false);
         });
     }
 

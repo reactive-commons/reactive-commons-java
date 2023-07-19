@@ -50,6 +50,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
@@ -131,8 +132,8 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener<?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getEventListeners().stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?>> eventsToBind = registry.getEventListeners().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?>> eventsToBind = registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredEventListener<?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
         final Map<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));

@@ -1,10 +1,15 @@
 package sample;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -13,11 +18,18 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
+import java.time.OffsetDateTime;
+import java.util.UUID;
+
 @RestController
 public class SampleRestController {
 
     @Autowired
     private DirectAsyncGateway directAsyncGateway;
+
+    @Autowired
+    private DomainEventBus domainEventBus;
     private final String queryName = "query1";
     private final String queryName2 = "query2";
     private final String target = "receiver";
@@ -25,11 +37,45 @@ public class SampleRestController {
     private final WebClient webClient = WebClient.builder().build();
 
     @PostMapping(path = "/sample", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
-    public Mono<RespQuery1> sampleService(@RequestBody Call call) {
-        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
-        return directAsyncGateway.requestReply(query, target, RespQuery1.class);
+    public Mono<CloudEvent> sampleService(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent query = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType(queryName) //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
+
+        return directAsyncGateway.requestReply(query, target, CloudEvent.class, "accounts");
+    }
+    @PostMapping(path = "/sample/event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<String> sampleServiceEvent(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent event = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType("event") //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
+
+        return Mono.from(domainEventBus.emit(event)).thenReturn("event");
     }
 
+    @PostMapping(path = "/sample/command", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public Mono<String> sampleServiceCommand(@RequestBody Call call) throws JsonProcessingException {
+//        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
+        CloudEvent command = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType("command") //
+                .withTime(OffsetDateTime.now())
+                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+                .build();
+
+        return directAsyncGateway.sendCommand(command, target, "accounts").thenReturn("command");
+    }
     @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleServices(@RequestBody Call call) {
         AsyncQuery<?> query = new AsyncQuery<>("sample.query.any.that.matches", call);

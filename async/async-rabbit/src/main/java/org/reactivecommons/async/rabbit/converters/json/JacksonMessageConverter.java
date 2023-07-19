@@ -16,6 +16,7 @@ import java.nio.charset.StandardCharsets;
 
 public class JacksonMessageConverter implements MessageConverter {
     private static final String CONTENT_TYPE = "application/json";
+    public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
 
     private final ObjectMapper objectMapper;
 
@@ -31,7 +32,7 @@ public class JacksonMessageConverter implements MessageConverter {
             final T value = objectMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
             return new AsyncQuery<>(asyncQueryJson.getResource(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -42,7 +43,7 @@ public class JacksonMessageConverter implements MessageConverter {
             final T value = objectMapper.treeToValue(domainEventJson.getData(), bodyClass);
             return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -53,7 +54,7 @@ public class JacksonMessageConverter implements MessageConverter {
             final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
             return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -62,7 +63,7 @@ public class JacksonMessageConverter implements MessageConverter {
         try {
             return objectMapper.readValue(message.getBody(), valueClass);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }
 
@@ -94,7 +95,7 @@ public class JacksonMessageConverter implements MessageConverter {
             String jsonString = this.objectMapper.writeValueAsString(object);
             bytes = jsonString.getBytes(StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new MessageConversionException("Failed to convert Message content", e);
+            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
         props.setContentType(CONTENT_TYPE);

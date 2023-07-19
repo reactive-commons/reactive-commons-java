@@ -62,6 +62,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 import java.util.stream.Stream;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
@@ -213,14 +214,14 @@ public class RabbitMqConfig {
 
         final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = registries
                 .values().stream()
-                .flatMap(r -> r.getEventListeners().stream())
+                .flatMap(r -> r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
         // event handlers and dynamic handlers
         final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = registries
                 .values().stream()
-                .flatMap(r -> Stream.concat(r.getEventListeners().stream(), r.getDynamicEventHandlers().stream()))
+                .flatMap(r -> Stream.concat(r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream(), r.getDynamicEventHandlers().stream()))
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 

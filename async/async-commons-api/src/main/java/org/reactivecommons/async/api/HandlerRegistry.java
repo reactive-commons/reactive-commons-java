@@ -1,5 +1,8 @@
 package org.reactivecommons.async.api;
 
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.provider.EventFormatProvider;
+import io.cloudevents.jackson.JsonFormat;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -13,24 +16,36 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
 public class HandlerRegistry {
-
-    private final List<RegisteredEventListener<?>> eventListeners = new CopyOnWriteArrayList<>();
+    public static final String DEFAULT_DOMAIN = "app";
+    private final Map<String, List<RegisteredEventListener<?>>> domainEventListeners = new ConcurrentHashMap<>();
     private final List<RegisteredEventListener<?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredEventListener<?>> eventNotificationListener = new CopyOnWriteArrayList<>();
     private final List<RegisteredQueryHandler<?, ?>> handlers = new CopyOnWriteArrayList<>();
     private final List<RegisteredCommandHandler<?>> commandHandlers = new CopyOnWriteArrayList<>();
 
+
     public static HandlerRegistry register() {
-        return new HandlerRegistry();
+        HandlerRegistry instance = new HandlerRegistry();
+        instance.domainEventListeners.put(DEFAULT_DOMAIN, new CopyOnWriteArrayList<>());
+        return instance;
+    }
+
+    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, EventHandler<T> handler, Class<T> eventClass) {
+        domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
+        .add(new RegisteredEventListener<>(eventName, handler, eventClass));
+        return this;
     }
 
     public <T> HandlerRegistry listenEvent(String eventName, EventHandler<T> handler, Class<T> eventClass) {
-        eventListeners.add(new RegisteredEventListener<>(eventName, handler, eventClass));
+        domainEventListeners.computeIfAbsent(DEFAULT_DOMAIN, ignored -> new CopyOnWriteArrayList<>())
+        .add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
 
@@ -67,7 +82,21 @@ public class HandlerRegistry {
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        if(queryClass == CloudEvent.class){
+            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+            {
+                CloudEvent query = EventFormatProvider
+                        .getInstance()
+                        .resolveFormat(JsonFormat.CONTENT_TYPE)
+                        .deserialize(message);
+
+                return handler.handle((R) query);
+
+            } , byte[].class));
+        }
+        else{
+            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        }
         return this;
     }
 

@@ -1,7 +1,8 @@
 apply plugin: 'org.springframework.boot'
 
 dependencies {
-    implementation project(":async-commons-rabbit-starter")
+    implementation project(":async-commons-rabbit-starter-eda")
     implementation 'org.springframework.boot:spring-boot-starter'
     runtimeOnly 'org.springframework.boot:spring-boot-devtools'
+    implementation 'io.cloudevents:cloudevents-core:2.5.0'
 }

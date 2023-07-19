@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: receiver
+  rabbitmq:
+    virtual-host: test
+app:
+  async:
+    max-retries: 10
+    with-d-l-q-retry: true
+    retry-delay: 1000 # son milisegundos
+    connections:
+      app:
+        virtualHost: domain-a
+#      accounts:
+#        virtualHost: domain-a
+#      deposits:
+#        virtualHost: domain-a
