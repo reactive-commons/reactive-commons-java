@@ -6,7 +6,6 @@
 
 - Creacion pruebas unitarias [\#87](https://github.com/reactive-commons/reactive-commons-java/pull/87)
 - Feature/eda [\#86](https://github.com/reactive-commons/reactive-commons-java/pull/86)
-- Feature/eda [\#85](https://github.com/reactive-commons/reactive-commons-java/pull/85)
 
 ## [2.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.0) (2023-03-03)
 
@@ -16,6 +15,7 @@
 
 **Merged pull requests:**
 
+- Feature/eda [\#85](https://github.com/reactive-commons/reactive-commons-java/pull/85)
 - update asciidoctor [\#83](https://github.com/reactive-commons/reactive-commons-java/pull/83)
 - Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - 73: Updated tests for NameGenerator [\#77](https://github.com/reactive-commons/reactive-commons-java/pull/77)
@@ -42,7 +42,6 @@
 **Merged pull requests:**
 
 - fix event bindings for dynamic events [\#65](https://github.com/reactive-commons/reactive-commons-java/pull/65)
-- Feature/dynamic registry [\#62](https://github.com/reactive-commons/reactive-commons-java/pull/62)
 
 ## [1.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.3) (2021-10-05)
 
@@ -60,6 +59,10 @@
 
 ## [1.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0) (2021-09-29)
 
+**Merged pull requests:**
+
+- Feature/dynamic registry [\#62](https://github.com/reactive-commons/reactive-commons-java/pull/62)
+
 ## [1.0.0-beta-10](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta-10) (2021-09-28)
 
 **Closed issues:**
@@ -69,6 +72,7 @@
 **Merged pull requests:**
 
 - ensure utf-8 charset from senders [\#61](https://github.com/reactive-commons/reactive-commons-java/pull/61)
+- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59)
 - Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53)
 
@@ -85,10 +89,6 @@
 - Dropped messages listener [\#20](https://github.com/reactive-commons/reactive-commons-java/issues/20)
 
 ## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
-
-**Merged pull requests:**
-
-- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
 
 ## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
 
@@ -108,7 +108,6 @@
 
 **Merged pull requests:**
 
-- add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - feat: dynamic events handlers [\#51](https://github.com/reactive-commons/reactive-commons-java/pull/51)
 - chore: upgrade dependencies [\#50](https://github.com/reactive-commons/reactive-commons-java/pull/50)
 
@@ -124,6 +123,7 @@
 
 **Merged pull requests:**
 
+- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
 - Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
 
 ## [0.6.2-Release](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-Release) (2020-09-24)
