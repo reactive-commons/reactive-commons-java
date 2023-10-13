@@ -1,11 +1,19 @@
 # Changelog
 
+## [2.0.2](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.2) (2023-10-13)
+
+**Merged pull requests:**
+
+- add explicit HandlerRegistry dependency [\#90](https://github.com/reactive-commons/reactive-commons-java/pull/90)
+- add explicit HandlerRegistry dependency [\#89](https://github.com/reactive-commons/reactive-commons-java/pull/89)
+
 ## [2.0.1](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.1) (2023-07-19)
 
 **Merged pull requests:**
 
 - Creacion pruebas unitarias [\#87](https://github.com/reactive-commons/reactive-commons-java/pull/87)
 - Feature/eda [\#86](https://github.com/reactive-commons/reactive-commons-java/pull/86)
+- Feature/eda [\#85](https://github.com/reactive-commons/reactive-commons-java/pull/85)
 
 ## [2.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.0) (2023-03-03)
 
@@ -15,7 +23,6 @@
 
 **Merged pull requests:**
 
-- Feature/eda [\#85](https://github.com/reactive-commons/reactive-commons-java/pull/85)
 - update asciidoctor [\#83](https://github.com/reactive-commons/reactive-commons-java/pull/83)
 - Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - 73: Updated tests for NameGenerator [\#77](https://github.com/reactive-commons/reactive-commons-java/pull/77)
@@ -90,6 +97,10 @@
 
 ## [1.0.0-beta8](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta8) (2021-04-26)
 
+**Merged pull requests:**
+
+- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
+
 ## [1.0.0-beta7.1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7.1) (2021-04-21)
 
 ## [1.0.0-beta7](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta7) (2021-04-21)
@@ -123,7 +134,6 @@
 
 **Merged pull requests:**
 
-- Common classes separation from RabbitMQ Implementation [\#56](https://github.com/reactive-commons/reactive-commons-java/pull/56)
 - Implement Query delegate [\#46](https://github.com/reactive-commons/reactive-commons-java/pull/46)
 
 ## [0.6.2-Release](https://github.com/reactive-commons/reactive-commons-java/tree/0.6.2-Release) (2020-09-24)
