@@ -7,11 +7,7 @@ import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.AsyncQuery;
-import org.reactivecommons.async.api.DefaultCommandHandler;
-import org.reactivecommons.async.api.DefaultQueryHandler;
-import org.reactivecommons.async.api.DynamicRegistry;
-import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.*;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
@@ -36,15 +32,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.ChannelPool;
-import reactor.rabbitmq.ChannelPoolFactory;
-import reactor.rabbitmq.ChannelPoolOptions;
-import reactor.rabbitmq.RabbitFlux;
-import reactor.rabbitmq.Receiver;
-import reactor.rabbitmq.ReceiverOptions;
-import reactor.rabbitmq.Sender;
-import reactor.rabbitmq.SenderOptions;
-import reactor.rabbitmq.Utils;
+import reactor.rabbitmq.*;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -74,9 +62,13 @@ public class RabbitMqConfig {
                                                     RabbitProperties defaultAppProps,
                                                     MessageConverter converter,
                                                     ApplicationContext context,
+                                                    HandlerRegistry primaryRegistry,
                                                     DefaultCommandHandler<?> commandHandler) {
         ConnectionManager connectionManager = new ConnectionManager();
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
+        if (!registries.containsValue(primaryRegistry)) {
+            registries.put("primaryHandlerRegistry", primaryRegistry);
+        }
         props.getConnections().computeIfAbsent(DEFAULT_DOMAIN, k -> defaultAppProps);
         props.getConnections()
                 .forEach((domain, properties) -> {
@@ -211,6 +203,12 @@ public class RabbitMqConfig {
     @ConditionalOnMissingBean
     public DefaultCommandHandler defaultCommandHandler() {
         return message -> Mono.error(new RuntimeException("No Handler Registered"));
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(HandlerRegistry.class)
+    public HandlerRegistry defaultHandlerRegistry() {
+        return HandlerRegistry.register();
     }
 
 }
