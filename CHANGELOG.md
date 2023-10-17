@@ -81,7 +81,6 @@
 - ensure utf-8 charset from senders [\#61](https://github.com/reactive-commons/reactive-commons-java/pull/61)
 - add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60)
 - Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59)
-- Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53)
 
 ## [1.0.0-beta10](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta10) (2021-05-21)
 
@@ -119,6 +118,7 @@
 
 **Merged pull requests:**
 
+- Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53)
 - feat: dynamic events handlers [\#51](https://github.com/reactive-commons/reactive-commons-java/pull/51)
 - chore: upgrade dependencies [\#50](https://github.com/reactive-commons/reactive-commons-java/pull/50)
 
