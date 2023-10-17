@@ -39,6 +39,7 @@ class NotificacionListenersConfigTest {
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
     private final ConnectionManager manager = new ConnectionManager();
+    private final DomainHandlers handlers = new DomainHandlers();
 
     @BeforeEach
     public void init() {
@@ -53,13 +54,14 @@ class NotificacionListenersConfigTest {
         when(receiver.consumeManualAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
-        manager.addDomain(DEFAULT_DOMAIN, listener, null, handlerResolver);
+        manager.addDomain(DEFAULT_DOMAIN, listener, null);
+        handlers.add(DEFAULT_DOMAIN, handlerResolver);
     }
 
     @Test
     void eventNotificationListener() {
         final ApplicationNotificationListener applicationEventListener =
-                config.eventNotificationListener(manager, messageConverter, customReporter);
+                config.eventNotificationListener(manager, handlers, messageConverter, customReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();
     }
 }

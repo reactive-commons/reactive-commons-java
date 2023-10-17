@@ -24,9 +24,10 @@ public class CommandListenersConfig {
 
     @Bean
     public ApplicationCommandListener applicationCommandListener(ConnectionManager manager,
+                                                                 DomainHandlers handlers,
                                                                  MessageConverter converter,
                                                                  CustomReporter errorReporter) {
-        ApplicationCommandListener commandListener = new ApplicationCommandListener(manager.getListener(DEFAULT_DOMAIN), appName, manager.getHandlerResolver(DEFAULT_DOMAIN),
+        ApplicationCommandListener commandListener = new ApplicationCommandListener(manager.getListener(DEFAULT_DOMAIN), appName, handlers.get(DEFAULT_DOMAIN),
                 asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
                 asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), manager.getDiscardNotifier(DEFAULT_DOMAIN), errorReporter);
 

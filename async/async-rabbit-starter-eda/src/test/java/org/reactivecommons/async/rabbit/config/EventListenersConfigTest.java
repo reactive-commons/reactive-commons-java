@@ -39,6 +39,7 @@ class EventListenersConfigTest {
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
     private ConnectionManager connectionManager;
+    private final DomainHandlers handlers = new DomainHandlers();
 
     @BeforeEach
     public void init() {
@@ -54,7 +55,8 @@ class EventListenersConfigTest {
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
         connectionManager = new ConnectionManager();
-        connectionManager.addDomain(HandlerRegistry.DEFAULT_DOMAIN, listener, sender, handlerResolver);
+        connectionManager.addDomain(HandlerRegistry.DEFAULT_DOMAIN, listener, sender);
+        handlers.add(HandlerRegistry.DEFAULT_DOMAIN, handlerResolver);
     }
 
     @Test
@@ -62,6 +64,7 @@ class EventListenersConfigTest {
         final ApplicationEventListener eventListener = config.eventListener(
                 messageConverter,
                 connectionManager,
+                handlers,
                 customReporter
         );
 

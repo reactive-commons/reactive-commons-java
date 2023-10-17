@@ -26,12 +26,13 @@ public class EventListenersConfig {
 
     @Bean
     public ApplicationEventListener eventListener(MessageConverter messageConverter,
-                                                  ConnectionManager manager, CustomReporter errorReporter) {
+                                                  ConnectionManager manager, DomainHandlers handlers,
+                                                  CustomReporter errorReporter) {
         AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
         manager.forListener((domain, receiver) -> {
             final ApplicationEventListener listener = new ApplicationEventListener(receiver,
                     appName + ".subsEvents",
-                    manager.getHandlerResolver(domain),
+                    handlers.get(domain),
                     asyncProps.getDomain().getEvents().getExchange(),
                     messageConverter, asyncProps.getWithDLQRetry(),
                     asyncProps.getMaxRetries(),

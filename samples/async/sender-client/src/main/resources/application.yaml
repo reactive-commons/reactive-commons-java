@@ -2,7 +2,7 @@ spring:
   application:
     name: sender
   rabbitmq:
-    virtual-host: test
+    virtual-host: /
 server:
   port: 4001
 management:
@@ -15,10 +15,10 @@ management:
         include: health,prometheus
 app:
   async:
-    listenRepliesFrom: [accounts]
-    connections:
-      app:
-        virtualHost: /
-      accounts:
-        virtualHost: domain-a
+#    listenRepliesFrom: [accounts]
+#    connections:
+#      app:
+#        virtualHost: /
+#      accounts:
+#        virtualHost: domain-a
 
