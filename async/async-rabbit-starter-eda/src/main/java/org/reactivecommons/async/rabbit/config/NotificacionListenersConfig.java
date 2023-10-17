@@ -24,13 +24,14 @@ public class NotificacionListenersConfig {
 
     @Bean
     public ApplicationNotificationListener eventNotificationListener(ConnectionManager manager,
+                                                                     DomainHandlers handlers,
                                                                      MessageConverter messageConverter,
                                                                      CustomReporter errorReporter) {
         final ApplicationNotificationListener listener = new ApplicationNotificationListener(
                 manager.getListener(DEFAULT_DOMAIN),
                 asyncProps.getDomain().getEvents().getExchange(),
                 asyncProps.getNotificationProps().getQueueName(appName),
-                manager.getHandlerResolver(DEFAULT_DOMAIN),
+                handlers.get(DEFAULT_DOMAIN),
                 messageConverter,
                 manager.getDiscardNotifier(DEFAULT_DOMAIN),
                 errorReporter);

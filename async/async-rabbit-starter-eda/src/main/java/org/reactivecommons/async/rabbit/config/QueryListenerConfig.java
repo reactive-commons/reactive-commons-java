@@ -24,10 +24,11 @@ public class QueryListenerConfig {
 
     @Bean
     public ApplicationQueryListener queryListener(MessageConverter converter,
+                                                  DomainHandlers handlers,
                                                   ConnectionManager manager,
                                                   CustomReporter errorReporter) {
         final ApplicationQueryListener listener = new ApplicationQueryListener(manager.getListener(DEFAULT_DOMAIN),
-                appName + ".query", manager.getHandlerResolver(DEFAULT_DOMAIN), manager.getSender(DEFAULT_DOMAIN), asyncProps.getDirect().getExchange(), converter,
+                appName + ".query", handlers.get(DEFAULT_DOMAIN), manager.getSender(DEFAULT_DOMAIN), asyncProps.getDirect().getExchange(), converter,
                 asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
                 asyncProps.getRetryDelay(), asyncProps.getGlobal().getMaxLengthBytes(),
                 asyncProps.getDirect().isDiscardTimeoutQueries(), manager.getDiscardNotifier(DEFAULT_DOMAIN), errorReporter);

@@ -60,11 +60,23 @@ public class RabbitMqConfig {
     public ConnectionManager buildConnectionManager(@Value("${spring.application.name}") String appName,
                                                     AsyncProps props,
                                                     RabbitProperties defaultAppProps,
-                                                    MessageConverter converter,
-                                                    ApplicationContext context,
-                                                    HandlerRegistry primaryRegistry,
-                                                    DefaultCommandHandler<?> commandHandler) {
+                                                    MessageConverter converter) {
         ConnectionManager connectionManager = new ConnectionManager();
+        props.getConnections().computeIfAbsent(DEFAULT_DOMAIN, k -> defaultAppProps);
+        props.getConnections()
+                .forEach((domain, properties) -> {
+                    ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties);
+                    ReactiveMessageSender sender = createMessageSender(appName, provider, properties, converter);
+                    ReactiveMessageListener listener = createMessageListener(appName, provider, props);
+                    connectionManager.addDomain(domain, listener, sender);
+                });
+        return connectionManager;
+    }
+
+    @Bean
+    public DomainHandlers buildHandlers(AsyncProps props, RabbitProperties defaultAppProps, ApplicationContext context,
+                                        HandlerRegistry primaryRegistry, DefaultCommandHandler<?> commandHandler) {
+        DomainHandlers handlers = new DomainHandlers();
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
         if (!registries.containsValue(primaryRegistry)) {
             registries.put("primaryHandlerRegistry", primaryRegistry);
@@ -72,13 +84,10 @@ public class RabbitMqConfig {
         props.getConnections().computeIfAbsent(DEFAULT_DOMAIN, k -> defaultAppProps);
         props.getConnections()
                 .forEach((domain, properties) -> {
-                    ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties);
-                    ReactiveMessageSender sender = createMessageSender(appName, provider, properties, converter);
-                    ReactiveMessageListener listener = createMessageListener(appName, provider, props);
                     HandlerResolver resolver = HandlerResolverBuilder.buildResolver(domain, registries, commandHandler);
-                    connectionManager.addDomain(domain, listener, sender, resolver);
+                    handlers.add(domain, resolver);
                 });
-        return connectionManager;
+        return handlers;
     }
 
 
@@ -187,8 +196,9 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    public DynamicRegistry dynamicRegistry(ConnectionManager connectionManager, IBrokerConfigProps props) {
-        return new DynamicRegistryImp(connectionManager.getHandlerResolver(DEFAULT_DOMAIN),
+    public DynamicRegistry dynamicRegistry(ConnectionManager connectionManager, DomainHandlers handlers,
+                                           IBrokerConfigProps props) {
+        return new DynamicRegistryImp(handlers.get(DEFAULT_DOMAIN),
                 connectionManager.getListener(DEFAULT_DOMAIN).getTopologyCreator(), props);
     }
 

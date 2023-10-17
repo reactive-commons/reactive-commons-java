@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.config;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -17,6 +18,7 @@ import java.util.stream.Stream;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
+@Log4j2
 public class HandlerResolverBuilder {
 
     public static HandlerResolver buildResolver(String domain,
@@ -75,7 +77,13 @@ public class HandlerResolverBuilder {
         // event handlers and dynamic handlers
         return registries
                 .values().stream()
-                .flatMap(r -> Stream.concat(r.getDomainEventListeners().get(domain).stream(), getDynamics(domain, r)))
+                .flatMap(r -> {
+                    if (r.getDomainEventListeners().containsKey(domain)) {
+                        return Stream.concat(r.getDomainEventListeners().get(domain).stream(), getDynamics(domain, r));
+                    }
+                    log.warn("Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
+                    return Stream.empty();
+                })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
     }
@@ -90,7 +98,13 @@ public class HandlerResolverBuilder {
     private static ConcurrentMap<String, RegisteredEventListener<?>> getEventsToBind(String domain, Map<String, HandlerRegistry> registries) {
         return registries
                 .values().stream()
-                .flatMap(r -> r.getDomainEventListeners().get(domain).stream())
+                .flatMap(r -> {
+                    if (r.getDomainEventListeners().containsKey(domain)) {
+                        return r.getDomainEventListeners().get(domain).stream();
+                    }
+                    log.warn("Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
+                    return Stream.empty();
+                })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
     }

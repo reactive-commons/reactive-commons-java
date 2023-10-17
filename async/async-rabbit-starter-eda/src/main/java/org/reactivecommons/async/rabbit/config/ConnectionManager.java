@@ -4,7 +4,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 
@@ -20,7 +19,6 @@ public class ConnectionManager {
     public static class DomainConnections {
         private final ReactiveMessageListener listener;
         private final ReactiveMessageSender sender;
-        private final HandlerResolver handlerResolver;
         private final ConnectionFactoryProvider provider;
         @Setter
         private DiscardNotifier discardNotifier;
@@ -35,35 +33,39 @@ public class ConnectionManager {
     }
 
     public void setDiscardNotifier(String domain, DiscardNotifier discardNotifier) {
-        connections.get(domain).setDiscardNotifier(discardNotifier);
+        getChecked(domain).setDiscardNotifier(discardNotifier);
     }
 
-    public ConnectionManager addDomain(String domain, ReactiveMessageListener listener, ReactiveMessageSender sender,
-                                       HandlerResolver resolver) {
+    public ConnectionManager addDomain(String domain, ReactiveMessageListener listener, ReactiveMessageSender sender) {
         connections.put(domain, DomainConnections.builder()
                 .listener(listener)
                 .sender(sender)
-                .handlerResolver(resolver)
                 .build());
         return this;
     }
 
     public ReactiveMessageSender getSender(String domain) {
-        return connections.get(domain).getSender();
+        return getChecked(domain).getSender();
     }
 
     public ReactiveMessageListener getListener(String domain) {
-        return connections.get(domain).getListener();
+        return getChecked(domain).getListener();
+    }
+
+    private DomainConnections getChecked(String domain) {
+        DomainConnections domainConnections = connections.get(domain);
+        if (domainConnections == null) {
+            throw new RuntimeException("You are trying to use the domain " + domain
+                    + " but this connection is not defined");
+        }
+        return domainConnections;
     }
 
     public DiscardNotifier getDiscardNotifier(String domain) {
-        return connections.get(domain).getDiscardNotifier();
+        return getChecked(domain).getDiscardNotifier();
     }
 
-    public HandlerResolver getHandlerResolver(String domain) {
-        return connections.get(domain).getHandlerResolver();
-    }
     public ConnectionFactoryProvider getProvider(String domain) {
-        return connections.get(domain).getProvider();
+        return getChecked(domain).getProvider();
     }
 }
