@@ -71,14 +71,14 @@ public class SampleReceiverApp {
 //                }, Call.class);
 
 //                .handleDynamicEvents("dynamic.*", message -> Mono.empty(), Object.class)
-                .listenEvent("event", message -> {
-                    log.info(message.getData().toString());
-                    return useCase.sendCommand(message.getData());
-                }, CloudEvent.class)
-                .handleCommand("command", message -> {
-                    log.info(message.getData().toString());
+//                .listenEvent("event", message -> {
+//                    log.info(message.getData().toString());
+//                    return useCase.sendCommand(message.getData());
+//                }, CloudEvent.class)
+                .handleCommand("unlock", message -> {
+                    log.info(message.getData());
                     return Mono.empty();
-                }, CloudEvent.class)
+                }, String.class)
 //                .serveQuery("query1", message -> {
 //                    log.info("resolving from direct query" + message);
 //                    Map<String, String> mapData = Map.of("1", "data");

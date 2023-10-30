@@ -322,7 +322,7 @@ class ApplicationCommandListenerPerfTest {
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomReporter errorReporter) {
-            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, 10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, false, 10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
 
     }

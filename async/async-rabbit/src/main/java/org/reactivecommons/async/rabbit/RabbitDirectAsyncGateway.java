@@ -59,12 +59,28 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
-        return sendCommand(command, targetName, DEFAULT_DOMAIN);
+        return sendCommand(command, targetName, 0, DEFAULT_DOMAIN);
+    }
+
+    @Override
+    public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis) {
+        return sendCommand(command, targetName, delayMillis, DEFAULT_DOMAIN);
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, String domain) {
-        return resolveSender(domain).sendWithConfirm(command, exchange, targetName, Collections.emptyMap(), persistentCommands);
+        return sendCommand(command, targetName, 0, domain);
+    }
+
+    @Override
+    public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis, String domain) {
+        Map<String, Object> headers = new HashMap<>();
+        String realTarget = targetName;
+        if (delayMillis > 0) {
+            headers.put(DELAYED, String.valueOf(delayMillis));
+            realTarget = targetName + "-delayed";
+        }
+        return resolveSender(domain).sendWithConfirm(command, exchange, realTarget, headers, persistentCommands);
     }
 
     @Override

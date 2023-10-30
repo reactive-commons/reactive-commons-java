@@ -56,9 +56,15 @@ public class TopologyCreator {
     }
 
     public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange, Optional<Integer> maxLengthBytesOpt) {
+        return declareQueue(name, dlqExchange, maxLengthBytesOpt, Optional.empty());
+    }
+
+    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange, Optional<Integer> maxLengthBytesOpt,
+                                                   Optional<String> dlRoutingKey) {
         final Map<String, Object> args = new HashMap<>();
         args.put("x-dead-letter-exchange", dlqExchange);
         maxLengthBytesOpt.ifPresent(maxLengthBytes -> args.put("x-max-length-bytes", maxLengthBytes));
+        dlRoutingKey.ifPresent(routingKey -> args.put("x-dead-letter-routing-key", routingKey));
         QueueSpecification specification = QueueSpecification.queue(name)
                 .durable(true)
                 .arguments(args);

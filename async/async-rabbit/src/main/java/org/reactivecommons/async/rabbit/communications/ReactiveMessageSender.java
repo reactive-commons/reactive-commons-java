@@ -1,10 +1,13 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import com.rabbitmq.client.AMQP;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
-import org.reactivecommons.async.commons.communications.Message;
-import reactor.core.publisher.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoSink;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.Sender;
@@ -13,14 +16,16 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
+import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
 public class ReactiveMessageSender {
-
     private final Sender sender;
     private final String sourceApplication;
     private final MessageConverter messageConverter;
@@ -61,7 +66,7 @@ public class ReactiveMessageSender {
         return Mono.create(monoSink -> {
             Consumer<Boolean> notifier = new AckNotifier(monoSink);
             final MyOutboundMessage outboundMessage = toOutboundMessage(message, exchange, routingKey, headers, notifier, persistent);
-            executorService2.submit(() -> fluxSinkConfirm.get((int) (System.currentTimeMillis()%numberOfSenderSubscriptions)).next(outboundMessage));
+            executorService2.submit(() -> fluxSinkConfirm.get((int) (System.currentTimeMillis() % numberOfSenderSubscriptions)).next(outboundMessage));
         });
     }
 
@@ -73,11 +78,11 @@ public class ReactiveMessageSender {
 
     public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
         return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
-            .as(sender::sendWithPublishConfirms)
-            .flatMap(result -> result.isAck() ?
-                Mono.empty() :
-                Mono.error(new SendFailureNoAckException("Event no ACK in communications"))
-            );
+                .as(sender::sendWithPublishConfirms)
+                .flatMap(result -> result.isAck() ?
+                        Mono.empty() :
+                        Mono.error(new SendFailureNoAckException("Event no ACK in communications"))
+                );
     }
 
     private static class AckNotifier implements Consumer<Boolean> {
@@ -98,8 +103,7 @@ public class ReactiveMessageSender {
     }
 
 
-
-    static class MyOutboundMessage extends OutboundMessage{
+    static class MyOutboundMessage extends OutboundMessage {
 
         private final Consumer<Boolean> ackNotifier;
 
@@ -130,14 +134,18 @@ public class ReactiveMessageSender {
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
         baseHeaders.put(SOURCE_APPLICATION, sourceApplication);
-        return new AMQP.BasicProperties.Builder()
+        AMQP.BasicProperties.Builder builder = new AMQP.BasicProperties.Builder()
                 .contentType(properties.getContentType())
                 .appId(sourceApplication)
                 .contentEncoding(properties.getContentEncoding())
                 .deliveryMode(persistent ? 2 : 1)
                 .timestamp(new Date())
                 .messageId(UUID.randomUUID().toString())
-                .headers(baseHeaders).build();
+                .headers(baseHeaders);
+        if (headers.containsKey(DELAYED)) {
+            builder.expiration((String) headers.get(DELAYED));
+        }
+        return builder.build();
     }
 
     public reactor.rabbitmq.Sender getSender() {

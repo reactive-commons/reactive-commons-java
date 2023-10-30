@@ -6,7 +6,8 @@ spring:
 app:
   async:
     max-retries: 10
-    with-d-l-q-retry: true
+#    with-d-l-q-retry: true
+    delayed-commands: true
     retry-delay: 1000 # son milisegundos
 #    connections:
 #      app:
