@@ -44,5 +44,6 @@ public class AsyncProps {
     private Integer retryDelay = 1000;
 
     private Boolean withDLQRetry = false;
+    private Boolean delayedCommands = false;
 
 }

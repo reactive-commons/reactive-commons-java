@@ -29,7 +29,7 @@ public class CommandListenersConfig {
                                                                  DiscardNotifier discardNotifier,
                                                                  CustomReporter errorReporter) {
         ApplicationCommandListener commandListener = new ApplicationCommandListener(listener, appName, resolver,
-                asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
+                asyncProps.getDirect().getExchange(), converter, asyncProps.getWithDLQRetry(), asyncProps.getDelayedCommands(), asyncProps.getMaxRetries(),
                 asyncProps.getRetryDelay(), asyncProps.getDirect().getMaxLengthBytes(), discardNotifier, errorReporter);
 
         commandListener.startListener();
