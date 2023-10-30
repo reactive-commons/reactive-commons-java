@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.4) (2023-10-30)
+
+**Merged pull requests:**
+
+- Add delayed command capability [\#92](https://github.com/reactive-commons/reactive-commons-java/pull/92)
+
 ## [2.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.3) (2023-10-17)
 
 **Merged pull requests:**
@@ -30,7 +36,6 @@
 **Merged pull requests:**
 
 - update asciidoctor [\#83](https://github.com/reactive-commons/reactive-commons-java/pull/83)
-- Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - 73: Updated tests for NameGenerator [\#77](https://github.com/reactive-commons/reactive-commons-java/pull/77)
 
 ## [1.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.5) (2022-05-25)
@@ -41,6 +46,7 @@
 
 **Merged pull requests:**
 
+- Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - updgrade actions [\#70](https://github.com/reactive-commons/reactive-commons-java/pull/70)
 - add metric to async query operation [\#69](https://github.com/reactive-commons/reactive-commons-java/pull/69)
 - Feature/upgrade spring [\#68](https://github.com/reactive-commons/reactive-commons-java/pull/68)
@@ -224,7 +230,6 @@
 - fix: avoid publish blocking with channels pooling [\#27](https://github.com/reactive-commons/reactive-commons-java/pull/27)
 - fix\(jackson\): Spring compatible starter is not using the ObjectMapper instance configured by Spring [\#26](https://github.com/reactive-commons/reactive-commons-java/pull/26)
 - Unbind queue with topology creator [\#15](https://github.com/reactive-commons/reactive-commons-java/pull/15)
-- Handle empty monos on served queries handlers [\#2](https://github.com/reactive-commons/reactive-commons-java/pull/2)
 
 ## [0.0.5-beta2](https://github.com/reactive-commons/reactive-commons-java/tree/0.0.5-beta2) (2019-01-02)
 
@@ -243,6 +248,7 @@
 **Merged pull requests:**
 
 - fix: command handler is not beign executed [\#4](https://github.com/reactive-commons/reactive-commons-java/pull/4)
+- Handle empty monos on served queries handlers [\#2](https://github.com/reactive-commons/reactive-commons-java/pull/2)
 
 
 
