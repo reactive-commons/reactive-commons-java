@@ -20,7 +20,8 @@ public class NameGenerator {
         bb.putLong(uuid.getMostSignificantBits())
                 .putLong(uuid.getLeastSignificantBits());
         // Convert to base64 and remove trailing =
-        return applicationName+"-"+ suffix + "-" + encodeToUrlSafeString(bb.array())
+        String realSuffix = suffix != null && !"".equals(suffix) ? suffix + "." : "";
+        return applicationName+"."+ realSuffix + encodeToUrlSafeString(bb.array())
                 .replace("=", "");
     }
 

@@ -54,7 +54,7 @@ class CommandListenersConfigTest {
         when(receiver.consumeManualAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
-        manager.addDomain(DEFAULT_DOMAIN, listener, null);
+        manager.addDomain(DEFAULT_DOMAIN, listener, null, null);
         handlers.add(DEFAULT_DOMAIN, handlerResolver);
     }
 

@@ -7,6 +7,7 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -52,17 +53,18 @@ public class SampleRestController {
 
         return directAsyncGateway.requestReply(query, target, CloudEvent.class, "accounts");
     }
+
     @PostMapping(path = "/sample/event", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<String> sampleServiceEvent(@RequestBody Call call) throws JsonProcessingException {
 //        AsyncQuery<?> query = new AsyncQuery<>(queryName, call);
-        CloudEvent event = CloudEventBuilder.v1() //
-                .withId(UUID.randomUUID().toString()) //
-                .withSource(URI.create("https://spring.io/foos"))//
-                .withType("event") //
-                .withTime(OffsetDateTime.now())
-                .withData("application/json", CloudEventBuilderExt.asBytes(call))
-                .build();
-
+//        CloudEvent event = CloudEventBuilder.v1() //
+//                .withId(UUID.randomUUID().toString()) //
+//                .withSource(URI.create("https://spring.io/foos"))//
+//                .withType("event") //
+//                .withTime(OffsetDateTime.now())
+//                .withData("application/json", CloudEventBuilderExt.asBytes(call))
+//                .build();
+        DomainEvent<String> event = new DomainEvent<>("sample.event", UUID.randomUUID().toString(), "hello");
         return Mono.from(domainEventBus.emit(event)).thenReturn("event");
     }
 
@@ -78,9 +80,9 @@ public class SampleRestController {
 //                .build();
 
 
-
         return directAsyncGateway.sendCommand(new Command<String>("unlock", "jhkj", "userId"), target, delay).thenReturn("command");
     }
+
     @PostMapping(path = "/sample/match", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<RespQuery1> sampleServices(@RequestBody Call call) {
         AsyncQuery<?> query = new AsyncQuery<>("sample.query.any.that.matches", call);

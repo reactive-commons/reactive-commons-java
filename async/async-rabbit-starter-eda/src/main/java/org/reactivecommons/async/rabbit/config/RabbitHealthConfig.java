@@ -1,6 +1,6 @@
 package org.reactivecommons.async.rabbit.config;
 
-import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
+import org.reactivecommons.async.rabbit.health.DomainRabbitReactiveHealthIndicator;
 import org.springframework.boot.actuate.health.AbstractReactiveHealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.context.annotation.Bean;
@@ -13,7 +13,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 public class RabbitHealthConfig {
 
     @Bean
-    public RabbitReactiveHealthIndicator rabbitHealthIndicator(ConnectionManager manager) {
-        return new RabbitReactiveHealthIndicator(manager.getProvider(DEFAULT_DOMAIN)); // TODO: Check every domain connection
+    public DomainRabbitReactiveHealthIndicator rabbitHealthIndicator(ConnectionManager manager) {
+        return new DomainRabbitReactiveHealthIndicator(manager);
     }
 }

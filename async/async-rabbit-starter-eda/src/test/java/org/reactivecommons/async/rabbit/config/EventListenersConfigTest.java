@@ -55,7 +55,7 @@ class EventListenersConfigTest {
         when(listener.getReceiver()).thenReturn(receiver);
         when(listener.getMaxConcurrency()).thenReturn(20);
         connectionManager = new ConnectionManager();
-        connectionManager.addDomain(HandlerRegistry.DEFAULT_DOMAIN, listener, sender);
+        connectionManager.addDomain(HandlerRegistry.DEFAULT_DOMAIN, listener, sender, null);
         handlers.add(HandlerRegistry.DEFAULT_DOMAIN, handlerResolver);
     }
 
