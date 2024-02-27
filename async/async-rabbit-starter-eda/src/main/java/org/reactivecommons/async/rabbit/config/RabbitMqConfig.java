@@ -68,7 +68,7 @@ public class RabbitMqConfig {
                     ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties);
                     ReactiveMessageSender sender = createMessageSender(appName, provider, properties, converter);
                     ReactiveMessageListener listener = createMessageListener(appName, provider, props);
-                    connectionManager.addDomain(domain, listener, sender);
+                    connectionManager.addDomain(domain, listener, sender, provider);
                 });
         return connectionManager;
     }

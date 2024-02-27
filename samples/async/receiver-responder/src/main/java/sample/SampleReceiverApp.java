@@ -1,6 +1,5 @@
 package sample;
 
-import io.cloudevents.CloudEvent;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -13,6 +12,7 @@ import org.reactivecommons.async.impl.config.annotations.EnableCommandListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
+import org.reactivecommons.async.impl.config.annotations.EnableNotificationListener;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +24,7 @@ import static reactor.core.publisher.Mono.just;
 
 @SpringBootApplication
 @EnableEventListeners
+@EnableNotificationListener
 @EnableCommandListeners
 @EnableDomainEventBus
 @EnableDirectAsyncGateway
@@ -76,6 +77,10 @@ public class SampleReceiverApp {
 //                    return useCase.sendCommand(message.getData());
 //                }, CloudEvent.class)
                 .handleCommand("unlock", message -> {
+                    log.info(message.getData());
+                    return Mono.empty();
+                }, String.class)
+                .listenNotificationEvent("sample.event", message -> {
                     log.info(message.getData());
                     return Mono.empty();
                 }, String.class)

@@ -5,10 +5,10 @@ import com.rabbitmq.client.ConnectionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
+import org.reactivecommons.async.rabbit.config.ConnectionManager;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Health.Builder;
 import org.springframework.boot.actuate.health.Status;
@@ -22,20 +22,26 @@ import java.util.concurrent.TimeoutException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @ExtendWith(MockitoExtension.class)
-public class RabbitReactiveHealthIndicatorTest {
+public class DomainRabbitReactiveHealthIndicatorTest {
     @Mock
     private ConnectionFactoryProvider provider;
     @Mock
     private ConnectionFactory factory;
     @Mock
     private Connection connection;
-    @InjectMocks
-    private RabbitReactiveHealthIndicator indicator;
+
+    private DomainRabbitReactiveHealthIndicator indicator;
 
     @BeforeEach
     void setup() {
+        ConnectionManager connectionManager = new ConnectionManager();
+        connectionManager.addDomain(DEFAULT_DOMAIN, null, null, provider);
+        connectionManager.addDomain("domain2", null, null, provider);
+        connectionManager.addDomain("domain3", null, null, provider);
+        indicator = new DomainRabbitReactiveHealthIndicator(connectionManager);
         when(provider.getConnectionFactory()).thenReturn(factory);
     }
 
@@ -51,7 +57,9 @@ public class RabbitReactiveHealthIndicatorTest {
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
-                    assertEquals("1.2.3", health.getDetails().get("version"));
+                    assertEquals("1.2.3", health.getDetails().get(DEFAULT_DOMAIN));
+                    assertEquals("1.2.3", health.getDetails().get("domain2"));
+                    assertEquals("1.2.3", health.getDetails().get("domain3"));
                     assertEquals(Status.UP, health.getStatus());
                 })
                 .verifyComplete();

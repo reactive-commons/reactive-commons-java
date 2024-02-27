@@ -36,10 +36,12 @@ public class ConnectionManager {
         getChecked(domain).setDiscardNotifier(discardNotifier);
     }
 
-    public ConnectionManager addDomain(String domain, ReactiveMessageListener listener, ReactiveMessageSender sender) {
+    public ConnectionManager addDomain(String domain, ReactiveMessageListener listener, ReactiveMessageSender sender,
+                                       ConnectionFactoryProvider provider) {
         connections.put(domain, DomainConnections.builder()
                 .listener(listener)
                 .sender(sender)
+                .provider(provider)
                 .build());
         return this;
     }
@@ -65,7 +67,7 @@ public class ConnectionManager {
         return getChecked(domain).getDiscardNotifier();
     }
 
-    public ConnectionFactoryProvider getProvider(String domain) {
-        return getChecked(domain).getProvider();
+    public Map<String, DomainConnections> getProviders() {
+        return connections;
     }
 }

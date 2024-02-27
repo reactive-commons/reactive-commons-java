@@ -10,15 +10,15 @@ class NameGeneratorTest {
     void generateNameFromWithoutSuffix() {
         String result = NameGenerator.generateNameFrom("application");
         assertFalse(result.contains("="));
-        assertTrue(result.startsWith("application--"));
-        assertEquals(35, result.length());
+        assertTrue(result.startsWith("application."));
+        assertEquals(34, result.length());
     }
 
     @Test
     void generateNameFromWithSuffix() {
         String result = NameGenerator.generateNameFrom("application", "suffix");
         assertFalse(result.contains("="));
-        assertTrue(result.startsWith("application-suffix-"));
+        assertTrue(result.startsWith("application.suffix."));
         assertEquals(41, result.length());
     }
 }
