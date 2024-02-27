@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.5) (2024-02-27)
+
+**Closed issues:**
+
+- El metodo listenNotificationEvent en el entry-point no esta funcionando [\#95](https://github.com/reactive-commons/reactive-commons-java/issues/95)
+
+**Merged pull requests:**
+
+- Fix health check, update name generator [\#96](https://github.com/reactive-commons/reactive-commons-java/pull/96)
+
 ## [2.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.4) (2023-10-30)
 
 **Merged pull requests:**
@@ -36,6 +46,7 @@
 **Merged pull requests:**
 
 - update asciidoctor [\#83](https://github.com/reactive-commons/reactive-commons-java/pull/83)
+- Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - 73: Updated tests for NameGenerator [\#77](https://github.com/reactive-commons/reactive-commons-java/pull/77)
 
 ## [1.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.5) (2022-05-25)
@@ -46,7 +57,6 @@
 
 **Merged pull requests:**
 
-- Feature/spring boot 3 [\#82](https://github.com/reactive-commons/reactive-commons-java/pull/82)
 - updgrade actions [\#70](https://github.com/reactive-commons/reactive-commons-java/pull/70)
 - add metric to async query operation [\#69](https://github.com/reactive-commons/reactive-commons-java/pull/69)
 - Feature/upgrade spring [\#68](https://github.com/reactive-commons/reactive-commons-java/pull/68)
