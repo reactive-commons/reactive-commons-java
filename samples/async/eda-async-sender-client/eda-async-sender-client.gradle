@@ -1,0 +1,11 @@
+apply plugin: 'org.springframework.boot'
+
+dependencies {
+    implementation project(':shared')
+    implementation project(':async-commons-rabbit-starter-eda')
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    implementation "io.cloudevents:cloudevents-core:${cloudEventsVersion}"
+
+}

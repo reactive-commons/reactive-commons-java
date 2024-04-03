@@ -1,0 +1,15 @@
+spring:
+  application:
+    name: receiver-eda
+  rabbitmq:
+    virtual-host: /
+app:
+  async:
+    app:
+      createTopology: true
+      listenReplies: false
+    domain-a:
+      listenReplies: false
+      connectionProperties:
+        virtual-host: domain-a
+

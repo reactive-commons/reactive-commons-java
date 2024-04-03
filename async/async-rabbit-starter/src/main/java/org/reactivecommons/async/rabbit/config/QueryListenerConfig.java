@@ -2,12 +2,13 @@ package org.reactivecommons.async.rabbit.config;
 
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -28,12 +29,13 @@ public class QueryListenerConfig {
     public ApplicationQueryListener queryListener(MessageConverter converter, HandlerResolver resolver,
                                                   ReactiveMessageSender sender, ReactiveMessageListener rlistener,
                                                   DiscardNotifier discardNotifier,
+                                                  IBrokerConfigProps brokerConfigProps,
                                                   CustomReporter errorReporter) {
         final ApplicationQueryListener listener = new ApplicationQueryListener(rlistener,
-                appName + ".query", resolver, sender, asyncProps.getDirect().getExchange(), converter,
-                asyncProps.getGlobal().getExchange(), asyncProps.getWithDLQRetry(), asyncProps.getMaxRetries(),
-                asyncProps.getRetryDelay(),asyncProps.getGlobal().getMaxLengthBytes(),
-                asyncProps.getDirect().isDiscardTimeoutQueries(),  discardNotifier, errorReporter);
+                brokerConfigProps.getQueriesQueue(), resolver, sender, brokerConfigProps.getDirectMessagesExchangeName(), converter,
+                brokerConfigProps.getGlobalReplyExchangeName(), asyncProps.getWithDLQRetry(), asyncProps.getCreateTopology(),
+                asyncProps.getMaxRetries(), asyncProps.getRetryDelay(), asyncProps.getGlobal().getMaxLengthBytes(),
+                asyncProps.getDirect().isDiscardTimeoutQueries(), discardNotifier, errorReporter);
 
         listener.startListener();
 

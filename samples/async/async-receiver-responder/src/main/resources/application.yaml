@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: receiver
+  rabbitmq:
+    virtual-host: /
+app:
+  async:
+    createTopology: true
+    listenReplies: false
+

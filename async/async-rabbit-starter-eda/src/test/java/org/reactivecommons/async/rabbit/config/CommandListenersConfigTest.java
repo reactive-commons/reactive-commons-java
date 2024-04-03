@@ -12,6 +12,7 @@ import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.listeners.ApplicationCommandListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -32,7 +33,12 @@ class CommandListenersConfigTest {
 
 
     private final AsyncProps props = new AsyncProps();
-    private CommandListenersConfig config = new CommandListenersConfig(props);
+    private final AsyncPropsDomain asyncPropsDomain = AsyncPropsDomain.builder()
+            .withDefaultAppName("appName")
+            .withDefaultRabbitProperties(new RabbitProperties())
+            .withDomain(DEFAULT_DOMAIN, props)
+            .build();
+    private CommandListenersConfig config = new CommandListenersConfig(asyncPropsDomain);
     private final ReactiveMessageListener listener = mock(ReactiveMessageListener.class);
     private final TopologyCreator creator = mock(TopologyCreator.class);
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);
@@ -43,10 +49,7 @@ class CommandListenersConfigTest {
     private final DomainHandlers handlers = new DomainHandlers();
 
     @BeforeEach
-    public void init() throws NoSuchFieldException, IllegalAccessException {
-        final Field appName = CommandListenersConfig.class.getDeclaredField("appName");
-        appName.setAccessible(true);
-        appName.set(config, "queue");
+    public void init() {
         when(creator.bind(any(BindingSpecification.class))).thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
         when(creator.declare(any(ExchangeSpecification.class))).thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.declareQueue(any(String.class), any())).thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));

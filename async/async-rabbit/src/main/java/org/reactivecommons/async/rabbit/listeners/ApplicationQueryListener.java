@@ -36,8 +36,6 @@ import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 @Log
 //TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos
 public class ApplicationQueryListener extends GenericMessageListener {
-
-
     private final MessageConverter converter;
     private final HandlerResolver handlerResolver;
     private final ReactiveMessageSender sender;
@@ -51,10 +49,10 @@ public class ApplicationQueryListener extends GenericMessageListener {
 
     public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
                                     ReactiveMessageSender sender, String directExchange, MessageConverter converter,
-                                    String replyExchange, boolean withDLQRetry, long maxRetries, int retryDelay,
-                                    Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries,
+                                    String replyExchange, boolean withDLQRetry, boolean createTopology, long maxRetries,
+                                    int retryDelay, Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries,
                                     DiscardNotifier discardNotifier, CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "query", errorReporter);
+        super(queueName, listener, withDLQRetry, createTopology, maxRetries, discardNotifier, "query", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.converter = converter;
@@ -153,7 +151,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
             Object response = signal.get();
-            if(response instanceof CloudEvent) {
+            if (response instanceof CloudEvent) {
                 byte[] serialized = EventFormatProvider
                         .getInstance()
                         .resolveFormat(JsonFormat.CONTENT_TYPE)

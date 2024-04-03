@@ -54,7 +54,7 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
     class StubGenericMessageListener extends ApplicationNotificationListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "exchange", "queue", handlerResolver, messageConverter, discardNotifier, errorReporter);
+            super(reactiveMessageListener, "exchange", "queue", true, handlerResolver, messageConverter, discardNotifier, errorReporter);
         }
 
     }

@@ -1,49 +1,61 @@
 package org.reactivecommons.async.rabbit.config.props;
 
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
-
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
 
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "app.async")
+@AllArgsConstructor
+@NoArgsConstructor
+@Builder
 public class AsyncProps {
+    private String appName;
 
     @NestedConfigurationProperty
+    @Builder.Default
     private FluxProps flux = new FluxProps();
 
     @NestedConfigurationProperty
+    @Builder.Default
     private DomainProps domain = new DomainProps();
 
     @NestedConfigurationProperty
+    @Builder.Default
     private DirectProps direct = new DirectProps();
 
     @NestedConfigurationProperty
+    @Builder.Default
     private GlobalProps global = new GlobalProps();
 
     @NestedConfigurationProperty
-    private NotificationProps notificationProps = new NotificationProps();
+    private RabbitProperties connectionProperties;
 
-    @NestedConfigurationProperty
-    private Map<String, RabbitProperties> connections = new TreeMap<>();
+    private IBrokerConfigProps brokerConfigProps;
 
-    private List<String> listenRepliesFrom = new ArrayList<>();
-
+    @Builder.Default
     private Integer maxRetries = 10;
 
+    @Builder.Default
     private Integer prefetchCount = 250;
 
+    @Builder.Default
     private Integer retryDelay = 1000;
 
+    @Builder.Default
+    private boolean listenReplies = true;
+
+    @Builder.Default
     private Boolean withDLQRetry = false;
+    @Builder.Default
     private Boolean delayedCommands = false;
+    @Builder.Default
+    private Boolean createTopology = true; // auto delete queues will always be created and bound
 
 }

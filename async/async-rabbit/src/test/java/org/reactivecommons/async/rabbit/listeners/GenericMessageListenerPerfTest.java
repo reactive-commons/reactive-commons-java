@@ -64,7 +64,7 @@ class GenericMessageListenerPerfTest {
     public void init() {
 //        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10, discardNotifier, "command", errorReporter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, true,10, discardNotifier, "command", errorReporter);
     }
 
 
@@ -139,8 +139,8 @@ class GenericMessageListenerPerfTest {
 
     class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter errorReporter) {
-            super(queueName, listener, useDLQRetries, maxRetries, discardNotifier, objectType, errorReporter);
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, boolean createTopology, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter errorReporter) {
+            super(queueName, listener, useDLQRetries, createTopology, maxRetries, discardNotifier, objectType, errorReporter);
         }
 
         @Override

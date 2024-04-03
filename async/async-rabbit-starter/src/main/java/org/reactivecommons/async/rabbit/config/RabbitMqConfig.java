@@ -161,8 +161,9 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, ReactiveMessageSender sender, BrokerConfigProps props) {
-        return new RabbitDiscardNotifier(domainEventBus(sender, props), objectMapperSupplier.get());
+    public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, AsyncProps asyncProps,
+                                                 ReactiveMessageSender sender, BrokerConfigProps props) {
+        return new RabbitDiscardNotifier(domainEventBus(sender, props, asyncProps.getCreateTopology()), objectMapperSupplier.get());
     }
 
     @Bean
@@ -186,9 +187,11 @@ public class RabbitMqConfig {
         };
     }
 
-    private DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props) {
+    private DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props, boolean createExchange) {
         final String exchangeName = props.getDomainEventsExchangeName();
-        sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+        if (createExchange) {
+            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+        }
         return new RabbitDomainEventBus(sender, exchangeName);
     }
 

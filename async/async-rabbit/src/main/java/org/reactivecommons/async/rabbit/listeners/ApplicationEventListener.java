@@ -38,16 +38,17 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     public ApplicationEventListener(ReactiveMessageListener receiver,
                                     String queueName,
-                                    HandlerResolver resolver,
                                     String eventsExchange,
+                                    HandlerResolver resolver,
                                     MessageConverter messageConverter,
                                     boolean withDLQRetry,
+                                    boolean createTopology,
                                     long maxRetries, int retryDelay,
                                     Optional<Integer> maxLengthBytes,
                                     DiscardNotifier discardNotifier,
                                     CustomReporter errorReporter,
                                     String appName) {
-        super(queueName, receiver, withDLQRetry, maxRetries, discardNotifier, "event", errorReporter);
+        super(queueName, receiver, withDLQRetry, createTopology, maxRetries, discardNotifier, "event", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.resolver = resolver;

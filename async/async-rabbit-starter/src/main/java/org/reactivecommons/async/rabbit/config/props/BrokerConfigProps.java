@@ -1,52 +1,50 @@
 package org.reactivecommons.async.rabbit.config.props;
 
 import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
-import org.reactivecommons.async.commons.utils.NameGenerator;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.Configuration;
 
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.reactivecommons.async.commons.utils.NameGenerator.fromNameWithSuffix;
+import static org.reactivecommons.async.commons.utils.NameGenerator.generateNameFrom;
+
 
 @Getter
-@Configuration
-@RequiredArgsConstructor
 public class BrokerConfigProps implements IBrokerConfigProps {
-
-    @Value("${spring.application.name}")
-    private String appName;
+    private final String appName;
     private final AsyncProps asyncProps;
     private final AtomicReference<String> replyQueueName = new AtomicReference<>();
+    private final AtomicReference<String> notificationsQueueName = new AtomicReference<>();
+
+    public BrokerConfigProps(@Value("${spring.application.name}") String appName, AsyncProps asyncProps) {
+        this.appName = appName;
+        this.asyncProps = asyncProps;
+    }
 
     @Override
     public String getEventsQueue() {
-        return appName + ".subsEvents";
+        return fromNameWithSuffix(getAppName(), asyncProps.getDomain().getEvents().getEventsSuffix());
+    }
+
+    @Override
+    public String getNotificationsQueue() {
+        return resolveTemporaryQueue(notificationsQueueName, asyncProps.getDomain().getEvents().getNotificationSuffix());
     }
 
     @Override
     public String getQueriesQueue() {
-        return appName + ".query";
+        return fromNameWithSuffix(getAppName(), asyncProps.getDirect().getQuerySuffix());
     }
 
     @Override
     public String getCommandsQueue() {
-        return appName;
+        return fromNameWithSuffix(getAppName(), asyncProps.getDirect().getCommandSuffix());
     }
 
     @Override
     public String getReplyQueue() {
-        final String name = replyQueueName.get();
-        if (name == null) {
-            final String replyName = NameGenerator.generateNameFrom(appName, "reply");
-            if (replyQueueName.compareAndSet(null, replyName)) {
-                return replyName;
-            } else {
-                return replyQueueName.get();
-            }
-        }
-        return name;
+        return resolveTemporaryQueue(replyQueueName, asyncProps.getGlobal().getRepliesSuffix());
     }
 
     @Override
@@ -57,5 +55,23 @@ public class BrokerConfigProps implements IBrokerConfigProps {
     @Override
     public String getDirectMessagesExchangeName() {
         return asyncProps.getDirect().getExchange();
+    }
+
+    @Override
+    public String getGlobalReplyExchangeName() {
+        return asyncProps.getGlobal().getExchange();
+    }
+
+    private String resolveTemporaryQueue(AtomicReference<String> property, String suffix) {
+        final String name = property.get();
+        if (name == null) {
+            final String replyName = generateNameFrom(getAppName(), suffix);
+            if (property.compareAndSet(null, replyName)) {
+                return replyName;
+            } else {
+                return property.get();
+            }
+        }
+        return name;
     }
 }

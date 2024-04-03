@@ -1,20 +1,17 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Delivery;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
+import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.RabbitMessage;
-import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.commons.ext.CustomReporter;
-import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.SignalType;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -36,8 +33,6 @@ import static reactor.core.publisher.Mono.defer;
 
 @Log
 public abstract class GenericMessageListener {
-
-
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
@@ -46,6 +41,7 @@ public abstract class GenericMessageListener {
     private final Scheduler errorReporterScheduler = Schedulers.newBoundedElastic(4, 256, "errorReporterScheduler");
 
     private final boolean useDLQRetries;
+    private final boolean createTopology;
     private final long maxRetries;
     private final DiscardNotifier discardNotifier;
     private final String objectType;
@@ -53,10 +49,12 @@ public abstract class GenericMessageListener {
     private volatile Flux<AcknowledgableDelivery> messageFlux;
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                  long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter customReporter) {
+                                  boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
+                                  String objectType, CustomReporter customReporter) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
+        this.createTopology = createTopology;
         this.maxRetries = maxRetries;
         this.useDLQRetries = useDLQRetries;
         this.discardNotifier = discardNotifier;
@@ -79,9 +77,16 @@ public abstract class GenericMessageListener {
         ConsumeOptions consumeOptions = new ConsumeOptions();
         consumeOptions.qos(messageListener.getPrefetchCount());
 
-        this.messageFlux = setUpBindings(messageListener.getTopologyCreator()).thenMany(
-                receiver.consumeManualAck(queueName, consumeOptions)
-                        .transform(this::consumeFaultTolerant));
+        if (createTopology) {
+            this.messageFlux = setUpBindings(messageListener.getTopologyCreator())
+                    .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
+                            .transform(this::consumeFaultTolerant));
+        } else {
+            this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
+                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
+                    .transform(this::consumeFaultTolerant);
+        }
+
 
         onTerminate();
     }

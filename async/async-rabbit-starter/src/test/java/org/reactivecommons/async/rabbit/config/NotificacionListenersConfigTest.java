@@ -5,16 +5,22 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.listeners.ApplicationNotificationListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
+import reactor.rabbitmq.Receiver;
 
 import java.util.Collections;
 
@@ -34,6 +40,8 @@ class NotificacionListenersConfigTest {
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
 
+    private final IBrokerConfigProps brokerConfigProps = new BrokerConfigProps("appName", props);
+
     @BeforeEach
     public void init() {
         when(handlerResolver.getEventListeners()).thenReturn(Collections.emptyList());
@@ -52,7 +60,7 @@ class NotificacionListenersConfigTest {
     @Test
     void eventNotificationListener() {
         final ApplicationNotificationListener applicationEventListener = config.
-                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, customReporter);
+                eventNotificationListener(handlerResolver, messageConverter, listener, discardNotifier, brokerConfigProps, customReporter);
         Assertions.assertThat(applicationEventListener).isNotNull();
     }
 }

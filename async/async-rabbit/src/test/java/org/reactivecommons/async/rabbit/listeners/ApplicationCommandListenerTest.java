@@ -54,7 +54,7 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,  false,10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,  false,false,10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
     }
 }

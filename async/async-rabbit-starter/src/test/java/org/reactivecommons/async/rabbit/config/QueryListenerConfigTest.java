@@ -5,17 +5,23 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.ExchangeSpecification;
+import reactor.rabbitmq.QueueSpecification;
+import reactor.rabbitmq.Receiver;
 
 import java.util.Collections;
 
@@ -35,6 +41,7 @@ class QueryListenerConfigTest {
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
     private final ReactiveMessageSender sender = mock(ReactiveMessageSender.class);
+    private final IBrokerConfigProps brokerConfigProps = new BrokerConfigProps("appName", props);
 
     @BeforeEach
     public void init() {
@@ -53,7 +60,8 @@ class QueryListenerConfigTest {
 
     @Test
     void queryListener() {
-        final ApplicationQueryListener queryListener = config.queryListener(messageConverter, handlerResolver, sender, listener, discardNotifier, customReporter);
+        final ApplicationQueryListener queryListener = config.queryListener(messageConverter, handlerResolver, sender,
+                listener, discardNotifier, brokerConfigProps, customReporter);
         Assertions.assertThat(queryListener).isNotNull();
     }
 }

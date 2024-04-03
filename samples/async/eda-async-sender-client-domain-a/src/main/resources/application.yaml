@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: sender-domain-a-eda
+  rabbitmq:
+    virtual-host: domain-a
+server:
+  port: 4002
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+app:
+  async:
+    app: # domain-a
+      connectionProperties:
+        virtualHost: domain-a
+    teams:
+      connectionProperties:
+        virtualHost: /
+
+
