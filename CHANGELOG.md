@@ -1,5 +1,11 @@
 # Changelog
 
+## [2.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/2.1.0) (2024-04-03)
+
+**Merged pull requests:**
+
+- feat\(eda\): Add eda properties, allow different queue and exchange names disallow topology creation [\#97](https://github.com/reactive-commons/reactive-commons-java/pull/97)
+
 ## [2.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/2.0.5) (2024-02-27)
 
 **Closed issues:**
@@ -148,10 +154,6 @@
 
 ## [1.0.0-beta2](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta2) (2020-12-05)
 
-**Merged pull requests:**
-
-- Feature unit tests [\#47](https://github.com/reactive-commons/reactive-commons-java/pull/47)
-
 ## [1.0.0-beta1](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta1) (2020-10-28)
 
 **Merged pull requests:**
@@ -191,6 +193,7 @@
 
 **Merged pull requests:**
 
+- Feature unit tests [\#47](https://github.com/reactive-commons/reactive-commons-java/pull/47)
 - updates contiperf version, fixes performance test [\#43](https://github.com/reactive-commons/reactive-commons-java/pull/43)
 - Feature/listeners matching [\#42](https://github.com/reactive-commons/reactive-commons-java/pull/42)
 
