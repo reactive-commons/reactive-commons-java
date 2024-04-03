@@ -33,8 +33,20 @@ public class ApplicationCommandListener extends GenericMessageListener {
     private final Optional<Integer> maxLengthBytes;
 
     //TODO: change large constructor parameters number
-    public ApplicationCommandListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver, String directExchange, MessageConverter messageConverter, boolean withDLQRetry, boolean delayedCommands, long maxRetries, int retryDelay, Optional<Integer> maxLengthBytes, DiscardNotifier discardNotifier, CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, maxRetries, discardNotifier, "command", errorReporter);
+    public ApplicationCommandListener(ReactiveMessageListener listener,
+                                      String queueName,
+                                      HandlerResolver resolver,
+                                      String directExchange,
+                                      MessageConverter messageConverter,
+                                      boolean withDLQRetry,
+                                      boolean createTopology,
+                                      boolean delayedCommands,
+                                      long maxRetries,
+                                      int retryDelay,
+                                      Optional<Integer> maxLengthBytes,
+                                      DiscardNotifier discardNotifier,
+                                      CustomReporter errorReporter) {
+        super(queueName, listener, withDLQRetry, createTopology, maxRetries, discardNotifier, "command", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.delayedCommands = delayedCommands;

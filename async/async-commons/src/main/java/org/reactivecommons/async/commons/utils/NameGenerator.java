@@ -6,12 +6,19 @@ import java.util.UUID;
 
 public class NameGenerator {
 
+    public static String fromNameWithSuffix(String appName, String suffix) {
+        if (suffix != null && !suffix.isEmpty()) {
+            return appName + "." + suffix;
+        }
+        return appName;
+    }
+
     public static String generateNameFrom(String applicationName, String suffix) {
-        return generateName(applicationName,suffix);
+        return generateName(applicationName, suffix);
     }
 
     public static String generateNameFrom(String applicationName) {
-        return generateName(applicationName,"");
+        return generateName(applicationName, "");
     }
 
     private static String generateName(String applicationName, String suffix) {
@@ -21,7 +28,7 @@ public class NameGenerator {
                 .putLong(uuid.getLeastSignificantBits());
         // Convert to base64 and remove trailing =
         String realSuffix = suffix != null && !"".equals(suffix) ? suffix + "." : "";
-        return applicationName+"."+ realSuffix + encodeToUrlSafeString(bb.array())
+        return applicationName + "." + realSuffix + encodeToUrlSafeString(bb.array())
                 .replace("=", "");
     }
 

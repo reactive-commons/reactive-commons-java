@@ -4,8 +4,8 @@ import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.listeners.ApplicationEventListener;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -19,10 +19,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @Import(RabbitMqConfig.class)
 public class EventListenersConfig {
 
-    @Value("${spring.application.name}")
-    private String appName;
-
-    private final AsyncProps asyncProps;
+    private final AsyncPropsDomain asyncPropsDomain;
 
     @Bean
     public ApplicationEventListener eventListener(MessageConverter messageConverter,
@@ -30,17 +27,19 @@ public class EventListenersConfig {
                                                   CustomReporter errorReporter) {
         AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
         manager.forListener((domain, receiver) -> {
+            AsyncProps asyncProps = asyncPropsDomain.getProps(domain);
             final ApplicationEventListener listener = new ApplicationEventListener(receiver,
-                    appName + ".subsEvents",
+                    asyncProps.getBrokerConfigProps().getEventsQueue(),
+                    asyncProps.getBrokerConfigProps().getDomainEventsExchangeName(),
                     handlers.get(domain),
-                    asyncProps.getDomain().getEvents().getExchange(),
                     messageConverter, asyncProps.getWithDLQRetry(),
+                    asyncProps.getCreateTopology(),
                     asyncProps.getMaxRetries(),
                     asyncProps.getRetryDelay(),
                     asyncProps.getDomain().getEvents().getMaxLengthBytes(),
                     manager.getDiscardNotifier(domain),
                     errorReporter,
-                    appName);
+                    asyncProps.getAppName());
             if (DEFAULT_DOMAIN.equals(domain)) {
                 external.set(listener);
             }

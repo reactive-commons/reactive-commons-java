@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.config.props;
 
+import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -23,8 +24,7 @@ public class AsyncProps {
     @NestedConfigurationProperty
     private GlobalProps global = new GlobalProps();
 
-    @NestedConfigurationProperty
-    private NotificationProps notificationProps = new NotificationProps();
+    private boolean listenReplies = true;
 
     private Integer maxRetries = 10;
 
@@ -33,5 +33,6 @@ public class AsyncProps {
     private Integer retryDelay = 1000;
 
     private Boolean withDLQRetry = false;
+    private Boolean createTopology = true; // auto delete queues will always be created and bound
     private Boolean delayedCommands = false;
 }

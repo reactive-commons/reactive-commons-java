@@ -11,6 +11,7 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -30,7 +31,12 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 class QueryListenerConfigTest {
 
     private final AsyncProps props = new AsyncProps();
-    private final QueryListenerConfig config = new QueryListenerConfig(props);
+    private final AsyncPropsDomain asyncPropsDomain = AsyncPropsDomain.builder()
+            .withDefaultAppName("appName")
+            .withDefaultRabbitProperties(new RabbitProperties())
+            .withDomain(DEFAULT_DOMAIN, props)
+            .build();
+    private final QueryListenerConfig config = new QueryListenerConfig(asyncPropsDomain);
     private final ReactiveMessageListener listener = mock(ReactiveMessageListener.class);
     private final TopologyCreator creator = mock(TopologyCreator.class);
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);

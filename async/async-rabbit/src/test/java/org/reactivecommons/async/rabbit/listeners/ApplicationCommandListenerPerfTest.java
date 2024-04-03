@@ -70,10 +70,6 @@ class ApplicationCommandListenerPerfTest {
 
     @BeforeEach
     public void setUp() {
-        Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class))).thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
-        Mockito.when(topologyCreator.declareDLQ(any(String.class), any(String.class), any(Integer.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
-        Mockito.when(topologyCreator.declareQueue(any(String.class), any(String.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
-        Mockito.when(topologyCreator.bind(any(BindingSpecification.class))).thenReturn(just(mock(AMQP.Queue.BindOk.class)));
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
     }
 
@@ -322,7 +318,7 @@ class ApplicationCommandListenerPerfTest {
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, DiscardNotifier discardNotifier, String objectType, HandlerResolver handlerResolver, MessageConverter messageConverter, CustomReporter errorReporter) {
-            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, false, 10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, false, false, 10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
 
     }

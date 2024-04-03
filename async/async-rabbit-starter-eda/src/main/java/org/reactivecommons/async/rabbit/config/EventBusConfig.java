@@ -7,7 +7,8 @@ import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
-import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -20,11 +21,14 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 public class EventBusConfig {
 
     @Bean // app connection
-    public DomainEventBus domainEventBus(ConnectionManager manager, BrokerConfigProps props, BrokerConfig config,
-                                         ObjectMapperSupplier objectMapperSupplier) {
+    public DomainEventBus domainEventBus(ConnectionManager manager, BrokerConfig config,
+                                         AsyncPropsDomain asyncPropsDomain, ObjectMapperSupplier objectMapperSupplier) {
         ReactiveMessageSender sender = manager.getSender(DEFAULT_DOMAIN);
-        final String exchangeName = props.getDomainEventsExchangeName();
-        sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+        AsyncProps asyncProps = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
+        final String exchangeName = asyncProps.getBrokerConfigProps().getDomainEventsExchangeName();
+        if (asyncProps.getCreateTopology()) {
+            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+        }
         DomainEventBus domainEventBus = new RabbitDomainEventBus(sender, exchangeName, config);
         manager.setDiscardNotifier(DEFAULT_DOMAIN, createDiscardNotifier(domainEventBus, objectMapperSupplier));
         return domainEventBus;

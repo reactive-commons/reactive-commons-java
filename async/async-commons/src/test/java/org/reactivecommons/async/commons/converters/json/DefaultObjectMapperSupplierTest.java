@@ -18,12 +18,12 @@ class DefaultObjectMapperSupplierTest {
     void shouldMapWithUnknownProperties() throws IOException {
         ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
 
-        SampleClassExtra base = new SampleClassExtra("23", "one", new Date(), 45l);
+        SampleClassExtra base = new SampleClassExtra("23", "one", new Date(), 45L);
         final String serialized = objectMapper.writeValueAsString(base);
 
         final SampleClass result = objectMapper.readValue(serialized, SampleClass.class);
 
-        assertThat(result).isEqualToComparingFieldByField(base);
+        assertThat(result).usingRecursiveComparison().isEqualTo(base);
     }
 
     @Getter

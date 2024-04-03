@@ -1,0 +1,48 @@
+spring:
+  application:
+    name: sender-eda
+  rabbitmq:
+    virtual-host: /
+server:
+  port: 4001
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+app:
+  async:
+    app:
+      appName: ${spring.application.name}
+      flux:
+        maxConcurrency: 250
+      domain:
+        events:
+          exchange: domainEvents
+          eventsSuffix: subEvents
+          notificationSuffix: notification
+      direct:
+        exchange: directMessages
+        querySuffix: query
+        commandSuffix: ''
+        discardTimeoutQueries: false
+      global:
+        exchange: globalReply
+        repliesSuffix: replies
+      connectionProperties: # RabbitProperties
+        virtualHost: /
+      maxRetries: 10
+      prefetchCount: 250
+      retryDelay: 1000
+      listenReplies: true
+      withDLQRetry: false
+      delayedCommands: false
+      createTopology: true
+#    accounts:
+#      connectionProps:
+#        virtualHost: domain-a
+
+

@@ -70,7 +70,7 @@ class ApplicationReplyListenerTest {
 
         applicationReplyListener = new ApplicationReplyListener(reactiveReplyRouter,
                 reactiveMessageListener,
-                REPLY_QUEUE);
+                REPLY_QUEUE, "globalReply", true);
 
         when(topologyCreator.declare(queueCaptor.capture()))
                 .thenReturn(Mono.just(new AMQImpl.Queue.DeclareOk(REPLY_QUEUE, 0, 0)));

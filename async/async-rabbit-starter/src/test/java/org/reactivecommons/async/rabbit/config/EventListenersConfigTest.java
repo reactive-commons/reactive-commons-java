@@ -5,12 +5,14 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.listeners.ApplicationEventListener;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -33,6 +35,7 @@ class EventListenersConfigTest {
     private final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
     private final CustomReporter customReporter = mock(CustomReporter.class);
     private final Receiver receiver = mock(Receiver.class);
+    private final IBrokerConfigProps brokerConfigProps = new BrokerConfigProps("appName", props);
 
     @BeforeEach
     public void init() {
@@ -56,6 +59,7 @@ class EventListenersConfigTest {
                 messageConverter,
                 listener,
                 discardNotifier,
+                brokerConfigProps,
                 customReporter
         );
 
