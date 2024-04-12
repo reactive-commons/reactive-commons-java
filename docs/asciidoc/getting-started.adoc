@@ -18,7 +18,7 @@ Start RabbitMQ on your local machine with all the defaults (e.g. AMQP port is 56
 
 ==== Sample Spring Boot Application
 
-The Spring Boot sample publishes and cosumes messages with the `DomainEventBus`. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.
+The Spring Boot sample publishes and consumes messages with the `DomainEventBus`. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.
 
 To build your own application using the Reactive Commons API,
 you need to include a dependency to Reactive Commons.

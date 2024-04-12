@@ -1,0 +1,70 @@
+{
+    "client": "Thunder Client",
+    "collectionName": "reactive-commons-eda-domain-a",
+    "dateExported": "2024-04-03T13:34:13.855Z",
+    "version": "1.1",
+    "folders": [],
+    "requests": [
+        {
+            "_id": "854a1a8b-792f-4e93-81c0-7303cac31c3b",
+            "colId": "4a3f48fc-b39b-4ae2-b90f-4b8dad86096a",
+            "containerId": "",
+            "name": "AddMember",
+            "url": "http://localhost:4002/api/teams/ingsw/members",
+            "method": "POST",
+            "sortNum": 20000,
+            "created": "2024-04-03T12:55:28.297Z",
+            "modified": "2024-04-03T13:29:04.872Z",
+            "headers": [],
+            "params": [],
+            "body": {
+                "type": "json",
+                "raw": "{\n  \"name\": \"Juan\",\n  \"username\": \"juancgalvis2\"\n}",
+                "form": []
+            },
+            "tests": []
+        },
+        {
+            "_id": "8790f03f-9047-409e-8c6a-0435d71eacd4",
+            "colId": "4a3f48fc-b39b-4ae2-b90f-4b8dad86096a",
+            "containerId": "",
+            "name": "GetTeams",
+            "url": "http://localhost:4002/api/teams",
+            "method": "GET",
+            "sortNum": 40000,
+            "created": "2024-04-03T12:55:28.300Z",
+            "modified": "2024-04-03T12:57:16.723Z",
+            "headers": [],
+            "params": [],
+            "tests": []
+        },
+        {
+            "_id": "3aeaf5d0-5f30-4e2c-a1da-d8ae26424d68",
+            "colId": "4a3f48fc-b39b-4ae2-b90f-4b8dad86096a",
+            "containerId": "",
+            "name": "GetTeamMembers",
+            "url": "http://localhost:4002/api/teams/ingsw",
+            "method": "GET",
+            "sortNum": 50000,
+            "created": "2024-04-03T12:55:28.301Z",
+            "modified": "2024-04-03T13:18:25.708Z",
+            "headers": [],
+            "params": [],
+            "tests": []
+        },
+        {
+            "_id": "535f2605-b22c-45c2-b188-24ad850d9c8b",
+            "colId": "4a3f48fc-b39b-4ae2-b90f-4b8dad86096a",
+            "containerId": "",
+            "name": "RemoveTeamMember",
+            "url": "http://localhost:4002/api/teams/ingsw/members/juancgalvis2",
+            "method": "DELETE",
+            "sortNum": 60000,
+            "created": "2024-04-03T12:55:28.302Z",
+            "modified": "2024-04-03T13:29:48.474Z",
+            "headers": [],
+            "params": [],
+            "tests": []
+        }
+    ]
+}

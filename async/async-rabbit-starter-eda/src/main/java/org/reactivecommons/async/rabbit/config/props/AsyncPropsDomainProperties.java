@@ -18,4 +18,21 @@ public class AsyncPropsDomainProperties extends HashMap<String, AsyncProps> {
     public AsyncPropsDomainProperties(Map<? extends String, ? extends AsyncProps> m) {
         super(m);
     }
+
+    public static AsyncPropsDomainPropertiesBuilder builder() {
+        return new AsyncPropsDomainPropertiesBuilder();
+    }
+
+    public static class AsyncPropsDomainPropertiesBuilder {
+        private final HashMap<String, AsyncProps> domains = new HashMap<>();
+
+        public AsyncPropsDomainPropertiesBuilder withDomain(String domain, AsyncProps props) {
+            domains.put(domain, props);
+            return this;
+        }
+
+        public AsyncPropsDomainProperties build() {
+            return new AsyncPropsDomainProperties(domains);
+        }
+    }
 }
