@@ -15,7 +15,7 @@
 <h1>Reactive Commons Reference Guide</h1>
 <div class="details">
 <span id="author" class="author">Daniel Bustamante Ospina</span><br>
-<span id="revnumber">version 2.1.0</span>
+<span id="revnumber">version 2.1.1</span>
 </div>
 <div id="toc" class="toc2">
 <div id="toctitle">Table of Contents</div>
@@ -107,7 +107,7 @@
 <p>Even though the main purpose is to provide such abstractions in a mostly generic way such abstractions would be of little use without a concrete implementation so we provide some implementations in a best effors maner that aim to be easy to change, personalize and extend.</p>
 </div>
 <div class="paragraph">
-<p>The first approach to this work was to release a very simple abstractions and a corresponding implementation over asyncronous message driven communication between microservices build on top of project-reactor and spring boot.</p>
+<p>The first approach to this work was to release a very simple abstractions and a corresponding implementation over asynchronous message driven communication between microservices build on top of project-reactor and spring boot.</p>
 </div>
 </div>
 <div class="sect2">
@@ -133,12 +133,12 @@ avoiding unnecessary intermediate buffering or blocking.</p>
 <div class="sect2">
 <h3 id="_reactive_api_for_event_mechanism">1.3. Reactive API for Event Mechanism</h3>
 <div class="paragraph">
-<p>Reactive Commons is a reactive API for asyncronous message driven communication based on Reactor.
+<p>Reactive Commons is a reactive API for asynchronous message driven communication based on Reactor.
 Reactive Commons API enables messages to be published over a event bus like RabbitMQ or SNS/SQS and consumed using functional APIs with non-blocking back-pressure and low overheads.
 It enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating it with other systems to provide an end-to-end reactive system.</p>
 </div>
 <div class="paragraph">
-<p>When we talk about asyncronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events, Commands and Queries.</p>
+<p>When we talk about asynchronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events, Commands and Queries.</p>
 </div>
 <div class="sect3">
 <h4 id="_events_pubsub">1.3.1. Events - Pub/Sub</h4>
@@ -188,7 +188,7 @@ It enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bu
 <div class="sect3">
 <h4 id="_sample_spring_boot_application">2.1.2. Sample Spring Boot Application</h4>
 <div class="paragraph">
-<p>The Spring Boot sample publishes and cosumes messages with the <code>DomainEventBus</code>. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.</p>
+<p>The Spring Boot sample publishes and consumes messages with the <code>DomainEventBus</code>. This application illustrates how to configure Reactive Commons using RabbitMQ in a Spring Boot environment.</p>
 </div>
 <div class="paragraph">
 <p>To build your own application using the Reactive Commons API,
@@ -908,8 +908,8 @@ public class SomeConfigurationClass {
 </div>
 <div id="footer">
 <div id="footer-text">
-Version 2.1.0<br>
-Last updated 2024-04-03 15:29:52 UTC
+Version 2.1.1<br>
+Last updated 2024-04-12 13:46:43 UTC
 </div>
 </div>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prettify/r298/prettify.min.css">
