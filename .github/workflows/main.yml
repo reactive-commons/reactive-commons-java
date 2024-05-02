@@ -80,7 +80,7 @@ jobs:
           push-branch: 'master'
           commit-message: 'Automatic docs and changelog generation'
           force-add: 'true'
-          files: CHANGELOG.md docs/
+          files: CHANGELOG.md
           name: ${{ github.actor }}
           email: ${{ github.actor }}@users.noreply.github.com
       #      - name: Push codeCoverage to Codecov
