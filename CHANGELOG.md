@@ -1,9 +1,10 @@
 # Changelog
 
-## [2.2.1](https://github.com/reactive-commons/reactive-commons-java/tree/2.2.1) (2024-04-12)
+## [2.2.1](https://github.com/reactive-commons/reactive-commons-java/tree/2.2.1) (2024-05-02)
 
 **Merged pull requests:**
 
+- Update spring [\#99](https://github.com/reactive-commons/reactive-commons-java/pull/99)
 - docs\(bean\): Add bean sample to generate configuration programatically [\#98](https://github.com/reactive-commons/reactive-commons-java/pull/98)
 
 ## [2.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/2.1.0) (2024-04-03)
