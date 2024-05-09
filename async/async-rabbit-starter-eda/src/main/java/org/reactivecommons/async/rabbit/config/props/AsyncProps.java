@@ -17,6 +17,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 @Builder
 public class AsyncProps {
     private String appName;
+    private String secret;
 
     @NestedConfigurationProperty
     @Builder.Default
