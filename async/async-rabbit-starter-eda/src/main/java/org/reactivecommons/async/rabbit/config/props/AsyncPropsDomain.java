@@ -5,6 +5,7 @@ import lombok.Setter;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.exceptions.InvalidConfigurationException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.util.StringUtils;
 
 import java.util.HashMap;
 
@@ -15,7 +16,8 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
     public AsyncPropsDomain(@Value("${spring.application.name}") String defaultAppName,
                             RabbitProperties defaultRabbitProperties,
-                            AsyncPropsDomainProperties configured) {
+                            AsyncPropsDomainProperties configured,
+                            SecretFiller secretFiller) {
         super(configured);
         this.computeIfAbsent(DEFAULT_DOMAIN, k -> new AsyncProps());
         super.forEach((key, value) -> { // To ensure that each domain has an appName
@@ -38,6 +40,9 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
             if (value.getBrokerConfigProps() == null) {
                 value.setBrokerConfigProps(new BrokerConfigProps(value));
             }
+            if (StringUtils.hasText(value.getSecret()) && secretFiller != null) {
+                secretFiller.fillWithSecret(value);
+            }
         });
     }
 
@@ -56,6 +61,7 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
     public static class AsyncPropsDomainBuilder {
         private String defaultAppName;
         private RabbitProperties defaultRabbitProperties;
+        private SecretFiller secretFiller;
         private final HashMap<String, AsyncProps> domains = new HashMap<>();
 
 
@@ -70,6 +76,12 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
             return this;
         }
 
+
+        public AsyncPropsDomainBuilder withSecretFiller(SecretFiller secretFiller) {
+            this.secretFiller = secretFiller;
+            return this;
+        }
+
         public AsyncPropsDomainBuilder withDomain(String domain, AsyncProps props) {
             domains.put(domain, props);
             return this;
@@ -80,9 +92,13 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
             if (defaultRabbitProperties == null) {
                 defaultRabbitProperties = new RabbitProperties();
             }
-            return new AsyncPropsDomain(defaultAppName, defaultRabbitProperties, domainProperties);
+            return new AsyncPropsDomain(defaultAppName, defaultRabbitProperties, domainProperties, secretFiller);
         }
 
+    }
+
+    public interface SecretFiller {
+        void fillWithSecret(AsyncProps props);
     }
 
 }

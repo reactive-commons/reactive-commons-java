@@ -225,4 +225,11 @@ public class RabbitMqConfig {
         return HandlerRegistry.register();
     }
 
+    @Bean
+    @ConditionalOnMissingBean(AsyncPropsDomain.SecretFiller.class)
+    public AsyncPropsDomain.SecretFiller defaultSecretFiller() {
+        return ignored -> {
+        };
+    }
+
 }
