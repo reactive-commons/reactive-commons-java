@@ -7,6 +7,7 @@ dependencies {
     api project(':async-rabbit')
     compileOnly 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
