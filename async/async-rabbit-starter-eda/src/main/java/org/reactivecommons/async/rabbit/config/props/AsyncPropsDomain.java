@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.config.props;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
@@ -20,6 +22,8 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
                             SecretFiller secretFiller) {
         super(configured);
         this.computeIfAbsent(DEFAULT_DOMAIN, k -> new AsyncProps());
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
         super.forEach((key, value) -> { // To ensure that each domain has an appName
             if (value.getAppName() == null) {
                 if (defaultAppName == null || defaultAppName.isEmpty()) {
@@ -35,7 +39,7 @@ public class AsyncPropsDomain extends HashMap<String, AsyncProps> {
                             " RabbitProperties properties found, please use withDefaultRabbitProperties or define the" +
                             "default " + key + " domain with properties explicitly");
                 }
-                value.setConnectionProperties(defaultRabbitProperties);
+                value.setConnectionProperties(mapper.convertValue(defaultRabbitProperties, RabbitProperties.class));
             }
             if (value.getBrokerConfigProps() == null) {
                 value.setBrokerConfigProps(new BrokerConfigProps(value));

@@ -28,22 +28,24 @@ public class EventListenersConfig {
         AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
         manager.forListener((domain, receiver) -> {
             AsyncProps asyncProps = asyncPropsDomain.getProps(domain);
-            final ApplicationEventListener listener = new ApplicationEventListener(receiver,
-                    asyncProps.getBrokerConfigProps().getEventsQueue(),
-                    asyncProps.getBrokerConfigProps().getDomainEventsExchangeName(),
-                    handlers.get(domain),
-                    messageConverter, asyncProps.getWithDLQRetry(),
-                    asyncProps.getCreateTopology(),
-                    asyncProps.getMaxRetries(),
-                    asyncProps.getRetryDelay(),
-                    asyncProps.getDomain().getEvents().getMaxLengthBytes(),
-                    manager.getDiscardNotifier(domain),
-                    errorReporter,
-                    asyncProps.getAppName());
-            if (DEFAULT_DOMAIN.equals(domain)) {
-                external.set(listener);
+            if (!asyncProps.getDomain().isIgnoreThisListener()) {
+                final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+                        asyncProps.getBrokerConfigProps().getEventsQueue(),
+                        asyncProps.getBrokerConfigProps().getDomainEventsExchangeName(),
+                        handlers.get(domain),
+                        messageConverter, asyncProps.getWithDLQRetry(),
+                        asyncProps.getCreateTopology(),
+                        asyncProps.getMaxRetries(),
+                        asyncProps.getRetryDelay(),
+                        asyncProps.getDomain().getEvents().getMaxLengthBytes(),
+                        manager.getDiscardNotifier(domain),
+                        errorReporter,
+                        asyncProps.getAppName());
+                if (DEFAULT_DOMAIN.equals(domain)) {
+                    external.set(listener);
+                }
+                listener.startListener();
             }
-            listener.startListener();
         });
 
         return external.get();
