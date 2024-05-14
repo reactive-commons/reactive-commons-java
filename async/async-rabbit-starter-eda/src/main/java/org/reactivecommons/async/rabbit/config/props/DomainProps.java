@@ -17,5 +17,6 @@ public class DomainProps {
     @NestedConfigurationProperty
     @Builder.Default
     private EventsProps events = new EventsProps();
+    @Builder.Default
     private boolean ignoreThisListener = false;
 }

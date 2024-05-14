@@ -19,8 +19,10 @@ class KeyMatcherTest {
         keyMatcher = new KeyMatcher();
         listeners = new HashSet<>();
         listeners.add("A.*");
+        listeners.add("A.#");
         listeners.add("A.B");
         listeners.add("A.B.*");
+        listeners.add("A.B.#");
         listeners.add("A.B.C");
         listeners.add("A.B.*.D");
         listeners.add("A.B.C.D");
@@ -50,6 +52,13 @@ class KeyMatcherTest {
     }
 
     @Test
+    void matchExistentAnotherThirdLevel() {
+        String nonExistentTarget = "A.B.X.Y";
+        final String match = keyMatcher.match(listeners, nonExistentTarget);
+        assertEquals("A.B.#", match);
+    }
+
+    @Test
     void matchExistentSecondLevel() {
         String existentTarget = "A.B.C";
         final String match = keyMatcher.match(listeners, existentTarget);
@@ -74,14 +83,14 @@ class KeyMatcherTest {
     void matchDefaultForNonExistent() {
         String nonExistentTarget = "A.W.X.Y.Z";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
-        assertEquals("A.*", match);
+        assertEquals("A.#", match);
     }
 
     @Test
     void matchDefaultForNonExistentSecondLevel() {
         String nonExistentTarget = "A.B.X.Y.Z";
         final String match = keyMatcher.match(listeners, nonExistentTarget);
-        assertEquals("A.B.*", match);
+        assertEquals("A.B.#", match);
     }
 
     @Test
@@ -109,12 +118,20 @@ class KeyMatcherTest {
     void shouldApplyPriority() {
         listeners = new HashSet<>();
         listeners.add("*.*.*");
+        listeners.add("*.#.*");
         listeners.add("prefix.*.*");
-        listeners.add("*.middle.*");
+        listeners.add("prefix.*.#");
         listeners.add("*.*.suffix");
+        listeners.add("#.*.suffix");
         listeners.add("*.middle.suffix");
+        listeners.add("#.middle.suffix");
+        listeners.add("*.middle.*");
+        listeners.add("*.middle.#");
+        listeners.add("#.middle.#");
         listeners.add("prefix.*.suffix");
+        listeners.add("prefix.#.suffix");
         listeners.add("prefix.middle.*");
+        listeners.add("prefix.middle.#");
         listeners.add("prefix.middle.suffix");
         listeners.add("prefix.other.other");
         listeners.add("other.middle.other");
@@ -128,18 +145,18 @@ class KeyMatcherTest {
         assertEquals("prefix.other.other", keyMatcher.match(listeners, "prefix.other.other"));
         assertEquals("prefix.middle.suffix", keyMatcher.match(listeners, "prefix.middle.suffix"));
         assertEquals("prefix.middle.*", keyMatcher.match(listeners, "prefix.middle.any"));
-        assertEquals("prefix.middle.*", keyMatcher.match(listeners, "prefix.middle.any.any"));
+        assertEquals("prefix.middle.#", keyMatcher.match(listeners, "prefix.middle.any.any"));
         assertEquals("prefix.*.suffix", keyMatcher.match(listeners, "prefix.any.suffix"));
-        assertEquals("prefix.*.suffix", keyMatcher.match(listeners, "prefix.any.any.suffix"));
+        assertEquals("prefix.#.suffix", keyMatcher.match(listeners, "prefix.any.any.suffix"));
         assertEquals("*.middle.suffix", keyMatcher.match(listeners, "any.middle.suffix"));
-        assertEquals("*.middle.suffix", keyMatcher.match(listeners, "any.any.middle.suffix"));
+        assertEquals("#.middle.suffix", keyMatcher.match(listeners, "any.any.middle.suffix"));
         assertEquals("*.*.suffix", keyMatcher.match(listeners, "any.any.suffix"));
-        assertEquals("*.*.suffix", keyMatcher.match(listeners, "any.any.any.suffix"));
+        assertEquals("#.*.suffix", keyMatcher.match(listeners, "any.any.any.suffix"));
         assertEquals("*.middle.*", keyMatcher.match(listeners, "any.middle.any"));
-        assertEquals("*.middle.*", keyMatcher.match(listeners, "any.any.middle.any.any"));
+        assertEquals("#.middle.#", keyMatcher.match(listeners, "any.any.middle.any.any"));
         assertEquals("prefix.*.*", keyMatcher.match(listeners, "prefix.any.any"));
-        assertEquals("prefix.*.*", keyMatcher.match(listeners, "prefix.any.any.any.any"));
+        assertEquals("prefix.*.#", keyMatcher.match(listeners, "prefix.any.any.any.any"));
         assertEquals("*.*.*", keyMatcher.match(listeners, "any.any.any"));
-        assertEquals("*.*.*", keyMatcher.match(listeners, "any.any.any.any.any"));
+        assertEquals("*.#.*", keyMatcher.match(listeners, "any.any.any.any.any"));
     }
 }

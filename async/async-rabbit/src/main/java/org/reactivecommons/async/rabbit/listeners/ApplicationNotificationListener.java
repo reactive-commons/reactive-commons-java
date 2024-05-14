@@ -41,7 +41,8 @@ public class ApplicationNotificationListener extends GenericMessageListener {
                                            MessageConverter messageConverter,
                                            DiscardNotifier discardNotifier,
                                            CustomReporter errorReporter) {
-        super(queueName, receiver, false, true, 1, discardNotifier, "event", errorReporter);
+        super(queueName, receiver, false, true, 1,
+                200, discardNotifier, "event", errorReporter);
         this.resolver = handlerResolver;
         this.messageConverter = messageConverter;
         this.exchangeName = exchangeName;

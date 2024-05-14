@@ -64,8 +64,8 @@ public class HandlerResolver {
     }
 
     void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
-        if (handler.getPath().contains("*")) {
-            throw new RuntimeException("avoid * in dynamic handlers, make sure you have no conflicts with cached patterns");
+        if (handler.getPath().contains("*") || handler.getPath().contains("#")) {
+            throw new RuntimeException("avoid * or # in dynamic handlers, make sure you have no conflicts with cached patterns");
         }
         queryHandlers.put(handler.getPath(), handler);
     }

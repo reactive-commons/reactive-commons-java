@@ -52,7 +52,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
                                     String replyExchange, boolean withDLQRetry, boolean createTopology, long maxRetries,
                                     int retryDelay, Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries,
                                     DiscardNotifier discardNotifier, CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, createTopology, maxRetries, discardNotifier, "query", errorReporter);
+        super(queueName, listener, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
+                "query", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.converter = converter;

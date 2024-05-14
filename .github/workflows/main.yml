@@ -1,32 +1,44 @@
 name: 'reactive-commons-ci-cd'
-
 on:
   push:
     branches:
       - master
-
   pull_request:
     branches:
       - master
-
-  release:
-    types: [ created ]
-
 jobs:
   build:
-    if: github.event_name != 'release'
+    if: ${{ !contains(github.event.head_commit.message, '[skip ci]') }}
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - name: Verify Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5
+        if: github.event_name == 'pull_request' || github.event_name == 'pull_request_target'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Set up NodeJS
+        if: github.ref == 'refs/heads/master'
+        uses: actions/setup-node@v4
         with:
-          fetch-depth: 0
+          node-version-file: '.nvmrc'
+      - name: Set up Semantic Release
+        if: github.ref == 'refs/heads/master'
+        run: npm -g install @semantic-release/git semantic-release@23.0.0
+      - name: Semantic Release
+        if: github.ref == 'refs/heads/master'
+        run: npx semantic-release@23.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.PA_TOKEN }}
       - name: Set up JDK 17
         uses: actions/setup-java@v3
         with:
           distribution: temurin
           java-version: 17
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
       - name: Execute build test jacocoTestReport and sonar analysis
         if: endsWith(github.REF, '/master') == true
         env:
@@ -39,49 +51,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: ./gradlew build test jacocoTestReport --refresh-dependencies --no-daemon --continue -Denv.ci=true
-
-  release:
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - name: Set up JDK 17
-        uses: actions/setup-java@v3
-        with:
-          distribution: temurin
-          java-version: 17
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-      #      - name: Execute jacocoTestReport
-      #        run: ./gradlew test jacocoTestReport && cp build/reports/jacoco/report.xml jacoco.xml || echo "Code coverage failed"
-      - name: Build with Gradle
-        run: ./gradlew build --refresh-dependencies --no-daemon --continue -Denv.ci=true
-      - name: Prepare gpg key
-        run: |
-          echo "${{secrets.SIGNING_KEY_FILE}}" | base64 -d > ~/.gradle/secring.gpg
-      - name: Publish Libraries
-        run: ./gradlew publish -Psigning.keyId=${{ secrets.SIGNING_KEY_ID }} -Psigning.password=${{ secrets.SIGNING_KEY_PASSWORD }} -Psigning.secretKeyRingFile=$(echo ~/.gradle/secring.gpg) -Denv.ci=true
-        env:
-          MAVEN_USERNAME: ${{ secrets.MAVEN_USERNAME }}
-          MAVEN_PASSWORD: ${{ secrets.MAVEN_PASSWORD }}
-      - name: Generate Changelog
-        uses: heinrichreimer/github-changelog-generator-action@v2.1.1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          pullRequests: true
-          prWoLabels: true
-          issues: true
-          issuesWoLabels: true
-          stripGeneratorNotice: true
-      - name: Push Changelog
-        uses: github-actions-x/commit@v2.9
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          push-branch: 'master'
-          commit-message: 'Automatic docs and changelog generation'
-          force-add: 'true'
-          files: CHANGELOG.md
-          name: ${{ github.actor }}
-          email: ${{ github.actor }}@users.noreply.github.com
-      #      - name: Push codeCoverage to Codecov
-      #        run: bash <(curl -s https://codecov.io/bash)
