@@ -10,4 +10,6 @@ public class Constants {
     public static String MEMBER_REMOVED = "member-removed";
     public static String MEMBER_REMOVED_EXTERNAL_DOMAIN = "member-removed-from-active-directory";
     public static String DATA_RESET = "data-reset";
+    public static String ANIMALS = "animals.*";
+    public static String ANIMALS_MANY = "animals.#";
 }
