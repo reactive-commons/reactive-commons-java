@@ -140,7 +140,7 @@ class GenericMessageListenerPerfTest {
     class StubGenericMessageListener extends GenericMessageListener {
 
         public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, boolean createTopology, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter errorReporter) {
-            super(queueName, listener, useDLQRetries, createTopology, maxRetries, discardNotifier, objectType, errorReporter);
+            super(queueName, listener, useDLQRetries, createTopology, maxRetries, 200, discardNotifier, objectType, errorReporter);
         }
 
         @Override

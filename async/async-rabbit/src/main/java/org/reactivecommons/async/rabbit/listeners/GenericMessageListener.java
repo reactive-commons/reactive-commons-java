@@ -33,6 +33,7 @@ import static reactor.core.publisher.Mono.defer;
 
 @Log
 public abstract class GenericMessageListener {
+    public static final int DEFAULT_RETRIES_DLQ = 10;
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
@@ -43,23 +44,29 @@ public abstract class GenericMessageListener {
     private final boolean useDLQRetries;
     private final boolean createTopology;
     private final long maxRetries;
+    private final Duration retryDelay;
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                  boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
+                                  boolean createTopology, long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
                                   String objectType, CustomReporter customReporter) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
         this.createTopology = createTopology;
-        this.maxRetries = maxRetries;
+        this.maxRetries = resolveRetries(useDLQRetries, maxRetries);
+        this.retryDelay = Duration.ofMillis(retryDelay);
         this.useDLQRetries = useDLQRetries;
         this.discardNotifier = discardNotifier;
         this.objectType = objectType;
         this.customReporter = customReporter;
+    }
+
+    private static long resolveRetries(boolean useDLQRetries, long maxRetries) {
+        return useDLQRetries && maxRetries == -1 ? DEFAULT_RETRIES_DLQ : maxRetries;
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -187,20 +194,18 @@ public abstract class GenericMessageListener {
         final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
-        if ((redeliver || retryNumber > 0) && useDLQRetries) {
-            if (retryNumber >= maxRetries) {
-                logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
-                return discardNotifier
-                        .notifyDiscard(rabbitMessage)
-                        .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
-            } else {
-                logError(err, msj, FallbackStrategy.RETRY_DLQ);
-                msj.nack(false);
-            }
+        if (maxRetries != -1 && retryNumber >= maxRetries) {
+            logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
+            return discardNotifier
+                    .notifyDiscard(rabbitMessage)
+                    .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
+        } else if (useDLQRetries) {
+            logError(err, msj, FallbackStrategy.RETRY_DLQ);
+            msj.nack(false);
             return Mono.just(msj);
         } else {
             logError(err, msj, FallbackStrategy.FAST_RETRY);
-            return Mono.just(msj).delayElement(Duration.ofMillis(200)).doOnNext(m -> m.nack(true));
+            return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> m.nack(true));
         }
     }
 

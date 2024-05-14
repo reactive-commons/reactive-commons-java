@@ -40,8 +40,13 @@ public class AsyncProps {
 
     private IBrokerConfigProps brokerConfigProps;
 
+    /**
+     * -1 will be considered default value.
+     * When withDLQRetry is true, it will be retried 10 times.
+     * When withDLQRetry is false, it will be retried indefinitely.
+     */
     @Builder.Default
-    private Integer maxRetries = 10;
+    private Integer maxRetries = -1;
 
     @Builder.Default
     private Integer prefetchCount = 250;

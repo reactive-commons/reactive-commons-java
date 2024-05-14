@@ -1,6 +1,5 @@
 package org.reactivecommons.async.rabbit.config.props;
 
-import lombok.Builder;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -26,7 +25,12 @@ public class AsyncProps {
 
     private boolean listenReplies = true;
 
-    private Integer maxRetries = 10;
+    /**
+     * -1 will be considered default value.
+     * When withDLQRetry is true, it will be retried 10 times.
+     * When withDLQRetry is false, it will be retried indefinitely.
+     */
+    private Integer maxRetries = -1;
 
     private Integer prefetchCount = 250;
 

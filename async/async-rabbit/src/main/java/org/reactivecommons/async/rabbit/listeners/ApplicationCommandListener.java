@@ -46,7 +46,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
                                       Optional<Integer> maxLengthBytes,
                                       DiscardNotifier discardNotifier,
                                       CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, createTopology, maxRetries, discardNotifier, "command", errorReporter);
+        super(queueName, listener, withDLQRetry, createTopology, maxRetries, retryDelay,
+                discardNotifier, "command", errorReporter);
         this.retryDelay = retryDelay;
         this.withDLQRetry = withDLQRetry;
         this.delayedCommands = delayedCommands;

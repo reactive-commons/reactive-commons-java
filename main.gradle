@@ -106,16 +106,16 @@ subprojects {
                     }
                 }
             }
-            repositories {
-                maven {
-                    name = 'OSSRH'
-                    url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
-                    credentials {
-                        username = System.getenv('MAVEN_USERNAME')
-                        password = System.getenv('MAVEN_PASSWORD')
-                    }
-                }
-            }
+//            repositories {
+//                maven {
+//                    name = 'OSSRH'
+//                    url = 'https://oss.sonatype.org/service/local/staging/deploy/maven2/'
+//                    credentials {
+//                        username = System.getenv('MAVEN_USERNAME')
+//                        password = System.getenv('MAVEN_PASSWORD')
+//                    }
+//                }
+//            }
         }
 
         if (project.hasProperty('signing.keyId')) {
@@ -123,6 +123,12 @@ subprojects {
                 sign publishing.publications.mavenJava
             }
         }
+    }
+}
+
+nexusPublishing {
+    repositories {
+        sonatype()
     }
 }
 

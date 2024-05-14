@@ -19,6 +19,7 @@ import sample.model.Member;
 import sample.model.Members;
 import sample.model.Teams;
 import sample.model.broker.AddMemberCommand;
+import sample.model.broker.AnimalEvent;
 import sample.model.broker.RemovedMemberEvent;
 
 import java.util.UUID;
@@ -68,6 +69,13 @@ public class SampleRestController {
                                                               @PathVariable("member") String member) {
         DomainEvent<RemovedMemberEvent> event = new DomainEvent<>(Constants.MEMBER_REMOVED, UUID.randomUUID().toString(),
                 RemovedMemberEvent.builder().teamName(team).username(member).build());
+        return Mono.from(domainEventBus.emit(event)).thenReturn(event);
+    }
+
+    @GetMapping(path = "/api/animals/{event}", produces = APPLICATION_JSON_VALUE)
+    public Mono<DomainEvent<AnimalEvent>> wildCardEvent(@PathVariable("event") String eventName) {
+        DomainEvent<AnimalEvent> event = new DomainEvent<>(eventName, UUID.randomUUID().toString(),
+                AnimalEvent.builder().type("dog").name(UUID.randomUUID().toString()).build());
         return Mono.from(domainEventBus.emit(event)).thenReturn(event);
     }
 }
