@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.0) (2024-05-15)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v3.0.0...v4.1.0)
+
+**Merged pull requests:**
+
+- ci\(docs\): Add docs in main branch, commit gradle version on relese [\#106](https://github.com/reactive-commons/reactive-commons-java/pull/106) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v3.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/v3.0.0) (2024-05-15)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v2.2.3...v3.0.0)
