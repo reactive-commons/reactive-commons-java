@@ -42,6 +42,6 @@ jobs:
           push-branch: 'master'
           commit-message: 'Automatic docs and changelog generation [skip ci]'
           force-add: 'true'
-          files: CHANGELOG.md
+          files: CHANGELOG.md gradle.properties
           name: ${{ github.actor }}
           email: ${{ github.actor }}@users.noreply.github.com
