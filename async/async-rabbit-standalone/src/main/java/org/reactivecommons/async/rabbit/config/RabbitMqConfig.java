@@ -32,10 +32,9 @@ public class RabbitMqConfig {
                 senderConnection,
                 new ChannelPoolOptions().maxCacheSize(rabbitProperties.getChannelPoolMaxCacheSize())
         );
-
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().channelPool(channelPool));
-
-        return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(sender));
+    final SenderOptions senderOptions = new SenderOptions().channelPool(channelPool);
+        final Sender sender = RabbitFlux.createSender(senderOptions);
+        return new ReactiveMessageSender(senderOptions, appName, converter, new TopologyCreator(sender));
     }
 
     /*public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {

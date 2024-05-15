@@ -1,6 +1,9 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.ShutdownSignalException;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
@@ -20,15 +23,19 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
+@Slf4j
 public class ReactiveMessageSender {
+    @Getter
     private final Sender sender;
     private final String sourceApplication;
     private final MessageConverter messageConverter;
+    @Getter
     private final TopologyCreator topologyCreator;
 
     private final int numberOfSenderSubscriptions = 4;
@@ -46,28 +53,56 @@ public class ReactiveMessageSender {
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
+        createSendersWithConfirm(numberOfSenderSubscriptions);
+        createSenderNoConfirm();
+    }
 
-        for (int i = 0; i < numberOfSenderSubscriptions; ++i) {
-            final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
-            sender.sendWithTypedPublishConfirms(messageSource).doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
-                final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
-                executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
-            }).subscribe();
+    private void createSendersWithConfirm(int toAdd) {
+        for (int i = 0; i < toAdd; ++i) {
+            final AtomicReference<FluxSink<?>> fluxSinkRef = new AtomicReference<>();
+            final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSink -> {
+                fluxSinkRef.set(fluxSink);
+                this.fluxSinkConfirm.add(fluxSink);
+            });
+            sender.sendWithTypedPublishConfirms(messageSource)
+                    .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
+                        final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
+                        executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
+                    })
+                    .onErrorResume(ShutdownSignalException.class, throwable -> {
+                        log.warn("RabbitMQ connection lost. Trying to recreate sender with confirm...", throwable);
+                        fluxSinkConfirm.remove(fluxSinkRef.get());
+                        createSendersWithConfirm(1);
+                        return Mono.empty();
+                    })
+                    .subscribe();
         }
+    }
 
-        final Flux<OutboundMessage> messageSourceNoConfirm = Flux.create(fluxSink -> {
-            this.fluxSinkNoConfirm = fluxSink;
-        });
-        sender.send(messageSourceNoConfirm).subscribe();
-
+    private void createSenderNoConfirm() {
+        final Flux<OutboundMessage> messageSourceNoConfirm = Flux.create(fluxSink -> this.fluxSinkNoConfirm = fluxSink);
+        sender.send(messageSourceNoConfirm)
+                .onErrorResume(ShutdownSignalException.class, throwable -> {
+                    log.warn("RabbitMQ connection lost. Trying to recreate sender no confirm...");
+                    createSenderNoConfirm();
+                    return Mono.empty();
+                })
+                .subscribe();
     }
 
     public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
         return Mono.create(monoSink -> {
             Consumer<Boolean> notifier = new AckNotifier(monoSink);
             final MyOutboundMessage outboundMessage = toOutboundMessage(message, exchange, routingKey, headers, notifier, persistent);
-            executorService2.submit(() -> fluxSinkConfirm.get((int) (System.currentTimeMillis() % numberOfSenderSubscriptions)).next(outboundMessage));
+            executorService2.submit(() -> {
+                FluxSink<MyOutboundMessage> outboundFlux = fluxSinkConfirm.get(random(numberOfSenderSubscriptions));
+                outboundFlux.next(outboundMessage);
+            });
         });
+    }
+
+    private static int random(int max) {
+        return (int) (System.currentTimeMillis() % max);
     }
 
 
@@ -76,7 +111,7 @@ public class ReactiveMessageSender {
         return Mono.empty();
     }
 
-    public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
+    public <T> Flux<OutboundMessageResult<?>> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey, Map<String, Object> headers, boolean persistent) {
         return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
                 .as(sender::sendWithPublishConfirms)
                 .flatMap(result -> result.isAck() ?
@@ -103,6 +138,7 @@ public class ReactiveMessageSender {
     }
 
 
+    @Getter
     static class MyOutboundMessage extends OutboundMessage {
 
         private final Consumer<Boolean> ackNotifier;
@@ -112,9 +148,6 @@ public class ReactiveMessageSender {
             this.ackNotifier = ackNotifier;
         }
 
-        public Consumer<Boolean> getAckNotifier() {
-            return ackNotifier;
-        }
     }
 
     private <T> MyOutboundMessage toOutboundMessage(T object, String exchange, String routingKey, Map<String, Object> headers, Consumer<Boolean> ackNotifier, boolean persistent) {
@@ -148,12 +181,5 @@ public class ReactiveMessageSender {
         return builder.build();
     }
 
-    public reactor.rabbitmq.Sender getSender() {
-        return sender;
-    }
-
-    public TopologyCreator getTopologyCreator() {
-        return topologyCreator;
-    }
 }
 

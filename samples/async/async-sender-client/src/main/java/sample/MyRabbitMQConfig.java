@@ -15,7 +15,8 @@ public class MyRabbitMQConfig {
         properties.setHost("localhost");
         properties.setPort(5672);
         properties.setVirtualHost("/");
-        properties.setUsername("guest");
+        properties.setUsername("other");
+        System.out.println("User changed");
         properties.setPassword("guest");
         return properties;
     }

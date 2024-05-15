@@ -2,6 +2,7 @@ spring:
   application:
     name: sender
   rabbitmq:
+    username: other
     virtual-host: /
 server:
   port: 4001
@@ -15,5 +16,5 @@ management:
         include: health,prometheus
 app:
   async:
-    createTopology: true
-    listenReplies: true
+    createTopology: false
+    listenReplies: false
