@@ -2,13 +2,13 @@
 sidebar_position: 10
 ---
 
-### Wildcards
+# Wildcards
 
 You may need to listen variable event names that have the same structure, in that case you have the method `handleDynamicEvents` in the `HandlerRegistry`, so you can specify a pattern with '*' wildcard, it does not creates a binding in the broker, but allows that you do it dynamically through a `DynamicRegistry` class.
 
 You can also create binding with '#' wildcard, it is used to listen multiple words, for example `animals.#` will listen to `animals.dog`, `animals.dog.bark`, `animals.cat`, `animals.cat.meow`, etc.
 
-#### DynamicRegistry API
+## DynamicRegistry API
 
 ```java
 public interface DynamicRegistry {
@@ -78,7 +78,7 @@ public class HandlerRegistryConfiguration {
 
 This last approach is useful when you have a dynamic event name, for example, you can have a `purchase.cancelled` event, but you can also have a `purchase.cancelled.2021` event, so you can listen to all of them with `purchase.*` or `purchase.#` respectively.
 
-# Priorities
+## Priorities
 
 The handlers with wildcards have the lowest priority, so if you have a specific handler for an event name, it will be called before the wildcard handler.
 
