@@ -1,9 +1,7 @@
 package org.reactivecommons.async.commons.utils.matcher;
 
-import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 public class KeyMatcher implements Matcher {
 
@@ -25,43 +23,14 @@ public class KeyMatcher implements Matcher {
                 .orElse(target);
     }
 
-    public static void main(String[] args) {
-        Set<String> names = Set.of(
-                "*.*.*",
-                "*.#.*",
-                "prefix.*.*",
-                "prefix.*.#",
-                "*.middle.*",
-                "*.*.suffix",
-                "*.middle.#",
-                "*.middle.suffix",
-                "#.middle.suffix",
-                "prefix.*.suffix",
-                "prefix.#.suffix",
-                "prefix.middle.*",
-                "prefix.middle.#",
-                "prefix.middle.suffix",
-                "prefix.other.other",
-                "other.middle.other",
-                "other.other.suffix",
-                "other.other.other",
-                "in.depend.ent");
-        String target = "any.any.middle.suffix";
-        List<String> res = names.stream()
-                .filter(name -> matches(target, name))
-                .sorted(KeyMatcher::compare)
-                .collect(Collectors.toList());
-        System.out.println(res);
-    }
-
     private static int compare(String firstExpression, String secondExpression) {
         String[] firstExpressionArr = getSeparated(firstExpression);
         String[] secondExpressionArr = getSeparated(secondExpression);
         return compare(secondExpressionArr.length - firstExpressionArr.length, firstExpressionArr, secondExpressionArr, 0);
     }
 
-    private static int compare(int current, String[] first, String[] second, int idx){
-        if(idx >= first.length || idx >= second.length){
+    private static int compare(int current, String[] first, String[] second, int idx) {
+        if (idx >= first.length || idx >= second.length) {
             return current;
         }
         if (first[idx].equals(second[idx])) {
