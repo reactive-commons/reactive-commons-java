@@ -13,8 +13,8 @@ app:
   async:
     app: # this is the name of the default domain
         withDLQRetry: false # if you want to have dlq queues with retries you can set it to true, you cannot change it after queues are created, because you will get an error, so you should delete topology before the change.
-        maxRetries: 10 # max message retries, used when withDLQRetry is enabled
-        retryDelay: 1000 # interval for message retries, used when withDLQRetry is enabled
+        maxRetries: -1 # -1 will be considered default value. When withDLQRetry is true, it will be retried 10 times. When withDLQRetry is false, it will be retried indefinitely.
+        retryDelay: 1000 # interval for message retries, with and without DLQRetry
         listenReplies: true # if you will not use ReqReply patter you can set it to false
         createTopology: true # if your organization have restricctions with automatic topology creation you can set it to false and create it manually or by your organization process.
         delayedCommands: false # Enable to send a delayed command to an external target

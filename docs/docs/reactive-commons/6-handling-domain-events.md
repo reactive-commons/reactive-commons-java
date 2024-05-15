@@ -94,9 +94,10 @@ public class DynamicSubscriber {
 }
 ```
 
-The conditions for a success dynamic registry functionallity are:
+The conditions for a success dynamic registry functionality are:
 
 - You should handle dynamic events with specific wildcard
+
 ```java
 @Configuration
 public class HandlerRegistryConfiguration {
@@ -109,10 +110,28 @@ public class HandlerRegistryConfiguration {
 }
 ```
 
-- Start a listener dinamically through
+- Start a listener dynamically through
 
 ```java
 registry.startListeningEvent("purchase.cancelled");
+```
+
+You also can listen with * wildcard or # wildcard, the * wildcard is for a single word and # wildcard is for multiple words, for example:
+
+`animals.*` will listen to `animals.dog`, `animals.cat`, `animals.bird`, etc.
+`animals.#` will listen to `animals.dog`, `animals.dog.bark`, `animals.cat`, `animals.cat.meow`, etc.
+
+```java
+@Configuration
+public class HandlerRegistryConfiguration {
+
+    @Bean
+    public HandlerRegistry handlerRegistry(EventsHandler events) {
+        return HandlerRegistry.register()
+                .listenEvent("animals.*", events::handleEventA, Object.class/*change for proper model*/)
+                .listenEvent("pets.#.any", events::handleEventA, Object.class/*change for proper model*/);
+    }
+}
 ```
 
 ## Example
