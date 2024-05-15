@@ -7,4 +7,5 @@ app:
   async:
     createTopology: true
     listenReplies: false
+    maxRetries: 3
 

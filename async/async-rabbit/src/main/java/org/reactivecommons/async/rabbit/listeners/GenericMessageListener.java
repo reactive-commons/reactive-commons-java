@@ -17,6 +17,7 @@ import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -69,6 +70,10 @@ public abstract class GenericMessageListener {
         return useDLQRetries && maxRetries == -1 ? DEFAULT_RETRIES_DLQ : maxRetries;
     }
 
+    private boolean hasLocalRetries() {
+        return !useDLQRetries && maxRetries != -1;
+    }
+
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         return Mono.empty();
     }
@@ -109,9 +114,12 @@ public abstract class GenericMessageListener {
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
             final Message message = RabbitMessage.fromDelivery(msj);
 
-            return defer(() -> handler.apply(message))
-                    .transform(enrichPostProcess(message))
-                    .doOnSuccess(o -> logExecution(executorPath, initTime, true))
+            Mono<Object> flow = defer(() -> handler.apply(message))
+                    .transform(enrichPostProcess(message));
+            if (hasLocalRetries()) {
+                flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay));
+            }
+            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(scheduler).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
@@ -194,16 +202,16 @@ public abstract class GenericMessageListener {
         final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
-        if (maxRetries != -1 && retryNumber >= maxRetries) {
+        if (hasLocalRetries() || retryNumber >= maxRetries) { // Discard
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
             return discardNotifier
                     .notifyDiscard(rabbitMessage)
                     .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
-        } else if (useDLQRetries) {
+        } else if (useDLQRetries) { // DLQ retries
             logError(err, msj, FallbackStrategy.RETRY_DLQ);
             msj.nack(false);
             return Mono.just(msj);
-        } else {
+        } else { // infinity fast retries
             logError(err, msj, FallbackStrategy.FAST_RETRY);
             return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> m.nack(true));
         }
