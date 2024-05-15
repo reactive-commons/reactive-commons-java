@@ -1,7 +1,6 @@
-subprojects {
-    apply plugin: 'java-library'
+allprojects {
+    apply plugin: 'java'
     apply plugin: 'jacoco'
-    apply plugin: 'io.spring.dependency-management'
 
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_17
@@ -11,6 +10,25 @@ subprojects {
         maven { url 'https://repo.spring.io/snapshot' }
         maven { url 'https://repo.spring.io/milestone' }
     }
+
+    group 'com.github.bancolombia'
+}
+
+nexusPublishing {
+    repositories {
+        sonatype()
+    }
+}
+
+subprojects {
+    apply plugin: 'java-library'
+    apply plugin: 'io.spring.dependency-management'
+
+    ext {
+        groupId = 'com.github.bancolombia'
+    }
+
+    group = groupId
 
     dependencies {
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
@@ -29,7 +47,7 @@ subprojects {
 
     test {
         useJUnitPlatform()
-        if (System.getProperty("env.ci").equals("true")){
+        if (System.getProperty("env.ci").equals("true")) {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
 
@@ -44,42 +62,25 @@ subprojects {
     if (toPublish.split(',').contains(it.name)) {
         apply plugin: 'maven-publish'
         apply plugin: 'signing'
-        ext {
-            groupId = 'org.reactivecommons'
-            pomConfig = {
-                licenses {
-                    license {
-                        name 'The Apache Software License, Version 2.0'
-                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-                        distribution 'repo'
-                    }
-                }
-                developers {
-                    developer {
-                        id 'danielbustamante'
-                        name 'Daniel Bustamante Ospina'
-                        email 'danibust@bancolombia.com.co'
-                    }
-                }
-                scm {
-                    url 'git@github.com:reactive-commons/reactive-commons-java.git'
-                }
-            }
-        }
 
         group groupId
 
-        tasks.register('sourcesJar', Jar) {
-            dependsOn classes
-            classifier 'sources'
-            from sourceSets.main.allJava
+        tasks.named("jar") {
+            enabled = true
+            archiveClassifier = ''
         }
 
-        tasks.register('javadocJar', Jar) {
-            dependsOn javadoc
-            classifier = 'javadoc'
-            from javadoc.destinationDir
+        java {
+            withJavadocJar()
+            withSourcesJar()
         }
+
+        javadoc {
+            if (JavaVersion.current().isJava9Compatible()) {
+                options.addBooleanOption('html5', true)
+            }
+        }
+        javadoc.failOnError = false
 
         tasks.withType(GenerateModuleMetadata).configureEach {
             enabled = false
@@ -88,22 +89,39 @@ subprojects {
         publishing {
             publications {
                 mavenJava(MavenPublication) {
-                    from components.java
+                    pom {
+                        name = artifactId
+                        description = 'Abstract your broker with semantic async messages'
+                        url = 'https://reactivecommons.org/reactive-commons-java'
+                        licenses {
+                            license {
+                                name = 'The Apache Software License, Version 2.0'
+                                url = 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                                distribution = 'repo'
+                            }
+                        }
+                        developers {
+                            developer {
+                                id = 'danielbustamante'
+                                name = 'Daniel Bustamante Ospina'
+                                email = 'danibust@bancolombia.com.co'
+                            }
+                            developer {
+                                id = "juancgalvis"
+                                name = "Juan Carlos Galvis"
+                                email = "juanc.galvis@outlook.com"
+                            }
+                        }
+                        scm {
+                            url = 'git@github.com:reactive-commons/reactive-commons-java.git'
+                        }
+                    }
 
-                    artifact sourcesJar
-                    artifact javadocJar
+                    from components.java
 
                     groupId = groupId
                     artifactId = artifactId
                     version = project.property('version')
-
-                    pom.withXml {
-                        def root = asNode()
-                        root.appendNode('description', artifactDescription)
-                        root.appendNode('name', artifactId)
-                        root.appendNode('url', 'http://reactivecommons.org')
-                        root.children().last() + pomConfig
-                    }
                 }
             }
         }
@@ -116,12 +134,6 @@ subprojects {
     }
 }
 
-nexusPublishing {
-    repositories {
-        sonatype()
-    }
-}
-
 tasks.named('wrapper') {
-    gradleVersion = '7.6'
+    gradleVersion = '8.5'
 }
