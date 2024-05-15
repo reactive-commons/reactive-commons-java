@@ -117,7 +117,14 @@ public abstract class GenericMessageListener {
             Mono<Object> flow = defer(() -> handler.apply(message))
                     .transform(enrichPostProcess(message));
             if (hasLocalRetries()) {
-                flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay));
+                flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay))
+                        .onErrorMap(err -> {
+                            if (err.getMessage() != null && err.getMessage().contains("Retries exhausted")) {
+                                log.warning(err.getMessage());
+                                return err.getCause();
+                            }
+                            return err;
+                        });
             }
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(scheduler).thenReturn(msj);
