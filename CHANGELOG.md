@@ -1,5 +1,16 @@
 # Changelog
 
+## [v4.1.1](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.1) (2024-05-15)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.0...v4.1.1)
+
+**Merged pull requests:**
+
+- test\(retries\): local retries [\#110](https://github.com/reactive-commons/reactive-commons-java/pull/110) ([juancgalvis](https://github.com/juancgalvis))
+- fix\(retries\): local retries [\#109](https://github.com/reactive-commons/reactive-commons-java/pull/109) ([juancgalvis](https://github.com/juancgalvis))
+- docs\(wildcard\): Add wildcard priority docs [\#108](https://github.com/reactive-commons/reactive-commons-java/pull/108) ([juancgalvis](https://github.com/juancgalvis))
+- docs\(wildcard\): Update documentation with changes in retries and wildcards [\#107](https://github.com/reactive-commons/reactive-commons-java/pull/107) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v4.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.0) (2024-05-15)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v3.0.0...v4.1.0)
