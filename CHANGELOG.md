@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.1](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.1) (2024-05-15)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.0...v4.1.1)
+
+**Merged pull requests:**
+
+- fix\(ci\): Fix release [\#103](https://github.com/reactive-commons/reactive-commons-java/pull/103) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v4.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.0) (2024-05-14)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v2.2.3...v4.1.0)
