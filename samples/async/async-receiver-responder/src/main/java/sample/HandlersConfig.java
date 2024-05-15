@@ -25,7 +25,7 @@ public class HandlersConfig {
     public HandlerRegistry handlerRegistrySubs(UseCase useCase) {
         animalEventEventHandler = event -> {
             log.info(event);
-            return Mono.empty();
+            return Mono.error(new RuntimeException("Not implemented"));
         };
         return HandlerRegistry.register()
                 .listenEvent(Constants.MEMBER_REMOVED, useCase::removeMember, RemovedMemberEvent.class)

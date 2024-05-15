@@ -99,6 +99,14 @@ The next code will help you to avoid unexpected behaviors, which indicates you t
     }
 ```
 
+## Possible issues
+
+Unprocessed events will be notified with an event, so please handle it properly and ensure you don't have wildcards that match all events, because it can cause unexpected behaviors.
+
+For example if you have a handler for `my.event.#` and you start listening to `my.event`, it will match all events that start with `my.event`, so it will match `my.event.any` if your handler has dlq retries or has local retries, when your handler fails the retry limit, an event with name `my.event.any.dlq` will be sent.
+
+And if you have the same binding `my.event.#` the event will be handled by the handler, so you will have two different event structures for the same handler, and it can cause unexpected behaviors.
+
 ## Example
 
 You can see a real example at [samples/async/async-receiver-responder](https://github.com/reactive-commons/reactive-commons-java/tree/master/samples/async/async-receiver-responder)
