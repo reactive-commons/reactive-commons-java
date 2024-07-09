@@ -41,7 +41,7 @@ subprojects {
 
     jacocoTestReport {
         reports {
-            xml.enabled true
+            xml.setRequired true
         }
     }
 
@@ -55,7 +55,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom "org.springframework.boot:spring-boot-dependencies:${springBootVersion}"
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.3.1'
         }
     }
 
@@ -135,5 +135,5 @@ subprojects {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '8.5'
+    gradleVersion = '8.8'
 }

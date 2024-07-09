@@ -14,5 +14,5 @@ dependencies {
     api 'com.rabbitmq:amqp-client'
     api 'com.fasterxml.jackson.core:jackson-databind'
     testImplementation 'io.projectreactor:reactor-test'
-    implementation "io.cloudevents:cloudevents-json-jackson:${cloudEventsVersion}"
+    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }
