@@ -41,7 +41,7 @@ jobs:
           java-version: 17
       - name: Execute build test jacocoTestReport and sonar analysis
         if: endsWith(github.REF, '/master') == true
-        env
+        env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: ./gradlew build test jacocoTestReport sonar --refresh-dependencies --no-daemon --continue -Denv.ci=true
