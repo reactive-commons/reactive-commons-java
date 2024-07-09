@@ -32,8 +32,8 @@ public class ConnectionManager {
         connections.forEach((key, conn) -> consumer.accept(key, conn.getListener()));
     }
 
-    public void setDiscardNotifier(String domain, DiscardNotifier discardNotifier) {
-        getChecked(domain).setDiscardNotifier(discardNotifier);
+    public void setDiscardNotifierForAll(DiscardNotifier discardNotifier) {
+        connections.forEach((key, conn) -> conn.setDiscardNotifier(discardNotifier));
     }
 
     public ConnectionManager addDomain(String domain, ReactiveMessageListener listener, ReactiveMessageSender sender,

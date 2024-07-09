@@ -1,10 +1,7 @@
 package org.reactivecommons.async.rabbit.config;
 
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.config.BrokerConfig;
-import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
-import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
@@ -22,19 +19,13 @@ public class EventBusConfig {
 
     @Bean // app connection
     public DomainEventBus domainEventBus(ConnectionManager manager, BrokerConfig config,
-                                         AsyncPropsDomain asyncPropsDomain, ObjectMapperSupplier objectMapperSupplier) {
+                                         AsyncPropsDomain asyncPropsDomain) {
         ReactiveMessageSender sender = manager.getSender(DEFAULT_DOMAIN);
         AsyncProps asyncProps = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
         final String exchangeName = asyncProps.getBrokerConfigProps().getDomainEventsExchangeName();
         if (asyncProps.getCreateTopology()) {
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
         }
-        DomainEventBus domainEventBus = new RabbitDomainEventBus(sender, exchangeName, config);
-        manager.setDiscardNotifier(DEFAULT_DOMAIN, createDiscardNotifier(domainEventBus, objectMapperSupplier));
-        return domainEventBus;
-    }
-
-    private DiscardNotifier createDiscardNotifier(DomainEventBus domainEventBus, ObjectMapperSupplier objectMapperSupplier) {
-        return new RabbitDiscardNotifier(domainEventBus, objectMapperSupplier.get());
+        return new RabbitDomainEventBus(sender, exchangeName, config);
     }
 }

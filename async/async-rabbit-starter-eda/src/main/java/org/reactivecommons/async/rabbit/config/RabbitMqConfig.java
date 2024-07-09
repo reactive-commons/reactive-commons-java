@@ -7,11 +7,13 @@ import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
@@ -21,6 +23,8 @@ import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
 import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
+import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -67,7 +71,8 @@ public class RabbitMqConfig {
 
 
     @Bean
-    public ConnectionManager buildConnectionManager(AsyncPropsDomain props, MessageConverter converter) {
+    public ConnectionManager buildConnectionManager(AsyncPropsDomain props, MessageConverter converter,
+                                                    BrokerConfig brokerConfig, ObjectMapperSupplier objectMapperSupplier) {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((domain, properties) -> {
             ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties.getConnectionProperties());
@@ -75,6 +80,11 @@ public class RabbitMqConfig {
             ReactiveMessageListener listener = createMessageListener(provider, properties);
             connectionManager.addDomain(domain, listener, sender, provider);
         });
+        ReactiveMessageSender appDomainSender = connectionManager.getSender(DEFAULT_DOMAIN);
+        DomainEventBus appDomainEventBus = new RabbitDomainEventBus(appDomainSender, props.getProps(DEFAULT_DOMAIN)
+                .getBrokerConfigProps().getDomainEventsExchangeName(), brokerConfig);
+        DiscardNotifier notifier = new RabbitDiscardNotifier(appDomainEventBus, objectMapperSupplier.get());
+        connectionManager.setDiscardNotifierForAll(notifier);
         return connectionManager;
     }
 
