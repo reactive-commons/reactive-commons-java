@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.2](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.2) (2024-07-09)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.1...v4.1.2)
+
+**Merged pull requests:**
+
+- fix\(notifier\): discard notifier for eda variant [\#112](https://github.com/reactive-commons/reactive-commons-java/pull/112) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v4.1.1](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.1) (2024-05-15)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.0...v4.1.1)
