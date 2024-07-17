@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.3](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.3) (2024-07-17)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.2...v4.1.3)
+
+**Merged pull requests:**
+
+- fix\(notifier\): Set the discard notifier with domain connection properties [\#113](https://github.com/reactive-commons/reactive-commons-java/pull/113) ([jhonatan-kmt](https://github.com/jhonatan-kmt))
+
 ## [v4.1.2](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.2) (2024-07-09)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.1...v4.1.2)
