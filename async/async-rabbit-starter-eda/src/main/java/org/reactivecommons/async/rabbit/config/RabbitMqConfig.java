@@ -79,12 +79,13 @@ public class RabbitMqConfig {
             ReactiveMessageSender sender = createMessageSender(provider, properties, converter);
             ReactiveMessageListener listener = createMessageListener(provider, properties);
             connectionManager.addDomain(domain, listener, sender, provider);
+            
+            ReactiveMessageSender appDomainSender = connectionManager.getSender(domain);
+            DomainEventBus appDomainEventBus = new RabbitDomainEventBus(appDomainSender, props.getProps(domain)
+                    .getBrokerConfigProps().getDomainEventsExchangeName(), brokerConfig);
+            DiscardNotifier notifier = new RabbitDiscardNotifier(appDomainEventBus, objectMapperSupplier.get());
+            connectionManager.setDiscardNotifier(domain, notifier);
         });
-        ReactiveMessageSender appDomainSender = connectionManager.getSender(DEFAULT_DOMAIN);
-        DomainEventBus appDomainEventBus = new RabbitDomainEventBus(appDomainSender, props.getProps(DEFAULT_DOMAIN)
-                .getBrokerConfigProps().getDomainEventsExchangeName(), brokerConfig);
-        DiscardNotifier notifier = new RabbitDiscardNotifier(appDomainEventBus, objectMapperSupplier.get());
-        connectionManager.setDiscardNotifierForAll(notifier);
         return connectionManager;
     }
 
