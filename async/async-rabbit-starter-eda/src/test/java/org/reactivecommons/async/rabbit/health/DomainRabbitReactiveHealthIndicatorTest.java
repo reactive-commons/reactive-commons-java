@@ -37,12 +37,14 @@ public class DomainRabbitReactiveHealthIndicatorTest {
 
     @BeforeEach
     void setup() {
+        when(provider.getConnectionFactory()).thenReturn(factory);
+        when(factory.clone()).thenReturn(factory);
+
         ConnectionManager connectionManager = new ConnectionManager();
         connectionManager.addDomain(DEFAULT_DOMAIN, null, null, provider);
         connectionManager.addDomain("domain2", null, null, provider);
         connectionManager.addDomain("domain3", null, null, provider);
         indicator = new DomainRabbitReactiveHealthIndicator(connectionManager);
-        when(provider.getConnectionFactory()).thenReturn(factory);
     }
 
     @Test
