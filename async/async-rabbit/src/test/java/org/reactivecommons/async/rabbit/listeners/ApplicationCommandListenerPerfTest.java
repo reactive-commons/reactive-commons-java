@@ -10,7 +10,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DefaultCommandHandler;
@@ -28,45 +27,48 @@ import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
-import reactor.rabbitmq.BindingSpecification;
-import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.Receiver;
 
 import java.math.BigInteger;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static reactor.core.publisher.Flux.range;
-import static reactor.core.publisher.Mono.just;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicationCommandListenerPerfTest {
 
 
-    @Mock
-    private Receiver receiver;
-
-    @Mock
-    private TopologyCreator topologyCreator;
-
-    @Mock
-    private DiscardNotifier discardNotifier;
-
-    @Mock
-    private CustomReporter errorReporter;
-
-    private StubGenericMessageListener messageListener;
     private static final CountDownLatch latch = new CountDownLatch(12 + 1);
-
     private static final int messageCount = 40000;
     private final Semaphore semaphore = new Semaphore(0);
+    @Mock
+    private Receiver receiver;
+    @Mock
+    private TopologyCreator topologyCreator;
+    @Mock
+    private DiscardNotifier discardNotifier;
+    @Mock
+    private CustomReporter errorReporter;
+    private StubGenericMessageListener messageListener;
     private MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     private ReactiveMessageListener reactiveMessageListener;
+
+    private static BigInteger makeHardWork() {
+        final long number = ThreadLocalRandom.current().nextLong(100) + 2700;
+        BigInteger fact = new BigInteger("1");
+        for (long i = 1; i <= number; i++) {
+            fact = fact.multiply(BigInteger.valueOf(i));
+        }
+        return fact;
+    }
 
     @BeforeEach
     public void setUp() {
@@ -169,14 +171,6 @@ class ApplicationCommandListenerPerfTest {
         for (long end = System.currentTimeMillis() + delay; System.currentTimeMillis() < end; ) ;
     }
 
-    private static BigInteger makeHardWork() {
-        final long number = ThreadLocalRandom.current().nextLong(100) + 2700;
-        BigInteger fact = new BigInteger("1");
-        for (long i = 1; i <= number; i++) {
-            fact = fact.multiply(BigInteger.valueOf(i));
-        }
-        return fact;
-    }
 
 
     @Test
@@ -265,14 +259,14 @@ class ApplicationCommandListenerPerfTest {
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry initialRegistry) {
         final HandlerRegistry registry = range(0, 20).reduce(initialRegistry, (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
-        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream()
+        final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers().stream()
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll);
         return new HandlerResolver(null, null, null, null, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
-            public RegisteredCommandHandler<Object> getCommandHandler(String path) {
-                final RegisteredCommandHandler<Object> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new RegisteredCommandHandler<Object>("", new DefaultCommandHandler<Object>() {
+            public RegisteredCommandHandler<Object, ? extends Object> getCommandHandler(String path) {
+                final RegisteredCommandHandler<Object, Object> handler = (RegisteredCommandHandler<Object, Object>) super.getCommandHandler(path);
+                return handler != null ? handler : new RegisteredCommandHandler<Object, Command<Object>>("", new DefaultCommandHandler<Object>() {
                     @Override
                     public Mono<Void> handle(Command<Object> message) {
                         return Mono.error(new RuntimeException("Default handler in Test"));

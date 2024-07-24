@@ -1,12 +1,14 @@
 package org.reactivecommons.async.api;
 
+import io.cloudevents.CloudEvent;
 import lombok.Data;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.handlers.CommandHandler;
-import org.reactivecommons.async.api.handlers.EventHandler;
+import org.reactivecommons.async.api.handlers.CloudCommandHandler;
+import org.reactivecommons.async.api.handlers.DomainCommandHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -23,10 +25,10 @@ class HandlerRegistryTest {
     private final String name = "some.event";
 
     @Test
-    void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
+    void shouldListenDomainEvent() {
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
 
-        registry.listenEvent(name, eventHandler);
+        registry.listenEvent(name, eventHandler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
@@ -35,32 +37,13 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void shouldRegisterPatternEventHandlerWithTypeInference() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
-
-        String eventNamePattern = "a.*";
-
-        HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler);
-        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
-                new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
-
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
-                .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
-                        .usingRecursiveComparison()
-                        .isEqualTo(expectedRegisteredEventListener));
-
-        assertThat(resultRegistry)
-                .isSameAs(registry);
-    }
-
-    @Test
     void shouldRegisterPatternEventHandler() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
 
         String eventNamePattern = "a.*";
 
         HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler, SomeDataClass.class);
-        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
+        RegisteredEventListener<SomeDataClass, DomainEvent<SomeDataClass>> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
@@ -82,7 +65,7 @@ class HandlerRegistryTest {
     @Test
     @SuppressWarnings("unchecked")
     public void listenEvent() {
-        EventHandler<SomeDataClass> handler = mock(EventHandler.class);
+        SomeDomainEventHandler<SomeDataClass> handler = mock(SomeDomainEventHandler.class);
         registry.listenEvent(name, handler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
@@ -92,15 +75,27 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void handleCommandWithTypeInference() {
-        SomeCommandHandler handler = new SomeCommandHandler();
+    void handleDomainCommand() {
+        SomeDomainCommandHandler<SomeDataClass> handler = new SomeDomainCommandHandler<>();
 
-        registry.handleCommand(name, handler);
+        registry.handleCommand(name, handler, SomeDataClass.class);
 
         assertThat(registry.getCommandHandlers())
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
                         .containsExactly(name, SomeDataClass.class, handler)).hasSize(1);
+    }
+
+    @Test
+    void handleCloudCommand() {
+        SomeCloudCommandHandler cloudCommandHandler = new SomeCloudCommandHandler();
+
+        registry.handleCloudCommand(name, cloudCommandHandler);
+
+        assertThat(registry.getCommandHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
+                        .containsExactly(name, CloudEvent.class, cloudCommandHandler)).hasSize(1);
     }
 
     @Test
@@ -181,17 +176,24 @@ class HandlerRegistryTest {
         }
     }
 
-    private static class SomeEventHandler implements EventHandler<SomeDataClass> {
+    private static class SomeDomainEventHandler<SomeDataClass> implements DomainEventHandler<SomeDataClass> {
         @Override
         public Mono<Void> handle(DomainEvent<SomeDataClass> message) {
             return Mono.empty();
         }
     }
 
-    private static class SomeCommandHandler implements CommandHandler<SomeDataClass> {
+    private static class SomeDomainCommandHandler<SomeDataClass> implements DomainCommandHandler<SomeDataClass> {
         @Override
         public Mono<Void> handle(Command<SomeDataClass> message) {
             return Mono.empty();
+        }
+    }
+
+    private static class SomeCloudCommandHandler implements CloudCommandHandler {
+        @Override
+        public Mono<Void> handle(CloudEvent message) {
+            return null;
         }
     }
 
