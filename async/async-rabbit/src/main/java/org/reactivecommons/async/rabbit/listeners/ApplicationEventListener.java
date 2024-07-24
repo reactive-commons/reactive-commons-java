@@ -2,7 +2,8 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.api.handlers.CloudEventHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
@@ -81,11 +82,9 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredEventListener<Object> handler = resolver.getEventListener(executorPath);
+        final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
 
-        final Class<Object> eventClass = handler.getInputClass();
-        Function<Message, DomainEvent<Object>> converter = msj -> messageConverter.readDomainEvent(msj, eventClass);
-
+        Function<Message, Object> converter = resolveConverter(handler);
         final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);
 
         return msj -> executor
@@ -102,6 +101,16 @@ public class ApplicationEventListener extends GenericMessageListener {
         return messageConverter.readDomainEventStructure(msj);
     }
 
+    private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
+        if (registeredEventListener.getHandler() instanceof DomainEventHandler) {
+            final Class<T> eventClass = registeredEventListener.getInputClass();
+            return msj -> messageConverter.readDomainEvent(msj, eventClass);
+        }
+        if (registeredEventListener.getHandler() instanceof CloudEventHandler) {
+            return messageConverter::readCloudEvent;
+        }
+        throw new RuntimeException("Unknown handler type");
+    }
 }
 
 

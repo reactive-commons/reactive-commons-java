@@ -215,26 +215,26 @@ public class RabbitMqConfig {
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = registries
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = registries
                 .values().stream()
                 .flatMap(r -> r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
         // event handlers and dynamic handlers
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = registries
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = registries
                 .values().stream()
                 .flatMap(r -> Stream.concat(r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream(), r.getDynamicEventHandlers().stream()))
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
+        final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
                 .values().stream()
                 .flatMap(r -> r.getCommandHandlers().stream())
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                         ConcurrentHashMap::putAll);
 
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventNotificationListener = registries
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
                 .values()
                 .stream()
                 .flatMap(r -> r.getEventNotificationListener().stream())
@@ -244,8 +244,8 @@ public class RabbitMqConfig {
         return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
             @Override
             @SuppressWarnings("unchecked")
-            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
-                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
+            public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
+                final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
                 return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
             }
         };

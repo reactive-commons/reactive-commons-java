@@ -14,6 +14,8 @@ import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessageResult;
+import reactor.util.function.Tuple2;
+import reactor.util.function.Tuples;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -24,11 +26,7 @@ import java.util.concurrent.TimeoutException;
 
 import static java.lang.Boolean.TRUE;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
-import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
-import static org.reactivecommons.async.commons.Headers.REPLY_ID;
-import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
-import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
+import static org.reactivecommons.async.commons.Headers.*;
 import static reactor.core.publisher.Mono.fromCallable;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
@@ -74,23 +72,26 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis, String domain) {
-        Map<String, Object> headers = new HashMap<>();
-        String realTarget = targetName;
-        if (delayMillis > 0) {
-            headers.put(DELAYED, String.valueOf(delayMillis));
-            realTarget = targetName + "-delayed";
-        }
-        return resolveSender(domain).sendWithConfirm(command, exchange, realTarget, headers, persistentCommands);
+        Tuple2<String, Map<String, Object>> targetAndHeaders = validateDelay(targetName, delayMillis);
+        return resolveSender(domain).sendWithConfirm(command, exchange, targetAndHeaders.getT1(),
+                targetAndHeaders.getT2(), persistentCommands);
     }
 
     @Override
-    public Mono<Void> sendCommand(CloudEvent command, String targetName) {
-        return sendCommand(new Command<>(command.getType(), command.getId(), command), targetName);
+    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName) {
+        return sendCloudCommand(command, targetName, 0, DEFAULT_DOMAIN);
     }
 
     @Override
-    public Mono<Void> sendCommand(CloudEvent command, String targetName, String domain) {
-        return sendCommand(new Command<>(command.getType(), command.getId(), command), targetName, domain);
+    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName, String domain) {
+        return sendCloudCommand(command, targetName, 0, domain);
+    }
+
+    @Override
+    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName, long delayMillis, String domain) {
+        Tuple2<String, Map<String, Object>> targetAndHeaders = validateDelay(targetName, delayMillis);
+        return resolveSender(domain).sendWithConfirm(command, exchange, targetAndHeaders.getT1(),
+                targetAndHeaders.getT2(), persistentCommands);
     }
 
     public <T> Flux<OutboundMessageResult> sendCommands(Flux<Command<T>> commands, String targetName) {
@@ -150,6 +151,16 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     protected ReactiveMessageSender resolveSender(String domain) { // NOSONAR
         return sender;
+    }
+
+    private Tuple2<String, Map<String, Object>> validateDelay(String targetName, long delayMillis) {
+        Map<String, Object> headers = new HashMap<>();
+        String realTarget = targetName;
+        if (delayMillis > 0) {
+            headers.put(DELAYED, String.valueOf(delayMillis));
+            realTarget = targetName + "-delayed";
+        }
+        return Tuples.of(realTarget, headers);
     }
 
 }

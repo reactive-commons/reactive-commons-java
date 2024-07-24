@@ -33,8 +33,10 @@ public class RabbitDomainEventBus implements DomainEventBus {
     }
 
     @Override
-    public Publisher<Void> emit(CloudEvent event) {
-        return emit(new DomainEvent<>(event.getType(), event.getId(), event));
+    public Publisher<Void> emitCloudEvent(CloudEvent cloudEvent) {
+        return sender.sendWithConfirm(cloudEvent, exchange, cloudEvent.getType(),
+                        Collections.emptyMap(), persistentEvents)
+                .onErrorMap(err -> new RuntimeException("Event send failure: " + cloudEvent.getType(), err));
     }
 
 }

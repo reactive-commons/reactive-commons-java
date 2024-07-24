@@ -32,48 +32,48 @@ public class HandlerResolverBuilder {
                     .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                             ConcurrentHashMap::putAll);
 
-            final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
+            final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
                     .values().stream()
                     .flatMap(r -> r.getCommandHandlers().stream())
                     .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                             ConcurrentHashMap::putAll);
 
-            final ConcurrentMap<String, RegisteredEventListener<?>> eventNotificationListener = registries
+            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
                     .values()
                     .stream()
                     .flatMap(r -> r.getEventNotificationListener().stream())
                     .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                             ConcurrentHashMap::putAll);
 
-            final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = getEventsToBind(domain, registries);
+            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain, registries);
 
-            final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
+            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
 
             return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
                 @Override
                 @SuppressWarnings("unchecked")
-                public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
-                    final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
+                public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
+                    final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
                     return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
                 }
             };
         }
 
 
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = getEventsToBind(domain, registries);
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain, registries);
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
 
         return new HandlerResolver(new ConcurrentHashMap<>(), eventHandlers, eventsToBind, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()) {
             @Override
             @SuppressWarnings("unchecked")
-            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
-                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
+            public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
+                final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
                 return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
             }
         };
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?>> getEventHandlersWithDynamics(String domain, Map<String, HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(String domain, Map<String, HandlerRegistry> registries) {
         // event handlers and dynamic handlers
         return registries
                 .values().stream()
@@ -88,14 +88,14 @@ public class HandlerResolverBuilder {
                         ConcurrentHashMap::putAll);
     }
 
-    private static Stream<RegisteredEventListener<?>> getDynamics(String domain, HandlerRegistry r) {
+    private static Stream<RegisteredEventListener<?, ?>> getDynamics(String domain, HandlerRegistry r) {
         if (DEFAULT_DOMAIN.equals(domain)) {
             return r.getDynamicEventHandlers().stream();
         }
         return Stream.of();
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?>> getEventsToBind(String domain, Map<String, HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(String domain, Map<String, HandlerRegistry> registries) {
         return registries
                 .values().stream()
                 .flatMap(r -> {

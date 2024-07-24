@@ -28,6 +28,7 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
 
     public JacksonCloudEventMessageConverter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
     }
 
     @Override
@@ -63,6 +64,11 @@ public class JacksonCloudEventMessageConverter implements MessageConverter {
         } catch (IOException e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
+    }
+
+    @Override
+    public CloudEvent readCloudEvent(Message message) {
+        return readValue(message, CloudEvent.class);
     }
 
     @Override

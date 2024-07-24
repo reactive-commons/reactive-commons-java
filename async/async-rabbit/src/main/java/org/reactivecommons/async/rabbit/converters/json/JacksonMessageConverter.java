@@ -2,6 +2,8 @@ package org.reactivecommons.async.rabbit.converters.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.jackson.JsonFormat;
 import lombok.Data;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -23,6 +25,7 @@ public class JacksonMessageConverter implements MessageConverter {
 
     public JacksonMessageConverter(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
+        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
     }
 
     @Override
@@ -56,6 +59,11 @@ public class JacksonMessageConverter implements MessageConverter {
         } catch (IOException e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
+    }
+
+    @Override
+    public CloudEvent readCloudEvent(Message message) {
+        return readValue(message, CloudEvent.class);
     }
 
     @Override
