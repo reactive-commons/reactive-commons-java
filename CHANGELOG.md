@@ -1,5 +1,13 @@
 # Changelog
 
+## [v4.1.4](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.4) (2024-07-25)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.3...v4.1.4)
+
+**Merged pull requests:**
+
+- fix\(health\): Use blocking IO for health indicator connection [\#114](https://github.com/reactive-commons/reactive-commons-java/pull/114) ([jhonatan-kmt](https://github.com/jhonatan-kmt))
+
 ## [v4.1.3](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.3) (2024-07-17)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.2...v4.1.3)
