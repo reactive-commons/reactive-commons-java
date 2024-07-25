@@ -2,30 +2,35 @@ package org.reactivecommons.async.rabbit.health;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
-import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.ConnectionManager;
 import org.springframework.boot.actuate.health.AbstractReactiveHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
 import reactor.core.publisher.Mono;
 
 import java.net.SocketException;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Log4j2
-@RequiredArgsConstructor
 public class DomainRabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicator {
     private static final String VERSION = "version";
-    private final ConnectionManager manager;
+    private final Map<String, ConnectionFactory> domainProviders;
+
+    public DomainRabbitReactiveHealthIndicator(ConnectionManager manager) {
+        this.domainProviders = manager.getProviders().entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                    ConnectionFactory connection = entry.getValue().getProvider().getConnectionFactory().clone();
+                    connection.useBlockingIo();
+                    return connection;
+                }));
+    }
 
     @Override
     protected Mono<Health> doHealthCheck(Health.Builder builder) {
-        return Mono.zip(manager.getProviders()
-                .entrySet()
-                .stream()
-                .map(entry -> checkSingle(entry.getKey(), entry.getValue().getProvider()))
+        return Mono.zip(domainProviders.entrySet().stream()
+                .map(entry -> checkSingle(entry.getKey(), entry.getValue()))
                 .collect(Collectors.toList()), this::merge);
     }
 
@@ -38,15 +43,9 @@ public class DomainRabbitReactiveHealthIndicator extends AbstractReactiveHealthI
         return builder.build();
     }
 
-    private Mono<Status> checkSingle(String domain, ConnectionFactoryProvider provider) {
-        return Mono.defer(() -> getVersion(provider))
+    private Mono<Status> checkSingle(String domain, ConnectionFactory connectionFactory) {
+        return Mono.defer(() -> Mono.just(getRawVersion(connectionFactory)))
                 .map(version -> Status.builder().version(version).domain(domain).build());
-    }
-
-    private Mono<String> getVersion(ConnectionFactoryProvider provider) {
-        return Mono.just(provider)
-                .map(ConnectionFactoryProvider::getConnectionFactory)
-                .map(this::getRawVersion);
     }
 
     @SneakyThrows
