@@ -83,7 +83,7 @@ public class RCKafkaConfig {
 
     @Bean
     public RCKafkaProps kafkaProps() throws IOException {
-        String env = Files.readString(Path.of("/Users/jcgalvis/projects/reactive-commons-java/.kafka-env"));
+        String env = Files.readString(Path.of(".kafka-env"));
         String[] split = env.split("\n");
         RCKafkaProps props = new RCKafkaProps();
         for (String s : split) {
