@@ -10,11 +10,12 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.json.CloudEventBuilderExt;
+import org.reactivecommons.async.commons.converters.json.JacksonCloudEventMessageConverter;
 
 import java.io.IOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.OffsetDateTime;
 import java.util.Date;
 import java.util.UUID;
 

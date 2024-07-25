@@ -1,6 +1,6 @@
 package org.reactivecommons.async.rabbit.config;
 
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 
 import java.util.Map;
 import java.util.TreeMap;

@@ -49,7 +49,8 @@ public class ReactiveMessageSender {
 
         for (int i = 0; i < numberOfSenderSubscriptions; ++i) {
             final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
-            sender.sendWithTypedPublishConfirms(messageSource).doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
+            sender.sendWithTypedPublishConfirms(messageSource)
+                    .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
                 final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
                 executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
             }).subscribe();

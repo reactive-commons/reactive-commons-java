@@ -22,7 +22,7 @@ import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupp
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -32,7 +32,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomainProperties;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
-import org.reactivecommons.async.rabbit.converters.json.JacksonCloudEventMessageConverter;
+import org.reactivecommons.async.commons.converters.json.JacksonCloudEventMessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.PropertyMapper;

@@ -8,7 +8,6 @@ import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.AsyncQuery;
@@ -21,16 +20,15 @@ import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupp
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.helpers.SampleClass;
 import org.reactivecommons.async.helpers.TestStubs;
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
-import reactor.test.publisher.PublisherProbe;
 
 import java.time.Instant;
 import java.util.Date;
