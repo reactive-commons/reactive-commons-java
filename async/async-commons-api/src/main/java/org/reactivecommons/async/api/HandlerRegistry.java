@@ -73,7 +73,7 @@ public class HandlerRegistry {
         return this;
     }
 
-    public HandlerRegistry handleDynamicEvents(String eventNamePattern, CloudEventHandler handler) {
+    public HandlerRegistry handleDynamicCloudEvents(String eventNamePattern, CloudEventHandler handler) {
         dynamicEventHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, CloudEvent.class));
         return this;
     }

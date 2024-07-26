@@ -78,17 +78,22 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     }
 
     @Override
-    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName) {
-        return sendCloudCommand(command, targetName, 0, DEFAULT_DOMAIN);
+    public Mono<Void> sendCommand(CloudEvent command, String targetName) {
+        return sendCommand(command, targetName, 0, DEFAULT_DOMAIN);
     }
 
     @Override
-    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName, String domain) {
-        return sendCloudCommand(command, targetName, 0, domain);
+    public Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis) {
+        return sendCommand(command, targetName, delayMillis, DEFAULT_DOMAIN);
     }
 
     @Override
-    public Mono<Void> sendCloudCommand(CloudEvent command, String targetName, long delayMillis, String domain) {
+    public Mono<Void> sendCommand(CloudEvent command, String targetName, String domain) {
+        return sendCommand(command, targetName, 0, domain);
+    }
+
+    @Override
+    public Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis, String domain) {
         Tuple2<String, Map<String, Object>> targetAndHeaders = validateDelay(targetName, delayMillis);
         return resolveSender(domain).sendWithConfirm(command, exchange, targetAndHeaders.getT1(),
                 targetAndHeaders.getT2(), persistentCommands);
