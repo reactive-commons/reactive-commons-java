@@ -18,15 +18,15 @@ class HandlerResolverTest {
 
     @BeforeEach
     void setup() {
-        Map<String, RegisteredCommandHandler<?>> commandHandlers = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener<?>> eventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?, ?>> eventListeners = new ConcurrentHashMap<>();
         eventListeners.put("event.name", new RegisteredEventListener<>("event.name", message -> Mono.empty(), String.class));
         eventListeners.put("event.name2", new RegisteredEventListener<>("event.name2", message -> Mono.empty(), String.class));
         eventListeners.put("some.*", new RegisteredEventListener<>("some.*", message -> Mono.empty(), String.class));
-        Map<String, RegisteredEventListener<?>> eventsToBind = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?, ?>> eventsToBind = new ConcurrentHashMap<>();
         eventsToBind.put("event.name", new RegisteredEventListener<>("event.name", message -> Mono.empty(), String.class));
         eventsToBind.put("event.name2", new RegisteredEventListener<>("event.name2", message -> Mono.empty(), String.class));
-        Map<String, RegisteredEventListener<?>> notificationEventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?, ?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers);
     }
@@ -34,7 +34,7 @@ class HandlerResolverTest {
     @Test
     void shouldGetOnlyTheBindingEvents() {
         // Act
-        Collection<RegisteredEventListener<?>> eventListener = resolver.getEventListeners();
+        Collection<RegisteredEventListener<?, ?>> eventListener = resolver.getEventListeners();
         // Assert
         Assertions.assertThat(eventListener.size()).isEqualTo(2);
     }
@@ -42,7 +42,7 @@ class HandlerResolverTest {
     @Test
     void shouldMatchForAWildcardEvent() {
         // Act
-        RegisteredEventListener<Object> eventListener = resolver.getEventListener("some.sample");
+        RegisteredEventListener<Object, Object> eventListener = resolver.getEventListener("some.sample");
         // Assert
         Assertions.assertThat(eventListener.getPath()).isEqualTo("some.*");
     }
@@ -50,7 +50,7 @@ class HandlerResolverTest {
     @Test
     void shouldMatchForAnExactEvent() {
         // Act
-        RegisteredEventListener<Object> eventListener = resolver.getEventListener("event.name");
+        RegisteredEventListener<Object, Object> eventListener = resolver.getEventListener("event.name");
         // Assert
         Assertions.assertThat(eventListener.getPath()).isEqualTo("event.name");
     }

@@ -40,7 +40,7 @@ public class DLQDiscardNotifier implements DiscardNotifier {
             CloudEvent forDlq = CloudEventBuilder.from(cloudEvent)
                     .withType(newTopic)
                     .build();
-            return Mono.from(eventBus.emitCloudEvent(forDlq));
+            return Mono.from(eventBus.emit(forDlq));
         }
         try {
             JsonSkeleton node = messageConverter.readValue(message, JsonSkeleton.class);

@@ -6,7 +6,12 @@ import io.cloudevents.jackson.JsonFormat;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.reactivecommons.async.api.handlers.*;
+import org.reactivecommons.async.api.handlers.CloudCommandHandler;
+import org.reactivecommons.async.api.handlers.CloudEventHandler;
+import org.reactivecommons.async.api.handlers.DomainCommandHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
+import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -73,7 +78,7 @@ public class HandlerRegistry {
         return this;
     }
 
-    public HandlerRegistry handleDynamicEvents(String eventNamePattern, CloudEventHandler handler) {
+    public HandlerRegistry handleDynamicCloudEvents(String eventNamePattern, CloudEventHandler handler) {
         dynamicEventHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, CloudEvent.class));
         return this;
     }
