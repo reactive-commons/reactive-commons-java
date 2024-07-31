@@ -2,6 +2,9 @@ package org.reactivecommons.async.rabbit;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
+import io.cloudevents.jackson.JsonFormat;
 import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -25,6 +28,7 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
     public RabbitDiscardNotifier(DomainEventBus eventBus, ObjectMapper objectMapper) {
         this.eventBus = eventBus;
         this.objectMapper = objectMapper;
+        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
     }
 
     @Override
@@ -39,7 +43,9 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
     private Mono<Void> notify(Message message){
         try {
             JsonSkeleton node = readSkeleton(message);
-            return Mono.from(eventBus.emit(createEvent(node)));
+            return node.isCloudEvent() ?
+                    Mono.from(eventBus.emit(createCloudEvent(message))) :
+                    Mono.from(eventBus.emit(createEvent(node)));
         } catch (MessageConversionException e) {
             return notifyUnreadableMessage(message, e);
         }
@@ -70,6 +76,16 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
         }
     }
 
+    private CloudEvent createCloudEvent(Message message) {
+        try {
+            CloudEvent cloudEvent = objectMapper.readValue(message.getBody(), CloudEvent.class);
+            return CloudEventBuilder.from(cloudEvent)
+                    .withType(cloudEvent.getType()+".dlq")
+                    .build();
+        } catch (IOException e) {
+            throw new MessageConversionException(e);
+        }
+    }
 
     private DomainEvent<JsonNode> createEvent(JsonSkeleton skeleton) {
         if (skeleton.isCommand()) {
@@ -91,6 +107,9 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
         private JsonNode data;
         private JsonNode queryData;
         private String commandId;
+        private String type;
+        private String id;
+        private String specversion;
 
         public boolean isEvent() {
             return !empty(eventId) && !empty(name) && data != null;
@@ -102,6 +121,10 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
 
         public boolean isQuery() {
             return  !empty(resource) && queryData != null;
+        }
+
+        public boolean isCloudEvent() {
+            return !empty(type) && !empty(id) && !empty(specversion);
         }
 
         private boolean empty(String str) {
