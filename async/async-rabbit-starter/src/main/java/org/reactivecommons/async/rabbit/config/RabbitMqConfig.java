@@ -20,7 +20,7 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
 import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
-import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
@@ -152,9 +152,9 @@ public class RabbitMqConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, AsyncProps asyncProps,
+    public DiscardNotifier rabbitDiscardNotifier(MessageConverter messageConverter, AsyncProps asyncProps,
                                                  ReactiveMessageSender sender, BrokerConfigProps props) {
-        return new RabbitDiscardNotifier(domainEventBus(sender, props, asyncProps.getCreateTopology()), objectMapperSupplier.get());
+        return new DLQDiscardNotifier(domainEventBus(sender, props, asyncProps.getCreateTopology()), messageConverter);
     }
 
     @Bean

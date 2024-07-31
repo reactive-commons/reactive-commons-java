@@ -23,7 +23,7 @@ import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
 import org.reactivecommons.async.commons.HandlerResolver;
-import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
@@ -72,7 +72,7 @@ public class RabbitMqConfig {
 
     @Bean
     public ConnectionManager buildConnectionManager(AsyncPropsDomain props, MessageConverter converter,
-                                                    BrokerConfig brokerConfig, ObjectMapperSupplier objectMapperSupplier) {
+                                                    BrokerConfig brokerConfig) {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((domain, properties) -> {
             ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties.getConnectionProperties());
@@ -83,7 +83,7 @@ public class RabbitMqConfig {
             ReactiveMessageSender appDomainSender = connectionManager.getSender(domain);
             DomainEventBus appDomainEventBus = new RabbitDomainEventBus(appDomainSender, props.getProps(domain)
                     .getBrokerConfigProps().getDomainEventsExchangeName(), brokerConfig);
-            DiscardNotifier notifier = new RabbitDiscardNotifier(appDomainEventBus, objectMapperSupplier.get());
+            DiscardNotifier notifier = new DLQDiscardNotifier(appDomainEventBus, converter);
             connectionManager.setDiscardNotifier(domain, notifier);
         });
         return connectionManager;

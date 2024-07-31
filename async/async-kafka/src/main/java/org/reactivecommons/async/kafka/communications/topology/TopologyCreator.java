@@ -55,7 +55,7 @@ public class TopologyCreator {
                         .all()
                         .toCompletionStage()
                         .toCompletableFuture())
-                .then(Mono.just(topic))
+                .thenReturn(topic)
                 .onErrorResume(TopicExistsException.class, e -> Mono.just(topic));
     }
 
@@ -70,6 +70,7 @@ public class TopologyCreator {
     public void checkTopic(String topicName) {
         if (!existingTopics.containsKey(topicName)) {
             throw new TopicNotFoundException("Topic not found: " + topicName + ". Please create it before send a message.");
+            // TODO: should refresh topics?? getTopics();
         }
     }
 }

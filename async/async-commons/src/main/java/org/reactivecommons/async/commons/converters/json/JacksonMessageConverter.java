@@ -16,6 +16,9 @@ import java.io.IOException;
 
 public abstract class JacksonMessageConverter implements MessageConverter {
     public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
+    public static final String CONTENT_TYPE = "content-type";
+    public static final String APPLICATION_CLOUD_EVENT_JSON = "application/cloudevents+json";
+    public static final String APPLICATION_JSON = "application/json";
 
     protected final ObjectMapper objectMapper;
 

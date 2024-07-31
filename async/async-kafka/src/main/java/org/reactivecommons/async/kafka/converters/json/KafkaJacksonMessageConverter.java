@@ -15,9 +15,6 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
-    public static final String CONTENT_TYPE = "content-type";
-    public static final String APPLICATION_CLOUD_EVENT_JSON = "application/cloudevents+json";
-    public static final String APPLICATION_JSON = "application/json";
 
     public KafkaJacksonMessageConverter(ObjectMapper objectMapper) {
         super(objectMapper);

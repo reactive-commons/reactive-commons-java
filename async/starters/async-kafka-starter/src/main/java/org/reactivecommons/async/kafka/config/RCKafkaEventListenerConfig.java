@@ -5,14 +5,12 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
-import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
@@ -24,11 +22,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Stream;
-
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
 public class RCKafkaEventListenerConfig {
@@ -77,58 +70,13 @@ public class RCKafkaEventListenerConfig {
     }
 
     @Bean
-    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
+    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler<?> defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-
-        final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
-                .values().stream()
-                .flatMap(r -> r.getHandlers().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = registries
-                .values().stream()
-                .flatMap(r -> r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        // event handlers and dynamic handlers
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = registries
-                .values().stream()
-                .flatMap(r -> Stream.concat(r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream(), r.getDynamicEventHandlers().stream()))
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
-                .values().stream()
-                .flatMap(r -> r.getCommandHandlers().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getEventNotificationListener().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
-                final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
-            }
-        };
+        return HandlerResolverUtil.fromHandlerRegistries(registries.values(), defaultCommandHandler);
     }
 
     @Bean
-    public DefaultCommandHandler defaultCommandHandler() {
-        return new DefaultCommandHandler() {
-            @Override
-            public Mono<Void> handle(Object command) {
-                return Mono.empty();
-            }
-        };
+    public DefaultCommandHandler<?> defaultCommandHandler() {
+        return command -> Mono.empty();
     }
 }

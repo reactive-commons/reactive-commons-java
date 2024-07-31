@@ -1,6 +1,5 @@
 package org.reactivecommons.async.kafka.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -8,7 +7,11 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
+import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.kafka.KafkaDomainEventBus;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
@@ -16,6 +19,8 @@ import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizatio
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.RCKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.kafka.receiver.ReceiverOptions;
@@ -35,24 +40,22 @@ import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_
 public class RCKafkaConfig {
     // Sender
     @Bean
-    public DomainEventBus domainEventBus(ReactiveMessageSender sender) {
+    @ConditionalOnMissingBean(DomainEventBus.class)
+    public DomainEventBus kafkaDomainEventBus(ReactiveMessageSender sender) {
         return new KafkaDomainEventBus(sender);
     }
 
     @Bean
-    public ReactiveMessageSender reactiveMessageSender(KafkaSender<String, byte[]> kafkaSender,
-                                                       MessageConverter converter, TopologyCreator topologyCreator) {
+    @ConditionalOnMissingBean(ReactiveMessageSender.class)
+    public ReactiveMessageSender kafkaReactiveMessageSender(KafkaSender<String, byte[]> kafkaSender,
+                                                            MessageConverter converter, TopologyCreator topologyCreator) {
         return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
     }
 
     @Bean
-    public KafkaSender<String, byte[]> kafkaSender(RCKafkaProps props) {
-//        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, secret.getBootstrapServers());
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, "sample-producer");
-//        props.put(ProducerConfig.ACKS_CONFIG, "all");
-//        props.put(SECURITY_PROTOCOL_CONFIG, SECURITY_PROTOCOL_SASL_SSL);
-//        props.put(SASL_MECHANISM_CONFIG, SASL_MECHANISM_PLAIN);
-//        props.put(SASL_JAAS_CONFIG, jassConfig(secret.getUsername(), secret.getPassword()));
+    @ConditionalOnMissingBean(KafkaSender.class)
+    public KafkaSender<String, byte[]> kafkaSender(RCKafkaProps props, @Value("${spring.application.name}") String clientId) {
+        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         props.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props);
@@ -62,12 +65,14 @@ public class RCKafkaConfig {
     // Receiver
 
     @Bean
-    public ReactiveMessageListener reactiveMessageListener(ReceiverOptions<String, byte[]> receiverOptions) {
+    @ConditionalOnMissingBean(ReactiveMessageListener.class)
+    public ReactiveMessageListener kafkaReactiveMessageListener(ReceiverOptions<String, byte[]> receiverOptions) {
         return new ReactiveMessageListener(receiverOptions);
     }
 
     @Bean
-    public ReceiverOptions<String, byte[]> receiverOptions(RCKafkaProps props) {
+    @ConditionalOnMissingBean(ReceiverOptions.class)
+    public ReceiverOptions<String, byte[]> kafkaReceiverOptions(RCKafkaProps props) {
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         return ReceiverOptions.create(props);
@@ -76,12 +81,20 @@ public class RCKafkaConfig {
     // Shared
 
     @Bean
-    public TopologyCreator topologyCreator(RCKafkaProps props) {
+    @ConditionalOnMissingBean(TopologyCreator.class)
+    public TopologyCreator kafkaTopologyCreator(RCKafkaProps props, KafkaCustomizations customizations) {
         AdminClient adminClient = AdminClient.create(props);
-        return new TopologyCreator(adminClient, new KafkaCustomizations());
+        return new TopologyCreator(adminClient, customizations);
     }
 
     @Bean
+    @ConditionalOnMissingBean(KafkaCustomizations.class)
+    public KafkaCustomizations defaultKafkaCustomizations() {
+        return new KafkaCustomizations();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(RCKafkaProps.class)
     public RCKafkaProps kafkaProps() throws IOException {
         String env = Files.readString(Path.of(".kafka-env"));
         String[] split = env.split("\n");
@@ -97,15 +110,19 @@ public class RCKafkaConfig {
     }
 
     @Bean
-    public MessageConverter kafkaJacksonMessageConverter(ObjectMapper objectMapper) {
-        return new KafkaJacksonMessageConverter(objectMapper);
+    @ConditionalOnMissingBean(MessageConverter.class)
+    public MessageConverter kafkaJacksonMessageConverter(ObjectMapperSupplier objectMapperSupplier) {
+        return new KafkaJacksonMessageConverter(objectMapperSupplier.get());
     }
 
     @Bean
-    public ObjectMapper objectMapper() {
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.findAndRegisterModules();
-        return mapper;
+    public DiscardNotifier kafkaDiscardNotifier(DomainEventBus domainEventBus, MessageConverter messageConverter) {
+        return new DLQDiscardNotifier(domainEventBus, messageConverter);
+    }
+
+    @Bean
+    public ObjectMapperSupplier defaultObjectMapperSupplier() {
+        return new DefaultObjectMapperSupplier();
     }
 
     public static String jassConfig(String username, String password) {
