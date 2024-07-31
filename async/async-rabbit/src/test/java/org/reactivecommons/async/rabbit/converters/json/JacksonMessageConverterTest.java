@@ -2,6 +2,9 @@ package org.reactivecommons.async.rabbit.converters.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
+import io.cloudevents.jackson.JsonCloudEventData;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -9,7 +12,9 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 
 import java.io.IOException;
+import java.net.URI;
 import java.util.Date;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -47,6 +52,21 @@ class JacksonMessageConverterTest {
         final SampleClass value = converter.readValue(message, SampleClass.class);
         assertThat(value).extracting(SampleClass::getId, SampleClass::getName, SampleClass::getDate)
                 .containsExactly("35", "name1", date);
+    }
+
+    @Test
+    void readCloudEvent() {
+        Date date = new Date();
+        CloudEvent command = CloudEventBuilder.v1() //
+                .withId(UUID.randomUUID().toString()) //
+                .withSource(URI.create("https://spring.io/foos"))//
+                .withType("command")
+                .withData("application/json", JsonCloudEventData.wrap(objectMapper.valueToTree(new SampleClass("35", "name1", date))))
+                .build();
+        Message message = converter.toMessage(command);
+        CloudEvent result = converter.readCloudEvent(message);
+
+        assertThat(result).usingRecursiveComparison().isEqualTo(command);
     }
 
     @Test
