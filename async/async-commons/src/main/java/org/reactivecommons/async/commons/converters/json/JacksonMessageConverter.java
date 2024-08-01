@@ -1,32 +1,28 @@
-package org.reactivecommons.async.rabbit.converters.json;
+package org.reactivecommons.async.commons.converters.json;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.jackson.JsonFormat;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
-import org.reactivecommons.async.rabbit.RabbitMessage;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 
-public class JacksonMessageConverter implements MessageConverter {
-    private static final String CONTENT_TYPE = "application/json";
+@RequiredArgsConstructor
+public abstract class JacksonMessageConverter implements MessageConverter {
     public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
+    public static final String CONTENT_TYPE = "content-type";
+    public static final String APPLICATION_CLOUD_EVENT_JSON = "application/cloudevents+json";
+    public static final String APPLICATION_JSON = "application/json";
 
-    private final ObjectMapper objectMapper;
-
-
-    public JacksonMessageConverter(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
-    }
+    protected final ObjectMapper objectMapper;
 
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {
@@ -94,22 +90,6 @@ public class JacksonMessageConverter implements MessageConverter {
     public <T> AsyncQuery<T> readAsyncQueryStructure(Message message) {
         final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
         return new AsyncQuery<>(asyncQueryJson.getResource(), (T) asyncQueryJson.getQueryData());
-    }
-
-    @Override
-    public Message toMessage(Object object) {
-        byte[] bytes;
-        try {
-            String jsonString = this.objectMapper.writeValueAsString(object);
-            bytes = jsonString.getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
-        }
-        RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
-        props.setContentType(CONTENT_TYPE);
-        props.setContentEncoding(StandardCharsets.UTF_8.name());
-        props.setContentLength(bytes.length);
-        return new RabbitMessage(bytes, props);
     }
 
     @Data

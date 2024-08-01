@@ -1,51 +1,50 @@
-package org.reactivecommons.async.rabbit;
+package org.reactivecommons.async.commons;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
-import io.cloudevents.jackson.JsonFormat;
+import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import reactor.core.publisher.Mono;
 
-import java.io.IOException;
 import java.util.logging.Level;
 
 import static java.lang.String.format;
+import static org.reactivecommons.async.commons.converters.json.JacksonMessageConverter.APPLICATION_CLOUD_EVENT_JSON;
 
 @Log
-public class RabbitDiscardNotifier implements DiscardNotifier {
-
+@AllArgsConstructor
+public class DLQDiscardNotifier implements DiscardNotifier {
     private final DomainEventBus eventBus;
-    private final ObjectMapper objectMapper;
-
-    public RabbitDiscardNotifier(DomainEventBus eventBus, ObjectMapper objectMapper) {
-        this.eventBus = eventBus;
-        this.objectMapper = objectMapper;
-        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
-    }
+    private final MessageConverter messageConverter;
 
     @Override
     public Mono<Void> notifyDiscard(Message message) {
         try {
             return notify(message).onErrorResume(this::onError);
-        }catch (Exception e){
+        } catch (Exception e) {
             return onError(e);
         }
     }
 
-    private Mono<Void> notify(Message message){
+    private Mono<Void> notify(Message message) {
+        if (isCloudEvent(message)) {
+            CloudEvent cloudEvent = messageConverter.readCloudEvent(message);
+            String dlqType = cloudEvent.getType() + ".dlq";
+            CloudEvent forDlq = CloudEventBuilder.from(cloudEvent)
+                    .withType(dlqType)
+                    .build();
+            return Mono.from(eventBus.emit(forDlq));
+        }
         try {
-            JsonSkeleton node = readSkeleton(message);
-            return node.isCloudEvent() ?
-                    Mono.from(eventBus.emit(createCloudEvent(message))) :
-                    Mono.from(eventBus.emit(createEvent(node)));
+            JsonSkeleton node = messageConverter.readValue(message, JsonSkeleton.class);
+            return Mono.from(eventBus.emit(createEvent(node)));
         } catch (MessageConversionException e) {
             return notifyUnreadableMessage(message, e);
         }
@@ -53,9 +52,9 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
 
     private Mono<Void> notifyUnreadableMessage(Message message, MessageConversionException e) {
         String bodyString;
-        try{
+        try {
             bodyString = new String(message.getBody());
-        }catch (Exception ex){
+        } catch (Exception ex) {
             bodyString = "Opaque binary Message, unable to decode: " + ex.getMessage();
         }
         log.log(Level.SEVERE, format("Unable to interpret discarded message: %s", bodyString), e);
@@ -63,40 +62,26 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
         return Mono.from(eventBus.emit(event));
     }
 
-    private Mono<Void> onError(Throwable e){
+    private Mono<Void> onError(Throwable e) {
         log.log(Level.SEVERE, "FATAL!! unable to notify Discard of message!!", e);
         return Mono.empty();
     }
 
-    private JsonSkeleton readSkeleton(Message message) {
-        try {
-            return objectMapper.readValue(message.getBody(), JsonSkeleton.class);
-        } catch (IOException e) {
-            throw new MessageConversionException(e);
-        }
-    }
-
-    private CloudEvent createCloudEvent(Message message) {
-        try {
-            CloudEvent cloudEvent = objectMapper.readValue(message.getBody(), CloudEvent.class);
-            return CloudEventBuilder.from(cloudEvent)
-                    .withType(cloudEvent.getType()+".dlq")
-                    .build();
-        } catch (IOException e) {
-            throw new MessageConversionException(e);
-        }
-    }
-
     private DomainEvent<JsonNode> createEvent(JsonSkeleton skeleton) {
         if (skeleton.isCommand()) {
-            return new DomainEvent<>(skeleton.name+".dlq", skeleton.commandId, skeleton.data);
+            return new DomainEvent<>(skeleton.name + ".dlq", skeleton.commandId, skeleton.data);
         } else if (skeleton.isEvent()) {
-            return new DomainEvent<>(skeleton.name+".dlq", skeleton.eventId, skeleton.data);
+            return new DomainEvent<>(skeleton.name + ".dlq", skeleton.eventId, skeleton.data);
         } else if (skeleton.isQuery()) {
-            return new DomainEvent<>(skeleton.resource+".dlq", skeleton.resource+"query", skeleton.queryData);
+            return new DomainEvent<>(skeleton.resource + ".dlq", skeleton.resource + "query", skeleton.queryData);
         } else {
             throw new MessageConversionException("Fail to math message type");
         }
+    }
+
+    private boolean isCloudEvent(Message message) {
+        return message.getProperties().getContentType() != null
+                && message.getProperties().getContentType().contains(APPLICATION_CLOUD_EVENT_JSON);
     }
 
     @Data
@@ -107,9 +92,6 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
         private JsonNode data;
         private JsonNode queryData;
         private String commandId;
-        private String type;
-        private String id;
-        private String specversion;
 
         public boolean isEvent() {
             return !empty(eventId) && !empty(name) && data != null;
@@ -120,11 +102,7 @@ public class RabbitDiscardNotifier implements DiscardNotifier {
         }
 
         public boolean isQuery() {
-            return  !empty(resource) && queryData != null;
-        }
-
-        public boolean isCloudEvent() {
-            return !empty(type) && !empty(id) && !empty(specversion);
+            return !empty(resource) && queryData != null;
         }
 
         private boolean empty(String str) {

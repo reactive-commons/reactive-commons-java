@@ -1,4 +1,4 @@
-package org.reactivecommons.async.rabbit;
+package org.reactivecommons.async.commons;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
@@ -9,6 +9,7 @@ import org.reactivecommons.async.commons.utils.matcher.KeyMatcher;
 import org.reactivecommons.async.commons.utils.matcher.Matcher;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
 
@@ -57,6 +58,14 @@ public class HandlerResolver {
     // Returns only the listenEvent not the handleDynamicEvents
     public Collection<RegisteredEventListener<?, ?>> getEventListeners() {
         return eventsToBind.values();
+    }
+
+    public List<String> getEventNames() {
+        return List.copyOf(eventListeners.keySet());
+    }
+
+    public List<String> getNotificationNames() {
+        return List.copyOf(eventNotificationListeners.keySet());
     }
 
     void addEventListener(RegisteredEventListener<?, ?> listener) {

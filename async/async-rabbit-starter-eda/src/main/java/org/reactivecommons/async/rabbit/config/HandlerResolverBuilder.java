@@ -8,7 +8,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;

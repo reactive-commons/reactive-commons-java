@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.commons.HandlerResolver;
 import reactor.core.publisher.Mono;
 
 import java.util.Collection;

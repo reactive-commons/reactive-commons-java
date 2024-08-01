@@ -10,6 +10,7 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 
 import java.io.IOException;
 import java.net.URI;
@@ -21,7 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JacksonMessageConverterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final JacksonMessageConverter converter = new JacksonMessageConverter(objectMapper);
+    private final JacksonMessageConverter converter = new RabbitJacksonMessageConverter(objectMapper);
 
     @Test
     void toMessage() {

@@ -1,8 +1,6 @@
 package org.reactivecommons.async.api;
 
 import io.cloudevents.CloudEvent;
-import io.cloudevents.core.provider.EventFormatProvider;
-import io.cloudevents.jackson.JsonFormat;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -88,26 +86,13 @@ public class HandlerRegistry {
         return this;
     }
 
-    public HandlerRegistry handleCloudCommand(String commandName, CloudCommandHandler handler) {
+    public HandlerRegistry handleCloudEventCommand(String commandName, CloudCommandHandler handler) {
         commandHandlers.add(new RegisteredCommandHandler<>(commandName, handler, CloudEvent.class));
         return this;
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        if (queryClass == CloudEvent.class) {
-            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
-            {
-                CloudEvent query = EventFormatProvider
-                        .getInstance()
-                        .resolveFormat(JsonFormat.CONTENT_TYPE)
-                        .deserialize(message);
-
-                return handler.handle((R) query);
-
-            }, byte[].class));
-        } else {
-            handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
-        }
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
         return this;
     }
 
@@ -116,28 +101,39 @@ public class HandlerRegistry {
         return this;
     }
 
+    public <T, R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<CloudEvent, CloudEvent> handler, Class<CloudEvent> queryClass) {
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        return this;
+    }
 
-    @Deprecated
+    public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandlerDelegate<Void, CloudEvent> handler) {
+        handlers.add(new RegisteredQueryHandler<>(resource, handler, CloudEvent.class));
+        return this;
+    }
+
+
+    @Deprecated(forRemoval = true)
     public <T> HandlerRegistry listenEvent(String eventName, DomainEventHandler<T> handler) {
         return listenEvent(eventName, handler, inferGenericParameterType(handler));
     }
 
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler) {
         return handleDynamicEvents(eventNamePattern, handler, inferGenericParameterType(handler));
     }
 
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public <T> HandlerRegistry handleCommand(String commandName, DomainCommandHandler<T> handler) {
         commandHandlers.add(new RegisteredCommandHandler<>(commandName, handler, inferGenericParameterType(handler)));
         return this;
     }
 
-    @Deprecated
+    @Deprecated(forRemoval = true)
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler) {
         return serveQuery(resource, handler, inferGenericParameterType(handler));
     }
 
+    @Deprecated(forRemoval = true)
     @SuppressWarnings("unchecked")
     private <T, R> Class<R> inferGenericParameterType(QueryHandler<T, R> handler) {
         try {
@@ -149,6 +145,7 @@ public class HandlerRegistry {
         }
     }
 
+    @Deprecated(forRemoval = true)
     @SuppressWarnings("unchecked")
     private <T> Class<T> inferGenericParameterType(DomainCommandHandler<T> handler) {
         try {
@@ -160,6 +157,7 @@ public class HandlerRegistry {
         }
     }
 
+    @Deprecated(forRemoval = true)
     private <T> Class<T> inferGenericParameterType(DomainEventHandler<T> handler) {
         try {
             ParameterizedType genericSuperclass = (ParameterizedType) handler.getClass().getGenericInterfaces()[0];
