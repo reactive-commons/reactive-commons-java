@@ -1,15 +1,18 @@
 package org.reactivecommons.async.rabbit.converters.json;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.jackson.JsonCloudEventData;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 
 import java.io.IOException;
@@ -21,8 +24,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class JacksonMessageConverterTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final JacksonMessageConverter converter = new RabbitJacksonMessageConverter(objectMapper);
+    private static RabbitJacksonMessageConverter converter;
+    private static ObjectMapper objectMapper;
+
+    @BeforeAll
+    static void setUp() {
+        objectMapper = new DefaultObjectMapperSupplier().get();
+        converter = new RabbitJacksonMessageConverter(objectMapper);
+    }
 
     @Test
     void toMessage() {
@@ -56,7 +65,7 @@ class JacksonMessageConverterTest {
     }
 
     @Test
-    void readCloudEvent() {
+    void readCloudEvent() throws JsonProcessingException {
         Date date = new Date();
         CloudEvent command = CloudEventBuilder.v1() //
                 .withId(UUID.randomUUID().toString()) //

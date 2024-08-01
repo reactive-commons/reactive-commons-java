@@ -16,13 +16,13 @@ import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -36,7 +36,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -58,7 +62,7 @@ class ApplicationCommandListenerPerfTest {
     @Mock
     private CustomReporter errorReporter;
     private StubGenericMessageListener messageListener;
-    private MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    private MessageConverter messageConverter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     private ReactiveMessageListener reactiveMessageListener;
 
     private static BigInteger makeHardWork() {
@@ -170,7 +174,6 @@ class ApplicationCommandListenerPerfTest {
     private void liveLock(int delay) {
         for (long end = System.currentTimeMillis() + delay; System.currentTimeMillis() < end; ) ;
     }
-
 
 
     @Test

@@ -20,6 +20,7 @@ import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupp
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -59,7 +60,7 @@ class RabbitDirectAsyncGatewayTest {
 
     private final BrokerConfig config = new BrokerConfig();
     private final Semaphore semaphore = new Semaphore(0);
-    private final MessageConverter converter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    private final MessageConverter converter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     @Mock
     private ReactiveReplyRouter router;
     @Mock
