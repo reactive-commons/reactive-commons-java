@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
@@ -65,7 +66,7 @@ class SimpleEventNotificationTest {
             return UnicastProcessor.create();
         }
 
-        private EventHandler<Long> handle(UnicastProcessor<DomainEvent<Long>> listener) {
+        private DomainEventHandler<Long> handle(UnicastProcessor<DomainEvent<Long>> listener) {
             return command -> {
                 listener.onNext(command);
                 return empty();

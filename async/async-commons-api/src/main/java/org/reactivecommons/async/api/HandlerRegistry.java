@@ -101,8 +101,8 @@ public class HandlerRegistry {
         return this;
     }
 
-    public <T, R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<CloudEvent, CloudEvent> handler, Class<CloudEvent> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+    public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler) {
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), CloudEvent.class));
         return this;
     }
 
