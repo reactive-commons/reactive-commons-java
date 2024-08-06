@@ -68,11 +68,11 @@ public class HandlerResolver {
         return List.copyOf(eventNotificationListeners.keySet());
     }
 
-    void addEventListener(RegisteredEventListener<?, ?> listener) {
+    public void addEventListener(RegisteredEventListener<?, ?> listener) {
         eventListeners.put(listener.getPath(), listener);
     }
 
-    void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
+    public void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
         if (handler.getPath().contains("*") || handler.getPath().contains("#")) {
             throw new RuntimeException("avoid * or # in dynamic handlers, make sure you have no conflicts with cached patterns");
         }

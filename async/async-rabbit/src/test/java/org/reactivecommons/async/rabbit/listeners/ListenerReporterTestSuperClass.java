@@ -21,7 +21,7 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -58,7 +58,7 @@ public abstract class ListenerReporterTestSuperClass {
 
     protected final TopologyCreator topologyCreator = mock(TopologyCreator.class);
     protected final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    protected final MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    protected final MessageConverter messageConverter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     protected final CustomReporter errorReporter = mock(CustomReporter.class);
     protected final Semaphore semaphore = new Semaphore(0);
     protected final Semaphore successSemaphore = new Semaphore(0);

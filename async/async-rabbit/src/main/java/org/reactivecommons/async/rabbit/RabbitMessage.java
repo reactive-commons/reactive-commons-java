@@ -13,19 +13,23 @@ public class RabbitMessage implements Message {
     private final Properties properties;
 
     @Data
-    public static class RabbitMessageProperties implements Properties{
+    public static class RabbitMessageProperties implements Properties {
         private String contentType;
         private String contentEncoding;
+        private long timestamp;
         private long contentLength;
         private Map<String, Object> headers = new HashMap<>();
     }
 
-    public static RabbitMessage fromDelivery(Delivery delivery){
+    public static RabbitMessage fromDelivery(Delivery delivery) {
         return new RabbitMessage(delivery.getBody(), createMessageProps(delivery));
     }
 
     private static Message.Properties createMessageProps(Delivery msj) {
         final RabbitMessage.RabbitMessageProperties properties = new RabbitMessage.RabbitMessageProperties();
+        if (msj.getProperties().getTimestamp() != null) {
+            properties.setTimestamp(msj.getProperties().getTimestamp().getTime());
+        }
         properties.setHeaders(msj.getProperties().getHeaders());
         properties.setContentType(msj.getProperties().getContentType());
         properties.setContentEncoding(msj.getProperties().getContentEncoding());

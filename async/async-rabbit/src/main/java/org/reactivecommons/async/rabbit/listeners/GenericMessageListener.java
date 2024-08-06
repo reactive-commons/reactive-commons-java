@@ -103,9 +103,13 @@ public abstract class GenericMessageListener {
         onTerminate();
     }
 
-    private void onTerminate() {
-        messageFlux.doOnTerminate(this::onTerminate)
-                .subscribe(new LoggerSubscriber<>(getClass().getName()));
+    private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
+        return messageFlux.flatMap(msj -> {
+            final Instant init = Instant.now();
+            return handle(msj, init)
+                    .doOnSuccess(AcknowledgableDelivery::ack)
+                    .onErrorResume(err -> requeueOrAck(msj, err, init));
+        }, messageListener.getMaxConcurrency());
     }
 
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
@@ -132,6 +136,11 @@ public abstract class GenericMessageListener {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
             return Mono.error(e);
         }
+    }
+
+    private void onTerminate() {
+        messageFlux.doOnTerminate(this::onTerminate)
+                .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 
     private void logExecution(String executorPath, Instant initTime, boolean success) {
@@ -161,15 +170,6 @@ public abstract class GenericMessageListener {
                 objectType, executorPath, timeElapsed));
     }
 
-    private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
-        return messageFlux.flatMap(msj -> {
-            final Instant init = Instant.now();
-            return handle(msj, init)
-                    .doOnSuccess(AcknowledgableDelivery::ack)
-                    .onErrorResume(err -> requeueOrAck(msj, err, init));
-        }, messageListener.getMaxConcurrency());
-    }
-
 
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         String messageID = msj.getProperties().getMessageId();
@@ -185,14 +185,7 @@ public abstract class GenericMessageListener {
     }
 
     private Function<Message, Mono<Object>> getExecutor(String path) {
-        final Function<Message, Mono<Object>> handler = handlers.get(path);
-        return handler != null ? handler : computeRawMessageHandler(path);
-    }
-
-    private Function<Message, Mono<Object>> computeRawMessageHandler(String commandId) {
-        return handlers.computeIfAbsent(commandId, s ->
-                rawMessageHandler(commandId)
-        );
+        return handlers.computeIfAbsent(path, this::rawMessageHandler);
     }
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);

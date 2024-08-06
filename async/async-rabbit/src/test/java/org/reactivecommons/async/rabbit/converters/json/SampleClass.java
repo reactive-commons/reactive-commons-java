@@ -1,14 +1,16 @@
 package org.reactivecommons.async.rabbit.converters.json;
 
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.util.Date;
 
-@RequiredArgsConstructor
-@Getter
+@Data
+@AllArgsConstructor
+@NoArgsConstructor
 class SampleClass {
-    private final String id;
-    private final String name;
-    private final Date date;
+    private String id;
+    private String name;
+    private Date date;
 }

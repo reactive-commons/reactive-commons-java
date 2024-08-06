@@ -17,7 +17,7 @@ public class KafkaDomainEventBus implements DomainEventBus {
     }
 
     @Override
-    public Publisher<Void> emitCloudEvent(CloudEvent event) {
+    public Publisher<Void> emit(CloudEvent event) {
         return sender.send(event);
     }
 }

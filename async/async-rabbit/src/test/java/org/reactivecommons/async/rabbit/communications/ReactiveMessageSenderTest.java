@@ -10,7 +10,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -37,7 +37,7 @@ class ReactiveMessageSenderTest {
     private Sender sender;
 
     @Spy
-    private final MessageConverter messageConverter = new JacksonMessageConverter(objectMapper);
+    private final MessageConverter messageConverter = new RabbitJacksonMessageConverter(objectMapper);
 
     @BeforeEach
     public void init() {

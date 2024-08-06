@@ -7,11 +7,11 @@ import io.cloudevents.jackson.JsonFormat;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.QueryExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -71,10 +71,16 @@ public class ApplicationQueryListener extends GenericMessageListener {
         if (handler == null) {
             return message -> Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
         }
-        final Class<?> handlerClass = handler.getQueryClass();
-        Function<Message, Object> messageConverter = msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
+        Function<Message, Object> messageConverter = resolveConverter(handler.getQueryClass());
         final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.getHandler(), messageConverter);
         return executor::execute;
+    }
+
+    private Function<Message, Object> resolveConverter(Class<?> handlerClass) {
+        if (handlerClass == CloudEvent.class) {
+            return converter::readCloudEvent;
+        }
+        return msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
@@ -152,14 +158,6 @@ public class ApplicationQueryListener extends GenericMessageListener {
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
             Object response = signal.get();
-            if (response instanceof CloudEvent) {
-                byte[] serialized = EventFormatProvider
-                        .getInstance()
-                        .resolveFormat(JsonFormat.CONTENT_TYPE)
-                        .serialize((CloudEvent) response);
-                return sender.sendNoConfirm(serialized, replyExchange, replyID, headers, false);
-            }
-
             return sender.sendNoConfirm(response, replyExchange, replyID, headers, false);
         });
     }

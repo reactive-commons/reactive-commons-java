@@ -5,12 +5,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.jackson.JsonCloudEventData;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 
 import java.io.IOException;
 import java.net.URI;
@@ -21,8 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class JacksonMessageConverterTest {
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-    private final JacksonMessageConverter converter = new JacksonMessageConverter(objectMapper);
+    private static RabbitJacksonMessageConverter converter;
+    private static ObjectMapper objectMapper;
+
+    @BeforeAll
+    static void setUp() {
+        objectMapper = new DefaultObjectMapperSupplier().get();
+        converter = new RabbitJacksonMessageConverter(objectMapper);
+    }
 
     @Test
     void toMessage() {

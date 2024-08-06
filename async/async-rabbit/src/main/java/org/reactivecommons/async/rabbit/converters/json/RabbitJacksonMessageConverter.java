@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.converters.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.cloudevents.CloudEvent;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
@@ -10,7 +11,6 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
-    private static final String CONTENT_TYPE = "application/json";
 
     public RabbitJacksonMessageConverter(ObjectMapper objectMapper) {
         super(objectMapper);
@@ -26,7 +26,11 @@ public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
-        props.setContentType(CONTENT_TYPE);
+        if (object instanceof CloudEvent) {
+            props.setContentType(APPLICATION_CLOUD_EVENT_JSON);
+        } else {
+            props.setContentType(CONTENT_TYPE);
+        }
         props.setContentEncoding(StandardCharsets.UTF_8.name());
         props.setContentLength(bytes.length);
         return new RabbitMessage(bytes, props);

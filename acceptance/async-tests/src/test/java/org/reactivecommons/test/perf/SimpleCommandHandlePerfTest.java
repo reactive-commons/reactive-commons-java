@@ -6,6 +6,7 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.CommandHandler;
+import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -88,7 +89,7 @@ class SimpleCommandHandlePerfTest {
             return UnicastProcessor.create();
         }
 
-        private CommandHandler<Long> handle(UnicastProcessor<Command<Long>> listener) {
+        private DomainCommandHandler<Long> handle(UnicastProcessor<Command<Long>> listener) {
             return command -> {
                 out.println("Received at: " + System.currentTimeMillis() / 1000);
                 out.println("Received in: " + Thread.currentThread().getName());

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.jackson.JsonFormat;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
@@ -14,6 +15,7 @@ import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 
 import java.io.IOException;
 
+@RequiredArgsConstructor
 public abstract class JacksonMessageConverter implements MessageConverter {
     public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
     public static final String CONTENT_TYPE = "content-type";
@@ -21,12 +23,6 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     public static final String APPLICATION_JSON = "application/json";
 
     protected final ObjectMapper objectMapper;
-
-
-    public JacksonMessageConverter(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
-        this.objectMapper.registerModule(JsonFormat.getCloudEventJacksonModule());
-    }
 
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {

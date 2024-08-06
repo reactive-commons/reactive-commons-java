@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
+import io.cloudevents.jackson.JsonCloudEventData;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -12,9 +13,12 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
+import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -25,8 +29,8 @@ class KafkaJacksonMessageConverterTest {
 
     @BeforeAll
     static void setUp() {
-        objectMapper = new ObjectMapper();
-        objectMapper.findAndRegisterModules();
+        ObjectMapperSupplier supplier = new DefaultObjectMapperSupplier();
+        objectMapper = supplier.get();
         converter = new KafkaJacksonMessageConverter(objectMapper);
     }
 

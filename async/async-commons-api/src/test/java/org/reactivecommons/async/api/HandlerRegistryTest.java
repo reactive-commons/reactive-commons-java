@@ -152,10 +152,10 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void handleCloudCommand() {
+    void handleCloudEventCommand() {
         SomeCloudCommandHandler cloudCommandHandler = new SomeCloudCommandHandler();
 
-        registry.handleCloudCommand(name, cloudCommandHandler);
+        registry.handleCloudEventCommand(name, cloudCommandHandler);
 
         assertThat(registry.getCommandHandlers())
                 .anySatisfy(registered -> assertThat(registered)

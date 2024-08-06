@@ -8,6 +8,7 @@ import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
@@ -34,11 +35,11 @@ public class DLQDiscardNotifier implements DiscardNotifier {
     }
 
     private Mono<Void> notify(Message message) {
-        if (APPLICATION_CLOUD_EVENT_JSON.equals(message.getProperties().getContentType())) {
+        if (isCloudEvent(message)) {
             CloudEvent cloudEvent = messageConverter.readCloudEvent(message);
-            String newTopic = cloudEvent.getType() + ".dlq";
+            String dlqType = cloudEvent.getType() + ".dlq";
             CloudEvent forDlq = CloudEventBuilder.from(cloudEvent)
-                    .withType(newTopic)
+                    .withType(dlqType)
                     .build();
             return Mono.from(eventBus.emit(forDlq));
         }
@@ -77,6 +78,11 @@ public class DLQDiscardNotifier implements DiscardNotifier {
         } else {
             throw new MessageConversionException("Fail to math message type");
         }
+    }
+
+    private boolean isCloudEvent(Message message) {
+        return message.getProperties().getContentType() != null
+                && message.getProperties().getContentType().contains(APPLICATION_CLOUD_EVENT_JSON);
     }
 
     @Data

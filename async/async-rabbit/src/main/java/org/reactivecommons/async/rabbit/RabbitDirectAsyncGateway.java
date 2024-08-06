@@ -23,11 +23,15 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Function;
 
 import static java.lang.Boolean.TRUE;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-import static org.reactivecommons.async.commons.Headers.*;
-import static reactor.core.publisher.Mono.fromCallable;
+import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
+import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
 public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
@@ -111,35 +115,39 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type, String domain) {
+        return requestReplyInternal(query, targetName, type, domain, AsyncQuery::getResource);
+    }
+
+    @Override
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
+        return requestReplyInternal(query, targetName, type, DEFAULT_DOMAIN, CloudEvent::getType);
+    }
+
+    @Override
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
+        return requestReplyInternal(query, targetName, type, domain, CloudEvent::getType);
+    }
+
+    private <T, R> Mono<R> requestReplyInternal(T query, String targetName, Class<R> type, String domain, Function<T, String> queryTypeExtractor) {
         final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
 
         final Mono<R> replyHolder = router.register(correlationID)
                 .timeout(replyTimeout)
                 .doOnError(TimeoutException.class, e -> router.deregister(correlationID))
-                .flatMap(s -> fromCallable(() -> converter.readValue(s, type)));
+                .map(s -> converter.readValue(s, type));
 
         Map<String, Object> headers = new HashMap<>();
         headers.put(REPLY_ID, config.getRoutingKey());
-        headers.put(SERVED_QUERY_ID, query.getResource());
+        headers.put(SERVED_QUERY_ID, queryTypeExtractor.apply(query));
         headers.put(CORRELATION_ID, correlationID);
         headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
 
         return resolveSender(domain).sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
                 .then(replyHolder)
                 .name("async_query")
-                .tag("operation", query.getResource())
+                .tag("operation", queryTypeExtractor.apply(query))
                 .tag("target", targetName)
                 .tap(Micrometer.metrics(meterRegistry));
-    }
-
-    @Override
-    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
-        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type);
-    }
-
-    @Override
-    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
-        return requestReply(new AsyncQuery<>(query.getType(), query), targetName, type, domain);
     }
 
     @Override
