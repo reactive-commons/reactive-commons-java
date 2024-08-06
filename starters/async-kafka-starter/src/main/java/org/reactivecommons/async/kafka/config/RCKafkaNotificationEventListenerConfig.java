@@ -10,6 +10,7 @@ import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
+import org.reactivecommons.async.kafka.listeners.ApplicationNotificationsListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -19,17 +20,17 @@ import reactor.core.publisher.Mono;
 import java.util.Map;
 
 @Configuration
-public class RCKafkaEventListenerConfig {
+public class RCKafkaNotificationEventListenerConfig {
 
     @Bean
-    public ApplicationEventListener applicationEventListener(ReactiveMessageListener listener,
-                                                             HandlerResolver resolver,
-                                                             MessageConverter messageConverter,
-                                                             TopologyCreator creator,
-                                                             DiscardNotifier discardNotifier,
-                                                             CustomReporter customReporter,
-                                                             @Value("${spring.application.name}") String appName) {
-        ApplicationEventListener eventListener = new ApplicationEventListener(listener,
+    public ApplicationNotificationsListener applicationEventListener(ReactiveMessageListener listener,
+                                                                     HandlerResolver resolver,
+                                                                     MessageConverter messageConverter,
+                                                                     TopologyCreator creator,
+                                                                     DiscardNotifier discardNotifier,
+                                                                     CustomReporter customReporter,
+                                                                     @Value("${spring.application.name}") String appName) {
+        ApplicationNotificationsListener eventListener = new ApplicationNotificationsListener(listener,
                 resolver,
                 messageConverter,
                 false,
