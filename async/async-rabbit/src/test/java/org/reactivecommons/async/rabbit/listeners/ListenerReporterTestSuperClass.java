@@ -13,15 +13,15 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandle
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.Headers;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.utils.TestUtils;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -56,18 +56,16 @@ import static reactor.core.publisher.Mono.just;
 
 public abstract class ListenerReporterTestSuperClass {
 
-    private final ObjectMapper mapper = new ObjectMapper();
-
-    private final Receiver receiver = mock(Receiver.class);
     protected final TopologyCreator topologyCreator = mock(TopologyCreator.class);
     protected final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    protected final MessageConverter messageConverter = new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    protected final MessageConverter messageConverter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
     protected final CustomReporter errorReporter = mock(CustomReporter.class);
-    private GenericMessageListener messageListener;
-
     protected final Semaphore semaphore = new Semaphore(0);
     protected final Semaphore successSemaphore = new Semaphore(0);
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final Receiver receiver = mock(Receiver.class);
     protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
+    private GenericMessageListener messageListener;
 
     @BeforeEach
     public void init() {
@@ -132,11 +130,11 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener<?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?>> eventsToBind = registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
-        final Map<String, RegisteredCommandHandler<?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
+        final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),

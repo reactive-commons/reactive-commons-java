@@ -5,7 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 import reactor.core.publisher.Mono;
 
 import java.util.Optional;

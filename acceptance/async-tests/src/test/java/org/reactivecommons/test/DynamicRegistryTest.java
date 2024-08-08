@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DynamicRegistry;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
@@ -36,7 +37,7 @@ class DynamicRegistryTest {
     @Test
     void shouldReceiveResponse() {
         UnicastProcessor<String> result = UnicastProcessor.create();
-        EventHandler<String> fn = message -> fromRunnable(() -> result.onNext(message.getData()));
+        DomainEventHandler<String> fn = message -> fromRunnable(() -> result.onNext(message.getData()));
 
         dynamicRegistry.listenEvent("test.event", fn, String.class).block();
         final Publisher<Void> emit = eventBus.emit(new DomainEvent<>("test.event", "42", "Hello"));

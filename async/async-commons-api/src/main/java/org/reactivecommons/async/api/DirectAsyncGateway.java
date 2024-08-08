@@ -17,7 +17,11 @@ public interface DirectAsyncGateway {
 
     Mono<Void> sendCommand(CloudEvent command, String targetName);
 
+    Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis);
+
     Mono<Void> sendCommand(CloudEvent command, String targetName, String domain);
+
+    Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis, String domain);
 
     <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
 

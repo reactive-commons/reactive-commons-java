@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.converters.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.reactivecommons.async.commons.converters.json.CloudEventBuilderExt;
 
 import java.util.Date;
 

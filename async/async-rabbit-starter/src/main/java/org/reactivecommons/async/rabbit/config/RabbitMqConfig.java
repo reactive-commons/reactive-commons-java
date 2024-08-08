@@ -4,35 +4,30 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
-import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
+import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -57,12 +52,8 @@ import java.security.KeyManagementException;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
-import java.util.stream.Stream;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
@@ -156,35 +147,20 @@ public class RabbitMqConfig {
     @Bean
     @ConditionalOnMissingBean
     public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
-        return new JacksonMessageConverter(objectMapperSupplier.get());
+        return new RabbitJacksonMessageConverter(objectMapperSupplier.get());
     }
 
     @Bean
     @ConditionalOnMissingBean
-    public DiscardNotifier rabbitDiscardNotifier(ObjectMapperSupplier objectMapperSupplier, AsyncProps asyncProps,
+    public DiscardNotifier rabbitDiscardNotifier(MessageConverter messageConverter, AsyncProps asyncProps,
                                                  ReactiveMessageSender sender, BrokerConfigProps props) {
-        return new RabbitDiscardNotifier(domainEventBus(sender, props, asyncProps.getCreateTopology()), objectMapperSupplier.get());
+        return new DLQDiscardNotifier(domainEventBus(sender, props, asyncProps.getCreateTopology()), messageConverter);
     }
 
     @Bean
     @ConditionalOnMissingBean
     public CustomReporter reactiveCommonsCustomErrorReporter() {
-        return new CustomReporter() {
-            @Override
-            public Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered) {
-                return Mono.empty();
-            }
-
-            @Override
-            public Mono<Void> reportError(Throwable ex, Message rawMessage, DomainEvent<?> message, boolean redelivered) {
-                return Mono.empty();
-            }
-
-            @Override
-            public Mono<Void> reportError(Throwable ex, Message rawMessage, AsyncQuery<?> message, boolean redelivered) {
-                return Mono.empty();
-            }
-        };
+        return new DefaultCustomReporter();
     }
 
     private DomainEventBus domainEventBus(ReactiveMessageSender sender, BrokerConfigProps props, boolean createExchange) {
@@ -208,47 +184,7 @@ public class RabbitMqConfig {
     @Bean
     public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler defaultCommandHandler) {
         final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-
-        final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
-                .values().stream()
-                .flatMap(r -> r.getHandlers().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventsToBind = registries
-                .values().stream()
-                .flatMap(r -> r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        // event handlers and dynamic handlers
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventHandlers = registries
-                .values().stream()
-                .flatMap(r -> Stream.concat(r.getDomainEventListeners().get(DEFAULT_DOMAIN).stream(), r.getDynamicEventHandlers().stream()))
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredCommandHandler<?>> commandHandlers = registries
-                .values().stream()
-                .flatMap(r -> r.getCommandHandlers().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        final ConcurrentMap<String, RegisteredEventListener<?>> eventNotificationListener = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getEventNotificationListener().stream())
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
-
-        return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
-            @Override
-            @SuppressWarnings("unchecked")
-            public <T> RegisteredCommandHandler<T> getCommandHandler(String path) {
-                final RegisteredCommandHandler<T> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
-            }
-        };
+        return HandlerResolverUtil.fromHandlerRegistries(registries.values(), defaultCommandHandler);
     }
 
     @Bean

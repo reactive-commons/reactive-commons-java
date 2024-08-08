@@ -13,7 +13,9 @@ import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
@@ -22,8 +24,6 @@ import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupp
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.DynamicRegistryImp;
-import org.reactivecommons.async.rabbit.HandlerResolver;
-import org.reactivecommons.async.rabbit.RabbitDiscardNotifier;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
@@ -32,7 +32,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomainProperties;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
-import org.reactivecommons.async.rabbit.converters.json.JacksonCloudEventMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.properties.PropertyMapper;
@@ -72,18 +72,18 @@ public class RabbitMqConfig {
 
     @Bean
     public ConnectionManager buildConnectionManager(AsyncPropsDomain props, MessageConverter converter,
-                                                    BrokerConfig brokerConfig, ObjectMapperSupplier objectMapperSupplier) {
+                                                    BrokerConfig brokerConfig) {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((domain, properties) -> {
             ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties.getConnectionProperties());
             ReactiveMessageSender sender = createMessageSender(provider, properties, converter);
             ReactiveMessageListener listener = createMessageListener(provider, properties);
             connectionManager.addDomain(domain, listener, sender, provider);
-            
+
             ReactiveMessageSender appDomainSender = connectionManager.getSender(domain);
             DomainEventBus appDomainEventBus = new RabbitDomainEventBus(appDomainSender, props.getProps(domain)
                     .getBrokerConfigProps().getDomainEventsExchangeName(), brokerConfig);
-            DiscardNotifier notifier = new RabbitDiscardNotifier(appDomainEventBus, objectMapperSupplier.get());
+            DiscardNotifier notifier = new DLQDiscardNotifier(appDomainEventBus, converter);
             connectionManager.setDiscardNotifier(domain, notifier);
         });
         return connectionManager;
@@ -175,7 +175,7 @@ public class RabbitMqConfig {
     @Bean
     @ConditionalOnMissingBean
     public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
-        return new JacksonCloudEventMessageConverter(objectMapperSupplier.get());
+        return new RabbitJacksonMessageConverter(objectMapperSupplier.get());
     }
 
     @Bean

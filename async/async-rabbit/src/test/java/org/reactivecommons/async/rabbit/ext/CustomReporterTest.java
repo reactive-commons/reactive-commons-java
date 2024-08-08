@@ -1,10 +1,11 @@
-package org.reactivecommons.async.commons.ext;
+package org.reactivecommons.async.rabbit.ext;
 
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.ext.CustomReporter;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import reactor.test.publisher.PublisherProbe;

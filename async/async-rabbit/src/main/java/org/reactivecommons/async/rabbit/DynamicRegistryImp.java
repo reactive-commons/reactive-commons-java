@@ -3,11 +3,13 @@ package org.reactivecommons.async.rabbit;
 
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.DynamicRegistry;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
@@ -22,7 +24,7 @@ public class DynamicRegistryImp implements DynamicRegistry {
 
 
     @Override
-    public <T> Mono<Void> listenEvent(String eventName, EventHandler<T> fn, Class<T> eventClass) {
+    public <T> Mono<Void> listenEvent(String eventName, DomainEventHandler<T> fn, Class<T> eventClass) {
         resolver.addEventListener(new RegisteredEventListener<>(eventName, fn, eventClass));
 
         return topologyCreator.bind(buildBindingSpecification(eventName))

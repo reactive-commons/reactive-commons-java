@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
-import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
+import org.reactivecommons.async.commons.converters.json.CloudEventBuilderExt;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;

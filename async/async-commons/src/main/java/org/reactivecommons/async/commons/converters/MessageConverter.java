@@ -14,10 +14,14 @@ public interface MessageConverter {
 
     <T> Command<T> readCommand(Message message, Class<T> bodyClass);
 
+    CloudEvent readCloudEvent(Message message);
+
     <T> T readValue(Message message, Class<T> valueClass);
 
     <T> Command<T> readCommandStructure(Message message);
+
     <T> DomainEvent<T> readDomainEventStructure(Message message);
+
     <T> AsyncQuery<T> readAsyncQueryStructure(Message message);
 
     Message toMessage(Object object);

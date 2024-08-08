@@ -6,8 +6,9 @@ import lombok.extern.java.Log;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.*;
 import reactor.util.retry.Retry;
@@ -58,7 +59,7 @@ public class RabbitMqConfig {
     }
 
     public MessageConverter messageConverter(ObjectMapperSupplier objectMapperSupplier) {
-        return new JacksonMessageConverter(objectMapperSupplier.get());
+        return new RabbitJacksonMessageConverter(objectMapperSupplier.get());
     }
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {

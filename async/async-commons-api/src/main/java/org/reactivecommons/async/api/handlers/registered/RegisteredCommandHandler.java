@@ -6,8 +6,8 @@ import org.reactivecommons.async.api.handlers.CommandHandler;
 
 @RequiredArgsConstructor
 @Getter
-public class RegisteredCommandHandler<T> {
+public class RegisteredCommandHandler<T,D> {
     private final String path;
-    private final CommandHandler<T> handler;
+    private final CommandHandler<D> handler;
     private final Class<T> inputClass;
 }

@@ -2,14 +2,15 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.async.api.handlers.CloudEventHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.rabbit.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
@@ -77,10 +78,11 @@ public class ApplicationNotificationListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredEventListener<Object> eventListener = resolver.getNotificationListener(executorPath);
-        final Function<Message, DomainEvent<Object>> converter = message -> messageConverter
-                .readDomainEvent(message, eventListener.getInputClass());
+        final RegisteredEventListener<Object, Object> eventListener = resolver.getNotificationListener(executorPath);
+
+        Function<Message, Object> converter = resolveConverter(eventListener);
         final EventExecutor<Object> executor = new EventExecutor<>(eventListener.getHandler(), converter);
+
         return message -> executor
                 .execute(message)
                 .cast(Object.class);
@@ -96,4 +98,16 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
     }
+
+    private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
+        if (registeredEventListener.getHandler() instanceof DomainEventHandler) {
+            final Class<T> eventClass = registeredEventListener.getInputClass();
+            return msj -> messageConverter.readDomainEvent(msj, eventClass);
+        }
+        if (registeredEventListener.getHandler() instanceof CloudEventHandler) {
+            return messageConverter::readCloudEvent;
+        }
+        throw new RuntimeException("Unknown handler type");
+    }
+
 }

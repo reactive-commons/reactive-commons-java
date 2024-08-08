@@ -5,6 +5,8 @@ ext {
 
 dependencies {
     api project(':async-rabbit')
+    implementation 'io.projectreactor.rabbitmq:reactor-rabbitmq'
+
     compileOnly 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
 

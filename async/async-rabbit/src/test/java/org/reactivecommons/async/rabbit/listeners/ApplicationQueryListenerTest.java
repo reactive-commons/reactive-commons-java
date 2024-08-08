@@ -8,29 +8,27 @@ import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.helpers.SampleClass;
 import org.reactivecommons.async.helpers.TestStubs;
-import org.reactivecommons.async.rabbit.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.rabbit.converters.json.JacksonMessageConverter;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
-import reactor.test.publisher.PublisherProbe;
 
 import java.time.Instant;
 import java.util.Date;
@@ -39,11 +37,23 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.*;
-import static org.reactivecommons.async.commons.Headers.*;
-import static reactor.core.publisher.Mono.*;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
+import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
+import static reactor.core.publisher.Mono.empty;
+import static reactor.core.publisher.Mono.error;
+import static reactor.core.publisher.Mono.just;
 
 @ExtendWith(MockitoExtension.class)
 class ApplicationQueryListenerTest {
@@ -51,7 +61,7 @@ class ApplicationQueryListenerTest {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
 
     private final MessageConverter messageConverter =
-            new JacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+            new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
 
 
     @Mock
@@ -86,7 +96,7 @@ class ApplicationQueryListenerTest {
         HandlerResolver resolver = new HandlerResolver(handlers, null, null, null, null);
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
                 "directExchange", messageConverter, "replyExchange", false,
-                true,1, 100, maxLengthBytes, true, discardNotifier, errorReporter);
+                true, 1, 100, maxLengthBytes, true, discardNotifier, errorReporter);
     }
 
     @Test

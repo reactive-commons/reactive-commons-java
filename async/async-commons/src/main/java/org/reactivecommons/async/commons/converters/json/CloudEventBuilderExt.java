@@ -1,4 +1,4 @@
-package org.reactivecommons.async.rabbit.converters.json;
+package org.reactivecommons.async.commons.converters.json;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;

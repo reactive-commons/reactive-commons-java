@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.rabbit.converters.json.CloudEventBuilderExt;
+import org.reactivecommons.async.commons.converters.json.CloudEventBuilderExt;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import sample.model.Constants;

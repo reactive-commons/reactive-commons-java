@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
@@ -43,10 +44,10 @@ class DynamicRegistryImpTest {
     @BeforeEach
     @SuppressWarnings("rawtypes")
     void setUp() {
-        Map<String, RegisteredCommandHandler<?>> commandHandlers = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener<?>> eventListeners = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener<?>> eventsToBind = new ConcurrentHashMap<>();
-        Map<String, RegisteredEventListener<?>> notificationEventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredCommandHandler<?,?>> commandHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?,?>> eventListeners = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?,?>> eventsToBind = new ConcurrentHashMap<>();
+        Map<String, RegisteredEventListener<?,?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers);
         dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
@@ -58,7 +59,7 @@ class DynamicRegistryImpTest {
         when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
         dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
-        final RegisteredEventListener<Object> listener = resolver.getEventListener("event1");
+        final RegisteredEventListener<Object,Object> listener = resolver.getEventListener("event1");
         assertThat(listener).isNotNull();
     }
 

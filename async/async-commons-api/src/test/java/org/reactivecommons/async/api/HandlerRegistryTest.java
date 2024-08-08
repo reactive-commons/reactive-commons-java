@@ -1,14 +1,11 @@
 package org.reactivecommons.async.api;
 
+import io.cloudevents.CloudEvent;
 import lombok.Data;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.handlers.CommandHandler;
-import org.reactivecommons.async.api.handlers.EventHandler;
-import org.reactivecommons.async.api.handlers.QueryHandler;
-import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.api.handlers.*;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -21,12 +18,38 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 class HandlerRegistryTest {
     private final HandlerRegistry registry = HandlerRegistry.register();
     private final String name = "some.event";
+    private final String domain = "some-domain";
+
 
     @Test
-    void shouldListenEventWithTypeInferenceWhenClassInstanceIsUsed() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
+    void shouldListenDomainEvent() {
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
 
-        registry.listenEvent(name, eventHandler);
+        registry.listenDomainEvent(domain, name, eventHandler, SomeDataClass.class);
+
+        assertThat(registry.getDomainEventListeners().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, SomeDataClass.class, eventHandler)).hasSize(1);
+    }
+
+    @Test
+    void shouldListenDomainCloudEvent() {
+        SomeCloudEventHandler eventHandler = new SomeCloudEventHandler();
+
+        registry.listenDomainCloudEvent(domain, name, eventHandler);
+
+        assertThat(registry.getDomainEventListeners().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, CloudEvent.class, eventHandler)).hasSize(1);
+    }
+
+    @Test
+    void shouldListenEvent() {
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
+
+        registry.listenEvent(name, eventHandler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
@@ -35,32 +58,25 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void shouldRegisterPatternEventHandlerWithTypeInference() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
+    void shouldListenCloudEvent() {
+        SomeCloudEventHandler eventHandler = new SomeCloudEventHandler();
 
-        String eventNamePattern = "a.*";
-
-        HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler);
-        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
-                new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
+        registry.listenCloudEvent(name, eventHandler);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
-                .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
-                        .usingRecursiveComparison()
-                        .isEqualTo(expectedRegisteredEventListener));
-
-        assertThat(resultRegistry)
-                .isSameAs(registry);
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, CloudEvent.class, eventHandler)).hasSize(1);
     }
 
     @Test
     void shouldRegisterPatternEventHandler() {
-        SomeEventHandler eventHandler = new SomeEventHandler();
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
 
         String eventNamePattern = "a.*";
 
         HandlerRegistry resultRegistry = registry.listenEvent(eventNamePattern, eventHandler, SomeDataClass.class);
-        RegisteredEventListener<SomeDataClass> expectedRegisteredEventListener =
+        RegisteredEventListener<SomeDataClass, DomainEvent<SomeDataClass>> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
@@ -80,9 +96,16 @@ class HandlerRegistryTest {
     }
 
     @Test
+    void shouldRegisterNotificationCloudEventListener() {
+        registry.listenNotificationCloudEvent(name, message -> Mono.empty());
+        assertThat(registry.getEventNotificationListener())
+                .anySatisfy(listener -> assertThat(listener.getPath()).isEqualTo(name));
+    }
+
+    @Test
     @SuppressWarnings("unchecked")
     public void listenEvent() {
-        EventHandler<SomeDataClass> handler = mock(EventHandler.class);
+        SomeDomainEventHandler<SomeDataClass> handler = mock(SomeDomainEventHandler.class);
         registry.listenEvent(name, handler, SomeDataClass.class);
 
         assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
@@ -92,10 +115,34 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void handleCommandWithTypeInference() {
-        SomeCommandHandler handler = new SomeCommandHandler();
+    void shouldListenDynamicEvent() {
+        SomeDomainEventHandler<SomeDataClass> eventHandler = new SomeDomainEventHandler<>();
 
-        registry.handleCommand(name, handler);
+        registry.handleDynamicEvents(name, eventHandler, SomeDataClass.class);
+
+        assertThat(registry.getDynamicEventHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, SomeDataClass.class, eventHandler)).hasSize(1);
+    }
+
+    @Test
+    void shouldListenDynamicCloudEvent() {
+        SomeCloudEventHandler eventHandler = new SomeCloudEventHandler();
+
+        registry.handleDynamicCloudEvents(name, eventHandler);
+
+        assertThat(registry.getDynamicEventHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass, RegisteredEventListener::getHandler)
+                        .containsExactly(name, CloudEvent.class, eventHandler)).hasSize(1);
+    }
+
+    @Test
+    void handleDomainCommand() {
+        SomeDomainCommandHandler<SomeDataClass> handler = new SomeDomainCommandHandler<>();
+
+        registry.handleCommand(name, handler, SomeDataClass.class);
 
         assertThat(registry.getCommandHandlers())
                 .anySatisfy(registered -> assertThat(registered)
@@ -104,24 +151,27 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void handleCommandWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty()));
+    void handleCloudEventCommand() {
+        SomeCloudEventCommandHandler cloudCommandHandler = new SomeCloudEventCommandHandler();
+
+        registry.handleCloudEventCommand(name, cloudCommandHandler);
+
+        assertThat(registry.getCommandHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass, RegisteredCommandHandler::getHandler)
+                        .containsExactly(name, CloudEvent.class, cloudCommandHandler)).hasSize(1);
     }
 
     @Test
-    void listenEventWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty()));
-    }
+    void shouldServerCloudEventQuery() {
+        SomeCloudEventQueryHandler queryHandler = new SomeCloudEventQueryHandler();
 
-    @Test
-    void handleQueryWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.serveQuery(name, (SomeDataClass query) -> Mono.empty()));
+        registry.serveCloudEventQuery(name, queryHandler);
+
+        assertThat(registry.getHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
+                        .containsExactly(name, CloudEvent.class)).hasSize(1);
     }
 
     @Test
@@ -147,7 +197,7 @@ class HandlerRegistryTest {
     @Test
     void serveQueryWithTypeInference() {
         QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
-        registry.serveQuery(name, handler);
+        registry.serveQuery(name, handler,SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
                     .containsExactly(name, SomeDataClass.class);
@@ -181,23 +231,44 @@ class HandlerRegistryTest {
         }
     }
 
-    private static class SomeEventHandler implements EventHandler<SomeDataClass> {
+    private static class SomeDomainEventHandler<SomeDataClass> implements DomainEventHandler<SomeDataClass> {
         @Override
         public Mono<Void> handle(DomainEvent<SomeDataClass> message) {
             return Mono.empty();
         }
     }
 
-    private static class SomeCommandHandler implements CommandHandler<SomeDataClass> {
+    private static class SomeCloudEventHandler implements CloudEventHandler {
+        @Override
+        public Mono<Void> handle(CloudEvent message) {
+            return null;
+        }
+    }
+
+    private static class SomeDomainCommandHandler<SomeDataClass> implements DomainCommandHandler<SomeDataClass> {
         @Override
         public Mono<Void> handle(Command<SomeDataClass> message) {
             return Mono.empty();
         }
     }
 
+    private static class SomeCloudEventCommandHandler implements CloudCommandHandler {
+        @Override
+        public Mono<Void> handle(CloudEvent message) {
+            return null;
+        }
+    }
+
     private static class SomeQueryHandler implements QueryHandler<SomeDataClass, SomeDataClass> {
         @Override
         public Mono<SomeDataClass> handle(SomeDataClass message) {
+            return Mono.empty();
+        }
+    }
+
+    private static class SomeCloudEventQueryHandler implements QueryHandler<SomeDataClass, CloudEvent> {
+        @Override
+        public Mono<SomeDataClass> handle(CloudEvent message) {
             return Mono.empty();
         }
     }
