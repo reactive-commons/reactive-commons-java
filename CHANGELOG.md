@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.0.0-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.0-alpha) (2024-08-08)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.4...v5.0.0-alpha)
+
+**Merged pull requests:**
+
+- chore\(next\): add native support for Cloud Events  [\#115](https://github.com/reactive-commons/reactive-commons-java/pull/115) ([jcanacon](https://github.com/jcanacon))
+
 ## [v4.1.4](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.4) (2024-07-25)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.3...v4.1.4)
