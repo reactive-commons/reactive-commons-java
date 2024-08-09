@@ -9,7 +9,7 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
-import org.reactivecommons.async.kafka.config.props.RCPropsKafka;
+import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationContext;
@@ -29,7 +29,7 @@ public class RCKafkaEventListenerConfig {
                                                              TopologyCreator creator,
                                                              DiscardNotifier discardNotifier,
                                                              CustomReporter customReporter,
-                                                             RCPropsKafka props,
+                                                             RCAsyncPropsKafka props,
                                                              @Value("${spring.application.name}") String appName) {
         ApplicationEventListener eventListener = new ApplicationEventListener(listener,
                 resolver,

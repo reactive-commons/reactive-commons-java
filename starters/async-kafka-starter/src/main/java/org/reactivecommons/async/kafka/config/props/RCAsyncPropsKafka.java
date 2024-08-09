@@ -9,7 +9,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 @Getter
 @Setter
 @ConfigurationProperties(prefix = "reactive.commons.kafka")
-public class RCPropsKafka {
+public class RCAsyncPropsKafka {
 
     @NestedConfigurationProperty
     private RCKafkaProps kafkaProps = new RCKafkaProps();

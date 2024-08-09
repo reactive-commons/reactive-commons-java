@@ -12,13 +12,15 @@ import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
 import org.reactivecommons.async.kafka.KafkaDomainEventBus;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
+import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
 import org.reactivecommons.async.kafka.config.props.RCKafkaProps;
-import org.reactivecommons.async.kafka.config.props.RCPropsKafka;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -39,7 +41,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Configuration
-@EnableConfigurationProperties({RCPropsKafka.class})
+@EnableConfigurationProperties({RCAsyncPropsKafka.class})
 public class RCKafkaConfig {
     // Sender
     @Bean
@@ -57,7 +59,8 @@ public class RCKafkaConfig {
 
     @Bean
     @ConditionalOnMissingBean(KafkaSender.class)
-    public KafkaSender<String, byte[]> kafkaSender(RCKafkaProps props, @Value("${spring.application.name}") String clientId) {
+    public KafkaSender<String, byte[]> kafkaSender(RCAsyncPropsKafka config, @Value("${spring.application.name}") String clientId) {
+        RCKafkaProps props = config.getKafkaProps();
         props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         props.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
@@ -75,7 +78,8 @@ public class RCKafkaConfig {
 
     @Bean
     @ConditionalOnMissingBean(ReceiverOptions.class)
-    public ReceiverOptions<String, byte[]> kafkaReceiverOptions(RCKafkaProps props) {
+    public ReceiverOptions<String, byte[]> kafkaReceiverOptions(RCAsyncPropsKafka config) {
+        RCKafkaProps props = config.getKafkaProps();
         props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         return ReceiverOptions.create(props);
@@ -85,8 +89,8 @@ public class RCKafkaConfig {
 
     @Bean
     @ConditionalOnMissingBean(TopologyCreator.class)
-    public TopologyCreator kafkaTopologyCreator(RCKafkaProps props, KafkaCustomizations customizations) {
-        AdminClient adminClient = AdminClient.create(props);
+    public TopologyCreator kafkaTopologyCreator(RCAsyncPropsKafka config, KafkaCustomizations customizations) {
+        AdminClient adminClient = AdminClient.create(config.getKafkaProps());
         return new TopologyCreator(adminClient, customizations);
     }
 
@@ -103,14 +107,24 @@ public class RCKafkaConfig {
     }
 
     @Bean
+    @ConditionalOnMissingBean(DiscardNotifier.class)
     public DiscardNotifier kafkaDiscardNotifier(DomainEventBus domainEventBus, MessageConverter messageConverter) {
         return new DLQDiscardNotifier(domainEventBus, messageConverter);
     }
 
     @Bean
+    @ConditionalOnMissingBean(ObjectMapperSupplier.class)
     public ObjectMapperSupplier defaultObjectMapperSupplier() {
         return new DefaultObjectMapperSupplier();
     }
+
+    @Bean
+    @ConditionalOnMissingBean(CustomReporter.class)
+    public CustomReporter defaultKafkaCustomReporter() {
+        return new DefaultCustomReporter();
+    }
+
+    // Utilities
 
     public static RCKafkaProps readPropsFromDotEnv(Path path) throws IOException {
         String env = Files.readString(path);
