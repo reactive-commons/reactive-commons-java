@@ -8,7 +8,6 @@ import lombok.Data;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;

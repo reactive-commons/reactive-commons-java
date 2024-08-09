@@ -2,11 +2,15 @@ package org.reactivecommons.async.api;
 
 import io.cloudevents.CloudEvent;
 import lombok.Data;
-import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.handlers.*;
+import org.reactivecommons.async.api.handlers.CloudCommandHandler;
+import org.reactivecommons.async.api.handlers.CloudEventHandler;
+import org.reactivecommons.async.api.handlers.DomainCommandHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
+import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -164,24 +168,15 @@ class HandlerRegistryTest {
     }
 
     @Test
-    void handleCommandWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty()));
-    }
+    void shouldServerCloudEventQuery() {
+        SomeCloudEventQueryHandler queryHandler = new SomeCloudEventQueryHandler();
 
-    @Test
-    void listenEventWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.listenEvent(name, (DomainEvent<SomeDataClass> message) -> Mono.empty()));
-    }
+        registry.serveCloudEventQuery(name, queryHandler);
 
-    @Test
-    void handleQueryWithoutTypeShouldFail() {
-        Assertions.assertThrows(
-                RuntimeException.class,
-                () -> registry.serveQuery(name, (SomeDataClass query) -> Mono.empty()));
+        assertThat(registry.getHandlers())
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
+                        .containsExactly(name, CloudEvent.class)).hasSize(1);
     }
 
     @Test
@@ -207,7 +202,7 @@ class HandlerRegistryTest {
     @Test
     void serveQueryWithTypeInference() {
         QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
-        registry.serveQuery(name, handler);
+        registry.serveQuery(name, handler, SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
                     .containsExactly(name, SomeDataClass.class);
@@ -272,6 +267,13 @@ class HandlerRegistryTest {
     private static class SomeQueryHandler implements QueryHandler<SomeDataClass, SomeDataClass> {
         @Override
         public Mono<SomeDataClass> handle(SomeDataClass message) {
+            return Mono.empty();
+        }
+    }
+
+    private static class SomeCloudEventQueryHandler implements QueryHandler<SomeDataClass, CloudEvent> {
+        @Override
+        public Mono<SomeDataClass> handle(CloudEvent message) {
             return Mono.empty();
         }
     }

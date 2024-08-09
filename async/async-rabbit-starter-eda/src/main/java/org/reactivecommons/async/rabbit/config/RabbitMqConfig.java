@@ -13,6 +13,7 @@ import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
@@ -72,7 +73,7 @@ public class RabbitMqConfig {
 
     @Bean
     public ConnectionManager buildConnectionManager(AsyncPropsDomain props, MessageConverter converter,
-                                                    BrokerConfig brokerConfig, ObjectMapperSupplier objectMapperSupplier) {
+                                                    BrokerConfig brokerConfig) {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((domain, properties) -> {
             ConnectionFactoryProvider provider = createConnectionFactoryProvider(properties.getConnectionProperties());
