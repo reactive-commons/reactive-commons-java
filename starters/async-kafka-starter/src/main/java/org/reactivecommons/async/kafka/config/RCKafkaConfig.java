@@ -18,9 +18,11 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.RCKafkaProps;
+import org.reactivecommons.async.kafka.config.props.RCPropsKafka;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.kafka.receiver.ReceiverOptions;
@@ -37,6 +39,7 @@ import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CL
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 
 @Configuration
+@EnableConfigurationProperties({RCPropsKafka.class})
 public class RCKafkaConfig {
     // Sender
     @Bean
@@ -94,22 +97,6 @@ public class RCKafkaConfig {
     }
 
     @Bean
-    @ConditionalOnMissingBean(RCKafkaProps.class)
-    public RCKafkaProps kafkaProps() throws IOException {
-        String env = Files.readString(Path.of(".kafka-env"));
-        String[] split = env.split("\n");
-        RCKafkaProps props = new RCKafkaProps();
-        for (String s : split) {
-            if (s.startsWith("#")) {
-                continue;
-            }
-            String[] split1 = s.split("=", 2);
-            props.put(split1[0], split1[1]);
-        }
-        return props;
-    }
-
-    @Bean
     @ConditionalOnMissingBean(MessageConverter.class)
     public MessageConverter kafkaJacksonMessageConverter(ObjectMapperSupplier objectMapperSupplier) {
         return new KafkaJacksonMessageConverter(objectMapperSupplier.get());
@@ -123,6 +110,20 @@ public class RCKafkaConfig {
     @Bean
     public ObjectMapperSupplier defaultObjectMapperSupplier() {
         return new DefaultObjectMapperSupplier();
+    }
+
+    public static RCKafkaProps readPropsFromDotEnv(Path path) throws IOException {
+        String env = Files.readString(path);
+        String[] split = env.split("\n");
+        RCKafkaProps props = new RCKafkaProps();
+        for (String s : split) {
+            if (s.startsWith("#")) {
+                continue;
+            }
+            String[] split1 = s.split("=", 2);
+            props.put(split1[0], split1[1]);
+        }
+        return props;
     }
 
     public static String jassConfig(String username, String password) {
