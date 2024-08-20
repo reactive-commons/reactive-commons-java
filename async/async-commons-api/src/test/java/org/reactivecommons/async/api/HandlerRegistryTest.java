@@ -5,7 +5,12 @@ import lombok.Data;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
-import org.reactivecommons.async.api.handlers.*;
+import org.reactivecommons.async.api.handlers.CloudCommandHandler;
+import org.reactivecommons.async.api.handlers.CloudEventHandler;
+import org.reactivecommons.async.api.handlers.DomainCommandHandler;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
+import org.reactivecommons.async.api.handlers.QueryHandler;
+import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -152,7 +157,7 @@ class HandlerRegistryTest {
 
     @Test
     void handleCloudEventCommand() {
-        SomeCloudEventCommandHandler cloudCommandHandler = new SomeCloudEventCommandHandler();
+        SomeCloudCommandHandler cloudCommandHandler = new SomeCloudCommandHandler();
 
         registry.handleCloudEventCommand(name, cloudCommandHandler);
 
@@ -197,7 +202,7 @@ class HandlerRegistryTest {
     @Test
     void serveQueryWithTypeInference() {
         QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
-        registry.serveQuery(name, handler,SomeDataClass.class);
+        registry.serveQuery(name, handler, SomeDataClass.class);
         assertThat(registry.getHandlers()).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::getPath, RegisteredQueryHandler::getQueryClass)
                     .containsExactly(name, SomeDataClass.class);
@@ -252,7 +257,7 @@ class HandlerRegistryTest {
         }
     }
 
-    private static class SomeCloudEventCommandHandler implements CloudCommandHandler {
+    private static class SomeCloudCommandHandler implements CloudCommandHandler {
         @Override
         public Mono<Void> handle(CloudEvent message) {
             return null;

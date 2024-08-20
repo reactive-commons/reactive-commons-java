@@ -1,0 +1,16 @@
+ext {
+    artifactId = 'async-commons-kafka-starter'
+    artifactDescription = 'Async Commons Starter'
+}
+
+dependencies {
+    api project(':async-kafka')
+    compileOnly 'org.springframework.boot:spring-boot-starter'
+    compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+}

@@ -1,0 +1,17 @@
+spring:
+  application:
+    name: sender-eda
+  rabbitmq:
+    virtual-host: /
+server:
+  port: 4001
+management:
+  endpoint:
+    health:
+      show-details: always
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+

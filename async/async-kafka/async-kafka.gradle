@@ -1,0 +1,12 @@
+ext {
+    artifactId = 'async-kafka'
+    artifactDescription = 'Async Kafka'
+}
+
+dependencies {
+    api project(':async-commons-api')
+    api project(':domain-events-api')
+    api project(':async-commons')
+    api 'io.projectreactor.kafka:reactor-kafka:1.3.23'
+    api 'io.cloudevents:cloudevents-json-jackson:4.0.1'
+}

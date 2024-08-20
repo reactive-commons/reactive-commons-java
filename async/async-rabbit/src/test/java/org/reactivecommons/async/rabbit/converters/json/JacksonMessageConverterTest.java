@@ -1,6 +1,5 @@
 package org.reactivecommons.async.rabbit.converters.json;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
@@ -13,7 +12,6 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
-import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter;
 
 import java.io.IOException;
 import java.net.URI;
@@ -65,7 +63,7 @@ class JacksonMessageConverterTest {
     }
 
     @Test
-    void readCloudEvent() throws JsonProcessingException {
+    void readCloudEvent() {
         Date date = new Date();
         CloudEvent command = CloudEventBuilder.v1() //
                 .withId(UUID.randomUUID().toString()) //
