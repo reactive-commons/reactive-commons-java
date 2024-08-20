@@ -1,5 +1,17 @@
 # Changelog
 
+## [v5.0.1-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.1-alpha) (2024-08-20)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.0-alpha...v5.0.1-alpha)
+
+**Closed issues:**
+
+- Adjust to reactive-commons library according to the CloudEvents specification. [\#111](https://github.com/reactive-commons/reactive-commons-java/issues/111)
+
+**Merged pull requests:**
+
+- chore\(kafka\): Implement kafka binding with support for Domain Events [\#116](https://github.com/reactive-commons/reactive-commons-java/pull/116) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.0.0-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.0-alpha) (2024-08-08)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.4...v5.0.0-alpha)
