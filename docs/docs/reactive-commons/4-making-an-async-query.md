@@ -28,7 +28,11 @@ public interface DirectAsyncGateway {
 
     <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type);
 
-    //... other definitions for commands and eda variant
+    <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type, String domain); // Query to specific domain
+
+    <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type); // Query with CloudEvent format
+
+    <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain); // Query with CloudEvent format to specific domain
 }
 ```
 

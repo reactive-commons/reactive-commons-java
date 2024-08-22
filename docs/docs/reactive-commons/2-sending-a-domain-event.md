@@ -26,7 +26,7 @@ Where name is the event name, eventId is an unique event identifier and data is 
 public interface DomainEventBus {
     <T> Publisher<Void> emit(DomainEvent<T> event);
 
-     //... other definitions for eda variant
+    Publisher<Void> emit(CloudEvent event);
 }
 ```
 

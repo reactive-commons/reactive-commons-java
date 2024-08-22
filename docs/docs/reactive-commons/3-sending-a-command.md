@@ -29,7 +29,13 @@ public interface DirectAsyncGateway {
 
     <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis);
 
-    //... other definitions for queries and eda variant
+    <T> Mono<Void> sendCommand(Command<T> command, String targetName, String domain); // Send to specific domain
+
+    <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis, String domain); // Send to specific domain with delay
+
+    Mono<Void> sendCommand(CloudEvent command, String targetName); // Send with CloudEvent format
+
+    Mono<Void> sendCommand(CloudEvent command, String targetName, String domain); // Send with CloudEvent format to an specific domain
 }
 ```
 
