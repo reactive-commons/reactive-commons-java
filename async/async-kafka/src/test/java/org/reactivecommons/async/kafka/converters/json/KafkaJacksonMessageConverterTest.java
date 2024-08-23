@@ -5,7 +5,6 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
-import io.cloudevents.jackson.JsonCloudEventData;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -18,7 +17,7 @@ import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -69,13 +68,15 @@ class KafkaJacksonMessageConverterTest {
                 "\",\"source\":\"https://reactivecommons.org/events\",\"type\":\"test\"," +
                 "\"datacontenttype\":\"application/json\",\"time\":\"" + dateTime +
                 "\",\"data\":{\"name\":\"name\",\"age\":1}}";
+        JsonCloudEvent expectedJsonNode = objectMapper.readValue(expectedJson, JsonCloudEvent.class);
         // Act
         Message message = converter.toMessage(testCloudEvent);
         // Assert
         assertEquals("test", message.getProperties().getTopic());
         assertEquals(id, message.getProperties().getKey());
         assertEquals("application/cloudevents+json", message.getProperties().getContentType());
-        assertEquals(expectedJson, new String(message.getBody()));
+        JsonCloudEvent receivedJsonNode = objectMapper.readValue(new String(message.getBody()), JsonCloudEvent.class);
+        assertEquals(expectedJsonNode, receivedJsonNode);
     }
 
     @Data
@@ -84,5 +85,16 @@ class KafkaJacksonMessageConverterTest {
     public static class MyEvent {
         private String name;
         private int age;
+    }
+
+    @Data
+    public static class JsonCloudEvent {
+        private String specversion;
+        private String id;
+        private String source;
+        private String type;
+        private String datacontenttype;
+        private Date time;
+        private MyEvent data;
     }
 }
