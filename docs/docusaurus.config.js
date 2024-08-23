@@ -97,10 +97,6 @@ const config = {
                 label: 'Reactive Commons',
                 to: '/docs/reactive-commons/getting-started',
               },
-              {
-                label: 'Reactive Commons EDA',
-                to: '/docs/reactive-commons-eda/getting-started',
-              },
             ],
           },
           {
