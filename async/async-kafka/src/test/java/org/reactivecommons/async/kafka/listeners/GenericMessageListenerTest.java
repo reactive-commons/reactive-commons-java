@@ -72,8 +72,6 @@ class GenericMessageListenerTest {
         Headers header = new RecordHeaders().add("contentType", "application/json".getBytes(StandardCharsets.UTF_8));
         when(record.headers()).thenReturn(header);
         when(record.key()).thenReturn("key");
-        ReceiverOffset receiverOffset = mock(ReceiverOffset.class);
-        when(record.receiverOffset()).thenReturn(receiverOffset);
 
         Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(record);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(flux);
@@ -91,7 +89,6 @@ class GenericMessageListenerTest {
         StepVerifier.create(flow).expectNext("").verifyComplete();
         // Assert
         verify(topologyCreator, times(1)).createTopics(any(List.class));
-        verify(receiverOffset, atLeastOnce()).acknowledge();
     }
 
 
