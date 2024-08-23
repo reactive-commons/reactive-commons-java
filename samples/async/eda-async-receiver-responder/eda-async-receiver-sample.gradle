@@ -2,7 +2,7 @@ apply plugin: 'org.springframework.boot'
 
 dependencies {
     implementation project(":shared")
-    implementation project(":async-commons-rabbit-starter-eda")
+    implementation project(":async-commons-rabbit-starter")
     implementation 'org.springframework.boot:spring-boot-starter'
     implementation 'io.cloudevents:cloudevents-core:4.0.1'
 }
