@@ -5,9 +5,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -34,7 +34,7 @@ class EventListenersConfigTest {
     private final AsyncProps props = new AsyncProps();
     private final AsyncPropsDomain asyncPropsDomain = AsyncPropsDomain.builder()
             .withDefaultAppName("appName")
-            .withDefaultRabbitProperties(new RabbitProperties())
+            .withDefaultProperties(new RabbitProperties())
             .withDomain(DEFAULT_DOMAIN, props)
             .build();
     private final EventListenersConfig config = new EventListenersConfig(asyncPropsDomain);

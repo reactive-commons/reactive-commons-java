@@ -2,12 +2,13 @@
 sidebar_position: 1
 ---
 
+# Getting Started
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
   <TabItem value="rabbitmq" label="RabbitMQ" default>
-# Getting Started
 
 This quick start tutorial sets up a single node RabbitMQ and runs the sample reactive sender and consumer using Reactive
 Commons.

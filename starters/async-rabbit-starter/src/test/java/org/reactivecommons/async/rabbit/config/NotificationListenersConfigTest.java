@@ -5,9 +5,9 @@ import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
@@ -33,7 +33,7 @@ class NotificationListenersConfigTest {
     private final AsyncProps props = new AsyncProps();
     private final AsyncPropsDomain asyncPropsDomain = AsyncPropsDomain.builder()
             .withDefaultAppName("appName")
-            .withDefaultRabbitProperties(new RabbitProperties())
+            .withDefaultProperties(new RabbitProperties())
             .withDomain(DEFAULT_DOMAIN, props)
             .build();
     private final NotificationListenersConfig config = new NotificationListenersConfig(asyncPropsDomain);

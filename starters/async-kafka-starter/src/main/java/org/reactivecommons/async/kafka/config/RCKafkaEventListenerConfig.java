@@ -1,60 +1,51 @@
 package org.reactivecommons.async.kafka.config;
 
-import org.reactivecommons.async.api.DefaultCommandHandler;
-import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.commons.HandlerResolver;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
-import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
-import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
-import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import reactor.core.publisher.Mono;
 
-import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
+@RequiredArgsConstructor
 public class RCKafkaEventListenerConfig {
 
     @Bean
-    public ApplicationEventListener applicationEventListener(ReactiveMessageListener listener,
-                                                             HandlerResolver resolver,
-                                                             MessageConverter messageConverter,
-                                                             TopologyCreator creator,
-                                                             DiscardNotifier discardNotifier,
-                                                             CustomReporter customReporter,
-                                                             RCAsyncPropsKafka props,
-                                                             @Value("${spring.application.name}") String appName) {
-        ApplicationEventListener eventListener = new ApplicationEventListener(listener,
-                resolver,
-                messageConverter,
-                props.getWithDLQRetry(),
-                props.getCreateTopology(),
-                props.getMaxRetries(),
-                props.getRetryDelay(),
-                discardNotifier,
-                customReporter,
-                appName);
+    public ApplicationEventListener kafkaEventListener(ConnectionManager manager,
+                                                       DomainHandlers handlers,
+                                                       AsyncKafkaPropsDomain asyncPropsDomain,
+                                                       MessageConverter messageConverter,
+                                                       CustomReporter customReporter) {
+        AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
+        manager.forListener((domain, receiver) -> {
+            AsyncKafkaProps asyncProps = asyncPropsDomain.getProps(domain);
+            if (!asyncProps.getDomain().isIgnoreThisListener()) {
+                ApplicationEventListener eventListener = new ApplicationEventListener(receiver,
+                        handlers.get(domain),
+                        messageConverter,
+                        asyncProps.getWithDLQRetry(),
+                        asyncProps.getCreateTopology(),
+                        asyncProps.getMaxRetries(),
+                        asyncProps.getRetryDelay(),
+                        manager.getDiscardNotifier(domain),
+                        customReporter,
+                        asyncProps.getAppName());
+                if (DEFAULT_DOMAIN.equals(domain)) {
+                    external.set(eventListener);
+                }
 
-        eventListener.startListener(creator);
+                eventListener.startListener(manager.getTopologyCreator(domain));
+            }
+        });
 
-        return eventListener;
+        return external.get();
     }
 
-    @Bean
-    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler<?> defaultCommandHandler) {
-        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-        return HandlerResolverUtil.fromHandlerRegistries(registries.values(), defaultCommandHandler);
-    }
-
-    @Bean
-    public DefaultCommandHandler<?> defaultCommandHandler() {
-        return command -> Mono.empty();
-    }
 }

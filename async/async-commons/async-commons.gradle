@@ -9,6 +9,7 @@ dependencies {
 
     compileOnly 'io.projectreactor:reactor-core'
     api 'com.fasterxml.jackson.core:jackson-databind'
+    api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     implementation 'commons-io:commons-io:2.16.1'
     implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 

@@ -1,60 +1,42 @@
 package org.reactivecommons.async.kafka.config;
 
 import org.reactivecommons.async.api.DefaultCommandHandler;
-import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.utils.resolver.HandlerResolverUtil;
-import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
-import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
-import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
 import org.reactivecommons.async.kafka.listeners.ApplicationNotificationsListener;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import reactor.core.publisher.Mono;
 
-import java.util.Map;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
 public class RCKafkaNotificationEventListenerConfig {
 
     @Bean
-    public ApplicationNotificationsListener applicationEventListener(ReactiveMessageListener listener,
-                                                                     HandlerResolver resolver,
-                                                                     MessageConverter messageConverter,
-                                                                     TopologyCreator creator,
-                                                                     DiscardNotifier discardNotifier,
-                                                                     CustomReporter customReporter,
-                                                                     RCAsyncPropsKafka props,
-                                                                     @Value("${spring.application.name}") String appName) {
-        ApplicationNotificationsListener eventListener = new ApplicationNotificationsListener(listener,
-                resolver,
+    public ApplicationNotificationsListener kafkaNotificationEventListener(ConnectionManager manager,
+                                                                           DomainHandlers handlers,
+                                                                           AsyncKafkaPropsDomain asyncPropsDomain,
+                                                                           MessageConverter messageConverter,
+                                                                           CustomReporter customReporter) {
+        AsyncKafkaProps props = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
+        ApplicationNotificationsListener eventListener = new ApplicationNotificationsListener(
+                manager.getListener(DEFAULT_DOMAIN),
+                handlers.get(DEFAULT_DOMAIN),
                 messageConverter,
                 props.getWithDLQRetry(),
                 props.getCreateTopology(),
                 props.getMaxRetries(),
                 props.getRetryDelay(),
-                discardNotifier,
+                manager.getDiscardNotifier(DEFAULT_DOMAIN),
                 customReporter,
-                appName);
+                props.getAppName());
 
-        eventListener.startListener(creator);
+        eventListener.startListener(manager.getTopologyCreator(DEFAULT_DOMAIN));
 
         return eventListener;
-    }
-
-    @Bean
-    public HandlerResolver resolver(ApplicationContext context, DefaultCommandHandler<?> defaultCommandHandler) {
-        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-        return HandlerResolverUtil.fromHandlerRegistries(registries.values(), defaultCommandHandler);
-    }
-
-    @Bean
-    public DefaultCommandHandler<?> defaultCommandHandler() {
-        return command -> Mono.empty();
     }
 }

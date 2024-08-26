@@ -2,12 +2,13 @@
 sidebar_position: 8
 ---
 
+# Configuration Properties
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
   <TabItem value="rabbitmq" label="RabbitMQ" default>
-# Configuration Properties
 
 You can customize some predefined variables of Reactive Commons
 
@@ -65,7 +66,7 @@ package sample;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomainProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 

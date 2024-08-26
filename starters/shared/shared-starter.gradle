@@ -1,0 +1,10 @@
+ext {
+    artifactId = 'shared-starter'
+    artifactDescription = 'Shared Starter'
+}
+
+dependencies {
+    compileOnly project(':async-commons-api')
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+}

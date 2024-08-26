@@ -19,15 +19,20 @@ public class TopologyCreator {
     private final AdminClient adminClient;
     private final KafkaCustomizations customizations;
     private final Map<String, Boolean> existingTopics;
+    private final boolean checkTopics;
 
-    public TopologyCreator(AdminClient adminClient, KafkaCustomizations customizations) {
+    public TopologyCreator(AdminClient adminClient, KafkaCustomizations customizations, boolean checkTopics) {
         this.adminClient = adminClient;
         this.customizations = customizations;
+        this.checkTopics = checkTopics;
         this.existingTopics = getTopics();
     }
 
     @SneakyThrows
     public Map<String, Boolean> getTopics() {
+        if (!checkTopics) {
+            return Map.of();
+        }
         ListTopicsResult topics = adminClient.listTopics(new ListTopicsOptions().timeoutMs(TIMEOUT_MS));
         return topics.names().get().stream().collect(Collectors.toConcurrentMap(name -> name, name -> true));
     }
@@ -68,7 +73,7 @@ public class TopologyCreator {
     }
 
     public void checkTopic(String topicName) {
-        if (!existingTopics.containsKey(topicName)) {
+        if (checkTopics && !existingTopics.containsKey(topicName)) {
             throw new TopicNotFoundException("Topic not found: " + topicName + ". Please create it before send a message.");
             // TODO: should refresh topics?? getTopics();
         }

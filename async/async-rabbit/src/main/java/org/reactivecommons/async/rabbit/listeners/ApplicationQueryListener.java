@@ -2,8 +2,6 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
-import io.cloudevents.core.provider.EventFormatProvider;
-import io.cloudevents.jackson.JsonFormat;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -34,7 +32,6 @@ import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
 @Log
-//TODO: Organizar inferencia de tipos de la misma forma que en comandos y eventos
 public class ApplicationQueryListener extends GenericMessageListener {
     private final MessageConverter converter;
     private final HandlerResolver handlerResolver;

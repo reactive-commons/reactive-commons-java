@@ -1,24 +1,24 @@
-package org.reactivecommons.async.rabbit.config;
+package org.reactivecommons.async.commons;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.java.Log;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.commons.HandlerResolver;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.logging.Level;
 import java.util.stream.Stream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
-@Log4j2
+@Log
 public class HandlerResolverBuilder {
 
     public static HandlerResolver buildResolver(String domain,
@@ -81,7 +81,7 @@ public class HandlerResolverBuilder {
                     if (r.getDomainEventListeners().containsKey(domain)) {
                         return Stream.concat(r.getDomainEventListeners().get(domain).stream(), getDynamics(domain, r));
                     }
-                    log.warn("Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
+                    log.log(Level.WARNING, "Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
                     return Stream.empty();
                 })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
@@ -102,7 +102,7 @@ public class HandlerResolverBuilder {
                     if (r.getDomainEventListeners().containsKey(domain)) {
                         return r.getDomainEventListeners().get(domain).stream();
                     }
-                    log.warn("Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
+                    log.log(Level.WARNING, "Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
                     return Stream.empty();
                 })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),

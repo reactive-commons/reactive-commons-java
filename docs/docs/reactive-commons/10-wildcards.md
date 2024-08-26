@@ -2,12 +2,13 @@
 sidebar_position: 10
 ---
 
+# Wildcards
+
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
 
 <Tabs>
   <TabItem value="rabbitmq" label="RabbitMQ" default>
-# Wildcards
 
 You may need to listen variable event names that have the same structure, in that case you have the
 method `handleDynamicEvents` in the `HandlerRegistry`, so you can specify a pattern with '*' wildcard, it does not

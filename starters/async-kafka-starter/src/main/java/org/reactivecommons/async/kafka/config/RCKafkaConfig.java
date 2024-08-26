@@ -1,14 +1,17 @@
 package org.reactivecommons.async.kafka.config;
 
 import org.apache.kafka.clients.admin.AdminClient;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.api.DefaultCommandHandler;
+import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolverBuilder;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
@@ -19,14 +22,17 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
-import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
-import org.reactivecommons.async.kafka.config.props.RCKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomainProperties;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverOptions;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
@@ -34,64 +40,88 @@ import reactor.kafka.sender.SenderOptions;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
-@EnableConfigurationProperties({RCAsyncPropsKafka.class})
+@EnableConfigurationProperties({KafkaPropertiesAutoConfig.class, AsyncKafkaPropsDomainProperties.class})
+@Import(AsyncKafkaPropsDomain.class) // RabbitHealthConfig.class
 public class RCKafkaConfig {
+
+    @Bean
+    public ConnectionManager kafkaConnectionManager(AsyncKafkaPropsDomain props,
+                                                    MessageConverter converter,
+                                                    KafkaCustomizations customizations) {
+        ConnectionManager connectionManager = new ConnectionManager();
+        props.forEach((domain, properties) -> {
+            TopologyCreator creator = createTopologyCreator(properties, customizations);
+            ReactiveMessageSender sender = createMessageSender(properties, converter, creator);
+            ReactiveMessageListener listener = createMessageListener(properties);
+            connectionManager.addDomain(domain, listener, sender, creator);
+
+            ReactiveMessageSender appDomainSender = connectionManager.getSender(domain);
+            DomainEventBus appDomainEventBus = new KafkaDomainEventBus(appDomainSender);
+            DiscardNotifier notifier = new DLQDiscardNotifier(appDomainEventBus, converter);
+            connectionManager.setDiscardNotifier(domain, notifier);
+        });
+        return connectionManager;
+    }
+
+    @Bean
+    public DomainHandlers buildHandlers(AsyncKafkaPropsDomain props, ApplicationContext context,
+                                        HandlerRegistry primaryRegistry, DefaultCommandHandler<?> commandHandler) {
+        DomainHandlers handlers = new DomainHandlers();
+        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
+        if (!registries.containsValue(primaryRegistry)) {
+            registries.put("primaryHandlerRegistry", primaryRegistry);
+        }
+        props.forEach((domain, properties) -> {
+            HandlerResolver resolver = HandlerResolverBuilder.buildResolver(domain, registries, commandHandler);
+            handlers.add(domain, resolver);
+        });
+        return handlers;
+    }
+
+
     // Sender
     @Bean
     @ConditionalOnMissingBean(DomainEventBus.class)
-    public DomainEventBus kafkaDomainEventBus(ReactiveMessageSender sender) {
-        return new KafkaDomainEventBus(sender);
+    public DomainEventBus kafkaDomainEventBus(ConnectionManager manager) {
+        return new KafkaDomainEventBus(manager.getSender(DEFAULT_DOMAIN));
     }
 
-    @Bean
-    @ConditionalOnMissingBean(ReactiveMessageSender.class)
-    public ReactiveMessageSender kafkaReactiveMessageSender(KafkaSender<String, byte[]> kafkaSender,
-                                                            MessageConverter converter, TopologyCreator topologyCreator) {
-        return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(KafkaSender.class)
-    public KafkaSender<String, byte[]> kafkaSender(RCAsyncPropsKafka config, @Value("${spring.application.name}") String clientId) {
-        RCKafkaProps props = config.getKafkaProps();
-        props.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
+    private static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
+                                                             MessageConverter converter,
+                                                             TopologyCreator topologyCreator) {
+        KafkaProperties props = config.getConnectionProperties();
+        props.put(CLIENT_ID_CONFIG, config.getAppName());
         props.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
         props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props);
-        return KafkaSender.create(senderOptions);
+        KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
+        return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
     }
 
     // Receiver
 
-    @Bean
-    @ConditionalOnMissingBean(ReactiveMessageListener.class)
-    public ReactiveMessageListener kafkaReactiveMessageListener(ReceiverOptions<String, byte[]> receiverOptions) {
+    private static ReactiveMessageListener createMessageListener(AsyncKafkaProps config) {
+        KafkaProperties props = config.getConnectionProperties();
+        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props);
         return new ReactiveMessageListener(receiverOptions);
     }
 
-    @Bean
-    @ConditionalOnMissingBean(ReceiverOptions.class)
-    public ReceiverOptions<String, byte[]> kafkaReceiverOptions(RCAsyncPropsKafka config) {
-        RCKafkaProps props = config.getKafkaProps();
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        return ReceiverOptions.create(props);
-    }
-
     // Shared
-
-    @Bean
-    @ConditionalOnMissingBean(TopologyCreator.class)
-    public TopologyCreator kafkaTopologyCreator(RCAsyncPropsKafka config, KafkaCustomizations customizations) {
-        AdminClient adminClient = AdminClient.create(config.getKafkaProps());
-        return new TopologyCreator(adminClient, customizations);
+    private static TopologyCreator createTopologyCreator(AsyncKafkaProps config, KafkaCustomizations customizations) {
+        AdminClient adminClient = AdminClient.create(config.getConnectionProperties());
+        return new TopologyCreator(adminClient, customizations, config.getCheckExistingTopics());
     }
 
     @Bean
@@ -124,12 +154,31 @@ public class RCKafkaConfig {
         return new DefaultCustomReporter();
     }
 
+    @Bean
+    @ConditionalOnMissingBean(AsyncKafkaPropsDomain.KafkaSecretFiller.class)
+    public AsyncKafkaPropsDomain.KafkaSecretFiller defaultKafkaSecretFiller() {
+        return (ignoredDomain, ignoredProps) -> {
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(KafkaProperties.class)
+    public KafkaProperties defaultKafkaProperties(KafkaPropertiesAutoConfig properties, ObjectMapperSupplier supplier) {
+        return supplier.get().convertValue(properties, KafkaProperties.class);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(DefaultCommandHandler.class)
+    public DefaultCommandHandler<?> defaultCommandHandler() {
+        return command -> Mono.empty();
+    }
+
     // Utilities
 
-    public static RCKafkaProps readPropsFromDotEnv(Path path) throws IOException {
+    public static KafkaProperties readPropsFromDotEnv(Path path) throws IOException {
         String env = Files.readString(path);
         String[] split = env.split("\n");
-        RCKafkaProps props = new RCKafkaProps();
+        KafkaProperties props = new KafkaProperties();
         for (String s : split) {
             if (s.startsWith("#")) {
                 continue;

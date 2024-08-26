@@ -6,9 +6,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
@@ -33,10 +33,10 @@ class CommandListenersConfigTest {
     private final AsyncProps props = new AsyncProps();
     private final AsyncPropsDomain asyncPropsDomain = AsyncPropsDomain.builder()
             .withDefaultAppName("appName")
-            .withDefaultRabbitProperties(new RabbitProperties())
+            .withDefaultProperties(new RabbitProperties())
             .withDomain(DEFAULT_DOMAIN, props)
             .build();
-    private CommandListenersConfig config = new CommandListenersConfig(asyncPropsDomain);
+    private final CommandListenersConfig config = new CommandListenersConfig(asyncPropsDomain);
     private final ReactiveMessageListener listener = mock(ReactiveMessageListener.class);
     private final TopologyCreator creator = mock(TopologyCreator.class);
     private final HandlerResolver handlerResolver = mock(HandlerResolver.class);

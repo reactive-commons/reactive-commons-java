@@ -5,6 +5,7 @@ ext {
 
 dependencies {
     api project(':async-kafka')
+    api project(':shared-starter')
     compileOnly 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
