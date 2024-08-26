@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.0.3-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.3-alpha) (2024-08-23)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.2-alpha...v5.0.3-alpha)
+
+**Merged pull requests:**
+
+- chore\(next\): Fix test, artifactid and docs [\#118](https://github.com/reactive-commons/reactive-commons-java/pull/118) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.0.2-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.2-alpha) (2024-08-23)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.1-alpha...v5.0.2-alpha)
