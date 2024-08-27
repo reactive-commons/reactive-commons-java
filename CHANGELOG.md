@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.0.0-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.0-beta) (2024-08-27)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.3-alpha...v5.0.0-beta)
+
+**Merged pull requests:**
+
+- chore\(next\): Update starters and extract common reusable code to an aditional module [\#119](https://github.com/reactive-commons/reactive-commons-java/pull/119) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.0.3-alpha](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.3-alpha) (2024-08-23)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.2-alpha...v5.0.3-alpha)
