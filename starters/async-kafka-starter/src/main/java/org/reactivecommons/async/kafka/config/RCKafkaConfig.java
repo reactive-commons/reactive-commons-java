@@ -28,6 +28,7 @@ import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomainPropert
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.ssl.SslBundles;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -42,11 +43,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
@@ -57,12 +53,13 @@ public class RCKafkaConfig {
     @Bean
     public ConnectionManager kafkaConnectionManager(AsyncKafkaPropsDomain props,
                                                     MessageConverter converter,
-                                                    KafkaCustomizations customizations) {
+                                                    KafkaCustomizations customizations,
+                                                    SslBundles sslBundles) {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((domain, properties) -> {
-            TopologyCreator creator = createTopologyCreator(properties, customizations);
-            ReactiveMessageSender sender = createMessageSender(properties, converter, creator);
-            ReactiveMessageListener listener = createMessageListener(properties);
+            TopologyCreator creator = createTopologyCreator(properties, customizations, sslBundles);
+            ReactiveMessageSender sender = createMessageSender(properties, converter, creator, sslBundles);
+            ReactiveMessageListener listener = createMessageListener(properties, sslBundles);
             connectionManager.addDomain(domain, listener, sender, creator);
 
             ReactiveMessageSender appDomainSender = connectionManager.getSender(domain);
@@ -98,29 +95,31 @@ public class RCKafkaConfig {
 
     private static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
                                                              MessageConverter converter,
-                                                             TopologyCreator topologyCreator) {
+                                                             TopologyCreator topologyCreator,
+                                                             SslBundles sslBundles) {
         KafkaProperties props = config.getConnectionProperties();
-        props.put(CLIENT_ID_CONFIG, config.getAppName());
-        props.put(KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);
-        props.put(VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props);
+        props.setClientId(config.getAppName()); // CLIENT_ID_CONFIG
+        props.getProducer().setKeySerializer(StringSerializer.class); // KEY_SERIALIZER_CLASS_CONFIG;
+        props.getProducer().setValueSerializer(ByteArraySerializer.class); // VALUE_SERIALIZER_CLASS_CONFIG
+        SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties(sslBundles));
         KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
         return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
     }
 
     // Receiver
 
-    private static ReactiveMessageListener createMessageListener(AsyncKafkaProps config) {
+    private static ReactiveMessageListener createMessageListener(AsyncKafkaProps config, SslBundles sslBundles) {
         KafkaProperties props = config.getConnectionProperties();
-        props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
-        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props);
+        props.getConsumer().setKeyDeserializer(StringDeserializer.class); // KEY_DESERIALIZER_CLASS_CONFIG
+        props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class); // VALUE_DESERIALIZER_CLASS_CONFIG
+        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props.buildConsumerProperties(sslBundles));
         return new ReactiveMessageListener(receiverOptions);
     }
 
     // Shared
-    private static TopologyCreator createTopologyCreator(AsyncKafkaProps config, KafkaCustomizations customizations) {
-        AdminClient adminClient = AdminClient.create(config.getConnectionProperties());
+    private static TopologyCreator createTopologyCreator(AsyncKafkaProps config, KafkaCustomizations customizations,
+                                                         SslBundles sslBundles) {
+        AdminClient adminClient = AdminClient.create(config.getConnectionProperties().buildAdminProperties(sslBundles));
         return new TopologyCreator(adminClient, customizations, config.getCheckExistingTopics());
     }
 
@@ -179,12 +178,13 @@ public class RCKafkaConfig {
         String env = Files.readString(path);
         String[] split = env.split("\n");
         KafkaProperties props = new KafkaProperties();
+        Map<String, String> properties = props.getProperties();
         for (String s : split) {
             if (s.startsWith("#")) {
                 continue;
             }
             String[] split1 = s.split("=", 2);
-            props.put(split1[0], split1[1]);
+            properties.put(split1[0], split1[1]);
         }
         return props;
     }

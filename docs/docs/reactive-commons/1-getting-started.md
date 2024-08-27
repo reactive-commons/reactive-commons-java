@@ -120,7 +120,146 @@ If you want to use it, you should read the [Creating a CloudEvent guide](11-crea
 
   </TabItem>
   <TabItem value="kafka" label="Kafka">
-    Comming soon...
+    This quick start tutorial sets up a single node Kafka and runs the sample reactive sender and consumer using Reactive
+Commons.
+
+## Requirements
+
+You need Java JRE installed (Java 17 or later).
+
+## Start Kafka
+
+Start a Kafka broker on your local machine with all the defaults (e.g. port is 9092).
+
+### Containerized
+
+You can run it with Docker or Podman.
+
+The following docker compose has a Kafka broker, a Zookeeper and a Kafka UI.
+
+docker-compose.yml
+```yaml
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.1
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.1
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    ports:
+      - "8081:8080"
+    depends_on:
+      - kafka
+```
+
+```shell
+docker-compose up
+```
+
+You may set in /etc/hosts (or equivalent) the following entry:
+
+```txt
+127.0.0.1 kafka
+```
+
+To enter the Kafka UI, open your browser and go to `http://localhost:8081`
+
+## Spring Boot Application
+
+The Spring Boot sample publishes and consumes messages with the `DomainEventBus`. This application illustrates how to
+configure Reactive Commons using RabbitMQ in a Spring Boot environment.
+
+To build your own application using the Reactive Commons API, you need to include a dependency to Reactive Commons.
+
+### Current version
+
+![Maven metadata URL](https://img.shields.io/maven-metadata/v?metadataUrl=https%3A%2F%2Frepo1.maven.org%2Fmaven2%2Forg%2Freactivecommons%2Fasync-commons-rabbit-starter%2Fmaven-metadata.xml)
+
+### Dependency
+
+```groovy
+dependencies {
+    implementation "org.reactivecommons:async-kafka-starter:<version>"
+}
+```
+
+### Configuration properties
+
+Also you need to include the name for your app in the `application.properties`, it is important because this value will
+be used
+to name the application queues inside RabbitMQ:
+
+```properties
+spring.application.name=MyAppName
+```
+
+Or in your `application.yaml`
+
+```yaml
+spring:
+  application:
+    name: MyAppName
+```
+
+You can set the RabbitMQ connection properties through spring boot with
+the [`spring.kafka.*` properties](https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html)
+
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092
+```
+
+You can also set it in runtime for example from a secret, so you can create the `KafkaProperties` bean like:
+
+```java title="org.reactivecommons.async.rabbit.config.RabbitProperties"
+
+@Configuration
+public class MyKafkaConfig {
+
+    @Bean
+    @Primary
+    public KafkaProperties myRCKafkaProperties() {
+        KafkaProperties properties = new KafkaProperties();
+        properties.setBootstrapServers(List.of("localhost:9092"));
+        return properties;
+    }
+}
+```
+
+### Multi Broker Instances of Kafka or Multi Domain support
+
+Enables to you the ability to listen events from different domains.
+
+### Cloud Events
+
+Includes the Cloud Events specification.
+
+If you want to use it, you should read the [Creating a CloudEvent guide](11-creating-a-cloud-event.md)
+
   </TabItem>
 </Tabs>
 
