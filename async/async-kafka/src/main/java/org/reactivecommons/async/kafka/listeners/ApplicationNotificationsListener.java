@@ -44,7 +44,7 @@ public class ApplicationNotificationsListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
+        final RegisteredEventListener<Object, Object> handler = resolver.getNotificationListener(executorPath);
 
         Function<Message, Object> converter = resolveConverter(handler);
         final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);

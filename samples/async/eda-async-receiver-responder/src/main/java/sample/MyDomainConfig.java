@@ -2,7 +2,7 @@ package sample;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomainProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
@@ -11,7 +11,7 @@ public class MyDomainConfig {
 
     @Bean
     @Primary
-    public AsyncPropsDomainProperties customDomainProperties() {
+    public AsyncRabbitPropsDomainProperties customDomainProperties() {
         RabbitProperties propertiesApp = new RabbitProperties();
         propertiesApp.setHost("localhost");
         propertiesApp.setPort(5672);
@@ -26,7 +26,7 @@ public class MyDomainConfig {
         propertiesAccounts.setUsername("guest");
         propertiesAccounts.setPassword("guest");
 
-        return AsyncPropsDomainProperties.builder()
+        return AsyncRabbitPropsDomainProperties.builder()
                 .withDomain("app", AsyncProps.builder()
                         .connectionProperties(propertiesApp)
                         .build())

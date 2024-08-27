@@ -58,7 +58,7 @@ class TopologyCreatorTest {
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();
         when(adminClient.createTopics(any())).thenReturn(createTopicsResult);
-        creator = new TopologyCreator(adminClient, customizations);
+        creator = new TopologyCreator(adminClient, customizations, true);
         // Act
         Mono<Void> flow = creator.createTopics(List.of("topic1", "topic2"));
         // Assert
@@ -73,7 +73,7 @@ class TopologyCreatorTest {
         names.complete(Set.of("topic1", "topic2"));
         doReturn(names).when(listTopicsResult).names();
         when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
-        creator = new TopologyCreator(adminClient, customizations);
+        creator = new TopologyCreator(adminClient, customizations, true);
         // Act
         creator.checkTopic("topic1");
         // Assert
@@ -87,7 +87,7 @@ class TopologyCreatorTest {
         names.complete(Set.of("topic1", "topic2"));
         doReturn(names).when(listTopicsResult).names();
         when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
-        creator = new TopologyCreator(adminClient, customizations);
+        creator = new TopologyCreator(adminClient, customizations, true);
         // Assert
         assertThrows(TopicNotFoundException.class, () ->
                 // Act

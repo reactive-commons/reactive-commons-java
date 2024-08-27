@@ -23,7 +23,8 @@ public class EventListenersConfig {
 
     @Bean
     public ApplicationEventListener eventListener(MessageConverter messageConverter,
-                                                  ConnectionManager manager, DomainHandlers handlers,
+                                                  ConnectionManager manager,
+                                                  DomainHandlers handlers,
                                                   CustomReporter errorReporter) {
         AtomicReference<ApplicationEventListener> external = new AtomicReference<>();
         manager.forListener((domain, receiver) -> {

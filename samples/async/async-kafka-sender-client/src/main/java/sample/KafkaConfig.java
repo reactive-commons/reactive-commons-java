@@ -1,7 +1,7 @@
 package sample;
 
 import org.reactivecommons.async.kafka.config.RCKafkaConfig;
-import org.reactivecommons.async.kafka.config.props.RCAsyncPropsKafka;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -14,13 +14,13 @@ public class KafkaConfig {
 
     @Bean
     @Primary
-    public RCAsyncPropsKafka kafkaProps() throws IOException {
-        RCAsyncPropsKafka kafkaProps = new RCAsyncPropsKafka();
+    public AsyncKafkaProps kafkaProps() throws IOException {
+        AsyncKafkaProps kafkaProps = new AsyncKafkaProps();
         kafkaProps.setCreateTopology(true);
         kafkaProps.setMaxRetries(5);
         kafkaProps.setRetryDelay(1000);
         kafkaProps.setWithDLQRetry(true);
-        kafkaProps.setKafkaProps(RCKafkaConfig.readPropsFromDotEnv(Path.of(".kafka-env")));
+        kafkaProps.setConnectionProperties(RCKafkaConfig.readPropsFromDotEnv(Path.of(".kafka-env")));
         return kafkaProps;
     }
 }

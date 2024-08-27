@@ -5,8 +5,10 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.starter.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 
@@ -14,11 +16,8 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 @Setter
 @AllArgsConstructor
 @NoArgsConstructor
-@Builder
-public class AsyncProps {
-    private String appName;
-    private String secret;
-
+@SuperBuilder
+public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     @NestedConfigurationProperty
     @Builder.Default
     private FluxProps flux = new FluxProps();

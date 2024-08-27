@@ -16,6 +16,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.HandlerResolverBuilder;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
@@ -30,7 +31,7 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
-import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomainProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -61,7 +62,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @Log
 @Configuration
 @RequiredArgsConstructor
-@EnableConfigurationProperties({RabbitPropertiesAutoConfig.class, AsyncPropsDomainProperties.class})
+@EnableConfigurationProperties({RabbitPropertiesAutoConfig.class, AsyncRabbitPropsDomainProperties.class})
 @Import({RabbitHealthConfig.class, AsyncPropsDomain.class})
 public class RabbitMqConfig {
 
@@ -237,8 +238,8 @@ public class RabbitMqConfig {
     }
 
     @Bean
-    @ConditionalOnMissingBean(AsyncPropsDomain.SecretFiller.class)
-    public AsyncPropsDomain.SecretFiller defaultSecretFiller() {
+    @ConditionalOnMissingBean(AsyncPropsDomain.RabbitSecretFiller.class)
+    public AsyncPropsDomain.RabbitSecretFiller defaultRabbitSecretFiller() {
         return (ignoredDomain, ignoredProps) -> {
         };
     }
