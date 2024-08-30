@@ -190,7 +190,7 @@ To enter the Kafka UI, open your browser and go to `http://localhost:8081`
 ## Spring Boot Application
 
 The Spring Boot sample publishes and consumes messages with the `DomainEventBus`. This application illustrates how to
-configure Reactive Commons using RabbitMQ in a Spring Boot environment.
+configure Reactive Commons using Kafka in a Spring Boot environment.
 
 To build your own application using the Reactive Commons API, you need to include a dependency to Reactive Commons.
 
@@ -210,7 +210,7 @@ dependencies {
 
 Also you need to include the name for your app in the `application.properties`, it is important because this value will
 be used
-to name the application queues inside RabbitMQ:
+to name the application group-id inside Kafka:
 
 ```properties
 spring.application.name=MyAppName
@@ -224,7 +224,7 @@ spring:
     name: MyAppName
 ```
 
-You can set the RabbitMQ connection properties through spring boot with
+You can set the Kafka connection properties through spring boot with
 the [`spring.kafka.*` properties](https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html)
 
 ```yaml
@@ -235,7 +235,7 @@ spring:
 
 You can also set it in runtime for example from a secret, so you can create the `KafkaProperties` bean like:
 
-```java title="org.reactivecommons.async.rabbit.config.RabbitProperties"
+```java title="org.reactivecommons.async.kafka.config.KafkaProperties"
 
 @Configuration
 public class MyKafkaConfig {

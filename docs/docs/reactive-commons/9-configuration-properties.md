@@ -148,9 +148,9 @@ You can override this settings programmatically through a `AsyncKafkaPropsDomain
 ```java
 package sample;
 
-import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
+import org.reactivecommons.async.kafka.config.KafkaProperties;
+import org.reactivecommons.async.kafka.config.props.AsyncProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
@@ -163,7 +163,7 @@ public class MyDomainConfig {
         KafkaProperties propertiesApp = new KafkaProperties();
         propertiesApp.setBootstrapServers(List.of("localhost:9092"));
 
-        RabbitProperties propertiesAccounts = new RabbitProperties();
+        KafkaProperties propertiesAccounts = new KafkaProperties();
         propertiesAccounts.setBootstrapServers(List.of("localhost:9093"));
 
         return AsyncKafkaPropsDomainProperties.builder()
