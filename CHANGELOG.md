@@ -1,5 +1,23 @@
 # Changelog
 
+## [v5.0.1-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.1-beta) (2024-09-02)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.5...v5.0.1-beta)
+
+**Merged pull requests:**
+
+- build\(deps\): bump micromatch from 4.0.7 to 4.0.8 in /docs [\#123](https://github.com/reactive-commons/reactive-commons-java/pull/123) ([dependabot[bot]](https://github.com/apps/dependabot))
+- chore\(next\): Fix kafka starter [\#121](https://github.com/reactive-commons/reactive-commons-java/pull/121) ([juancgalvis](https://github.com/juancgalvis))
+
+## [v4.1.5](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.5) (2024-09-02)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.0-beta...v4.1.5)
+
+**Merged pull requests:**
+
+- build\(deps\): bump webpack from 5.91.0 to 5.94.0 in /docs [\#122](https://github.com/reactive-commons/reactive-commons-java/pull/122) ([dependabot[bot]](https://github.com/apps/dependabot))
+- docs\(kafka\): kafka docs [\#120](https://github.com/reactive-commons/reactive-commons-java/pull/120) ([AndresFelipe11](https://github.com/AndresFelipe11))
+
 ## [v5.0.0-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.0-beta) (2024-08-27)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.3-alpha...v5.0.0-beta)
