@@ -1,6 +1,5 @@
 package org.reactivecommons.async.kafka.config;
 
-import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
@@ -14,7 +13,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Configuration
-@RequiredArgsConstructor
 public class RCKafkaEventListenerConfig {
 
     @Bean
