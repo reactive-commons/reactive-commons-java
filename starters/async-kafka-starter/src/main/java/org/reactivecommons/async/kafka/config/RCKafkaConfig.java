@@ -70,22 +70,6 @@ public class RCKafkaConfig {
         return connectionManager;
     }
 
-    @Bean
-    public DomainHandlers buildHandlers(AsyncKafkaPropsDomain props, ApplicationContext context,
-                                        HandlerRegistry primaryRegistry, DefaultCommandHandler<?> commandHandler) {
-        DomainHandlers handlers = new DomainHandlers();
-        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-        if (!registries.containsValue(primaryRegistry)) {
-            registries.put("primaryHandlerRegistry", primaryRegistry);
-        }
-        props.forEach((domain, properties) -> {
-            HandlerResolver resolver = HandlerResolverBuilder.buildResolver(domain, registries, commandHandler);
-            handlers.add(domain, resolver);
-        });
-        return handlers;
-    }
-
-
     // Sender
     @Bean
     @ConditionalOnMissingBean(DomainEventBus.class)
