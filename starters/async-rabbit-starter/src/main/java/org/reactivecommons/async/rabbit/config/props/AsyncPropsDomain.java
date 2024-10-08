@@ -3,7 +3,7 @@ package org.reactivecommons.async.rabbit.config.props;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomain;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Constructor;

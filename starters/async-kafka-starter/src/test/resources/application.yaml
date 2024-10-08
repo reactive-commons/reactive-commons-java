@@ -1,0 +1,8 @@
+spring:
+  application:
+    name: async-kafka-starter
+reactive:
+  commons:
+    kafka:
+      app:
+        checkExistingTopics: false

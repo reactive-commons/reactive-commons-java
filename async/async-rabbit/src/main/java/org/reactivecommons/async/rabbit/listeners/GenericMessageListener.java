@@ -139,7 +139,8 @@ public abstract class GenericMessageListener {
     }
 
     private void onTerminate() {
-        messageFlux.doOnTerminate(this::onTerminate)
+        messageFlux
+                .doOnTerminate(this::onTerminate)
                 .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 

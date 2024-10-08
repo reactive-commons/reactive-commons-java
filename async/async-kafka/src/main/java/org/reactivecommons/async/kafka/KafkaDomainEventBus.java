@@ -17,7 +17,17 @@ public class KafkaDomainEventBus implements DomainEventBus {
     }
 
     @Override
+    public <T> Publisher<Void> emit(String domain, DomainEvent<T> event) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public Publisher<Void> emit(CloudEvent event) {
         return sender.send(event);
+    }
+
+    @Override
+    public Publisher<Void> emit(String domain, CloudEvent event) {
+        throw new UnsupportedOperationException("Not implemented yet");
     }
 }

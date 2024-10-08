@@ -1,6 +1,6 @@
 package sample;
 
-import org.reactivecommons.async.kafka.config.RCKafkaConfig;
+import org.reactivecommons.async.kafka.KafkaSetupUtils;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +20,7 @@ public class KafkaConfig {
         kafkaProps.setMaxRetries(5);
         kafkaProps.setRetryDelay(1000);
         kafkaProps.setWithDLQRetry(true);
-        kafkaProps.setConnectionProperties(RCKafkaConfig.readPropsFromDotEnv(Path.of(".kafka-env")));
+        kafkaProps.setConnectionProperties(KafkaSetupUtils.readPropsFromDotEnv(Path.of(".kafka-env")));
         return kafkaProps;
     }
 }

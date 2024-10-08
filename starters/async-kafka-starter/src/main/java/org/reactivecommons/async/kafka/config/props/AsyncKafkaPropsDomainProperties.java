@@ -1,7 +1,7 @@
 package org.reactivecommons.async.kafka.config.props;
 
 import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomainProperties;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomainProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.Map;

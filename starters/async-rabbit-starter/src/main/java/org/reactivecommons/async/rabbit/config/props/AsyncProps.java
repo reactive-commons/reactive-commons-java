@@ -8,7 +8,7 @@ import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.starter.GenericAsyncProps;
+import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 
@@ -62,5 +62,14 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private Boolean delayedCommands = false;
     @Builder.Default
     private Boolean createTopology = true; // auto delete queues will always be created and bound
+
+    @Builder.Default
+    private boolean useDiscardNotifierPerDomain = false;
+
+    @Builder.Default
+    private boolean enabled = true;
+
+    @Builder.Default
+    private String brokerType = "rabbitmq";
 
 }

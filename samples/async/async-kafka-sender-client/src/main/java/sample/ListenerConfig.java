@@ -4,7 +4,7 @@ import io.cloudevents.CloudEvent;
 import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.kafka.annotations.EnableEventListeners;
+import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;

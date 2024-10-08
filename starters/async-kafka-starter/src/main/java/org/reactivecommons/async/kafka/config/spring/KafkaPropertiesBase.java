@@ -1640,12 +1640,12 @@ public class KafkaPropertiesBase {
     public static class Cleanup {
 
         /**
-         * Cleanup the application’s local state directory on startup.
+         * Cleanup the application?s local state directory on startup.
          */
         private boolean onStartup = false;
 
         /**
-         * Cleanup the application’s local state directory on shutdown.
+         * Cleanup the application?s local state directory on shutdown.
          */
         private boolean onShutdown = false;
 
