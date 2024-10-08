@@ -19,15 +19,6 @@ public class ConnectionManager {
         return this;
     }
 
-    private BrokerProvider getChecked(String domain) {
-        BrokerProvider domainProvider = connections.get(domain);
-        if (domainProvider == null) {
-            throw new RuntimeException("You are trying to use the domain " + domain
-                    + " but this connection is not defined");
-        }
-        return domainProvider;
-    }
-
     public Map<String, BrokerProvider> getProviders() {
         return connections;
     }

@@ -38,9 +38,9 @@ public class KafkaSetupUtils {
                                                             TopologyCreator topologyCreator,
                                                             SslBundles sslBundles) {
         KafkaProperties props = config.getConnectionProperties();
-        props.setClientId(config.getAppName()); // CLIENT_ID_CONFIG
-        props.getProducer().setKeySerializer(StringSerializer.class); // KEY_SERIALIZER_CLASS_CONFIG;
-        props.getProducer().setValueSerializer(ByteArraySerializer.class); // VALUE_SERIALIZER_CLASS_CONFIG
+        props.setClientId(config.getAppName());
+        props.getProducer().setKeySerializer(StringSerializer.class);
+        props.getProducer().setValueSerializer(ByteArraySerializer.class);
         SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties(sslBundles));
         KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
         return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
@@ -50,8 +50,8 @@ public class KafkaSetupUtils {
 
     public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config, SslBundles sslBundles) {
         KafkaProperties props = config.getConnectionProperties();
-        props.getConsumer().setKeyDeserializer(StringDeserializer.class); // KEY_DESERIALIZER_CLASS_CONFIG
-        props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class); // VALUE_DESERIALIZER_CLASS_CONFIG
+        props.getConsumer().setKeyDeserializer(StringDeserializer.class);
+        props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class);
         ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props.buildConsumerProperties(sslBundles));
         return new ReactiveMessageListener(receiverOptions);
     }

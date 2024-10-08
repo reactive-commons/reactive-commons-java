@@ -2,6 +2,7 @@ package org.reactivecommons.async.starter.props;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
@@ -10,6 +11,7 @@ import org.reactivecommons.async.starter.exceptions.InvalidConfigurationExceptio
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
@@ -61,7 +63,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
     }
 
     protected void fillCustoms(T asyncProps) {
-
+        // To be overridden called after the default properties are set
     }
 
     public T getProps(String domain) {
@@ -153,4 +155,17 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         void fillWithSecret(String domain, GenericAsyncProps<P> props);
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
+        GenericAsyncPropsDomain<?, ?> that = (GenericAsyncPropsDomain<?, ?>) o;
+        return Objects.equals(asyncPropsClass, that.asyncPropsClass) && Objects.equals(propsClass, that.propsClass);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), asyncPropsClass, propsClass);
+    }
 }

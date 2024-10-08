@@ -37,7 +37,7 @@ public class RabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicat
             return connection.getServerProperties().get(VERSION).toString();
         } catch (SocketException e) {
             log.warn("Identified error", e);
-            throw new RuntimeException(e);
+            throw new RabbitMQHealthException(e);
         } finally {
             if (connection != null) {
                 try {

@@ -15,13 +15,13 @@ public abstract class GenericAsyncProps<P> {
     private String appName;
     private String secret;
 
-    abstract public void setConnectionProperties(P properties);
+    public abstract void setConnectionProperties(P properties);
 
-    abstract public P getConnectionProperties();
+    public abstract P getConnectionProperties();
 
-    abstract public String getBrokerType();
+    public abstract String getBrokerType();
 
-    abstract public boolean isEnabled();
+    public abstract boolean isEnabled();
 
-    abstract public void setUseDiscardNotifierPerDomain(boolean enabled);
+    public abstract void setUseDiscardNotifierPerDomain(boolean enabled);
 }

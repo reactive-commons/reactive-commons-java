@@ -1,6 +1,5 @@
 package org.reactivecommons.async.impl.config.annotations;
 
-import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.senders.DirectAsyncGatewayConfig;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;

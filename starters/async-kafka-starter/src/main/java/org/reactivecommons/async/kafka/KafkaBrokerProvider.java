@@ -52,20 +52,18 @@ public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
 
     @Override
     public void listenDomainEvents(HandlerResolver resolver) {
-        if (!props.getDomain().isIgnoreThisListener()) {
-            if (!resolver.getEventListeners().isEmpty()) {
-                ApplicationEventListener eventListener = new ApplicationEventListener(receiver,
-                        resolver,
-                        converter,
-                        props.getWithDLQRetry(),
-                        props.getCreateTopology(),
-                        props.getMaxRetries(),
-                        props.getRetryDelay(),
-                        discardNotifier,
-                        errorReporter,
-                        props.getAppName());
-                eventListener.startListener(topologyCreator);
-            }
+        if (!props.getDomain().isIgnoreThisListener() && !resolver.getEventListeners().isEmpty()) {
+            ApplicationEventListener eventListener = new ApplicationEventListener(receiver,
+                    resolver,
+                    converter,
+                    props.getWithDLQRetry(),
+                    props.getCreateTopology(),
+                    props.getMaxRetries(),
+                    props.getRetryDelay(),
+                    discardNotifier,
+                    errorReporter,
+                    props.getAppName());
+            eventListener.startListener(topologyCreator);
         }
     }
 
@@ -88,17 +86,17 @@ public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
 
     @Override
     public void listenCommands(HandlerResolver resolver) {
-
+        // Implemented in the future
     }
 
     @Override
     public void listenQueries(HandlerResolver resolver) {
-
+        // May be implemented in the future
     }
 
     @Override
     public void listenReplies(HandlerResolver resolver) {
-
+        // May be implemented in the future
     }
 
     @Override

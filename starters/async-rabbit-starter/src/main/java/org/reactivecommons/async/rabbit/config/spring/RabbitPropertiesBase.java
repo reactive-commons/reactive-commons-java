@@ -29,7 +29,7 @@ public class RabbitPropertiesBase {
     /**
      * Login to authenticate against the communications.
      */
-    private String password = "guest";
+    private String password = "guest"; //NOSONAR
 
     /**
      * SSL configuration.
@@ -156,11 +156,11 @@ public class RabbitPropertiesBase {
     }
 
     private List<Address> parseAddresses(String addresses) {
-        List<Address> parsedAddresses = new ArrayList<>();
+        List<Address> parsedAddressesLocal = new ArrayList<>();
         for (String address : StringUtils.commaDelimitedListToStringArray(addresses)) {
-            parsedAddresses.add(new Address(address));
+            parsedAddressesLocal.add(new Address(address));
         }
-        return parsedAddresses;
+        return parsedAddressesLocal;
     }
 
     public String getUsername() {

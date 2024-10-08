@@ -10,7 +10,7 @@ import java.util.Map;
 @Setter
 public class GenericAsyncPropsDomainProperties<T extends GenericAsyncProps<P>, P> extends HashMap<String, T> {
 
-    public GenericAsyncPropsDomainProperties(Map<? extends String, ? extends T> m) {
+    public GenericAsyncPropsDomainProperties(Map<String, ? extends T> m) {
         super(m);
     }
 

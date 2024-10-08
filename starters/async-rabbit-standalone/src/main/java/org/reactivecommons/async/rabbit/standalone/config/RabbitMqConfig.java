@@ -3,17 +3,21 @@ package org.reactivecommons.async.rabbit.standalone.config;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.extern.java.Log;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
-import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.ChannelPool;
+import reactor.rabbitmq.ChannelPoolFactory;
+import reactor.rabbitmq.ChannelPoolOptions;
+import reactor.rabbitmq.RabbitFlux;
+import reactor.rabbitmq.Sender;
+import reactor.rabbitmq.SenderOptions;
 import reactor.util.retry.Retry;
 
-import java.io.File;
 import java.time.Duration;
 import java.util.logging.Level;
 
@@ -39,12 +43,6 @@ public class RabbitMqConfig {
 
         return new ReactiveMessageSender(sender, appName, converter, new TopologyCreator(sender));
     }
-
-    /*public ReactiveMessageListener messageListener(ConnectionFactoryProvider provider) {
-        final Mono<Connection> connection = createSenderConnectionMono(provider.getConnectionFactory(), "listener");
-        Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
-        return new ReactiveMessageListener(receiver, new TopologyCreator(connection));
-    }*/
 
     public ConnectionFactoryProvider connectionFactory(RabbitProperties properties) {
         final ConnectionFactory factory = new ConnectionFactory();

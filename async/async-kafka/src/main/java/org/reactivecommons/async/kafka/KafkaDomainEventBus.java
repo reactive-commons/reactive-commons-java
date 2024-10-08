@@ -9,6 +9,7 @@ import org.reactivestreams.Publisher;
 
 @AllArgsConstructor
 public class KafkaDomainEventBus implements DomainEventBus {
+    public static final String NOT_IMPLEMENTED_YET = "Not implemented yet";
     private final ReactiveMessageSender sender;
 
     @Override
@@ -18,7 +19,7 @@ public class KafkaDomainEventBus implements DomainEventBus {
 
     @Override
     public <T> Publisher<Void> emit(String domain, DomainEvent<T> event) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
     }
 
     @Override
@@ -28,6 +29,6 @@ public class KafkaDomainEventBus implements DomainEventBus {
 
     @Override
     public Publisher<Void> emit(String domain, CloudEvent event) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
     }
 }

@@ -22,13 +22,17 @@ public class DirectAsyncGatewayConfig {
     private String appName;
 
 
-    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender rSender, MessageConverter converter,
-                                                             MeterRegistry meterRegistry) throws Exception {
-        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter, meterRegistry);
+    public RabbitDirectAsyncGateway rabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router,
+                                                             ReactiveMessageSender rSender, MessageConverter converter,
+                                                             MeterRegistry meterRegistry) {
+        return new RabbitDirectAsyncGateway(config, router, rSender, directMessagesExchangeName, converter,
+                meterRegistry);
     }
 
-    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config, ReactiveMessageListener listener, boolean createTopology) {
-        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, listener, generateName(), globalReplyExchangeName, createTopology);
+    public ApplicationReplyListener msgListener(ReactiveReplyRouter router, BrokerConfig config,
+                                                ReactiveMessageListener listener, boolean createTopology) {
+        final ApplicationReplyListener replyListener = new ApplicationReplyListener(router, listener, generateName(),
+                globalReplyExchangeName, createTopology);
         replyListener.startListening(config.getRoutingKey());
         return replyListener;
     }
@@ -50,7 +54,7 @@ public class DirectAsyncGatewayConfig {
                 .putLong(uuid.getLeastSignificantBits());
         // Convert to base64 and remove trailing =
         return this.appName + encodeToUrlSafeString(bb.array())
-                .replaceAll("=", "");
+                .replace("=", "");
     }
 
     public static String encodeToUrlSafeString(byte[] src) {

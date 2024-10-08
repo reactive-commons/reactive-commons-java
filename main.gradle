@@ -11,7 +11,7 @@ allprojects {
         maven { url 'https://repo.spring.io/milestone' }
     }
 
-    if (toPublish.split(',').contains(project.name) || project.name == 'ReactiveArchitectureCommons') {
+    if (toPublish.split(',').contains(project.name) || project.name == rootProject.name) {
 
         sonar {
             properties {
