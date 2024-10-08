@@ -12,23 +12,6 @@ allprojects {
     }
 
     group 'org.reactivecommons'
-
-    sonar {
-        properties {
-            property "sonar.sourceEncoding", "UTF-8"
-            property 'sonar.projectKey', 'reactive-commons_reactive-commons-java'
-            property 'sonar.organization', 'reactive-commons'
-            property 'sonar.host.url', 'https://sonarcloud.io'
-            property "sonar.sources", "src/main"
-            property "sonar.test", "src/test"
-            property "sonar.java.binaries", "build/classes"
-            property "sonar.junit.reportPaths", "build/test-results/test"
-            property "sonar.java-coveragePlugin", "jacoco"
-            property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/generateMergedReport/generateMergedReport.xml"
-            property "sonar.exclusions", ".github/**,samples/**/*"
-            property 'sonar.coverage.exclusions', 'samples/**/*'
-        }
-    }
 }
 
 nexusPublishing {
@@ -86,6 +69,23 @@ subprojects {
         apply plugin: 'signing'
 
         group groupId
+
+        sonar {
+            properties {
+                property "sonar.sourceEncoding", "UTF-8"
+                property 'sonar.projectKey', 'reactive-commons_reactive-commons-java'
+                property 'sonar.organization', 'reactive-commons'
+                property 'sonar.host.url', 'https://sonarcloud.io'
+                property "sonar.sources", "src/main"
+                property "sonar.test", "src/test"
+                property "sonar.java.binaries", "build/classes"
+                property "sonar.junit.reportPaths", "build/test-results/test"
+                property "sonar.java-coveragePlugin", "jacoco"
+                property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/generateMergedReport/generateMergedReport.xml"
+                property "sonar.exclusions", ".github/**,samples/**/*"
+                property 'sonar.coverage.exclusions', 'samples/**/*'
+            }
+        }
 
         tasks.named("jar") {
             enabled = true
