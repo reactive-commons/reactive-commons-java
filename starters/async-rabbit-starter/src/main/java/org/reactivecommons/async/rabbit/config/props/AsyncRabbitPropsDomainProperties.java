@@ -13,7 +13,7 @@ public class AsyncRabbitPropsDomainProperties extends GenericAsyncPropsDomainPro
     public AsyncRabbitPropsDomainProperties() {
     }
 
-    public AsyncRabbitPropsDomainProperties(Map<? extends String, ? extends AsyncProps> m) {
+    public AsyncRabbitPropsDomainProperties(Map<String, ? extends AsyncProps> m) {
         super(m);
     }
 

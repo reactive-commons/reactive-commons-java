@@ -9,7 +9,7 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "reactive.commons.kafka")
 public class AsyncKafkaPropsDomainProperties extends GenericAsyncPropsDomainProperties<AsyncKafkaProps, KafkaProperties> {
 
-    public AsyncKafkaPropsDomainProperties(Map<? extends String, ? extends AsyncKafkaProps> m) {
+    public AsyncKafkaPropsDomainProperties(Map<String, ? extends AsyncKafkaProps> m) {
         super(m);
     }
 
