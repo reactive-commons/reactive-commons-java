@@ -27,6 +27,9 @@ app:
       createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
       delayedCommands: false # Enable to send a delayed command to an external target
       prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this settings acts per instance of your service
+      useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
+      enabled: true # if you want to disable this domain you can set it to false
+      brokerType: "rabbitmq" # please don't change this value
       flux:
         maxConcurrency: 250 # max concurrency of listener flow
       domain:
@@ -64,7 +67,7 @@ You can override this settings programmatically through a `AsyncPropsDomainPrope
 ```java
 package sample;
 
-import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.standalone.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
@@ -133,6 +136,9 @@ reactive:
         retryDelay: 1000 # interval for message retries, with and without DLQRetry
         checkExistingTopics: true # if you don't want to verify topic existence before send a record you can set it to false
         createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
+        useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
+        enabled: true # if you want to disable this domain you can set it to false
+        brokerType: "kafka" # please don't change this value
         domain:
           ignoreThisListener: false # Allows you to disable event listener for this specific domain
         connectionProperties: # you can override the connection properties of each domain

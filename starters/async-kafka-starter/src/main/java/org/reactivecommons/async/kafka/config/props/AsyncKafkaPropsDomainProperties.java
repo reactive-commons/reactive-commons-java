@@ -1,7 +1,7 @@
 package org.reactivecommons.async.kafka.config.props;
 
 import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomainProperties;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomainProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.Map;
@@ -9,7 +9,7 @@ import java.util.Map;
 @ConfigurationProperties(prefix = "reactive.commons.kafka")
 public class AsyncKafkaPropsDomainProperties extends GenericAsyncPropsDomainProperties<AsyncKafkaProps, KafkaProperties> {
 
-    public AsyncKafkaPropsDomainProperties(Map<? extends String, ? extends AsyncKafkaProps> m) {
+    public AsyncKafkaPropsDomainProperties(Map<String, ? extends AsyncKafkaProps> m) {
         super(m);
     }
 

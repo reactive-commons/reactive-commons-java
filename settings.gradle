@@ -13,7 +13,7 @@ FileTree buildFiles = fileTree(rootDir) {
 String rootDirPath = rootDir.absolutePath + File.separator
 buildFiles.each { File buildFile ->
 
-    boolean isDefaultName = 'build.gradle'.equals(buildFile.name)
+    boolean isDefaultName = 'build.gradle' == buildFile.name
     if (isDefaultName) {
         String buildFilePath = buildFile.parentFile.absolutePath
         String projectPath = buildFilePath.replace(rootDirPath, '').replace(File.separator, ':')

@@ -3,7 +3,7 @@ package org.reactivecommons.async.kafka.config.props;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomain;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Constructor;

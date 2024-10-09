@@ -5,7 +5,8 @@ ext {
 
 dependencies {
     api project(':async-kafka')
-    api project(':shared-starter')
+    api project(':async-commons-starter')
+    implementation 'org.apache.kafka:kafka-clients'
     compileOnly 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'

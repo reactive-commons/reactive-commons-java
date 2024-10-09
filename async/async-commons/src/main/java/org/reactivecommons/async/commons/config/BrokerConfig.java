@@ -1,8 +1,11 @@
 package org.reactivecommons.async.commons.config;
 
+import lombok.Getter;
+
 import java.time.Duration;
 import java.util.UUID;
 
+@Getter
 public class BrokerConfig {
     private final String routingKey = UUID.randomUUID().toString().replaceAll("-", "");
     private final boolean persistentQueries;
@@ -22,26 +25,6 @@ public class BrokerConfig {
         this.persistentCommands = persistentCommands;
         this.persistentEvents = persistentEvents;
         this.replyTimeout = replyTimeout;
-    }
-
-    public boolean isPersistentQueries() {
-        return persistentQueries;
-    }
-
-    public boolean isPersistentCommands() {
-        return persistentCommands;
-    }
-
-    public boolean isPersistentEvents() {
-        return persistentEvents;
-    }
-
-    public Duration getReplyTimeout() {
-        return replyTimeout;
-    }
-
-    public String getRoutingKey() {
-        return routingKey;
     }
 
 }

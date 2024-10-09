@@ -7,10 +7,10 @@ import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
@@ -51,9 +51,6 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
-        final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(exchange(exchangeName)
-                .type("topic")
-                .durable(true));
 
         final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declare(
                 queue(queueName)
@@ -65,6 +62,10 @@ public class ApplicationNotificationListener extends GenericMessageListener {
                 .flatMap(listener -> creator.bind(binding(exchangeName, listener.getPath(), queueName)));
 
         if (createTopology) {
+            final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(exchange(exchangeName)
+                    .type("topic")
+                    .durable(true));
+
             return declareExchange
                     .then(declareQueue)
                     .thenMany(bindings)

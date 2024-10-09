@@ -7,7 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.starter.GenericAsyncProps;
+import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 
@@ -43,4 +43,12 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
     @Builder.Default
     private Boolean checkExistingTopics = true;
 
+    @Builder.Default
+    private boolean useDiscardNotifierPerDomain = false;
+
+    @Builder.Default
+    private boolean enabled = true;
+
+    @Builder.Default
+    private String brokerType = "kafka";
 }
