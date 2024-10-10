@@ -7,16 +7,18 @@ import org.springframework.boot.actuate.health.AbstractReactiveHealthIndicator;
 import org.springframework.boot.actuate.health.Health;
 import reactor.core.publisher.Mono;
 
+import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.DOMAIN;
+import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.VERSION;
+
 @Log4j2
 @AllArgsConstructor
 public class KafkaReactiveHealthIndicator extends AbstractReactiveHealthIndicator {
-    public static final String VERSION = "version";
     private final String domain;
     private final AdminClient adminClient;
 
     @Override
     protected Mono<Health> doHealthCheck(Health.Builder builder) {
-        builder.withDetail("domain", domain);
+        builder.withDetail(DOMAIN, domain);
         return checkKafkaHealth()
                 .map(clusterId -> builder.up().withDetail(VERSION, clusterId).build())
                 .onErrorReturn(builder.down().build());

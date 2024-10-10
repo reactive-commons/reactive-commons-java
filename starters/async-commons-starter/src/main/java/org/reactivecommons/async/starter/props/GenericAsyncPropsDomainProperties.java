@@ -2,6 +2,7 @@ package org.reactivecommons.async.starter.props;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.SneakyThrows;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -38,8 +39,9 @@ public class GenericAsyncPropsDomainProperties<T extends GenericAsyncProps<P>, P
             return this;
         }
 
+        @SneakyThrows
         public X build() {
-            return returnType.cast(new GenericAsyncPropsDomainProperties<>(domains));
+            return returnType.getDeclaredConstructor(Map.class).newInstance(domains);
         }
     }
 }

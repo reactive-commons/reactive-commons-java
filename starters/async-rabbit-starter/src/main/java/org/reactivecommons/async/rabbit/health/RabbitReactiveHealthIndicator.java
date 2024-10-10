@@ -10,9 +10,11 @@ import reactor.core.publisher.Mono;
 
 import java.net.SocketException;
 
+import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.DOMAIN;
+import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.VERSION;
+
 @Log4j2
 public class RabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicator {
-    public static final String VERSION = "version";
     private final String domain;
     private final ConnectionFactory connectionFactory;
 
@@ -24,7 +26,7 @@ public class RabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicat
 
     @Override
     protected Mono<Health> doHealthCheck(Health.Builder builder) {
-        builder.withDetail("domain", domain);
+        builder.withDetail(DOMAIN, domain);
         return Mono.fromCallable(() -> getRawVersion(connectionFactory))
                 .map(status -> builder.up().withDetail(VERSION, status).build());
     }

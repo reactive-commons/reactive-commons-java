@@ -13,6 +13,8 @@ import reactor.core.publisher.Mono;
 @Log4j2
 @AllArgsConstructor
 public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndicator {
+    public static final String DOMAIN = "domain";
+    public static final String VERSION = "version";
     private final ConnectionManager manager;
 
     @Override
@@ -26,8 +28,8 @@ public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndica
     }
 
     private Health.Builder reduceHealth(Health.Builder builder, Health status) {
-        String domain = status.getDetails().get("domain").toString();
-        if (!status.getStatus().equals(Status.DOWN)) {
+        String domain = status.getDetails().get(DOMAIN).toString();
+        if (status.getStatus().equals(Status.DOWN)) {
             log.error("Broker of domain {} is down", domain);
             return builder.down().withDetail(domain, status.getDetails());
         }
