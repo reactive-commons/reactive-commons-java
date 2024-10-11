@@ -22,8 +22,7 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
     @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncProps, RabbitProperties, AsyncRabbitPropsDomainProperties,
             AsyncPropsDomain> builder() {
-        return GenericAsyncPropsDomain.builder(AsyncProps.class,
-                RabbitProperties.class,
+        return GenericAsyncPropsDomain.builder(RabbitProperties.class,
                 AsyncRabbitPropsDomainProperties.class,
                 (Constructor<AsyncPropsDomain>) AsyncPropsDomain.class.getDeclaredConstructors()[0]);
     }

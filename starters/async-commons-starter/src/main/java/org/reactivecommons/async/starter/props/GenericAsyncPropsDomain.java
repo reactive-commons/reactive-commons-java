@@ -2,7 +2,6 @@ package org.reactivecommons.async.starter.props;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
@@ -34,7 +33,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
         this.computeIfAbsent(DEFAULT_DOMAIN, k -> {
-            T defaultApp = GenericAsyncPropsDomain.instantiate(asyncPropsClass);
+            T defaultApp = AsyncPropsDomainBuilder.instantiate(asyncPropsClass);
             defaultApp.setConnectionProperties(mapper.convertValue(defaultProperties, propsClass));
             return defaultApp;
         });
@@ -81,11 +80,10 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
             P,
             X extends GenericAsyncPropsDomainProperties<T, P>,
             R extends GenericAsyncPropsDomain<T, P>>
-    AsyncPropsDomainBuilder<T, P, X, R> builder(Class<T> asyncPropsClass,
-                                                Class<P> propsClass,
+    AsyncPropsDomainBuilder<T, P, X, R> builder(Class<P> propsClass,
                                                 Class<X> asyncPropsDomainClass,
                                                 Constructor<R> returnType) {
-        return new AsyncPropsDomainBuilder<>(asyncPropsClass, propsClass, asyncPropsDomainClass, returnType);
+        return new AsyncPropsDomainBuilder<>(propsClass, asyncPropsDomainClass, returnType);
     }
 
     public static class AsyncPropsDomainBuilder<
@@ -101,7 +99,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         private P defaultProperties;
         private SecretFiller<P> secretFiller;
 
-        public AsyncPropsDomainBuilder(Class<T> asynPropsClass, Class<P> propsClass, Class<X> asyncPropsDomainClass,
+        public AsyncPropsDomainBuilder(Class<P> propsClass, Class<X> asyncPropsDomainClass,
                                        Constructor<R> returnType) {
             this.propsClass = propsClass;
             this.asyncPropsDomainClass = asyncPropsDomainClass;
@@ -139,16 +137,16 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
             return returnType.newInstance(defaultAppName, defaultProperties, domainProperties, secretFiller);
         }
 
-    }
+        @SneakyThrows
+        private static <X> X instantiate(Class<X> xClass) {
+            return xClass.getDeclaredConstructor().newInstance();
+        }
 
-    @SneakyThrows
-    private static <X> X instantiate(Class<X> xClass) {
-        return xClass.getDeclaredConstructor().newInstance();
-    }
+        @SneakyThrows
+        private static <X> X instantiate(Class<X> xClass, Map<?, ?> arg) {
+            return xClass.getDeclaredConstructor(Map.class).newInstance(arg);
+        }
 
-    @SneakyThrows
-    private static <X> X instantiate(Class<X> xClass, Map<?, ?> arg) {
-        return xClass.getDeclaredConstructor(Map.class).newInstance(arg);
     }
 
     public interface SecretFiller<P> {

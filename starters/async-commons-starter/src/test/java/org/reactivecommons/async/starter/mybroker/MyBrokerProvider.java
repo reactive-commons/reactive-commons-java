@@ -33,27 +33,27 @@ public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
 
     @Override
     public void listenDomainEvents(HandlerResolver resolver) {
-
+        // for testing purposes
     }
 
     @Override
     public void listenNotificationEvents(HandlerResolver resolver) {
-
+        // for testing purposes
     }
 
     @Override
     public void listenCommands(HandlerResolver resolver) {
-
+        // for testing purposes
     }
 
     @Override
     public void listenQueries(HandlerResolver resolver) {
-
+        // for testing purposes
     }
 
     @Override
     public void listenReplies(HandlerResolver resolver) {
-
+        // for testing purposes
     }
 
     @Override

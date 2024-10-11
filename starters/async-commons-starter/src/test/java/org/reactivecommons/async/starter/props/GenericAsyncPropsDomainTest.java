@@ -2,11 +2,11 @@ package org.reactivecommons.async.starter.props;
 
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
+import org.reactivecommons.async.starter.mybroker.MyBrokerSecretFiller;
 import org.reactivecommons.async.starter.mybroker.props.AsyncMyBrokerPropsDomainProperties;
 import org.reactivecommons.async.starter.mybroker.props.MyBrokerAsyncProps;
-import org.reactivecommons.async.starter.mybroker.props.MyBrokerConnProps;
 import org.reactivecommons.async.starter.mybroker.props.MyBrokerAsyncPropsDomain;
-import org.reactivecommons.async.starter.mybroker.MyBrokerSecretFiller;
+import org.reactivecommons.async.starter.mybroker.props.MyBrokerConnProps;
 
 import java.lang.reflect.Constructor;
 
@@ -47,7 +47,7 @@ class GenericAsyncPropsDomainTest {
         String defaultAppName = "sample";
         MyBrokerConnProps defaultMyBrokerProps = new MyBrokerConnProps();
         MyBrokerAsyncProps propsConfigured = new MyBrokerAsyncProps();
-        MyBrokerAsyncPropsDomain propsDomain = MyBrokerAsyncPropsDomain.builder(MyBrokerAsyncProps.class, MyBrokerConnProps.class,
+        MyBrokerAsyncPropsDomain propsDomain = MyBrokerAsyncPropsDomain.builder(MyBrokerConnProps.class,
                         AsyncMyBrokerPropsDomainProperties.class,
                         (Constructor<MyBrokerAsyncPropsDomain>) MyBrokerAsyncPropsDomain.class.getDeclaredConstructors()[0])
                 .withDefaultAppName(defaultAppName)

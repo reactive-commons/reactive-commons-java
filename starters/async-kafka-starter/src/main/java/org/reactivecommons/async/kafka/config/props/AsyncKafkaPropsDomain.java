@@ -23,8 +23,7 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
     @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncKafkaProps, KafkaProperties, AsyncKafkaPropsDomainProperties,
             AsyncKafkaPropsDomain> builder() {
-        return GenericAsyncPropsDomain.builder(AsyncKafkaProps.class,
-                KafkaProperties.class,
+        return GenericAsyncPropsDomain.builder(KafkaProperties.class,
                 AsyncKafkaPropsDomainProperties.class,
                 (Constructor<AsyncKafkaPropsDomain>) AsyncKafkaPropsDomain.class.getDeclaredConstructors()[0]);
     }
