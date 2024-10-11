@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.1.0-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.0-beta) (2024-10-11)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.1-beta...v5.1.0-beta)
+
+**Merged pull requests:**
+
+- chore\(next\): Create shared starter [\#124](https://github.com/reactive-commons/reactive-commons-java/pull/124) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.0.1-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.0.1-beta) (2024-09-02)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.5...v5.0.1-beta)
