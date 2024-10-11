@@ -3,7 +3,7 @@ package org.reactivecommons.async.rabbit.config.props;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomain;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Constructor;
@@ -22,8 +22,7 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
     @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncProps, RabbitProperties, AsyncRabbitPropsDomainProperties,
             AsyncPropsDomain> builder() {
-        return GenericAsyncPropsDomain.builder(AsyncProps.class,
-                RabbitProperties.class,
+        return GenericAsyncPropsDomain.builder(RabbitProperties.class,
                 AsyncRabbitPropsDomainProperties.class,
                 (Constructor<AsyncPropsDomain>) AsyncPropsDomain.class.getDeclaredConstructors()[0]);
     }

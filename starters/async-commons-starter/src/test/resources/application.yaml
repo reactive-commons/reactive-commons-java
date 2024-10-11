@@ -1,0 +1,7 @@
+spring:
+  application:
+    name: test-app
+my:
+  broker:
+    app:
+      enabled: true

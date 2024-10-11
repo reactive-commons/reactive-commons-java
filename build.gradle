@@ -13,18 +13,9 @@ buildscript {
 plugins {
     id 'jacoco'
     id 'org.sonarqube' version '5.1.0.4882'
-    id 'org.springframework.boot' version '3.3.1' apply false
+    id 'org.springframework.boot' version '3.3.4' apply false
     id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
-    id 'co.com.bancolombia.cleanArchitecture' version '3.17.13'
-}
-
-sonar {
-    properties {
-        property 'sonar.projectKey', 'reactive-commons_reactive-commons-java'
-        property 'sonar.coverage.exclusions', 'samples/**/*'
-        property 'sonar.organization', 'reactive-commons'
-        property 'sonar.host.url', 'https://sonarcloud.io'
-    }
+    id 'co.com.bancolombia.cleanArchitecture' version '3.17.26'
 }
 
 repositories {

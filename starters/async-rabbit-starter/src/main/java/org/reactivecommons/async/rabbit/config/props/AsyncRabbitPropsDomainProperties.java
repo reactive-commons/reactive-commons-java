@@ -1,7 +1,7 @@
 package org.reactivecommons.async.rabbit.config.props;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.starter.GenericAsyncPropsDomainProperties;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomainProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.util.Map;
@@ -13,7 +13,7 @@ public class AsyncRabbitPropsDomainProperties extends GenericAsyncPropsDomainPro
     public AsyncRabbitPropsDomainProperties() {
     }
 
-    public AsyncRabbitPropsDomainProperties(Map<? extends String, ? extends AsyncProps> m) {
+    public AsyncRabbitPropsDomainProperties(Map<String, ? extends AsyncProps> m) {
         super(m);
     }
 

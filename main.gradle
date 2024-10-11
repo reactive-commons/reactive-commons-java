@@ -11,6 +11,26 @@ allprojects {
         maven { url 'https://repo.spring.io/milestone' }
     }
 
+    if (toPublish.split(',').contains(project.name) || project.name == rootProject.name) {
+
+        sonar {
+            properties {
+                property "sonar.sourceEncoding", "UTF-8"
+                property 'sonar.projectKey', 'reactive-commons_reactive-commons-java'
+                property 'sonar.organization', 'reactive-commons'
+                property 'sonar.host.url', 'https://sonarcloud.io'
+                property "sonar.sources", "src/main"
+                property "sonar.test", "src/test"
+                property "sonar.java.binaries", "build/classes"
+                property "sonar.junit.reportPaths", "build/test-results/test"
+                property "sonar.java-coveragePlugin", "jacoco"
+                property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/generateMergedReport/generateMergedReport.xml"
+                property "sonar.exclusions", ".github/**,samples/**/*,**/mybroker/**/*,**/standalone/**/*"
+                property 'sonar.coverage.exclusions', 'samples/**/*'
+            }
+        }
+    }
+
     group 'org.reactivecommons'
 }
 
@@ -39,9 +59,14 @@ subprojects {
         testCompileOnly 'org.projectlombok:lombok'
     }
 
+    test.finalizedBy(project.tasks.jacocoTestReport)
+
     jacocoTestReport {
+        dependsOn test
         reports {
             xml.setRequired true
+            html.setRequired true
+            csv.setRequired false
         }
     }
 
@@ -55,7 +80,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.3.1'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.3.4'
         }
     }
 
@@ -134,6 +159,22 @@ subprojects {
     }
 }
 
+tasks.register('generateMergedReport', JacocoReport) {
+    dependsOn test
+    dependsOn subprojects.test
+    dependsOn subprojects.javadoc
+    dependsOn subprojects.jacocoTestReport
+    additionalSourceDirs.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    sourceDirectories.setFrom files(subprojects.sourceSets.main.allSource.srcDirs)
+    classDirectories.setFrom files(subprojects.sourceSets.main.output).filter({ !it.toString().contains("sample") })
+    executionData.setFrom project.fileTree(dir: '.', include: '**/build/jacoco/test.exec')
+    reports {
+        xml.setRequired true
+        csv.setRequired false
+        html.setRequired true
+    }
+}
+
 tasks.named('wrapper') {
-    gradleVersion = '8.8'
+    gradleVersion = '8.10.2'
 }
