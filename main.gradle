@@ -25,7 +25,7 @@ allprojects {
                 property "sonar.junit.reportPaths", "build/test-results/test"
                 property "sonar.java-coveragePlugin", "jacoco"
                 property "sonar.coverage.jacoco.xmlReportPaths", "${rootDir}/build/reports/jacoco/generateMergedReport/generateMergedReport.xml"
-                property "sonar.exclusions", ".github/**,samples/**/*,**/mybroker/**/*"
+                property "sonar.exclusions", ".github/**,samples/**/*,**/mybroker/**/*,**/standalone/**/*"
                 property 'sonar.coverage.exclusions', 'samples/**/*'
             }
         }
