@@ -83,7 +83,7 @@ spring:
 
 You can also set it in runtime for example from a secret, so you can create the `RabbitProperties` bean like:
 
-```java title="org.reactivecommons.async.rabbit.standalone.config.RabbitProperties"
+```java title="org.reactivecommons.async.rabbit.config.RabbitProperties"
 
 @Configuration
 public class MyRabbitMQConfig {

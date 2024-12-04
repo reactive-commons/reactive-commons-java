@@ -1,5 +1,6 @@
 package sample;
 
+import io.cloudevents.CloudEvent;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -22,6 +23,8 @@ import sample.model.broker.AddMemberCommand;
 import sample.model.broker.AnimalEvent;
 import sample.model.broker.RemovedMemberEvent;
 
+import java.net.URI;
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.springframework.http.MediaType.APPLICATION_JSON_VALUE;

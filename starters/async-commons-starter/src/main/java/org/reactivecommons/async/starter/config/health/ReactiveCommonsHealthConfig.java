@@ -8,12 +8,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
-@ConditionalOnClass(AbstractReactiveHealthIndicator.class)
 public class ReactiveCommonsHealthConfig {
 
     @Bean
     @ConditionalOnProperty(prefix = "management.health.reactive-commons", name = "enabled", havingValue = "true",
             matchIfMissing = true)
+    @ConditionalOnClass(AbstractReactiveHealthIndicator.class)
     public ReactiveCommonsHealthIndicator reactiveCommonsHealthIndicator(ConnectionManager manager) {
         return new ReactiveCommonsHealthIndicator(manager);
     }

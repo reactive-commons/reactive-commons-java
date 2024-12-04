@@ -67,7 +67,7 @@ You can override this settings programmatically through a `AsyncPropsDomainPrope
 ```java
 package sample;
 
-import org.reactivecommons.async.rabbit.standalone.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
