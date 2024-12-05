@@ -1,11 +1,75 @@
 ---
-sidebar_position: 8
+sidebar_position: 2
 ---
 
-# Configuration Properties
+# Two Brokers same Broker Type - Emit to external Broker
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+import ThemeImage from '../../src/components/ThemeImage';
+
+<ThemeImage scenario="2"></ThemeImage>
+
+`App 1` has only connection to `Broker 1`, which is considered the `app` domain for this app. This is the same as
+the [Single Broker](./1-single-broker.md) scenario.
+
+`App 3` has only connection to `Broker 2`, which is considered the `app domain` for this app. This is the same as
+the [Single Broker](./1-single-broker.md) scenario.
+
+`App 2` has two brokers, `Broker 1` and `Broker 2`. `Broker 1` is considered the `app` domain for this app, and `Broker 2`
+is considered an external broker which will be called `accounts` domain for this scenario.
+
+So you need to configure the connection properties for each broker.
+
+In this scenario, `Broker 1` is considered the `app` domain by default, so `App 2` can listen and send all operations
+from/to this broker, but it can only publish commands and queries to `Broker 2` and listen for events from the
+`Broker 2` (`accounts` domain).
+
+Note: `App 2` cannot listen notification events, cannot listen for queries, and commands from `Broker 2`. This is for
+responsibility segregation.
+
+To send commands and queries to `Broker 2` you need to use the `DirectAsyncGateway` interface with the `accounts` domain
+, and the same when listen, you should pass the domain name.
+
+### Listen from external domain
+
+```java
+@Bean
+@Primary
+public HandlerRegistry handlerRegistrySubs(UseCase useCase) {
+    return HandlerRegistry.register()
+            //.serveQuery(...)
+            //.handleCommand(...)
+            //.listenEvent(...)
+            //.listenNotificationEvent(...)
+            .listenDomainEvent("accounts", "event-name", handler::process, MyEventData.class)
+            .listenDomainCloudEvent("accounts", "event-name", handler::processCloudEvent);
+}
+```
+
+### Send to external domain
+
+```java
+@Service
+@AllArgsConstructor
+public class SampleRestController {
+    private final DirectAsyncGateway directAsyncGateway;
+
+    public Mono<Teams> getTeams() {
+        AsyncQuery<Request> query = ....
+        return directAsyncGateway.requestReply(query, "external-service", Teams.class, "accounts");
+    }
+
+    public Mono<Teams> getTeamsCloudEvent() {
+        CloudEvent query = ....
+        return directAsyncGateway.requestReply(query, "external-service", CloudEvent.class, "accounts")
+                .map(...);
+    }
+}
+```
+
+
+Next are configurations needed to set up this scenario for `App 2`.
 
 <Tabs>
   <TabItem value="rabbitmq" label="RabbitMQ" default>
@@ -56,7 +120,7 @@ app:
     accounts: # this is a second domain name and can have another independent setup
       connectionProperties: # you can override the connection properties of each domain
         host: localhost
-        port: 5672
+        port: 5673
         username: guest
         password: guest
         virtual-host: /accounts
@@ -79,16 +143,16 @@ public class MyDomainConfig {
     @Bean
     @Primary
     public AsyncPropsDomainProperties customDomainProperties() {
-        RabbitProperties propertiesApp = new RabbitProperties();
+        RabbitProperties propertiesApp = new RabbitProperties();  // this may be loaded from secrets
         propertiesApp.setHost("localhost");
         propertiesApp.setPort(5672);
         propertiesApp.setVirtualHost("/");
         propertiesApp.setUsername("guest");
         propertiesApp.setPassword("guest");
 
-        RabbitProperties propertiesAccounts = new RabbitProperties();
+        RabbitProperties propertiesAccounts = new RabbitProperties(); // this may be loaded from secrets
         propertiesAccounts.setHost("localhost");
-        propertiesAccounts.setPort(5672);
+        propertiesAccounts.setPort(5673);
         propertiesAccounts.setVirtualHost("/accounts");
         propertiesAccounts.setUsername("guest");
         propertiesAccounts.setPassword("guest");
@@ -166,10 +230,10 @@ public class MyDomainConfig {
     @Bean
     @Primary
     public AsyncKafkaPropsDomainProperties customKafkaDomainProperties() {
-        KafkaProperties propertiesApp = new KafkaProperties();
+        KafkaProperties propertiesApp = new KafkaProperties();  // this may be loaded from secrets
         propertiesApp.setBootstrapServers(List.of("localhost:9092"));
-
-        KafkaProperties propertiesAccounts = new KafkaProperties();
+        
+        KafkaProperties propertiesAccounts = new KafkaProperties();  // this may be loaded from secrets
         propertiesAccounts.setBootstrapServers(List.of("localhost:9093"));
 
         return AsyncKafkaPropsDomainProperties.builder()

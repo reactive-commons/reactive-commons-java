@@ -1,11 +1,17 @@
 ---
-sidebar_position: 8
+sidebar_position: 1
 ---
 
-# Configuration Properties
+# Single Broker
 
 import Tabs from '@theme/Tabs';
 import TabItem from '@theme/TabItem';
+import ThemeImage from '../../src/components/ThemeImage';
+
+<ThemeImage scenario="1"></ThemeImage>
+
+Both apps the `App 1` and the `App 2` are connected to the same `Broker`, so both has the same connection configuration,
+and `Broker` is considered the `app` domain for both apps.
 
 <Tabs>
   <TabItem value="rabbitmq" label="RabbitMQ" default>
@@ -52,14 +58,6 @@ app:
         username: guest
         password: guest
         virtual-host: /
-    # Another domain can be configured with same properties structure that app
-    accounts: # this is a second domain name and can have another independent setup
-      connectionProperties: # you can override the connection properties of each domain
-        host: localhost
-        port: 5672
-        username: guest
-        password: guest
-        virtual-host: /accounts
 ```
 
 You can override this settings programmatically through a `AsyncPropsDomainProperties` bean.
@@ -86,19 +84,9 @@ public class MyDomainConfig {
         propertiesApp.setUsername("guest");
         propertiesApp.setPassword("guest");
 
-        RabbitProperties propertiesAccounts = new RabbitProperties();
-        propertiesAccounts.setHost("localhost");
-        propertiesAccounts.setPort(5672);
-        propertiesAccounts.setVirtualHost("/accounts");
-        propertiesAccounts.setUsername("guest");
-        propertiesAccounts.setPassword("guest");
-
         return AsyncPropsDomainProperties.builder()
                 .withDomain("app", AsyncProps.builder()
                         .connectionProperties(propertiesApp)
-                        .build())
-                .withDomain("accounts", AsyncProps.builder()
-                        .connectionProperties(propertiesAccounts)
                         .build())
                 .build();
     }
@@ -143,10 +131,6 @@ reactive:
           ignoreThisListener: false # Allows you to disable event listener for this specific domain
         connectionProperties: # you can override the connection properties of each domain
           bootstrap-servers: localhost:9092
-      # Another domain can be configured with same properties structure that app
-      accounts: # this is a second domain name and can have another independent setup
-        connectionProperties: # you can override the connection properties of each domain
-          bootstrap-servers: localhost:9093
 ```
 
 You can override this settings programmatically through a `AsyncKafkaPropsDomainProperties` bean.
@@ -169,15 +153,9 @@ public class MyDomainConfig {
         KafkaProperties propertiesApp = new KafkaProperties();
         propertiesApp.setBootstrapServers(List.of("localhost:9092"));
 
-        KafkaProperties propertiesAccounts = new KafkaProperties();
-        propertiesAccounts.setBootstrapServers(List.of("localhost:9093"));
-
         return AsyncKafkaPropsDomainProperties.builder()
                 .withDomain("app", AsyncProps.builder()
                         .connectionProperties(propertiesApp)
-                        .build())
-                .withDomain("accounts", AsyncProps.builder()
-                        .connectionProperties(propertiesAccounts)
                         .build())
                 .build();
     }

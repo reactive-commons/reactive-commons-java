@@ -118,7 +118,7 @@ public class ReactiveCommonsConfig {
     }
 
     @Bean
-    @ConditionalOnMissingBean(HandlerRegistry.class)
+    @ConditionalOnMissingBean
     public HandlerRegistry defaultHandlerRegistry() {
         return HandlerRegistry.register();
     }

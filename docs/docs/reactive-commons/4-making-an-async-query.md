@@ -38,6 +38,9 @@ public interface DirectAsyncGateway {
 
 In this method the Class\<R> called type is the return type of the query, represented by a JSON Serializable object
 
+You can send a CloudEvent or an AsyncQuery\<T> to a target application. You also can send a query to a specific domain
+(remote broker out of you application context).
+
 ## Enabling autoconfiguration
 
 To do an Async Query you should enable the respecting spring boot autoconfiguration using the `@EnableDirectAsyncGateway` annotation

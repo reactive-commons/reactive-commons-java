@@ -1,0 +1,8 @@
+{
+  "label": "Communication scenarios",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Review configuration examples for common scenarios."
+  }
+}

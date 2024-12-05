@@ -39,6 +39,9 @@ public interface DirectAsyncGateway {
 }
 ```
 
+You can send a CloudEvent or a Command\<T> to a target application. You also can send a command to a specific domain
+(remote broker out of you application context).
+
 ## Enabling autoconfiguration
 
 To send Commands you should enable the respecting spring boot autoconfiguration using the `@EnableDomainEventBus` annotation
@@ -50,7 +53,7 @@ For example:
 public class ReactiveDirectAsyncGateway {
     public static final String TARGET_NAME = "other-app";// refers to remote spring.application.name property
     public static final String SOME_COMMAND_NAME = "some.command.name";
-    private final DirectAsyncGateway gateway; // Auto injectec bean created by the @EnableDirectAsyncGateway annotation
+    private final DirectAsyncGateway gateway; // Auto injected bean created by the @EnableDirectAsyncGateway annotation
 
     public Mono<Void> runRemoteJob(Object command/*change for proper model*/)  {
          return gateway.sendCommand(new Command<>(SOME_COMMAND_NAME, UUID.randomUUID().toString(), command), TARGET_NAME);

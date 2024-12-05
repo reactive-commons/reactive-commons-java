@@ -50,6 +50,16 @@ dependencies {
 }
 ```
 
+Note: If you will use Cloud Events, you should include the Cloud Events dependency:
+
+```groovy
+dependencies {
+    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
+}
+```
+
+```groovy
+
 ### Configuration properties
 
 Also you need to include the name for your app in the `application.properties`, it is important because this value will
@@ -83,7 +93,7 @@ spring:
 
 You can also set it in runtime for example from a secret, so you can create the `RabbitProperties` bean like:
 
-```java title="org.reactivecommons.async.rabbit.standalone.config.RabbitProperties"
+```java title="org.reactivecommons.async.rabbit.config.RabbitProperties"
 
 @Configuration
 public class MyRabbitMQConfig {
@@ -203,6 +213,14 @@ To build your own application using the Reactive Commons API, you need to includ
 ```groovy
 dependencies {
     implementation "org.reactivecommons:async-kafka-starter:<version>"
+}
+```
+
+Note: If you will use Cloud Events, you should include the Cloud Events dependency:
+
+```groovy
+dependencies {
+    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }
 ```
 
