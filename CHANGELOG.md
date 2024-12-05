@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.1.1-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.1-beta) (2024-12-05)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.0-beta...v5.1.1-beta)
+
+**Merged pull requests:**
+
+- docs\(scenarios\): Add scenarios documentation [\#125](https://github.com/reactive-commons/reactive-commons-java/pull/125) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.1.0-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.0-beta) (2024-10-11)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.0.1-beta...v5.1.0-beta)
