@@ -23,7 +23,7 @@ import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
-import org.springframework.boot.actuate.health.Health;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
@@ -181,12 +181,12 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldProxyHealthCheck() {
-        when(healthIndicator.health()).thenReturn(Mono.fromSupplier(() -> Health.up().build()));
+        when(healthIndicator.health()).thenReturn(Mono.fromSupplier(() -> RCHealth.builder().up().build()));
         // Act
-        Mono<Health> flow = brokerProvider.healthCheck();
+        Mono<RCHealth> flow = brokerProvider.healthCheck();
         // Assert
         StepVerifier.create(flow)
-                .expectNextMatches(health -> health.getStatus().getCode().equals("UP"))
+                .expectNextMatches(health -> health.getStatus().equals(RCHealth.Status.UP))
                 .verifyComplete();
     }
 }

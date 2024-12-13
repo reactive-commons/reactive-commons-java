@@ -4,8 +4,8 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.boot.actuate.health.AbstractReactiveHealthIndicator;
-import org.springframework.boot.actuate.health.Health;
+import org.reactivecommons.async.starter.config.health.RCHealth;
+import org.reactivecommons.async.starter.config.health.RCHealthIndicator;
 import reactor.core.publisher.Mono;
 
 import java.net.SocketException;
@@ -14,7 +14,7 @@ import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHea
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.VERSION;
 
 @Log4j2
-public class RabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicator {
+public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     private final String domain;
     private final ConnectionFactory connectionFactory;
 
@@ -25,7 +25,7 @@ public class RabbitReactiveHealthIndicator extends AbstractReactiveHealthIndicat
     }
 
     @Override
-    protected Mono<Health> doHealthCheck(Health.Builder builder) {
+    public Mono<RCHealth> doHealthCheck(RCHealth.RCHealthBuilder builder) {
         builder.withDetail(DOMAIN, domain);
         return Mono.fromCallable(() -> getRawVersion(connectionFactory))
                 .map(status -> builder.up().withDetail(VERSION, status).build());

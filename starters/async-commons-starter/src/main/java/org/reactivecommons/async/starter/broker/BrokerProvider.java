@@ -3,8 +3,8 @@ package org.reactivecommons.async.starter.broker;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.props.GenericAsyncProps;
-import org.springframework.boot.actuate.health.Health;
 import reactor.core.publisher.Mono;
 
 @SuppressWarnings("rawtypes")
@@ -25,5 +25,5 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
 
     void listenReplies(HandlerResolver resolver);
 
-    Mono<Health> healthCheck();
+    Mono<RCHealth> healthCheck();
 }

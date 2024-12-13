@@ -20,7 +20,7 @@ import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
-import org.springframework.boot.actuate.health.Health;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.boot.ssl.DefaultSslBundleRegistry;
 import org.springframework.boot.ssl.SslBundles;
 import reactor.core.publisher.Flux;
@@ -136,12 +136,12 @@ class KafkaBrokerProviderTest {
 
     @Test
     void shouldProxyHealthCheck() {
-        when(healthIndicator.health()).thenReturn(Mono.fromSupplier(() -> Health.up().build()));
+        when(healthIndicator.health()).thenReturn(Mono.fromSupplier(() -> RCHealth.builder().up().build()));
         // Act
-        Mono<Health> flow = brokerProvider.healthCheck();
+        Mono<RCHealth> flow = brokerProvider.healthCheck();
         // Assert
         StepVerifier.create(flow)
-                .expectNextMatches(health -> health.getStatus().getCode().equals("UP"))
+                .expectNextMatches(health -> health.getStatus().equals(RCHealth.Status.UP))
                 .verifyComplete();
     }
 }

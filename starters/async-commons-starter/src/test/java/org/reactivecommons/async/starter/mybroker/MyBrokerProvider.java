@@ -6,8 +6,8 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.mybroker.props.MyBrokerAsyncProps;
-import org.springframework.boot.actuate.health.Health;
 import reactor.core.publisher.Mono;
 
 @AllArgsConstructor
@@ -57,7 +57,7 @@ public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
     }
 
     @Override
-    public Mono<Health> healthCheck() {
+    public Mono<RCHealth> healthCheck() {
         return null;
     }
 }
