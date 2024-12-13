@@ -37,11 +37,11 @@ class ReactiveCommonsHealthIndicatorTest {
     @Test
     void shouldBeUp() {
         // Arrange
-        when(brokerProvider.healthCheck()).thenReturn(Mono.just(RCHealth.builder()
+        when(brokerProvider.healthCheck()).thenReturn(Mono.just(RCHealth.builder().up()
                 .withDetail(DOMAIN, DEFAULT_DOMAIN)
                 .withDetail(VERSION, "123")
                 .build()));
-        when(brokerProvider2.healthCheck()).thenReturn(Mono.just(RCHealth.builder()
+        when(brokerProvider2.healthCheck()).thenReturn(Mono.just(RCHealth.builder().up()
                 .withDetail(DOMAIN, OTHER)
                 .withDetail(VERSION, "1234")
                 .build()));
@@ -56,11 +56,11 @@ class ReactiveCommonsHealthIndicatorTest {
     @Test
     void shouldBeDown() {
         // Arrange
-        when(brokerProvider.healthCheck()).thenReturn(Mono.just(RCHealth.builder()
+        when(brokerProvider.healthCheck()).thenReturn(Mono.just(RCHealth.builder().down()
                 .withDetail(DOMAIN, DEFAULT_DOMAIN)
                 .withDetail(VERSION, "123")
                 .build()));
-        when(brokerProvider2.healthCheck()).thenReturn(Mono.just(RCHealth.builder()
+        when(brokerProvider2.healthCheck()).thenReturn(Mono.just(RCHealth.builder().up()
                 .withDetail(DOMAIN, OTHER)
                 .withDetail(VERSION, "1234")
                 .build()));
