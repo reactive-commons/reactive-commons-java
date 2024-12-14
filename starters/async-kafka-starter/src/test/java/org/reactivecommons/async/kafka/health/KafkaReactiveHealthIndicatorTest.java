@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.boot.actuate.health.Health;
 import org.springframework.boot.actuate.health.Health.Builder;
 import org.springframework.boot.actuate.health.Status;
@@ -39,13 +40,13 @@ class KafkaReactiveHealthIndicatorTest {
         when(adminClient.describeCluster()).thenReturn(describeClusterResult);
         when(describeClusterResult.clusterId()).thenReturn(KafkaFuture.completedFuture("cluster123"));
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
                     assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
                     assertEquals("cluster123", health.getDetails().get("version"));
-                    assertEquals(Status.UP, health.getStatus());
+                    assertEquals(RCHealth.Status.UP, health.getStatus());
                 })
                 .verifyComplete();
     }
@@ -58,12 +59,12 @@ class KafkaReactiveHealthIndicatorTest {
         future.completeExceptionally(new RuntimeException("simulate error"));
         when(describeClusterResult.clusterId()).thenReturn(future);
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .expectNextMatches(health -> {
                     assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
-                    assertEquals(Status.DOWN, health.getStatus());
+                    assertEquals(RCHealth.Status.DOWN, health.getStatus());
                     return true;
                 })
                 .verifyComplete();

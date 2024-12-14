@@ -22,7 +22,7 @@ import org.reactivecommons.async.rabbit.listeners.ApplicationNotificationListene
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
-import org.springframework.boot.actuate.health.Health;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
@@ -154,7 +154,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     }
 
     @Override
-    public Mono<Health> healthCheck() {
+    public Mono<RCHealth> healthCheck() {
         return healthIndicator.health();
     }
 }

@@ -19,7 +19,7 @@ import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
 import org.reactivecommons.async.kafka.listeners.ApplicationNotificationsListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
-import org.springframework.boot.actuate.health.Health;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.boot.ssl.SslBundles;
 import reactor.core.publisher.Mono;
 
@@ -100,7 +100,7 @@ public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
     }
 
     @Override
-    public Mono<Health> healthCheck() {
+    public Mono<RCHealth> healthCheck() {
         return healthIndicator.health();
     }
 }

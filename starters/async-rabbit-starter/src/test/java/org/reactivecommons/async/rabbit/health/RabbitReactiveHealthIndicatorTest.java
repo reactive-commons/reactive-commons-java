@@ -7,9 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.boot.actuate.health.Health;
-import org.springframework.boot.actuate.health.Health.Builder;
-import org.springframework.boot.actuate.health.Status;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -47,13 +45,13 @@ class RabbitReactiveHealthIndicatorTest {
         when(factory.newConnection()).thenReturn(connection);
         when(connection.getServerProperties()).thenReturn(properties);
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
                     assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
                     assertEquals("1.2.3", health.getDetails().get("version"));
-                    assertEquals(Status.UP, health.getStatus());
+                    assertEquals(RCHealth.Status.UP, health.getStatus());
                 })
                 .verifyComplete();
     }
@@ -67,13 +65,13 @@ class RabbitReactiveHealthIndicatorTest {
         when(connection.getServerProperties()).thenReturn(properties);
         doThrow(new IOException("Error closing connection")).when(connection).close();
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
                     assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
                     assertEquals("1.2.3", health.getDetails().get("version"));
-                    assertEquals(Status.UP, health.getStatus());
+                    assertEquals(RCHealth.Status.UP, health.getStatus());
                 })
                 .verifyComplete();
     }
@@ -83,7 +81,7 @@ class RabbitReactiveHealthIndicatorTest {
         // Arrange
         when(factory.newConnection()).thenThrow(new TimeoutException("Connection timeout"));
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .expectError(TimeoutException.class)
@@ -95,7 +93,7 @@ class RabbitReactiveHealthIndicatorTest {
         // Arrange
         when(factory.newConnection()).thenThrow(new SocketException("Connection timeout"));
         // Act
-        Mono<Health> result = indicator.doHealthCheck(new Builder());
+        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
                 .expectError(RuntimeException.class)
