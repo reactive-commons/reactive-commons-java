@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.1.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.2-beta) (2024-12-14)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.1-beta...v5.1.2-beta)
+
+**Merged pull requests:**
+
+- chore\(health\): ignore health indicator when dependency not exists [\#126](https://github.com/reactive-commons/reactive-commons-java/pull/126) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.1.1-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.1-beta) (2024-12-05)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.0-beta...v5.1.1-beta)
