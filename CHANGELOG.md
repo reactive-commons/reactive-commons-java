@@ -1,5 +1,9 @@
 # Changelog
 
+## [v5.1.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.2) (2024-12-14)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.2-beta...v5.1.2)
+
 ## [v5.1.2-beta](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.2-beta) (2024-12-14)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.1-beta...v5.1.2-beta)
