@@ -105,13 +105,12 @@ public class MyDomainConfig {
 }
 ```
 
-Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.SecretFiller` class.
+Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.RabbitSecretFiller` class.
 
 ```java
 
 @Bean
-@Primary
-public AsyncPropsDomain.SecretFiller customFiller() {
+public AsyncPropsDomain.RabbitSecretFiller customFiller() {
     return (domain, asyncProps) -> {
         // customize asyncProps here by domain
     };

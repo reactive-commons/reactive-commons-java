@@ -90,8 +90,10 @@ public class RabbitMQSetupUtils {
         return new DLQDiscardNotifier(appDomainEventBus, converter);
     }
 
-    private static SenderOptions reactiveCommonsSenderOptions(String appName, ConnectionFactoryProvider provider, RabbitProperties rabbitProperties) {
-        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName, SENDER_TYPE);
+    private static SenderOptions reactiveCommonsSenderOptions(String appName, ConnectionFactoryProvider provider,
+                                                              RabbitProperties rabbitProperties) {
+        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName,
+                SENDER_TYPE);
         final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
         final PropertyMapper map = PropertyMapper.get();
 
@@ -109,10 +111,12 @@ public class RabbitMQSetupUtils {
                         .transform(Utils::cache));
     }
 
-    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix, String connectionType) {
+    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix,
+                                                         String connectionType) {
         return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
-                        log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
+                        log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host" +
+                                factory.getHost() + ". Starting retry process...", err)
                 )
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(300))
                         .maxBackoff(Duration.ofMillis(3000)))
