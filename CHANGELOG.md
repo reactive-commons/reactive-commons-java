@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.2.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.0) (2024-12-27)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.3...v5.2.0)
+
+**Merged pull requests:**
+
+- feat\(tls\): ssl default options [\#128](https://github.com/reactive-commons/reactive-commons-java/pull/128) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.1.3](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.3) (2024-12-27)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.2...v5.1.3)
