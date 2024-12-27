@@ -12,10 +12,10 @@ buildscript {
 
 plugins {
     id 'jacoco'
-    id 'org.sonarqube' version '6.0.0.5145'
-    id 'org.springframework.boot' version '3.4.0' apply false
+    id 'org.sonarqube' version '6.0.1.5171'
+    id 'org.springframework.boot' version '3.4.1' apply false
     id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
-    id 'co.com.bancolombia.cleanArchitecture' version '3.20.2'
+    id 'co.com.bancolombia.cleanArchitecture' version '3.20.7'
 }
 
 repositories {
