@@ -1,5 +1,17 @@
 # Changelog
 
+## [v5.1.3](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.3) (2024-12-27)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.2...v5.1.3)
+
+**Closed issues:**
+
+- Compile error message when using reactive-commons-java and Spring Boot [\#93](https://github.com/reactive-commons/reactive-commons-java/issues/93)
+
+**Merged pull requests:**
+
+- fix\(docs\): Update docs for secret filler and log when rabbit connection error [\#127](https://github.com/reactive-commons/reactive-commons-java/pull/127) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.1.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.1.2) (2024-12-14)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.2-beta...v5.1.2)
