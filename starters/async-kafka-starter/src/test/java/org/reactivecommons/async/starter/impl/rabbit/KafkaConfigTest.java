@@ -7,6 +7,7 @@ import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
+import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.reactivecommons.async.starter.impl.kafka.RCKafkaConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -17,7 +18,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         RCKafkaConfig.class,
         AsyncKafkaPropsDomain.class,
         KafkaBrokerProviderFactory.class,
-        ReactiveCommonsConfig.class})
+        ReactiveCommonsConfig.class,
+        ReactiveCommonsListenersConfig.class
+})
 class KafkaConfigTest {
     @Autowired
     private KafkaJacksonMessageConverter converter;

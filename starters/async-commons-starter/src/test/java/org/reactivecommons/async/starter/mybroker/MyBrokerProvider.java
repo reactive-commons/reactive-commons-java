@@ -27,7 +27,7 @@ public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
     }
 
     @Override
-    public DirectAsyncGateway getDirectAsyncGateway(HandlerResolver resolver) {
+    public DirectAsyncGateway getDirectAsyncGateway() {
         return null;
     }
 

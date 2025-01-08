@@ -1,5 +1,6 @@
 package org.reactivecommons.async.starter.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -68,6 +69,12 @@ public class ReactiveCommonsConfig {
     @ConditionalOnMissingBean
     public ObjectMapperSupplier objectMapperSupplier() {
         return new DefaultObjectMapperSupplier();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public ObjectMapper defaultReactiveCommonsObjectMapper(ObjectMapperSupplier supplier) {
+        return supplier.get();
     }
 
     @Bean
