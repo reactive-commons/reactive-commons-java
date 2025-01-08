@@ -12,7 +12,6 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Level;
 import java.util.stream.Stream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
@@ -45,35 +44,44 @@ public class HandlerResolverBuilder {
                     .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
                             ConcurrentHashMap::putAll);
 
-            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain, registries);
+            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain,
+                    registries);
 
-            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
+            final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers =
+                    getEventHandlersWithDynamics(domain, registries);
 
-            return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener, commandHandlers) {
+            return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener,
+                    commandHandlers) {
                 @Override
                 @SuppressWarnings("unchecked")
                 public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
                     final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
-                    return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
+                    return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler,
+                            Object.class);
                 }
             };
         }
 
 
         final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain, registries);
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers = getEventHandlersWithDynamics(domain, registries);
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers =
+                getEventHandlersWithDynamics(domain, registries);
 
-        return new HandlerResolver(new ConcurrentHashMap<>(), eventHandlers, eventsToBind, new ConcurrentHashMap<>(), new ConcurrentHashMap<>()) {
+        return new HandlerResolver(new ConcurrentHashMap<>(), eventHandlers, eventsToBind, new ConcurrentHashMap<>(),
+                new ConcurrentHashMap<>()) {
             @Override
             @SuppressWarnings("unchecked")
             public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
                 final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
-                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler, Object.class);
+                return handler != null ? handler : new RegisteredCommandHandler<>("", defaultCommandHandler,
+                        Object.class);
             }
         };
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(String domain, Map<String, HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(String domain,
+                                                                                                     Map<String,
+                                                                                                             HandlerRegistry> registries) {
         // event handlers and dynamic handlers
         return registries
                 .values().stream()
@@ -81,7 +89,6 @@ public class HandlerResolverBuilder {
                     if (r.getDomainEventListeners().containsKey(domain)) {
                         return Stream.concat(r.getDomainEventListeners().get(domain).stream(), getDynamics(domain, r));
                     }
-                    log.log(Level.WARNING, "Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
                     return Stream.empty();
                 })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
@@ -95,14 +102,14 @@ public class HandlerResolverBuilder {
         return Stream.of();
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(String domain, Map<String, HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(String domain, Map<String,
+            HandlerRegistry> registries) {
         return registries
                 .values().stream()
                 .flatMap(r -> {
                     if (r.getDomainEventListeners().containsKey(domain)) {
                         return r.getDomainEventListeners().get(domain).stream();
                     }
-                    log.log(Level.WARNING, "Domain " + domain + "does not have a connection defined in your configuration and you want to listen from it");
                     return Stream.empty();
                 })
                 .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),

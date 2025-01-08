@@ -14,7 +14,7 @@ public class LoggerSubscriber<T> extends BaseSubscriber<T> {
 
     private final String flowName;
     private static final String ON_COMPLETE_MSG = "%s: ##On Complete Hook!!";
-    private static final String ON_ERROR_MSG = "%s: ##On Error Hook!!";
+    private static final String ON_ERROR_MSG = "%s: ##On Error Hook!! %s";
     private static final String ON_CANCEL_MSG = "%s: ##On Cancel Hook!!";
     private static final String ON_FINALLY_MSG = "%s: ##On Finally Hook! Signal type: %s";
 
@@ -29,7 +29,7 @@ public class LoggerSubscriber<T> extends BaseSubscriber<T> {
 
     @Override
     protected void hookOnError(Throwable throwable) {
-        log.log(Level.SEVERE, format(ON_ERROR_MSG), throwable);
+        log.log(Level.SEVERE, format(ON_ERROR_MSG, throwable.getMessage()), throwable);
     }
 
     @Override
