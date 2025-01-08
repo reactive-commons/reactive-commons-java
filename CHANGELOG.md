@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.2.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.1) (2025-01-08)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.0...v5.2.1)
+
+**Merged pull requests:**
+
+- fix\(circular-dependency\): Extract listener config and remove handler resolver from replies listener [\#129](https://github.com/reactive-commons/reactive-commons-java/pull/129) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.2.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.0) (2024-12-27)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.1.3...v5.2.0)
