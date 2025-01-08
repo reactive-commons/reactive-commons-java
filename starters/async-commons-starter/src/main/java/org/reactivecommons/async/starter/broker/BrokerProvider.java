@@ -13,7 +13,7 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
 
     DomainEventBus getDomainBus();
 
-    DirectAsyncGateway getDirectAsyncGateway(HandlerResolver resolver);
+    DirectAsyncGateway getDirectAsyncGateway();
 
     void listenDomainEvents(HandlerResolver resolver);
 
@@ -23,7 +23,7 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
 
     void listenQueries(HandlerResolver resolver);
 
-    void listenReplies(HandlerResolver resolver);
+    void listenReplies();
 
     Mono<RCHealth> healthCheck();
 }

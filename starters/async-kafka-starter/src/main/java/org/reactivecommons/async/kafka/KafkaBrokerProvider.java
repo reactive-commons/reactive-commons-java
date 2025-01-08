@@ -46,7 +46,7 @@ public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
     }
 
     @Override
-    public DirectAsyncGateway getDirectAsyncGateway(HandlerResolver resolver) {
+    public DirectAsyncGateway getDirectAsyncGateway() {
         return new KafkaDirectAsyncGateway();
     }
 
@@ -95,7 +95,7 @@ public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
     }
 
     @Override
-    public void listenReplies(HandlerResolver resolver) {
+    public void listenReplies() {
         // May be implemented in the future
     }
 

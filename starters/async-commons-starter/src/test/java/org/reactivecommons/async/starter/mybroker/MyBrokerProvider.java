@@ -52,7 +52,7 @@ public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
     }
 
     @Override
-    public void listenReplies(HandlerResolver resolver) {
+    public void listenReplies() {
         // for testing purposes
     }
 

@@ -99,7 +99,7 @@ class KafkaBrokerProviderTest {
     @Test
     void shouldCreateDirectAsyncGateway() {
         // Act
-        DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway(handlerResolver);
+        DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(KafkaDirectAsyncGateway.class);
     }

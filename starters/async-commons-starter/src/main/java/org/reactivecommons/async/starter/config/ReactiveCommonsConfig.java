@@ -4,16 +4,9 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.reactivecommons.async.api.DefaultCommandHandler;
-import org.reactivecommons.async.api.DefaultQueryHandler;
-import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.commons.HandlerResolver;
-import org.reactivecommons.async.commons.HandlerResolverBuilder;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
-import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
@@ -27,7 +20,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
@@ -67,24 +59,6 @@ public class ReactiveCommonsConfig {
     }
 
     @Bean
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    public DomainHandlers buildHandlers(ApplicationContext context,
-                                        HandlerRegistry primaryRegistry, DefaultCommandHandler<?> commandHandler) {
-        DomainHandlers handlers = new DomainHandlers();
-        final Map<String, HandlerRegistry> registries = context.getBeansOfType(HandlerRegistry.class);
-        if (!registries.containsValue(primaryRegistry)) {
-            registries.put("primaryHandlerRegistry", primaryRegistry);
-        }
-        final Map<String, GenericAsyncPropsDomain> props = context.getBeansOfType(GenericAsyncPropsDomain.class);
-        props.forEach((beanName, properties) -> properties.forEach((domain, asyncProps) -> {
-            String domainName = (String) domain;
-            HandlerResolver resolver = HandlerResolverBuilder.buildResolver(domainName, registries, commandHandler);
-            handlers.add(domainName, resolver);
-        }));
-        return handlers;
-    }
-
-    @Bean
     @ConditionalOnMissingBean
     public BrokerConfig brokerConfig() {
         return new BrokerConfig();
@@ -94,33 +68,6 @@ public class ReactiveCommonsConfig {
     @ConditionalOnMissingBean
     public ObjectMapperSupplier objectMapperSupplier() {
         return new DefaultObjectMapperSupplier();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public CustomReporter reactiveCommonsCustomErrorReporter() {
-        return new DefaultCustomReporter();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    @SuppressWarnings("rawtypes")
-    public DefaultQueryHandler defaultHandler() {
-        return (DefaultQueryHandler<Object, Object>) command ->
-                Mono.error(new RuntimeException("No Handler Registered"));
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    @SuppressWarnings("rawtypes")
-    public DefaultCommandHandler defaultCommandHandler() {
-        return message -> Mono.error(new RuntimeException("No Handler Registered"));
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public HandlerRegistry defaultHandlerRegistry() {
-        return HandlerRegistry.register();
     }
 
     @Bean
