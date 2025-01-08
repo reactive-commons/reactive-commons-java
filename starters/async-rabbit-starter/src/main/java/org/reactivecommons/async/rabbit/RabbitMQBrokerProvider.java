@@ -53,12 +53,12 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     }
 
     @Override
-    public DirectAsyncGateway getDirectAsyncGateway(HandlerResolver resolver) {
+    public DirectAsyncGateway getDirectAsyncGateway() {
         String exchangeName = props.getBrokerConfigProps().getDirectMessagesExchangeName();
         if (props.getCreateTopology()) {
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
         }
-        listenReplies(resolver);
+        listenReplies();
         return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry);
     }
 
@@ -141,7 +141,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     }
 
     @Override
-    public void listenReplies(HandlerResolver resolver) {
+    public void listenReplies() {
         if (props.isListenReplies()) {
             final ApplicationReplyListener replyListener =
                     new ApplicationReplyListener(router,

@@ -112,7 +112,7 @@ class RabbitMQBrokerProviderTest {
         when(listener.getReceiver()).thenReturn(receiver);
         when(receiver.consumeAutoAck(any(String.class))).thenReturn(Flux.never());
         // Act
-        DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway(handlerResolver);
+        DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(RabbitDirectAsyncGateway.class);
     }

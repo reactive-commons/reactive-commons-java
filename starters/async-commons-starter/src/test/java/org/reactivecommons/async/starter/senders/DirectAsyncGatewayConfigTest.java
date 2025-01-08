@@ -9,10 +9,8 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.ConnectionManager;
-import org.reactivecommons.async.starter.config.DomainHandlers;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -40,14 +38,11 @@ class DirectAsyncGatewayConfigTest {
     @Test
     void shouldCreateAllDomainEventBuses() {
         // Arrange
-        when(brokerProvider.getDirectAsyncGateway(any())).thenReturn(domainEventBus);
-        DomainHandlers handlers = new DomainHandlers();
-        handlers.add("domain", resolver);
-        handlers.add("domain2", resolver);
+        when(brokerProvider.getDirectAsyncGateway()).thenReturn(domainEventBus);
         // Act
-        DirectAsyncGateway genericDomainEventBus = directAsyncGatewayConfig.genericDirectAsyncGateway(manager, handlers);
+        DirectAsyncGateway genericDomainEventBus = directAsyncGatewayConfig.genericDirectAsyncGateway(manager);
         // Assert
         assertNotNull(genericDomainEventBus);
-        verify(brokerProvider, times(2)).getDirectAsyncGateway(resolver);
+        verify(brokerProvider, times(2)).getDirectAsyncGateway();
     }
 }

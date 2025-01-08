@@ -6,6 +6,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
+import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
@@ -15,7 +16,9 @@ import static org.assertj.core.api.Assertions.assertThat;
         RabbitMQConfig.class,
         AsyncPropsDomain.class,
         RabbitMQBrokerProviderFactory.class,
-        ReactiveCommonsConfig.class})
+        ReactiveCommonsConfig.class,
+        ReactiveCommonsListenersConfig.class
+})
 class RabbitMQConfigTest {
     @Autowired
     private RabbitJacksonMessageConverter converter;

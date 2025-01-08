@@ -150,8 +150,8 @@ public class RabbitMQSetupUtils {
                                                          String connectionType) {
         return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
-                        log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host" +
-                                factory.getHost() + ". Starting retry process...", err)
+                        log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host '" +
+                                factory.getHost() + "'. Starting retry process...", err)
                 )
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                         .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
