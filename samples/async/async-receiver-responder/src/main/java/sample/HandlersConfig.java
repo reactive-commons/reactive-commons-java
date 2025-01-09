@@ -4,7 +4,6 @@ import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
-import org.reactivecommons.async.api.handlers.EventHandler;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

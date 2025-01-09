@@ -2,8 +2,6 @@ package org.reactivecommons.async.kafka.communications.topology;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
-import org.reactivecommons.async.kafka.communications.topology.TopicCustomization;
 
 import java.util.HashMap;
 import java.util.Map;

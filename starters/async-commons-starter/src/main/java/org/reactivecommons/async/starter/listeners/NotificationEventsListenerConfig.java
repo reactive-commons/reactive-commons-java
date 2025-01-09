@@ -2,8 +2,8 @@ package org.reactivecommons.async.starter.listeners;
 
 
 import org.reactivecommons.async.commons.HandlerResolver;
-import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
+import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.DomainHandlers;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;

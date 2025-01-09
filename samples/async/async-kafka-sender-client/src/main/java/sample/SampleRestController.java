@@ -2,14 +2,12 @@ package sample;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudevents.CloudEvent;
-import io.cloudevents.CloudEventData;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.jackson.JsonCloudEventData;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
-import org.reactivecommons.async.commons.converters.json.CloudEventBuilderExt;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.RestController;

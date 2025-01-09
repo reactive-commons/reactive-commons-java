@@ -5,7 +5,6 @@ import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.CommandHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
@@ -23,7 +22,8 @@ import java.time.Duration;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static reactor.core.publisher.Mono.*;
+import static reactor.core.publisher.Mono.empty;
+import static reactor.core.publisher.Mono.just;
 
 @SpringBootTest
 class SimpleDirectCommunicationTest {

@@ -7,8 +7,6 @@ import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.HandlerResolverBuilder;
-import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
 import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;

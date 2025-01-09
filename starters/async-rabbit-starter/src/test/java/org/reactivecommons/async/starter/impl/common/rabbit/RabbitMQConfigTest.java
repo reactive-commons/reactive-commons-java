@@ -7,7 +7,6 @@ import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConv
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
-import org.reactivecommons.async.starter.impl.common.rabbit.RabbitMQConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
