@@ -5,7 +5,6 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
-import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,7 +18,9 @@ import reactor.test.StepVerifier;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static reactor.core.publisher.Mono.*;
+import static reactor.core.publisher.Mono.empty;
+import static reactor.core.publisher.Mono.from;
+import static reactor.core.publisher.Mono.just;
 
 @SpringBootTest
 class SimpleEventNotificationTest {

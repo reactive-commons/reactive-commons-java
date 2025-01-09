@@ -4,7 +4,6 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.rabbit.RabbitMessage;
 
 import java.util.HashMap;
 import java.util.Map;

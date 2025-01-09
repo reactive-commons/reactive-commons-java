@@ -2,8 +2,8 @@ package org.reactivecommons.async.starter.mybroker.props;
 
 import lombok.Getter;
 import lombok.Setter;
-import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.reactivecommons.async.starter.mybroker.MyBrokerSecretFiller;
+import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.beans.factory.annotation.Value;
 
 @Getter

@@ -8,6 +8,8 @@ import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.commons.ext.DefaultCustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
@@ -30,7 +32,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @Configuration
 @RequiredArgsConstructor
 @Import(ReactiveCommonsHealthConfig.class)
-@ComponentScan("org.reactivecommons.async.starter.impl")
+@ComponentScan("org.reactivecommons.async.starter.impl.common")
 public class ReactiveCommonsConfig {
 
     @Bean
@@ -87,6 +89,12 @@ public class ReactiveCommonsConfig {
     @ConditionalOnMissingBean(MeterRegistry.class)
     public MeterRegistry defaultRabbitMeterRegistry() {
         return new SimpleMeterRegistry();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public CustomReporter reactiveCommonsCustomErrorReporter() {
+        return new DefaultCustomReporter();
     }
 
 }

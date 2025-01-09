@@ -1,9 +1,11 @@
 package org.reactivecommons.async.helpers;
 
-import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.rabbit.RabbitMessage;
 
-import static org.reactivecommons.async.commons.Headers.*;
+import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
 public class TestStubs {
 

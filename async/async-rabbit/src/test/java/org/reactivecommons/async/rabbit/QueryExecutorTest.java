@@ -8,10 +8,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.commons.QueryExecutor;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.helpers.SampleClass;
 import org.reactivecommons.async.helpers.TestStubs;
-import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.commons.QueryExecutor;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 

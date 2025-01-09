@@ -3,7 +3,6 @@ package org.reactivecommons.async.commons.converters.json;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
-import io.cloudevents.jackson.JsonFormat;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;

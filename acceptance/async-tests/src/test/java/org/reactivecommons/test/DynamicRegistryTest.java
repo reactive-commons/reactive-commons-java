@@ -5,7 +5,6 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
-import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableMessageListeners;
 import org.reactivestreams.Publisher;

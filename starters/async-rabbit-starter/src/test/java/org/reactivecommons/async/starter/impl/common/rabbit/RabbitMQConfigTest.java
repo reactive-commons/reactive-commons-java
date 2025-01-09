@@ -1,4 +1,4 @@
-package org.reactivecommons.async.starter.impl.rabbit;
+package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;

@@ -14,7 +14,6 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
 
-import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Function;
 

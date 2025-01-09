@@ -1,4 +1,4 @@
-package org.reactivecommons.async.starter.impl.rabbit;
+package org.reactivecommons.async.starter.impl.common.kafka;
 
 
 import org.junit.jupiter.api.Test;
@@ -8,7 +8,6 @@ import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConver
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
-import org.reactivecommons.async.starter.impl.kafka.RCKafkaConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
