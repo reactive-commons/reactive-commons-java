@@ -1,9 +1,10 @@
-package org.reactivecommons.async.starter.impl.rabbit;
+package org.reactivecommons.async.starter.impl.common.kafka;
+
 
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
-import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
-import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.kafka.KafkaBrokerProviderFactory;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
+import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
@@ -13,15 +14,15 @@ import org.springframework.boot.test.context.SpringBootTest;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = {
-        RabbitMQConfig.class,
-        AsyncPropsDomain.class,
-        RabbitMQBrokerProviderFactory.class,
+        RCKafkaConfig.class,
+        AsyncKafkaPropsDomain.class,
+        KafkaBrokerProviderFactory.class,
         ReactiveCommonsConfig.class,
         ReactiveCommonsListenersConfig.class
 })
-class RabbitMQConfigTest {
+class KafkaConfigTest {
     @Autowired
-    private RabbitJacksonMessageConverter converter;
+    private KafkaJacksonMessageConverter converter;
     @Autowired
     private ConnectionManager manager;
 
@@ -40,6 +41,6 @@ class RabbitMQConfigTest {
         // Assert
         assertThat(manager).isNotNull();
         assertThat(manager.getProviders()).isNotEmpty();
-        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("test-app");
+        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("async-kafka-starter");
     }
 }

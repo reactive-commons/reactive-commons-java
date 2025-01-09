@@ -1,29 +1,28 @@
-package org.reactivecommons.async.starter.impl.rabbit;
-
+package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import org.junit.jupiter.api.Test;
-import org.reactivecommons.async.kafka.KafkaBrokerProviderFactory;
-import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
-import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
-import org.reactivecommons.async.starter.impl.kafka.RCKafkaConfig;
+import org.reactivecommons.async.starter.impl.common.rabbit.RabbitMQConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = {
-        RCKafkaConfig.class,
-        AsyncKafkaPropsDomain.class,
-        KafkaBrokerProviderFactory.class,
+        RabbitMQConfig.class,
+        AsyncPropsDomain.class,
+        RabbitMQBrokerProviderFactory.class,
         ReactiveCommonsConfig.class,
         ReactiveCommonsListenersConfig.class
 })
-class KafkaConfigTest {
+class RabbitMQConfigTest {
     @Autowired
-    private KafkaJacksonMessageConverter converter;
+    private RabbitJacksonMessageConverter converter;
     @Autowired
     private ConnectionManager manager;
 
@@ -42,6 +41,6 @@ class KafkaConfigTest {
         // Assert
         assertThat(manager).isNotNull();
         assertThat(manager.getProviders()).isNotEmpty();
-        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("async-kafka-starter");
+        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("test-app");
     }
 }

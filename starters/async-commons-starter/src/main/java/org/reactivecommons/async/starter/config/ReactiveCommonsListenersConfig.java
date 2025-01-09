@@ -13,6 +13,7 @@ import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import reactor.core.publisher.Mono;
 
@@ -21,6 +22,7 @@ import java.util.Map;
 @Log
 @Configuration
 @RequiredArgsConstructor
+@ComponentScan("org.reactivecommons.async.starter.impl.listener")
 public class ReactiveCommonsListenersConfig {
 
     @Bean
@@ -39,12 +41,6 @@ public class ReactiveCommonsListenersConfig {
             handlers.add(domainName, resolver);
         }));
         return handlers;
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public CustomReporter reactiveCommonsCustomErrorReporter() {
-        return new DefaultCustomReporter();
     }
 
     @Bean

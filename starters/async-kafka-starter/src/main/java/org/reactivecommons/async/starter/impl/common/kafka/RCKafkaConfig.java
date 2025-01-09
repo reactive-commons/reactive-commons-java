@@ -1,4 +1,4 @@
-package org.reactivecommons.async.starter.impl.kafka;
+package org.reactivecommons.async.starter.impl.common.kafka;
 
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.kafka.KafkaBrokerProviderFactory;
