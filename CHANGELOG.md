@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.2.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.2) (2025-01-09)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.1...v5.2.2)
+
+**Merged pull requests:**
+
+- fix\(dynamic-registry\): move to respective listener bean dependency [\#130](https://github.com/reactive-commons/reactive-commons-java/pull/130) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.2.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.1) (2025-01-08)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.0...v5.2.1)
