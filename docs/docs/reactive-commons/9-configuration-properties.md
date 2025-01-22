@@ -105,6 +105,8 @@ public class MyDomainConfig {
 }
 ```
 
+## Loading properties from a secret
+
 Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.RabbitSecretFiller` class.
 
 ```java
@@ -115,6 +117,75 @@ public AsyncPropsDomain.RabbitSecretFiller customFiller() {
         // customize asyncProps here by domain
     };
 }
+```
+
+For example if you use the [Secrets Manager](https://github.com/bancolombia/secrets-manager) project, you may use
+the next code to load the properties from a secret:
+
+1. Create a class with the properties that you will load from the secret:
+```java
+import lombok.Builder;
+import lombok.Data;
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+
+@Data
+@Builder
+public class RabbitConnectionProperties {
+    private String hostname;
+    private String password;
+    private String username;
+    private Integer port;
+    private String virtualhost;
+    private boolean ssl;
+
+    public RabbitProperties toRabbitProperties() {
+        var rabbitProperties = new RabbitProperties();
+        rabbitProperties.setHost(this.hostname);
+        rabbitProperties.setUsername(this.username);
+        rabbitProperties.setPassword(this.password);
+        rabbitProperties.setPort(this.port);
+        rabbitProperties.setVirtualHost(this.virtualhost);
+        rabbitProperties.getSsl().setEnabled(this.ssl); // To enable SSL
+        return rabbitProperties;
+    }
+}
+```
+2. Use the `SecretsManager` to load the properties from the secret:
+
+```java
+import co.com.bancolombia.secretsmanager.api.GenericManager;
+import lombok.SneakyThrows;
+import lombok.extern.log4j.Log4j2;
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.lang.reflect.GenericArrayType;
+
+@Log4j2
+@Configuration
+public class AsyncEventBusConfig {
+
+    // TODO: You should create the GenericManager bean as indicated in Secrets Manager library
+    @Bean
+    public AsyncPropsDomain.RabbitSecretFiller rabbitSecretFiller(GenericManager genericManager) {
+        return (domain, props) -> {
+            if (props.getSecret() != null) {
+                log.info("Loading RabbitMQ connection properties from secret: {}", props.getSecret());
+                props.setConnectionProperties(getFromSecret(genericManager, props.getSecret()));
+                log.info("RabbitMQ connection properties loaded successfully with host: '{}'",
+                        props.getConnectionProperties().getHost());
+            }
+        };
+    }
+
+    @SneakyThrows
+    private RabbitProperties getFromSecret(GenericManager genericManager, String secretName) {
+        return genericManager.getSecret(secretName, RabbitConnectionProperties.class).toRabbitProperties();
+    }
+}
+
 ```
 
   </TabItem>

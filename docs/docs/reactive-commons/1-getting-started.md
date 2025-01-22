@@ -112,6 +112,9 @@ public class MyRabbitMQConfig {
 }
 ```
 
+Please refer to [Configuration Properties](/reactive-commons-java/docs/reactive-commons/configuration-properties)
+Or with secrets [Loading properties from a secret](/reactive-commons-java/docs/reactive-commons/configuration-properties#loading-properties-from-a-secret)
+
 The 5.x.x stable version of Reactive Commons has been merged with the deprecated `-eda` variant, this means that
 the `async-commons-rabbit-starter` artifact is now the only one to use.
 

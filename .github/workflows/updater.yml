@@ -1,0 +1,41 @@
+name: updater
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 12 * * 5' # every Friday at 07:00 Colombia Time
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 17
+      - name: Check for updates
+        run: ./gradlew internalTask --action UPDATE_DEPENDENCIES
+      - name: Check for changes
+        id: git_changes
+        run: |
+          git diff --name-only
+          if [[ $(git diff --name-only) ]]; then
+            echo "Changes detected!"
+            echo "HAS_CHANGES=true" >> $GITHUB_ENV
+          else
+            echo "No changes detected!"
+            echo "HAS_CHANGES=false" >> $GITHUB_ENV
+          fi
+      - name: Create Pull Request
+        if: env.HAS_CHANGES == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.PA_TOKEN }}
+          committer: Dependencies Bot <release-bot@reactivecommons.org>
+          commit-message: 'fix(deps): update dependencies'
+          title: 'fix(deps): update dependencies'
+          body: 'This PR updates dependencies to latest versions'
+          branch: 'feature/autoupdate-deps'
+          base: 'master'
+          labels: 'dependencies'
+          reviewers: 'juancgalvis'
