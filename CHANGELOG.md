@@ -1,5 +1,30 @@
 # Changelog
 
+## [v5.2.3](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.3) (2025-01-24)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.2...v5.2.3)
+
+**Implemented enhancements:**
+
+- Add unit tests for classes \(RabbitDomainEventBus, RabbitDiscardNotifier\) [\#75](https://github.com/reactive-commons/reactive-commons-java/issues/75)
+- Test de class TopologyCreator of module async-rabbit [\#74](https://github.com/reactive-commons/reactive-commons-java/issues/74)
+- Increase coverage by testing classes \(QueryExecutor, EventExecutor and CommandExecutor\) [\#72](https://github.com/reactive-commons/reactive-commons-java/issues/72)
+- Centralize bintray task configuration in a single place [\#8](https://github.com/reactive-commons/reactive-commons-java/issues/8)
+
+**Closed issues:**
+
+- Acerca de Reactive Commons y Secretos AWS Secrets Manager [\#81](https://github.com/reactive-commons/reactive-commons-java/issues/81)
+- Allow multi broker configuration [\#80](https://github.com/reactive-commons/reactive-commons-java/issues/80)
+- Update DynamicRegistryImp reactive commons SQS to new DynamicRegistry especification [\#78](https://github.com/reactive-commons/reactive-commons-java/issues/78)
+- Add interaction diagrams to documentation [\#76](https://github.com/reactive-commons/reactive-commons-java/issues/76)
+- Circular dependency with HandlerResolver and Dynamic registry [\#55](https://github.com/reactive-commons/reactive-commons-java/issues/55)
+
+**Merged pull requests:**
+
+- fix\(deps\): update dependencies [\#133](https://github.com/reactive-commons/reactive-commons-java/pull/133) ([juancgalvis](https://github.com/juancgalvis))
+- build\(deps\): bump path-to-regexp and express in /docs [\#132](https://github.com/reactive-commons/reactive-commons-java/pull/132) ([dependabot[bot]](https://github.com/apps/dependabot))
+- docs\(updated\): Add secret example documentation and updater actions [\#131](https://github.com/reactive-commons/reactive-commons-java/pull/131) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.2.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.2) (2025-01-09)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.1...v5.2.2)
