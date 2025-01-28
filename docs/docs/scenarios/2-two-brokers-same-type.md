@@ -51,7 +51,7 @@ public HandlerRegistry handlerRegistrySubs(UseCase useCase) {
 
 ```java
 @Service
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class SampleRestController {
     private final DirectAsyncGateway directAsyncGateway;
 
@@ -126,7 +126,7 @@ app:
         virtual-host: /accounts
 ```
 
-You can override this settings programmatically through a `AsyncPropsDomainProperties` bean.
+You can override this settings programmatically through a `AsyncRabbitPropsDomainProperties` bean.
 
 ```java
 package sample;
@@ -142,7 +142,7 @@ public class MyDomainConfig {
 
     @Bean
     @Primary
-    public AsyncPropsDomainProperties customDomainProperties() {
+    public AsyncRabbitPropsDomainProperties customDomainProperties() {
         RabbitProperties propertiesApp = new RabbitProperties();  // this may be loaded from secrets
         propertiesApp.setHost("localhost");
         propertiesApp.setPort(5672);
@@ -157,7 +157,7 @@ public class MyDomainConfig {
         propertiesAccounts.setUsername("guest");
         propertiesAccounts.setPassword("guest");
 
-        return AsyncPropsDomainProperties.builder()
+        return AsyncRabbitPropsDomainProperties.builder()
                 .withDomain("app", AsyncProps.builder()
                         .connectionProperties(propertiesApp)
                         .build())

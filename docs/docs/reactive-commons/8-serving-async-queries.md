@@ -38,7 +38,7 @@ As the model of queries is direct, a consumer always can send queries to the ser
 
 ### Wildcards
 
-You may need to handle variable querie names that have the same structure, in that case you can specfy a pattern with '*' wildcard, for example:
+You may need to handle variable queries names that have the same structure, in that case you can specfy a pattern with '*' wildcard, for example:
 
 ```java
 @Configuration
@@ -60,7 +60,7 @@ There is a concept introduced in queries that cannot be resolved locally and may
 
 - A consumer application called APP1 make an async query to an application called APP2 (with horizontal scaling).
 - an instance A of the APP2 receives the query and stores a reference to respond later.
-- When response is fullfilled, an external source makes an HTTPS Call to an endpoint of an instance of APP2 but it can be diferent to the instance A, for example can be the instance B.
+- When response is fulfilled, an external source makes an HTTPS Call to an endpoint of an instance of APP2 but it can be diferent to the instance A, for example can be the instance B.
 - The instance B of APP2 queries for the saved reference and uses DirectAsyncGateway to answer the pending query to the application APP1.
 
 This scenario can be resolved with ReactiveCommons by using the next resources:
@@ -106,7 +106,7 @@ When some external source notifies our APP2 instance with the answer we should f
 @RequiredArgsConstructor
 @EnableDirectAsyncGateway
 public class ReactiveDirectAsyncGateway {
-    private final DirectAsyncGateway gateway; // Auto injectec bean created by the @EnableDirectAsyncGateway annotation
+    private final DirectAsyncGateway gateway; // Auto injected bean created by the @EnableDirectAsyncGateway annotation
 
     public  Mono<Void> replyDelegate(String correlationId, Object response/*change for proper model*/)  {
         return getReference(correlationId)
