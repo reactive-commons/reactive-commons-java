@@ -1,6 +1,6 @@
 package org.reactivecommons.async.kafka;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
@@ -13,7 +13,7 @@ import org.springframework.boot.ssl.SslBundles;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class KafkaDiscardProvider implements DiscardProvider {
     private final AsyncKafkaProps props;
     private final MessageConverter converter;

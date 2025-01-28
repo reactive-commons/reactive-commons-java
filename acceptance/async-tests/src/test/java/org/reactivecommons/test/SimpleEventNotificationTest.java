@@ -12,7 +12,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 import java.util.concurrent.ThreadLocalRandom;
@@ -30,17 +30,15 @@ class SimpleEventNotificationTest {
     @Autowired
     private DomainEventBus eventBus;
 
-    @Autowired
-    private UnicastProcessor<DomainEvent<Long>> listener;
-
-    private String eventId = ThreadLocalRandom.current().nextInt() + "";
-    private Long data = ThreadLocalRandom.current().nextLong();
+    private final String eventId = ThreadLocalRandom.current().nextInt() + "";
+    private final Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
     void shouldReceiveEvent() throws InterruptedException {
         DomainEvent<?> event = new DomainEvent<>(EVENT_NAME, eventId, data);
+        Sinks.Many<DomainEvent<Long>> listener = Sinks.many().unicast().onBackpressureBuffer();
         from(eventBus.emit(event)).subscribe();
-        StepVerifier.create(listener.take(1)).assertNext(evt ->
+        StepVerifier.create(listener.asFlux().take(1)).assertNext(evt ->
                 assertThat(evt).extracting(DomainEvent::getName, DomainEvent::getEventId, DomainEvent::getData)
                         .containsExactly(EVENT_NAME, eventId, data)
         ).verifyComplete();
@@ -56,20 +54,20 @@ class SimpleEventNotificationTest {
         }
 
         @Bean
-        public HandlerRegistry registry(UnicastProcessor<DomainEvent<Long>> listener) {
+        public HandlerRegistry registry(Sinks.Many<DomainEvent<Long>> listener) {
             return HandlerRegistry.register()
                     .serveQuery("double", rqt -> just(rqt * 2), Long.class)
                     .listenEvent(EVENT_NAME, handle(listener), Long.class);
         }
 
         @Bean
-        public UnicastProcessor<DomainEvent<Long>> listener() {
-            return UnicastProcessor.create();
+        public Sinks.Many<DomainEvent<Long>> listener() {
+            return Sinks.many().unicast().onBackpressureBuffer();
         }
 
-        private DomainEventHandler<Long> handle(UnicastProcessor<DomainEvent<Long>> listener) {
+        private DomainEventHandler<Long> handle(Sinks.Many<DomainEvent<Long>> listener) {
             return command -> {
-                listener.onNext(command);
+                listener.emitNext(command, Sinks.EmitFailureHandler.FAIL_FAST);
                 return empty();
             };
         }

@@ -2,24 +2,7 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.BuiltinExchangeType;
-import com.rabbitmq.client.CancelCallback;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ConfirmCallback;
-import com.rabbitmq.client.ConfirmListener;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.Consumer;
-import com.rabbitmq.client.ConsumerShutdownSignalCallback;
-import com.rabbitmq.client.DeliverCallback;
-import com.rabbitmq.client.Delivery;
-import com.rabbitmq.client.Envelope;
-import com.rabbitmq.client.GetResponse;
-import com.rabbitmq.client.Method;
-import com.rabbitmq.client.ReturnCallback;
-import com.rabbitmq.client.ReturnListener;
-import com.rabbitmq.client.ShutdownListener;
-import com.rabbitmq.client.ShutdownSignalException;
+import com.rabbitmq.client.*;
 import lombok.Data;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,10 +61,12 @@ class GenericMessageListenerPerfTest {
     private final Semaphore semaphore = new Semaphore(0);
 
     @BeforeEach
-    public void init() {
+    void init() {
 //        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, true,10, discardNotifier, "command", errorReporter);
+        messageListener = new StubGenericMessageListener(
+                "test-queue", reactiveMessageListener, true, true, 10, discardNotifier, "command", errorReporter
+        );
     }
 
 
@@ -124,7 +109,9 @@ class GenericMessageListenerPerfTest {
 
     private Flux<AcknowledgableDelivery> createSource(int count) throws JsonProcessingException {
         ObjectMapper mapper = new ObjectMapper();
-        Command<DummyMessage> command = new Command<>("some.command.name", UUID.randomUUID().toString(), new DummyMessage());
+        Command<DummyMessage> command = new Command<>(
+                "some.command.name", UUID.randomUUID().toString(), new DummyMessage()
+        );
         String data = mapper.writeValueAsString(command);
         final List<AcknowledgableDelivery> list = IntStream.range(0, count).mapToObj(value -> {
             AMQP.BasicProperties props = new AMQP.BasicProperties();
@@ -156,8 +143,11 @@ class GenericMessageListenerPerfTest {
 
     class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries, boolean createTopology, long maxRetries, DiscardNotifier discardNotifier, String objectType, CustomReporter errorReporter) {
-            super(queueName, listener, useDLQRetries, createTopology, maxRetries, 200, discardNotifier, objectType, errorReporter);
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
+                                          boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
+                                          String objectType, CustomReporter errorReporter) {
+            super(queueName, listener, useDLQRetries, createTopology, maxRetries, 200, discardNotifier,
+                    objectType, errorReporter);
         }
 
         @Override
@@ -580,7 +570,10 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive, Map<String, Object> arguments, DeliverCallback deliverCallback, CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) throws IOException {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive,
+                               Map<String, Object> arguments, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) throws IOException {
         return null;
     }
 

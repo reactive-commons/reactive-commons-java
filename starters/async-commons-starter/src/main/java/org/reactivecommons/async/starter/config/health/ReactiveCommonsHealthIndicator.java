@@ -1,6 +1,6 @@
 package org.reactivecommons.async.starter.config.health;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -10,7 +10,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 @Log4j2
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndicator {
     public static final String DOMAIN = "domain";
     public static final String VERSION = "version";
@@ -21,7 +21,9 @@ public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndica
     protected Mono<Health> doHealthCheck(Health.Builder builder) {
         return Flux.fromIterable(manager.getProviders().values())
                 .flatMap(BrokerProvider::healthCheck)
-                .reduceWith(Health::up, (health, status) -> reduceHealth((Health.Builder) health, (RCHealth) status))
+                .reduceWith(Health::up, (health, status) ->
+                        reduceHealth((Health.Builder) health, (RCHealth) status)
+                )
                 .map(b -> ((Health.Builder) b).build());
 
     }

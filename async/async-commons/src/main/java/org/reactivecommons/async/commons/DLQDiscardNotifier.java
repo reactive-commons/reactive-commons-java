@@ -3,8 +3,8 @@ package org.reactivecommons.async.commons;
 import com.fasterxml.jackson.databind.JsonNode;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -13,13 +13,14 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import reactor.core.publisher.Mono;
 
+import java.util.Arrays;
 import java.util.logging.Level;
 
 import static java.lang.String.format;
 import static org.reactivecommons.async.commons.converters.json.JacksonMessageConverter.APPLICATION_CLOUD_EVENT_JSON;
 
 @Log
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class DLQDiscardNotifier implements DiscardNotifier {
     private final DomainEventBus eventBus;
     private final MessageConverter messageConverter;
@@ -53,7 +54,7 @@ public class DLQDiscardNotifier implements DiscardNotifier {
     private Mono<Void> notifyUnreadableMessage(Message message, MessageConversionException e) {
         String bodyString;
         try {
-            bodyString = new String(message.getBody());
+            bodyString = Arrays.toString(message.getBody());
         } catch (Exception ex) {
             bodyString = "Opaque binary Message, unable to decode: " + ex.getMessage();
         }

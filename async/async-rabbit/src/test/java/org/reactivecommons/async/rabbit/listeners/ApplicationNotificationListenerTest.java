@@ -22,8 +22,12 @@ import static reactor.core.publisher.Mono.just;
 @ExtendWith(MockitoExtension.class)
 public class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass {
 
-    private DomainEvent<DummyMessage> event1 = new DomainEvent<>("app.event.test", UUID.randomUUID().toString(), new DummyMessage());
-    private DomainEvent<DummyMessage> event2 = new DomainEvent<>("app.event.test2", UUID.randomUUID().toString(), new DummyMessage());
+    private final DomainEvent<DummyMessage> event1 = new DomainEvent<>(
+            "app.event.test", UUID.randomUUID().toString(), new DummyMessage()
+    );
+    private final DomainEvent<DummyMessage> event2 = new DomainEvent<>(
+            "app.event.test2", UUID.randomUUID().toString(), new DummyMessage()
+    );
 
     @BeforeEach
     public void initCreator() {
@@ -33,15 +37,20 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
     @Test
     void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
-                .listenNotificationEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+                .listenNotificationEvent("app.event.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class);
         assertSendErrorToCustomReporter(registry, createSource(DomainEvent::getName, event1));
     }
 
     @Test
     void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
-                .listenNotificationEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
-                .listenNotificationEvent("app.event.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);
+                .listenNotificationEvent("app.event.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                )
+                .listenNotificationEvent("app.event.test2",
+                        m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
+                );
 
         assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(DomainEvent::getName, event1, event2));
     }
@@ -54,7 +63,8 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
     class StubGenericMessageListener extends ApplicationNotificationListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "exchange", "queue", true, handlerResolver, messageConverter, discardNotifier, errorReporter);
+            super(reactiveMessageListener, "exchange", "queue", true, handlerResolver,
+                    messageConverter, discardNotifier, errorReporter);
         }
 
     }

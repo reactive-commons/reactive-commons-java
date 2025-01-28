@@ -1,8 +1,8 @@
 package org.reactivecommons.async.kafka;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -24,7 +24,7 @@ import org.springframework.boot.ssl.SslBundles;
 import reactor.core.publisher.Mono;
 
 @Getter
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
     private final String domain;
     private final AsyncKafkaProps props;

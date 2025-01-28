@@ -16,19 +16,19 @@ import static org.mockito.Mockito.when;
 class KafkaMessageTest {
 
     @Mock
-    private ReceiverRecord<String, byte[]> record;
+    private ReceiverRecord<String, byte[]> receiverRecord;
 
     @Test
     void shouldParse() {
         // Arrange
         RecordHeaders headers = new RecordHeaders();
         headers.add("content-type", "application/json".getBytes());
-        when(record.value()).thenReturn("value".getBytes());
-        when(record.key()).thenReturn("key");
-        when(record.topic()).thenReturn("topic");
-        when(record.headers()).thenReturn(headers);
+        when(receiverRecord.value()).thenReturn("value".getBytes());
+        when(receiverRecord.key()).thenReturn("key");
+        when(receiverRecord.topic()).thenReturn("topic");
+        when(receiverRecord.headers()).thenReturn(headers);
         // Act
-        Message message = KafkaMessage.fromDelivery(record);
+        Message message = KafkaMessage.fromDelivery(receiverRecord);
         // Assert
         assertEquals("key", message.getProperties().getKey());
         assertEquals("topic", message.getProperties().getTopic());
@@ -41,12 +41,12 @@ class KafkaMessageTest {
     void shouldParseWhenNoContentType() {
         // Arrange
         RecordHeaders headers = new RecordHeaders();
-        when(record.value()).thenReturn("value".getBytes());
-        when(record.key()).thenReturn("key");
-        when(record.topic()).thenReturn("topic");
-        when(record.headers()).thenReturn(headers);
+        when(receiverRecord.value()).thenReturn("value".getBytes());
+        when(receiverRecord.key()).thenReturn("key");
+        when(receiverRecord.topic()).thenReturn("topic");
+        when(receiverRecord.headers()).thenReturn(headers);
         // Act
-        Message message = KafkaMessage.fromDelivery(record);
+        Message message = KafkaMessage.fromDelivery(receiverRecord);
         // Assert
         assertEquals("key", message.getProperties().getKey());
         assertEquals("topic", message.getProperties().getTopic());

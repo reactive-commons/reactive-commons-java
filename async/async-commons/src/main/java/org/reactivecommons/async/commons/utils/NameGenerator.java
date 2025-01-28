@@ -1,10 +1,14 @@
 package org.reactivecommons.async.commons.utils;
 
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+
 import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.UUID;
 
-public class NameGenerator {
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public final class NameGenerator {
 
     public static String fromNameWithSuffix(String appName, String suffix) {
         if (suffix != null && !suffix.isEmpty()) {
@@ -27,7 +31,7 @@ public class NameGenerator {
         bb.putLong(uuid.getMostSignificantBits())
                 .putLong(uuid.getLeastSignificantBits());
         // Convert to base64 and remove trailing =
-        String realSuffix = suffix != null && !"".equals(suffix) ? suffix + "." : "";
+        String realSuffix = suffix != null && !suffix.isEmpty() ? suffix + "." : "";
         return applicationName + "." + realSuffix + encodeToUrlSafeString(bb.array())
                 .replace("=", "");
     }

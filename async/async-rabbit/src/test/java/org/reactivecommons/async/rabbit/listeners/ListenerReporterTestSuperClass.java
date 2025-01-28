@@ -54,28 +54,41 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
+@SuppressWarnings("unchecked")
 public abstract class ListenerReporterTestSuperClass {
 
     protected final TopologyCreator topologyCreator = mock(TopologyCreator.class);
     protected final DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
-    protected final MessageConverter messageConverter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    protected final MessageConverter messageConverter = new RabbitJacksonMessageConverter(
+            new DefaultObjectMapperSupplier().get()
+    );
     protected final CustomReporter errorReporter = mock(CustomReporter.class);
     protected final Semaphore semaphore = new Semaphore(0);
     protected final Semaphore successSemaphore = new Semaphore(0);
     private final ObjectMapper mapper = new ObjectMapper();
     private final Receiver receiver = mock(Receiver.class);
-    protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
+    protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(
+            receiver, topologyCreator
+    );
     private GenericMessageListener messageListener;
 
     @BeforeEach
     public void init() {
-        Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class))).thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
-        Mockito.when(topologyCreator.declareDLQ(any(String.class), any(String.class), any(Integer.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
-        Mockito.when(topologyCreator.declareQueue(any(String.class), any(String.class), any(Optional.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
-        Mockito.when(topologyCreator.bind(any(BindingSpecification.class))).thenReturn(just(mock(AMQP.Queue.BindOk.class)));
+        Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class)))
+                .thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
+        Mockito.when(topologyCreator.declareDLQ
+                        (any(String.class), any(String.class), any(Integer.class), any(Optional.class))
+                )
+                .thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+        Mockito.when(topologyCreator.declareQueue(any(String.class), any(String.class), any(Optional.class)))
+                .thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+        Mockito.when(topologyCreator.bind(any(BindingSpecification.class)))
+                .thenReturn(just(mock(AMQP.Queue.BindOk.class)));
     }
 
-    protected void assertContinueAfterSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source) throws InterruptedException {
+    protected void assertContinueAfterSendErrorToCustomReporter(HandlerRegistry handlerRegistry,
+                                                                Flux<AcknowledgableDelivery> source)
+            throws InterruptedException {
         final HandlerResolver handlerResolver = createHandlerResolver(handlerRegistry);
         when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class), any(Boolean.class)))
                 .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
@@ -93,7 +106,8 @@ public abstract class ListenerReporterTestSuperClass {
         assertThat(processed).isTrue();
     }
 
-    protected void assertSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source) throws InterruptedException {
+    protected void assertSendErrorToCustomReporter(HandlerRegistry handlerRegistry, Flux<AcknowledgableDelivery> source)
+            throws InterruptedException {
         final HandlerResolver handlerResolver = createHandlerResolver(handlerRegistry);
         when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class), any(Boolean.class)))
                 .then(inv -> empty().doOnSuccess(o -> semaphore.release()));
@@ -107,7 +121,8 @@ public abstract class ListenerReporterTestSuperClass {
         ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
         final boolean reported = semaphore.tryAcquire(1, TimeUnit.SECONDS);
         assertThat(reported).isTrue();
-        verify(errorReporter).reportError(throwableCaptor.capture(), any(Message.class), any(Object.class), any(Boolean.class));
+        verify(errorReporter
+        ).reportError(throwableCaptor.capture(), any(Message.class), any(Object.class), any(Boolean.class));
         assertThat(throwableCaptor.getValue().getMessage()).isEqualTo("testEx");
     }
 
@@ -119,7 +134,9 @@ public abstract class ListenerReporterTestSuperClass {
                     .headers(Collections.singletonMap(Headers.SERVED_QUERY_ID, routeExtractor.apply(value)))
                     .build();
 
-            final Envelope envelope = new Envelope(new Random().nextInt(), true, "exchange", routeExtractor.apply(value));
+            final Envelope envelope = new Envelope(
+                    new Random().nextInt(), true, "exchange", routeExtractor.apply(value)
+            );
             final Delivery delivery = new Delivery(envelope, props, data.getBytes());
             return new AcknowledgableDelivery(delivery, new ChannelDummy(), null);
         }).collect(Collectors.toList());
@@ -130,11 +147,18 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener<?, ?>> eventHandlers = Stream.concat(registry.getDynamicEventHandlers().stream(), registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream()).collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener().stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream().collect(toMap(RegisteredQueryHandler::getPath, identity()));
-        final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers().stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> eventHandlers = Stream.concat(
+                        registry.getDynamicEventHandlers().stream(),
+                        registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
+                .collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners()
+                .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener()
+                .stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream()
+                .collect(toMap(RegisteredQueryHandler::getPath, identity()));
+        final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
+                .stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),

@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.standalone.config;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
@@ -22,13 +23,10 @@ import java.time.Duration;
 import java.util.logging.Level;
 
 @Log
+@RequiredArgsConstructor
 public class RabbitMqConfig {
 
-    private String appName;
-
-    public RabbitMqConfig(String appName) {
-        this.appName = appName;
-    }
+    private final String appName;
 
     public ReactiveMessageSender messageSender(ConnectionFactoryProvider provider, MessageConverter converter,
                                                RabbitProperties rabbitProperties) {
@@ -63,9 +61,9 @@ public class RabbitMqConfig {
 
     Mono<Connection> createSenderConnectionMono(ConnectionFactory factory, String name) {
         return Mono.fromCallable(() -> factory.newConnection(name))
-                .doOnError(err ->
-                        log.log(Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err)
-                )
+                .doOnError(err -> log.log(
+                        Level.SEVERE, "Error creating connection to RabbitMq Broker. Starting retry process...", err
+                ))
                 .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(300)))
                 .cache();
     }

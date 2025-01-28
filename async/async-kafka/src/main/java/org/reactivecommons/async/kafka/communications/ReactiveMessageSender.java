@@ -26,13 +26,18 @@ import java.util.stream.Collectors;
 
 public class ReactiveMessageSender {
     private final ConcurrentHashMap<String, MonoSink<Void>> confirmations = new ConcurrentHashMap<>();
-    private final CopyOnWriteArrayList<FluxSink<SenderRecord<String, byte[], String>>> fluxSinks = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<FluxSink<SenderRecord<String, byte[], String>>> fluxSinks =
+            new CopyOnWriteArrayList<>();
     private final AtomicLong counter = new AtomicLong();
 
-    private final ExecutorService executorServiceConfirm = Executors.newFixedThreadPool(13, r -> new Thread(r, "KMessageSender1-" + counter.getAndIncrement()));
-    private final ExecutorService executorServiceEmit = Executors.newFixedThreadPool(13, r -> new Thread(r, "KMessageSender2-" + counter.getAndIncrement()));
+    private final ExecutorService executorServiceConfirm = Executors.newFixedThreadPool(13, r ->
+            new Thread(r, "KMessageSender1-" + counter.getAndIncrement())
+    );
+    private final ExecutorService executorServiceEmit = Executors.newFixedThreadPool(13, r ->
+            new Thread(r, "KMessageSender2-" + counter.getAndIncrement())
+    );
 
-    private final int senderCount = 4;
+    private static final int SENDER_COUNT = 4;
 
     private final MessageConverter messageConverter;
     private final TopologyCreator topologyCreator;
@@ -41,7 +46,7 @@ public class ReactiveMessageSender {
                                  TopologyCreator topologyCreator) {
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
-        for (int i = 0; i < senderCount; ++i) {
+        for (int i = 0; i < SENDER_COUNT; ++i) {
             Flux<SenderRecord<String, byte[], String>> source = Flux.create(fluxSinks::add);
             sender.send(source)
                     .doOnNext(this::confirm)
@@ -51,9 +56,10 @@ public class ReactiveMessageSender {
 
     public <V> Mono<Void> send(V message) {
         return Mono.create(sink -> {
-            SenderRecord<String, byte[], String> record = createRecord(message);
-            confirmations.put(record.key(), sink);
-            executorServiceEmit.submit(() -> fluxSinks.get((int) (System.currentTimeMillis() % senderCount)).next(record));
+            SenderRecord<String, byte[], String> senderRecord = createRecord(message);
+            confirmations.put(senderRecord.key(), sink);
+            executorServiceEmit.submit(() -> fluxSinks.get((int) (System.currentTimeMillis() % SENDER_COUNT))
+                    .next(senderRecord));
         });
     }
 
@@ -72,8 +78,8 @@ public class ReactiveMessageSender {
 
     private <V> SenderRecord<String, byte[], String> createRecord(V object) {
         KafkaMessage message = (KafkaMessage) messageConverter.toMessage(object);
-        ProducerRecord<String, byte[]> record = createProducerRecord(message);
-        return SenderRecord.create(record, message.getProperties().getKey()); // TODO: Review for Request-Reply
+        ProducerRecord<String, byte[]> producerRecord = createProducerRecord(message);
+        return SenderRecord.create(producerRecord, message.getProperties().getKey()); // TODO: Review for Request-Reply
     }
 
     @SneakyThrows

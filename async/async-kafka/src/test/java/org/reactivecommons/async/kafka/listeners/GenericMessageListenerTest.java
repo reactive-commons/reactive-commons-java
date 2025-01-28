@@ -30,7 +30,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings({"rawtypes", "unchecked"})
+@SuppressWarnings("unchecked")
 @ExtendWith(MockitoExtension.class)
 class GenericMessageListenerTest {
 
@@ -64,14 +64,14 @@ class GenericMessageListenerTest {
     @Test
     void shouldStartListener() {
         // Arrange
-        ReceiverRecord<String, byte[]> record = mock(ReceiverRecord.class);
-        when(record.topic()).thenReturn("topic");
-        when(record.value()).thenReturn("message".getBytes(StandardCharsets.UTF_8));
+        ReceiverRecord<String, byte[]> receiverRecord = mock(ReceiverRecord.class);
+        when(receiverRecord.topic()).thenReturn("topic");
+        when(receiverRecord.value()).thenReturn("message".getBytes(StandardCharsets.UTF_8));
         Headers header = new RecordHeaders().add("contentType", "application/json".getBytes(StandardCharsets.UTF_8));
-        when(record.headers()).thenReturn(header);
-        when(record.key()).thenReturn("key");
+        when(receiverRecord.headers()).thenReturn(header);
+        when(receiverRecord.key()).thenReturn("key");
 
-        Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(record);
+        Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(receiverRecord);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(flux);
         when(receiver.getMaxConcurrency()).thenReturn(1);
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
@@ -88,7 +88,6 @@ class GenericMessageListenerTest {
         // Assert
         verify(topologyCreator, times(1)).createTopics(any(List.class));
     }
-
 
     public static class SampleListener extends GenericMessageListener {
         private final Function<Message, Mono<Object>> handler;

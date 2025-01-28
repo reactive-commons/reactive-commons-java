@@ -30,7 +30,7 @@ import static reactor.core.publisher.Flux.range;
 class QueryProcessPerfTest {
 
     private static final String QUERY_NAME = "app.command.test";
-    private static final int messageCount = 40000;
+    private static final int MESSAGE_COUNT = 40000;
     private static final Semaphore semaphore = new Semaphore(0);
     private static final AtomicLong atomicLong = new AtomicLong(0);
     private static final CountDownLatch latch = new CountDownLatch(12 + 1);
@@ -44,19 +44,20 @@ class QueryProcessPerfTest {
 
     @Test
     void serveQueryPerformanceTest() throws InterruptedException {
-        final Flux<AsyncQuery<DummyMessage>> messages = createMessages(messageCount);
+        final Flux<AsyncQuery<DummyMessage>> messages = createMessages(MESSAGE_COUNT);
 
         final long init = System.currentTimeMillis();
         messages
-                .flatMap(dummyMessageAsyncQuery -> gateway.requestReply(dummyMessageAsyncQuery, appName, DummyMessage.class)
-                        .doOnNext(s -> semaphore.release())
+                .flatMap(dummyMessageAsyncQuery ->
+                        gateway.requestReply(dummyMessageAsyncQuery, appName, DummyMessage.class)
+                                .doOnNext(s -> semaphore.release())
                 )
                 .subscribe();
-        semaphore.acquire(messageCount);
+        semaphore.acquire(MESSAGE_COUNT);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        assertMessageThroughput(total, messageCount, 200);
+        assertMessageThroughput(total, MESSAGE_COUNT, 200);
     }
 
     private void assertMessageThroughput(long total, long messageCount, int reqMicrosPerMessage) {
@@ -72,7 +73,9 @@ class QueryProcessPerfTest {
 
 
     private Flux<AsyncQuery<DummyMessage>> createMessages(int count) {
-        final List<AsyncQuery<DummyMessage>> queryList = IntStream.range(0, count).mapToObj(_v -> new AsyncQuery<>(QUERY_NAME, new DummyMessage())).collect(Collectors.toList());
+        final List<AsyncQuery<DummyMessage>> queryList = IntStream.range(0, count)
+                .mapToObj(_v -> new AsyncQuery<>(QUERY_NAME, new DummyMessage()))
+                .collect(Collectors.toList());
         return Flux.fromIterable(queryList);
     }
 
@@ -87,7 +90,11 @@ class QueryProcessPerfTest {
 
         @Bean
         public HandlerRegistry registry() {
-            final HandlerRegistry registry = range(0, 20).reduce(HandlerRegistry.register(), (r, i) -> r.handleCommand("app.command.name" + i, message -> Mono.empty(), Map.class)).block();
+            final HandlerRegistry registry = range(0, 20)
+                    .reduce(HandlerRegistry.register(), (r, i) -> r.handleCommand(
+                            "app.command.name" + i, message -> Mono.empty(), Map.class
+                    ))
+                    .block();
             return registry
                     .serveQuery(QUERY_NAME, this::handleSimple, DummyMessage.class);
         }

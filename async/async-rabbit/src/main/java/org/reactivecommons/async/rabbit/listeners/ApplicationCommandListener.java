@@ -64,13 +64,25 @@ public class ApplicationCommandListener extends GenericMessageListener {
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
-        final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(ExchangeSpecification.exchange(directExchange).durable(true).type("direct"));
+        final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
+                ExchangeSpecification.exchange(directExchange).durable(true).type("direct")
+        );
         if (withDLQRetry) {
-            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(ExchangeSpecification.exchange(directExchange + DQL).durable(true).type("direct"));
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, directExchange + DQL, maxLengthBytes);
-            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(queueName, directExchange, retryDelay, maxLengthBytes);
-            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(directExchange, queueName, queueName));
-            final Mono<AMQP.Queue.BindOk> bindingDLQ = creator.bind(BindingSpecification.binding(directExchange + DQL, queueName, queueName + DQL));
+            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(
+                    ExchangeSpecification.exchange(directExchange + DQL).durable(true).type("direct")
+            );
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(
+                    queueName, directExchange + DQL, maxLengthBytes
+            );
+            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
+                    queueName, directExchange, retryDelay, maxLengthBytes
+            );
+            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(
+                    directExchange, queueName, queueName)
+            );
+            final Mono<AMQP.Queue.BindOk> bindingDLQ = creator.bind(
+                    BindingSpecification.binding(directExchange + DQL, queueName, queueName + DQL)
+            );
             return declareExchange.then(declareExchangeDLQ)
                     .then(declareDLQ)
                     .then(declareQueue)
@@ -80,7 +92,9 @@ public class ApplicationCommandListener extends GenericMessageListener {
                     .then();
         } else {
             final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, maxLengthBytes);
-            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(directExchange, queueName, queueName));
+            final Mono<AMQP.Queue.BindOk> binding = creator.bind(
+                    BindingSpecification.binding(directExchange, queueName, queueName)
+            );
             return declareExchange.then(declareQueue).then(binding).then(declareDelayedTopology(creator)).then();
         }
     }
@@ -88,8 +102,12 @@ public class ApplicationCommandListener extends GenericMessageListener {
     private Mono<Void> declareDelayedTopology(TopologyCreator creator) {
         if (delayedCommands) {
             String delayedQueue = queueName + "-delayed";
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(delayedQueue, directExchange, maxLengthBytes, Optional.of(queueName));
-            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(directExchange, delayedQueue, delayedQueue));
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(
+                    delayedQueue, directExchange, maxLengthBytes, Optional.of(queueName)
+            );
+            final Mono<AMQP.Queue.BindOk> binding = creator.bind(
+                    BindingSpecification.binding(directExchange, delayedQueue, delayedQueue)
+            );
             return declareQueue.then(binding).then();
         }
         return Mono.empty();
@@ -109,9 +127,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
         JsonNode jsonNode = messageConverter.readValue(rabbitMessage, JsonNode.class);
         if (jsonNode.get(COMMAND_ID) != null) {
             return jsonNode.get(NAME).asText();
-        } else {
-            return jsonNode.get(TYPE).asText();
         }
+        return jsonNode.get(TYPE).asText();
     }
 
     @Override

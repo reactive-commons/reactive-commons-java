@@ -29,18 +29,18 @@ public class KafkaMessage implements Message {
         }
     }
 
-    public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> record) {
-        return new KafkaMessage(record.value(), createMessageProps(record));
+    public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> receiverRecord) {
+        return new KafkaMessage(receiverRecord.value(), createMessageProps(receiverRecord));
     }
 
-    private static Properties createMessageProps(ReceiverRecord<String, byte[]> record) {
-        Map<String, Object> headers = parseHeaders(record.headers());
+    private static Properties createMessageProps(ReceiverRecord<String, byte[]> receiverRecord) {
+        Map<String, Object> headers = parseHeaders(receiverRecord.headers());
 
         final KafkaMessageProperties properties = new KafkaMessageProperties();
         properties.setHeaders(headers);
-        properties.setKey(record.key());
-        properties.setTopic(record.topic());
-        properties.setContentLength(record.value().length);
+        properties.setKey(receiverRecord.key());
+        properties.setTopic(receiverRecord.topic());
+        properties.setContentLength(receiverRecord.value().length);
         return properties;
     }
 

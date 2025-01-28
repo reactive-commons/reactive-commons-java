@@ -25,9 +25,8 @@ import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("unchecked")
 class ReactiveMessageSenderTest {
-
-    private final String sourceApplication = "TestApp";
 
     private ReactiveMessageSender messageSender;
 
@@ -43,12 +42,11 @@ class ReactiveMessageSenderTest {
     public void init() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class))).then(invocation -> {
             final Flux<ReactiveMessageSender.MyOutboundMessage> argument = invocation.getArgument(0);
-            return argument.map(myOutboundMessage -> {
-                OutboundMessageResult<ReactiveMessageSender.MyOutboundMessage> outboundMessageResult = new OutboundMessageResult<>(myOutboundMessage, true);
-                return outboundMessageResult;
-            });
+            return argument
+                    .map(myOutboundMessage -> new OutboundMessageResult<>(myOutboundMessage, true));
         });
         when(sender.send(any(Publisher.class))).thenReturn(Mono.empty());
+        String sourceApplication = "TestApp";
         messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null);
     }
 
