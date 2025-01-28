@@ -52,7 +52,7 @@ For example:
 public class ReactiveDirectAsyncGateway {
     public static final String TARGET_NAME = "other-app";// refers to remote spring.application.name property
     public static final String SOME_QUERY_NAME = "some.query.name";
-    private final DirectAsyncGateway gateway; // Auto injectec bean created by the @EnableDirectAsyncGateway annotation
+    private final DirectAsyncGateway gateway; // Auto injected bean created by the @EnableDirectAsyncGateway annotation
 
     public Mono<Object /*change for proper model*/> requestForRemoteData(Object query/*change for proper model*/)  {
         return gateway.requestReply(new AsyncQuery<>(SOME_QUERY_NAME, query), TARGET_NAME, Object.class/*change for proper model*/);

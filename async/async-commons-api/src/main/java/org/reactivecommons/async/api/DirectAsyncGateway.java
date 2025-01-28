@@ -5,7 +5,7 @@ import org.reactivecommons.api.domain.Command;
 import reactor.core.publisher.Mono;
 
 public interface DirectAsyncGateway {
-    public static final String DELAYED = "rc-delay";
+    String DELAYED = "rc-delay";
 
     <T> Mono<Void> sendCommand(Command<T> command, String targetName);
 

@@ -16,33 +16,35 @@ import java.util.stream.Stream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
-@NoArgsConstructor(access = AccessLevel.PRIVATE)
 @Log
-public class HandlerResolverBuilder {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class HandlerResolverBuilder {
 
-    public static HandlerResolver buildResolver(String domain,
-                                                Map<String, HandlerRegistry> registries,
+    public static HandlerResolver buildResolver(String domain, Map<String, HandlerRegistry> registries,
                                                 final DefaultCommandHandler defaultCommandHandler) {
 
         if (DEFAULT_DOMAIN.equals(domain)) {
             final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
                     .values().stream()
                     .flatMap(r -> r.getHandlers().stream())
-                    .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                            ConcurrentHashMap::putAll);
+                    .collect(ConcurrentHashMap::new, (map, handler)
+                            -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                    );
 
             final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
                     .values().stream()
                     .flatMap(r -> r.getCommandHandlers().stream())
-                    .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                            ConcurrentHashMap::putAll);
+                    .collect(ConcurrentHashMap::new, (map, handler)
+                            -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                    );
 
             final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
                     .values()
                     .stream()
                     .flatMap(r -> r.getEventNotificationListener().stream())
-                    .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                            ConcurrentHashMap::putAll);
+                    .collect(ConcurrentHashMap::new, (map, handler)
+                            -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                    );
 
             final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain,
                     registries);
@@ -79,9 +81,8 @@ public class HandlerResolverBuilder {
         };
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(String domain,
-                                                                                                     Map<String,
-                                                                                                             HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(
+            String domain, Map<String, HandlerRegistry> registries) {
         // event handlers and dynamic handlers
         return registries
                 .values().stream()
@@ -91,8 +92,9 @@ public class HandlerResolverBuilder {
                     }
                     return Stream.empty();
                 })
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
+                .collect(ConcurrentHashMap::new, (map, handler)
+                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                );
     }
 
     private static Stream<RegisteredEventListener<?, ?>> getDynamics(String domain, HandlerRegistry r) {
@@ -102,8 +104,8 @@ public class HandlerResolverBuilder {
         return Stream.of();
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(String domain, Map<String,
-            HandlerRegistry> registries) {
+    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(
+            String domain, Map<String, HandlerRegistry> registries) {
         return registries
                 .values().stream()
                 .flatMap(r -> {
@@ -112,7 +114,8 @@ public class HandlerResolverBuilder {
                     }
                     return Stream.empty();
                 })
-                .collect(ConcurrentHashMap::new, (map, handler) -> map.put(handler.getPath(), handler),
-                        ConcurrentHashMap::putAll);
+                .collect(ConcurrentHashMap::new, (map, handler)
+                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                );
     }
 }

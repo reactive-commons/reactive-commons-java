@@ -33,6 +33,7 @@ import static java.util.function.Function.identity;
 import static reactor.core.publisher.Mono.defer;
 
 @Log
+@SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
@@ -51,9 +52,10 @@ public abstract class GenericMessageListener {
     private final CustomReporter customReporter;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
 
-    public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                  boolean createTopology, long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
-                                  String objectType, CustomReporter customReporter) {
+    protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
+                                     boolean createTopology, long maxRetries, long retryDelay,
+                                     DiscardNotifier discardNotifier, String objectType,
+                                     CustomReporter customReporter) {
         this.receiver = listener.getReceiver();
         this.queueName = queueName;
         this.messageListener = listener;
@@ -79,9 +81,13 @@ public abstract class GenericMessageListener {
     }
 
     public void startListener() {
-        log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
+        log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}",
+                new Object[]{messageListener.getMaxConcurrency(), queueName}
+        );
         if (useDLQRetries) {
-            log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!", new Object[]{maxRetries});
+            log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!",
+                    new Object[]{maxRetries}
+            );
         } else {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
@@ -98,7 +104,6 @@ public abstract class GenericMessageListener {
                     .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
                     .transform(this::consumeFaultTolerant);
         }
-
 
         onTerminate();
     }
@@ -175,7 +180,9 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         String messageID = msj.getProperties().getMessageId();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s: %s", messageID, err.toString()), err);
+            log.log(Level.SEVERE,
+                    format("Error encounter while processing message %s: %s", messageID, err.toString()), err
+            );
             log.warning(format("Message %s Headers: %s", messageID, msj.getProperties().getHeaders().toString()));
             log.warning(format("Message %s Body: %s", messageID, new String(msj.getBody())));
         } catch (Exception e) {

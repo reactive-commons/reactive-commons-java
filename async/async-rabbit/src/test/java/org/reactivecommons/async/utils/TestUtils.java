@@ -1,6 +1,7 @@
 package org.reactivecommons.async.utils;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
@@ -14,8 +15,8 @@ import static org.mockito.Mockito.when;
 import static reactor.core.publisher.Flux.defer;
 
 
-@UtilityClass
-public class TestUtils {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class TestUtils {
 
     public static void instructSafeReceiverMock(final Receiver receiver, final Flux<AcknowledgableDelivery> source) {
         final AtomicReference<Flux<AcknowledgableDelivery>> sourceReference = new AtomicReference<>(source);

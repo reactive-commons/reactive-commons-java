@@ -66,7 +66,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
         if (handler == null) {
-            return message -> Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
+            return message ->
+                    Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
         }
         Function<Message, Object> messageConverter = resolveConverter(handler.getQueryClass());
         final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.getHandler(), messageConverter);
@@ -81,17 +82,36 @@ public class ApplicationQueryListener extends GenericMessageListener {
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
-        final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(ExchangeSpecification.exchange(directExchange).durable(true).type("direct"));
+        final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
+                ExchangeSpecification.exchange(directExchange).durable(true).type("direct")
+        );
         if (withDLQRetry) {
-            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(ExchangeSpecification.exchange(directExchange + ".DLQ").durable(true).type("direct"));
-            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, directExchange + ".DLQ", maxLengthBytes);
-            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(queueName, directExchange, retryDelay, maxLengthBytes);
-            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(directExchange, queueName, queueName));
-            final Mono<AMQP.Queue.BindOk> bindingDLQ = creator.bind(BindingSpecification.binding(directExchange + ".DLQ", queueName, queueName + ".DLQ"));
-            return declareExchange.then(declareExchangeDLQ).then(declareQueue).then(declareDLQ).then(binding).then(bindingDLQ).then();
+            final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(
+                    ExchangeSpecification.exchange(directExchange + ".DLQ").durable(true).type("direct")
+            );
+            final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(
+                    queueName, directExchange + ".DLQ", maxLengthBytes
+            );
+            final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
+                    queueName, directExchange, retryDelay, maxLengthBytes
+            );
+            final Mono<AMQP.Queue.BindOk> binding = creator.bind(
+                    BindingSpecification.binding(directExchange, queueName, queueName)
+            );
+            final Mono<AMQP.Queue.BindOk> bindingDLQ = creator.bind(
+                    BindingSpecification.binding(directExchange + ".DLQ", queueName, queueName + ".DLQ")
+            );
+            return declareExchange
+                    .then(declareExchangeDLQ)
+                    .then(declareQueue)
+                    .then(declareDLQ)
+                    .then(binding)
+                    .then(bindingDLQ)
+                    .then();
         } else {
             final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(queueName, maxLengthBytes);
-            final Mono<AMQP.Queue.BindOk> binding = creator.bind(BindingSpecification.binding(directExchange, queueName, queueName));
+            final Mono<AMQP.Queue.BindOk> binding = creator.bind(
+                    BindingSpecification.binding(directExchange, queueName, queueName));
             return declareExchange.then(declareQueue).then(binding).then();
         }
     }

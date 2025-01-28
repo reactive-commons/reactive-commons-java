@@ -44,7 +44,8 @@ public class TopologyCreator {
                 .onErrorMap(TopologyDefException::new);
     }
 
-    public Mono<AMQP.Queue.DeclareOk> declareDLQ(String originQueue, String retryTarget, int retryTime, Optional<Integer> maxLengthBytesOpt) {
+    public Mono<AMQP.Queue.DeclareOk> declareDLQ(String originQueue, String retryTarget, int retryTime,
+                                                 Optional<Integer> maxLengthBytesOpt) {
         final Map<String, Object> args = new HashMap<>();
         args.put("x-dead-letter-exchange", retryTarget);
         args.put("x-message-ttl", retryTime);
@@ -55,7 +56,8 @@ public class TopologyCreator {
         return declare(specification);
     }
 
-    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange, Optional<Integer> maxLengthBytesOpt) {
+    public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, String dlqExchange,
+                                                   Optional<Integer> maxLengthBytesOpt) {
         return declareQueue(name, dlqExchange, maxLengthBytesOpt, Optional.empty());
     }
 

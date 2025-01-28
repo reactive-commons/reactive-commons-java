@@ -32,8 +32,9 @@ public class DynamicRegistryImp implements DynamicRegistry {
 
     @Override
     public <T, R> void serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        resolver.addQueryHandler(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message)
-                , queryClass));
+        resolver.addQueryHandler(new RegisteredQueryHandler<>(resource,
+                (ignored, message) -> handler.handle(message), queryClass)
+        );
     }
 
     @Override

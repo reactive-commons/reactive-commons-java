@@ -1,7 +1,7 @@
 package org.reactivecommons.async.rabbit.standalone.config;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
@@ -14,7 +14,7 @@ import java.nio.ByteBuffer;
 import java.util.Base64;
 import java.util.UUID;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class DirectAsyncGatewayConfig {
 
     private String directMessagesExchangeName;

@@ -1,6 +1,6 @@
 package org.reactivecommons.async.starter.mybroker;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.HandlerResolver;
@@ -10,7 +10,7 @@ import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.mybroker.props.MyBrokerAsyncProps;
 import reactor.core.publisher.Mono;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
     private final String domain;
     private final MyBrokerAsyncProps props;

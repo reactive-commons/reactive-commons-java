@@ -1,6 +1,7 @@
 package org.reactivecommons.async.kafka;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -25,8 +26,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Map;
 
-@UtilityClass
-public class KafkaSetupUtils {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class KafkaSetupUtils {
 
     public static DiscardNotifier createDiscardNotifier(ReactiveMessageSender sender, MessageConverter converter) {
         return new DLQDiscardNotifier(new KafkaDomainEventBus(sender), converter);
@@ -52,7 +53,9 @@ public class KafkaSetupUtils {
         KafkaProperties props = config.getConnectionProperties();
         props.getConsumer().setKeyDeserializer(StringDeserializer.class);
         props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class);
-        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props.buildConsumerProperties(sslBundles));
+        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(
+                props.buildConsumerProperties(sslBundles)
+        );
         return new ReactiveMessageListener(receiverOptions);
     }
 
@@ -81,6 +84,7 @@ public class KafkaSetupUtils {
     }
 
     public static String jassConfig(String username, String password) {
-        return String.format("org.apache.kafka.common.security.plain.PlainLoginModule required username=\"%s\" password=\"%s\";", username, password);
+        return String.format("org.apache.kafka.common.security.plain.PlainLoginModule required " +
+                "username=\"%s\" password=\"%s\";", username, password);
     }
 }

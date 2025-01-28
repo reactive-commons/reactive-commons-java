@@ -1,6 +1,6 @@
 package org.reactivecommons.async.kafka.communications;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import reactor.core.publisher.Flux;
 import reactor.kafka.receiver.KafkaReceiver;
 import reactor.kafka.receiver.ReceiverOptions;
@@ -13,7 +13,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_RECORDS_CONFIG;
 
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class ReactiveMessageListener {
     private final ReceiverOptions<String, byte[]> receiverOptions;
 

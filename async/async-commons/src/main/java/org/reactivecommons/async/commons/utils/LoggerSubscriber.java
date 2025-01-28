@@ -1,5 +1,6 @@
 package org.reactivecommons.async.commons.utils;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.SignalType;
@@ -10,6 +11,7 @@ import static org.reactivecommons.async.commons.utils.ArrayUtils.prefixArray;
 
 
 @Log
+@RequiredArgsConstructor
 public class LoggerSubscriber<T> extends BaseSubscriber<T> {
 
     private final String flowName;
@@ -17,10 +19,6 @@ public class LoggerSubscriber<T> extends BaseSubscriber<T> {
     private static final String ON_ERROR_MSG = "%s: ##On Error Hook!! %s";
     private static final String ON_CANCEL_MSG = "%s: ##On Cancel Hook!!";
     private static final String ON_FINALLY_MSG = "%s: ##On Finally Hook! Signal type: %s";
-
-    public LoggerSubscriber(String flowName) {
-        this.flowName = flowName;
-    }
 
     @Override
     protected void hookOnComplete() {

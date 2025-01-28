@@ -1,6 +1,7 @@
 package org.reactivecommons.async.commons.utils.resolver;
 
-import lombok.experimental.UtilityClass;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.CommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -15,8 +16,8 @@ import java.util.stream.Stream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
-@UtilityClass
-public class HandlerResolverUtil {
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public final class HandlerResolverUtil {
 
     public static HandlerResolver fromHandlerRegistries(Collection<HandlerRegistry> registries,
                                                         CommandHandler defaultHandler) {

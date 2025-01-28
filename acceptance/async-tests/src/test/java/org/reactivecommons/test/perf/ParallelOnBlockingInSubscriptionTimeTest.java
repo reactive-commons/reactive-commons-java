@@ -15,7 +15,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.UnicastProcessor;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
@@ -37,15 +37,13 @@ class ParallelOnBlockingInSubscriptionTimeTest {
     @Value("${spring.application.name}")
     private String appName;
 
-    @Autowired
-    private UnicastProcessor<Command<Long>> listener;
-
-    private String commandId = ThreadLocalRandom.current().nextInt() + "";
-    private Long data = ThreadLocalRandom.current().nextLong();
+    private final String commandId = ThreadLocalRandom.current().nextInt() + "";
+    private final Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
     @Disabled
-    public void commandShouldBeHandledInParallel() throws InterruptedException {
+    void commandShouldBeHandledInParallel() throws InterruptedException {
+        Sinks.Many<Command<Long>> listener = Sinks.many().unicast().onBackpressureBuffer();
         Flux.range(0, 12).flatMap(i -> {
             Command<Long> command = new Command<>(COMMAND_NAME, commandId + 1, data + 1);
             return gateway.sendCommand(command, appName);
@@ -53,13 +51,13 @@ class ParallelOnBlockingInSubscriptionTimeTest {
 
         final long init = System.currentTimeMillis();
 
-        final Flux<Command<Long>> results = listener.take(12).collectList()
+        final Flux<Command<Long>> results = listener.asFlux().take(12).collectList()
                 .timeout(Duration.ofMillis(1500))
                 .flatMapMany(Flux::fromIterable);
 
         StepVerifier.create(results).assertNext(cmd -> {
-            assertThat(cmd.getName()).isEqualTo(COMMAND_NAME);
-        })
+                    assertThat(cmd.getName()).isEqualTo(COMMAND_NAME);
+                })
                 .expectNextCount(11)
                 .verifyComplete();
 
@@ -81,27 +79,24 @@ class ParallelOnBlockingInSubscriptionTimeTest {
         }
 
         @Bean
-        public HandlerRegistry registry(UnicastProcessor<Command<Long>> listener) {
+        public HandlerRegistry registry(Sinks.Many<Command<Long>> listener) {
             return HandlerRegistry.register()
                     .handleCommand(COMMAND_NAME, handle(listener), Long.class);
         }
 
         @Bean
-        public UnicastProcessor<Command<Long>> listener() {
-            return UnicastProcessor.create();
+        public Sinks.Many<Command<Long>> listener() {
+            return Sinks.many().unicast().onBackpressureBuffer();
         }
 
-        private DomainCommandHandler<Long> handle(UnicastProcessor<Command<Long>> listener) {
+        private DomainCommandHandler<Long> handle(Sinks.Many<Command<Long>> listener) {
             return command -> {
-//                out.println("Received at: " + System.currentTimeMillis()/1000);
                 try {
-//                    out.println("internal: " + Thread.currentThread().getName());
                     TimeUnit.MILLISECONDS.sleep(750);
-//                    out.println("Handled at: " + System.currentTimeMillis()/1000);
-                    listener.onNext(command);
+                    listener.emitNext(command, Sinks.EmitFailureHandler.FAIL_FAST);
                 } catch (InterruptedException e) {
                 }
-                listener.onNext(command);
+                listener.emitNext(command, Sinks.EmitFailureHandler.FAIL_FAST);
                 return empty();
             };
         }

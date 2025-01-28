@@ -14,7 +14,7 @@ class ReactiveReplyRouterTest {
     private final ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
 
     @Test
-    void shouldRouteReply(){
+    void shouldRouteReply() {
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 
@@ -28,18 +28,18 @@ class ReactiveReplyRouterTest {
     }
 
     @Test
-    void shouldRouteEmptyResponse(){
+    void shouldRouteEmptyResponse() {
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 
         replyRouter.routeEmpty(uuid);
 
         StepVerifier.create(registered)
-            .verifyComplete();
+                .verifyComplete();
     }
 
     @Test
-    void shouldDeRegisterProcessor(){
+    void shouldDeRegisterProcessor() {
         final String uuid = UUID.randomUUID().toString();
         final Mono<Message> registered = replyRouter.register(uuid);
 
@@ -47,7 +47,7 @@ class ReactiveReplyRouterTest {
         replyRouter.routeEmpty(uuid);
 
         StepVerifier.create(registered.timeout(Duration.ofSeconds(1)))
-            .expectTimeout(Duration.ofSeconds(3)).verify();
+                .expectTimeout(Duration.ofSeconds(3)).verify();
     }
 
 }

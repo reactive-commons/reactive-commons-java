@@ -1,7 +1,7 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.ext.CustomReporter;
@@ -19,7 +19,7 @@ import org.reactivecommons.async.starter.broker.DiscardProvider;
 import org.springframework.stereotype.Service;
 
 @Service("rabbitmq")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<AsyncProps> {
     private final BrokerConfig config;
     private final ReactiveReplyRouter router;

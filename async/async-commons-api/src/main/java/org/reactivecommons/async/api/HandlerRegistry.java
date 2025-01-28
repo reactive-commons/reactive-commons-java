@@ -22,7 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
-public class HandlerRegistry {
+public final class HandlerRegistry {
     public static final String DEFAULT_DOMAIN = "app";
     private final Map<String, List<RegisteredEventListener<?, ?>>> domainEventListeners = new ConcurrentHashMap<>();
     private final List<RegisteredEventListener<?, ?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
@@ -37,7 +37,8 @@ public class HandlerRegistry {
         return instance;
     }
 
-    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, DomainEventHandler<T> handler,
+                                                 Class<T> eventClass) {
         domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
                 .add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
@@ -61,7 +62,8 @@ public class HandlerRegistry {
         return this;
     }
 
-    public <T> HandlerRegistry listenNotificationEvent(String eventName, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry listenNotificationEvent(String eventName, DomainEventHandler<T> handler,
+                                                       Class<T> eventClass) {
         eventNotificationListener.add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
@@ -71,7 +73,8 @@ public class HandlerRegistry {
         return this;
     }
 
-    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler,
+                                                   Class<T> eventClass) {
         dynamicEventHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
         return this;
     }
@@ -92,7 +95,9 @@ public class HandlerRegistry {
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+                handler.handle(message), queryClass
+        ));
         return this;
     }
 
@@ -102,7 +107,9 @@ public class HandlerRegistry {
     }
 
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), CloudEvent.class));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+                handler.handle(message), CloudEvent.class
+        ));
         return this;
     }
 

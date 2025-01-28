@@ -3,13 +3,14 @@ package org.reactivecommons.async.commons.converters.json;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.CloudEventData;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.SneakyThrows;
-import lombok.experimental.UtilityClass;
 
 import java.util.Objects;
 
-@UtilityClass
-public class CloudEventBuilderExt {
+@AllArgsConstructor(access = AccessLevel.PRIVATE)
+public final class CloudEventBuilderExt {
     private static final ObjectMapper mapper = new ObjectMapper();
 
     @SneakyThrows

@@ -19,6 +19,7 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
 
     @NestedConfigurationProperty
+    @Builder.Default
     private KafkaProperties connectionProperties = new KafkaProperties();
 
     @NestedConfigurationProperty

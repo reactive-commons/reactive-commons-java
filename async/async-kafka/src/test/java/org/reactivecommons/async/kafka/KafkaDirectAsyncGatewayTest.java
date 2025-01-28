@@ -29,20 +29,42 @@ class KafkaDirectAsyncGatewayTest {
 
     @Test
     void allMethodsAreNotImplemented() {
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(cloudEvent, targetName));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(cloudEvent, targetName, domain));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay, domain));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(command, targetName));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(command, targetName, domain));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(command, targetName, delay));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.sendCommand(command, targetName, delay, domain));
-
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class));
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class, domain));
-
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(cloudEvent, targetName)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, domain)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay, domain)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(command, targetName)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(command, targetName, domain)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(command, targetName, delay)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.sendCommand(command, targetName, delay, domain)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class)
+        );
+        assertThrows(UnsupportedOperationException.class,
+                () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class, domain)
+        );
         assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.reply(targetName, from));
     }
 }

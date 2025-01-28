@@ -24,7 +24,7 @@ import java.util.stream.IntStream;
 class DirectGatewayPerfTest {
 
     private static final String COMMAND_NAME = "app.command.test";
-    private static final int messageCount = 40000;
+    private static final int MESSAGE_COUNT = 40000;
     private static final Semaphore semaphore = new Semaphore(0);
 
     @Autowired
@@ -36,17 +36,17 @@ class DirectGatewayPerfTest {
 
     @Test
     void shouldSendInOptimalTime() throws InterruptedException {
-        final Flux<Command<DummyMessage>> messages = createMessages(messageCount);
+        final Flux<Command<DummyMessage>> messages = createMessages(MESSAGE_COUNT);
         final Flux<Void> target = messages.flatMap(dummyMessageCommand ->
                 gateway.sendCommand(dummyMessageCommand, appName)
                         .doOnSuccess(aVoid -> semaphore.release()));
 
         final long init = System.currentTimeMillis();
         target.subscribe();
-        semaphore.acquire(messageCount);
+        semaphore.acquire(MESSAGE_COUNT);
         final long end = System.currentTimeMillis();
 
-        assertMessageThroughput(end - init, messageCount, 200);
+        assertMessageThroughput(end - init, MESSAGE_COUNT, 200);
     }
 
     @Test
@@ -67,8 +67,10 @@ class DirectGatewayPerfTest {
     private void shouldSendBatchInOptimalTimeNChannels(int channels) throws InterruptedException {
         List<Mono<Void>> subs = new ArrayList<>(channels);
         for (int i = 0; i < channels; ++i) {
-            final Flux<Command<DummyMessage>> messages = createMessages(messageCount / channels);
-            final Mono<Void> target = gateway.sendCommands(messages, appName).then().doOnSuccess(_v -> semaphore.release());
+            final Flux<Command<DummyMessage>> messages = createMessages(MESSAGE_COUNT / channels);
+            final Mono<Void> target = gateway.sendCommands(messages, appName)
+                    .then()
+                    .doOnSuccess(_v -> semaphore.release());
             subs.add(target);
         }
 
@@ -79,7 +81,7 @@ class DirectGatewayPerfTest {
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
-        assertMessageThroughput(total, messageCount, 230);
+        assertMessageThroughput(total, MESSAGE_COUNT, 230);
     }
 
     private void assertMessageThroughput(long total, long messageCount, int reqMicrosPerMessage) {
@@ -94,7 +96,9 @@ class DirectGatewayPerfTest {
     }
 
     private Flux<Command<DummyMessage>> createMessages(int count) {
-        final List<Command<DummyMessage>> commands = IntStream.range(0, count).mapToObj(value -> new Command<>(COMMAND_NAME, UUID.randomUUID().toString(), new DummyMessage())).collect(Collectors.toList());
+        final List<Command<DummyMessage>> commands = IntStream.range(0, count)
+                .mapToObj(value -> new Command<>(COMMAND_NAME, UUID.randomUUID().toString(), new DummyMessage()))
+                .collect(Collectors.toList());
         return Flux.fromIterable(commands);
     }
 
