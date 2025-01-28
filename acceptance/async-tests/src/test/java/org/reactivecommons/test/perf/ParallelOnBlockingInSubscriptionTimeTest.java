@@ -91,11 +91,8 @@ class ParallelOnBlockingInSubscriptionTimeTest {
 
         private DomainCommandHandler<Long> handle(Sinks.Many<Command<Long>> listener) {
             return command -> {
-//                out.println("Received at: " + System.currentTimeMillis()/1000);
                 try {
-//                    out.println("internal: " + Thread.currentThread().getName());
                     TimeUnit.MILLISECONDS.sleep(750);
-//                    out.println("Handled at: " + System.currentTimeMillis()/1000);
                     listener.emitNext(command, Sinks.EmitFailureHandler.FAIL_FAST);
                 } catch (InterruptedException e) {
                 }

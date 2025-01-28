@@ -13,7 +13,6 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import reactor.core.publisher.Mono;
 
-import java.util.Arrays;
 import java.util.logging.Level;
 
 import static java.lang.String.format;
@@ -54,7 +53,7 @@ public class DLQDiscardNotifier implements DiscardNotifier {
     private Mono<Void> notifyUnreadableMessage(Message message, MessageConversionException e) {
         String bodyString;
         try {
-            bodyString = Arrays.toString(message.getBody());
+            bodyString = new String(message.getBody());
         } catch (Exception ex) {
             bodyString = "Opaque binary Message, unable to decode: " + ex.getMessage();
         }
