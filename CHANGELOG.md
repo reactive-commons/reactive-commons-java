@@ -1,5 +1,14 @@
 # Changelog
 
+## [v5.3.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.3.0) (2025-02-24)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.3...v5.3.0)
+
+**Merged pull requests:**
+
+- feat\(raw-handler\): Raw event handler [\#136](https://github.com/reactive-commons/reactive-commons-java/pull/136) ([juancgalvis](https://github.com/juancgalvis))
+- refactor: fix code semells [\#134](https://github.com/reactive-commons/reactive-commons-java/pull/134) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v5.2.3](https://github.com/reactive-commons/reactive-commons-java/tree/v5.2.3) (2025-01-24)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.2...v5.2.3)
