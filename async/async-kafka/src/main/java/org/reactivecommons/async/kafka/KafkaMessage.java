@@ -30,8 +30,8 @@ public class KafkaMessage implements Message {
         }
     }
 
-    public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> record) {
-        return fromDelivery(record, null);
+    public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> receiverRecord) {
+        return fromDelivery(receiverRecord, null);
     }
 
     public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> receiverRecord, String type) {

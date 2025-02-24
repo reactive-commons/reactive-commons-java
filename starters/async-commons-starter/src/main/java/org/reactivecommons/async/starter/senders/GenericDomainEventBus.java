@@ -15,6 +15,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @RequiredArgsConstructor
 public class GenericDomainEventBus implements DomainEventBus {
+    private static final String DOMAIN_NOT_FOUND = "Domain not found: ";
     private final ConcurrentMap<String, DomainEventBus> domainEventBuses;
 
 
@@ -27,7 +28,7 @@ public class GenericDomainEventBus implements DomainEventBus {
     public <T> Publisher<Void> emit(String domain, DomainEvent<T> event) {
         DomainEventBus domainEventBus = domainEventBuses.get(domain);
         if (domainEventBus == null) {
-            return Mono.error(() -> new InvalidConfigurationException("Domain not found: " + domain));
+            return Mono.error(() -> new InvalidConfigurationException(DOMAIN_NOT_FOUND + domain));
         }
         return domainEventBus.emit(event);
     }
@@ -41,7 +42,7 @@ public class GenericDomainEventBus implements DomainEventBus {
     public Publisher<Void> emit(String domain, CloudEvent event) {
         DomainEventBus domainEventBus = domainEventBuses.get(domain);
         if (domainEventBus == null) {
-            return Mono.error(() -> new InvalidConfigurationException("Domain not found: " + domain));
+            return Mono.error(() -> new InvalidConfigurationException(DOMAIN_NOT_FOUND + domain));
         }
         return domainEventBus.emit(event);
     }
@@ -55,7 +56,7 @@ public class GenericDomainEventBus implements DomainEventBus {
     public Publisher<Void> emit(String domain, RawMessage event) {
         DomainEventBus domainEventBus = domainEventBuses.get(domain);
         if (domainEventBus == null) {
-            return Mono.error(() -> new InvalidConfigurationException("Domain not found: " + domain));
+            return Mono.error(() -> new InvalidConfigurationException(DOMAIN_NOT_FOUND + domain));
         }
         return domainEventBus.emit(event);
     }
