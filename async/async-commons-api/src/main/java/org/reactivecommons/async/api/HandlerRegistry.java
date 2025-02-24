@@ -52,7 +52,7 @@ public final class HandlerRegistry {
         return this;
     }
 
-    public HandlerRegistry listenDomainRawEvent(String domain, String eventName, RawEventHandler handler) {
+    public HandlerRegistry listenDomainRawEvent(String domain, String eventName, RawEventHandler<?> handler) {
         domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
                 .add(new RegisteredEventListener<>(eventName, handler, RawMessage.class));
         return this;

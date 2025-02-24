@@ -19,6 +19,7 @@ import java.util.Date;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class JacksonMessageConverterTest {
 
@@ -34,6 +35,7 @@ class JacksonMessageConverterTest {
     @Test
     void toMessage() {
         final Message message = converter.toMessage(new SampleClass("42", "Daniel", new Date()));
+        assertEquals(message, converter.toMessage(message));
         assertThat(new String(message.getBody())).contains("42").contains("Daniel");
     }
 

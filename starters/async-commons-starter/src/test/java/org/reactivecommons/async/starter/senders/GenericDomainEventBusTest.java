@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -27,6 +28,8 @@ class GenericDomainEventBusTest {
     private DomainEventBus domainEventBus2;
     @Mock
     private CloudEvent cloudEvent;
+    @Mock
+    private Message rawMessage;
     @Mock
     private DomainEvent<?> domainEvent;
     private GenericDomainEventBus genericDomainEventBus;
@@ -103,6 +106,29 @@ class GenericDomainEventBusTest {
         // Arrange
         // Act
         Mono<Void> flow = Mono.from(genericDomainEventBus.emit("another", cloudEvent));
+        // Assert
+        StepVerifier.create(flow)
+                .expectError(InvalidConfigurationException.class)
+                .verify();
+    }
+
+    @Test
+    void shouldEmitRawEventWithSpecificDomain() {
+        // Arrange
+        when(domainEventBus2.emit(rawMessage)).thenReturn(Mono.empty());
+        // Act
+        Mono<Void> flow = Mono.from(genericDomainEventBus.emit(DOMAIN_2, rawMessage));
+        // Assert
+        StepVerifier.create(flow)
+                .verifyComplete();
+        verify(domainEventBus2).emit(rawMessage);
+    }
+
+    @Test
+    void shouldFailWhenNoDomainFoundEmittingRawEvent() {
+        // Arrange
+        // Act
+        Mono<Void> flow = Mono.from(genericDomainEventBus.emit("another", rawMessage));
         // Assert
         StepVerifier.create(flow)
                 .expectError(InvalidConfigurationException.class)

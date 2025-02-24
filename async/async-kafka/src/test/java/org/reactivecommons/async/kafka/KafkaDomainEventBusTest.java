@@ -7,6 +7,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -20,6 +21,8 @@ class KafkaDomainEventBusTest {
     private DomainEvent<String> domainEvent;
     @Mock
     private CloudEvent cloudEvent;
+    @Mock
+    private RawMessage rawMessage;
     @Mock
     private ReactiveMessageSender sender;
     @InjectMocks
@@ -49,8 +52,20 @@ class KafkaDomainEventBusTest {
     }
 
     @Test
+    void shouldEmitRawMessage() {
+        // Arrange
+        when(sender.send(rawMessage)).thenReturn(Mono.empty());
+        // Act
+        Mono<Void> flow = Mono.from(kafkaDomainEventBus.emit(rawMessage));
+        // Assert
+        StepVerifier.create(flow)
+                .verifyComplete();
+    }
+
+    @Test
     void operationsShouldNotBeAbleForDomains() {
         assertThrows(UnsupportedOperationException.class, () -> kafkaDomainEventBus.emit(domain, domainEvent));
         assertThrows(UnsupportedOperationException.class, () -> kafkaDomainEventBus.emit(domain, cloudEvent));
+        assertThrows(UnsupportedOperationException.class, () -> kafkaDomainEventBus.emit(domain, rawMessage));
     }
 }

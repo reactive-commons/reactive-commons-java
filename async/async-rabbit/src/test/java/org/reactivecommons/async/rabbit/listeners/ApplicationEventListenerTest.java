@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import io.cloudevents.CloudEvent;
+import io.cloudevents.core.builder.CloudEventBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -8,6 +10,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
 import reactor.core.publisher.Mono;
 
+import java.net.URI;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -25,6 +28,13 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
             "app.event.test2", UUID.randomUUID().toString(), new DummyMessage()
     );
 
+    private final CloudEvent cloudEvent = CloudEventBuilder.v1()
+            .withType("app.event.test")
+            .withId(UUID.randomUUID().toString())
+            .withSource(URI.create("/test"))
+            .withData("application/json", "{}".getBytes())
+            .build();
+
     @Test
     void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
@@ -32,6 +42,20 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
                         m -> error(new RuntimeException("testEx")), DummyMessage.class
                 );
         assertSendErrorToCustomReporter(registry, createSource(DomainEvent::getName, event1));
+    }
+
+    @Test
+    void shouldResolveCorrectCloudEventHandler() throws InterruptedException {
+        final HandlerRegistry registry = HandlerRegistry.register()
+                .listenCloudEvent("app.event.test", m -> error(new RuntimeException("testEx")));
+        assertSendErrorToCustomReporter(registry, createSource(CloudEvent::getType, cloudEvent));
+    }
+
+    @Test
+    void shouldResolveCorrectRawHandler() throws InterruptedException {
+        final HandlerRegistry registry = HandlerRegistry.register()
+                .listenDomainRawEvent("domain","app.event.test", m -> error(new RuntimeException("testEx")));
+        assertSendErrorToCustomReporter(registry, createSource(CloudEvent::getType, cloudEvent));
     }
 
     @Test
@@ -44,7 +68,8 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
                         m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
                 );
 
-        assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(DomainEvent::getName, event1, event2));
+        assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(DomainEvent::getName, event1,
+                event2));
     }
 
     @Override
