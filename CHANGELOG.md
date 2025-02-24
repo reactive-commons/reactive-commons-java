@@ -1,5 +1,14 @@
 # Changelog
 
+## [v5.3.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.3.1) (2025-02-24)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.3.0...v5.3.1)
+
+**Merged pull requests:**
+
+- chore\(deps\): update dependencies [\#137](https://github.com/reactive-commons/reactive-commons-java/pull/137) ([luisgomez29](https://github.com/luisgomez29))
+- fix\(deps\): update dependencies [\#135](https://github.com/reactive-commons/reactive-commons-java/pull/135) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.3.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.3.0) (2025-02-24)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.2.3...v5.3.0)
