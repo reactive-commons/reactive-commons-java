@@ -2,8 +2,9 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import lombok.AccessLevel;
+import lombok.NoArgsConstructor;
 import lombok.SneakyThrows;
-import lombok.experimental.UtilityClass;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.DLQDiscardNotifier;
@@ -51,8 +52,8 @@ import java.util.Arrays;
 import java.util.logging.Level;
 
 @Log
-@UtilityClass
-public class RabbitMQSetupUtils {
+@NoArgsConstructor(access = AccessLevel.PRIVATE)
+public final class RabbitMQSetupUtils {
     private static final String LISTENER_TYPE = "listener";
     private static final String SENDER_TYPE = "sender";
     private static final String DEFAULT_PROTOCOL;
@@ -180,7 +181,7 @@ public class RabbitMQSetupUtils {
 
             logDetails(trustManagers);
 
-            if (ssl.getVerifyHostname()) {
+            if (ssl.isVerifyHostname()) {
                 factory.enableHostnameVerification();
             }
         }

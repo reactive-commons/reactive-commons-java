@@ -38,16 +38,15 @@ public class TopologyCreator {
     }
 
     public Mono<Void> createTopics(List<String> topics) {
-        TopicCustomization.TopicCustomizationBuilder defaultBuilder = TopicCustomization.builder()
-                .partitions(-1)
-                .replicationFactor((short) -1);
-
         return Flux.fromIterable(topics)
                 .map(topic -> {
                     if (customizations.getTopics().containsKey(topic)) {
                         return customizations.getTopics().get(topic);
                     }
-                    return defaultBuilder.topic(topic).build();
+                    return TopicCustomization.builder()
+                            .partitions(-1)
+                            .replicationFactor((short) -1)
+                            .topic(topic).build();
                 })
                 .map(this::toNewTopic)
                 .flatMap(this::createTopic)

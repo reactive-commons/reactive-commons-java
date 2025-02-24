@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,7 @@ class KeyMatcherPerformanceManualTest {
 
     Map<String, String> candidates = new HashMap<>();
 
-    private KeyMatcher keyMatcher = new KeyMatcher();
+    private final KeyMatcher keyMatcher = new KeyMatcher();
     private List<String> testList;
     private List<String> testResultList;
 
@@ -29,7 +30,7 @@ class KeyMatcherPerformanceManualTest {
     @BeforeEach
     public void init() {
         ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("candidateNamesForMatching.txt").getFile());
+        File file = new File(Objects.requireNonNull(classLoader.getResource("candidateNamesForMatching.txt")).getFile());
         try {
             Set<String> names = new HashSet<>(Files
                     .readAllLines(Paths.get(file.getAbsolutePath())));

@@ -1,8 +1,8 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -29,7 +29,7 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 @Getter
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final String domain;
     private final AsyncProps props;
@@ -143,12 +143,12 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public void listenReplies() {
         if (props.isListenReplies()) {
-            final ApplicationReplyListener replyListener =
-                    new ApplicationReplyListener(router,
-                            receiver,
-                            props.getBrokerConfigProps().getReplyQueue(),
-                            props.getBrokerConfigProps().getGlobalReplyExchangeName(),
-                            props.getCreateTopology());
+            final ApplicationReplyListener replyListener = new ApplicationReplyListener(router,
+                    receiver,
+                    props.getBrokerConfigProps().getReplyQueue(),
+                    props.getBrokerConfigProps().getGlobalReplyExchangeName(),
+                    props.getCreateTopology()
+            );
             replyListener.startListening(config.getRoutingKey());
         }
     }

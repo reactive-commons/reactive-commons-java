@@ -40,7 +40,7 @@ For example:
 @EnableDomainEventBus
 public class ReactiveEventsGateway {
     public static final String SOME_EVENT_NAME = "some.event.name";
-    private final DomainEventBus domainEventBus; // Auto injectec bean created by the @EnableDomainEventBus annotation
+    private final DomainEventBus domainEventBus; // Auto injected bean created by the @EnableDomainEventBus annotation
 
     public Mono<Void> emit(Object event) {
          return Mono.from(domainEventBus.emit(new DomainEvent<>(SOME_EVENT_NAME, UUID.randomUUID().toString(), event)));

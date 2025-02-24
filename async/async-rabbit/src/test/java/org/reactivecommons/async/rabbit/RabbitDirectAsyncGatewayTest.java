@@ -68,14 +68,14 @@ class RabbitDirectAsyncGatewayTest {
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     private RabbitDirectAsyncGateway asyncGateway;
 
-    public void init(ReactiveMessageSender sender) {
+    void init(ReactiveMessageSender sender) {
         asyncGateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter, meterRegistry);
     }
 
     @Test
     void shouldReleaseRouterResourcesOnTimeout() {
-        BrokerConfig config = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
-        asyncGateway = new RabbitDirectAsyncGateway(config, router, senderMock, "ex", converter, meterRegistry);
+        BrokerConfig brokerConfig = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
+        asyncGateway = new RabbitDirectAsyncGateway(brokerConfig, router, senderMock, "ex", converter, meterRegistry);
         when(router.register(anyString())).thenReturn(Mono.never());
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
                 .thenReturn(Mono.empty());
@@ -98,8 +98,10 @@ class RabbitDirectAsyncGatewayTest {
         int messageCount = 40000;
         final Flux<Command<DummyMessage>> messages = createMessagesHot(messageCount);
         final Flux<Void> target =
-                messages.flatMap(dummyMessageCommand -> asyncGateway.sendCommand(dummyMessageCommand, "testTarget")
-                        .doOnSuccess(aVoid -> semaphore.release()));
+                messages.flatMap(dummyMessageCommand ->
+                        asyncGateway.sendCommand(dummyMessageCommand, "testTarget")
+                                .doOnSuccess(aVoid -> semaphore.release())
+                );
 
         final long init = System.currentTimeMillis();
         target.subscribe();
@@ -118,7 +120,7 @@ class RabbitDirectAsyncGatewayTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldReplyQuery() {
+    void shouldReplyQuery() {
         // Arrange
         senderMock();
 
@@ -132,13 +134,15 @@ class RabbitDirectAsyncGatewayTest {
         StepVerifier.create(result).verifyComplete();
         ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
         verify(senderMock, times(1))
-                .sendNoConfirm(eq(response), eq("globalReply"), eq("replyId"), headersCaptor.capture(), anyBoolean());
+                .sendNoConfirm(eq(response), eq("globalReply"), eq("replyId"),
+                        headersCaptor.capture(), anyBoolean()
+                );
         assertThat(headersCaptor.getValue().get(CORRELATION_ID)).isEqualTo("correlationId");
     }
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldReplyQueryWithout() {
+    void shouldReplyQueryWithout() {
         // Arrange
         senderMock();
 
@@ -158,7 +162,7 @@ class RabbitDirectAsyncGatewayTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldHandleRequestReply() throws JsonProcessingException {
+    void shouldHandleRequestReply() throws JsonProcessingException {
         // Arrange
         senderMock();
         mockReply();

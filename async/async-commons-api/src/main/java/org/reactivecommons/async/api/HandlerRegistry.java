@@ -24,7 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
-public class HandlerRegistry {
+public final class HandlerRegistry {
     public static final String DEFAULT_DOMAIN = "app";
     private final Map<String, List<RegisteredEventListener<?, ?>>> domainEventListeners = new ConcurrentHashMap<>();
     private final List<RegisteredEventListener<?, ?>> dynamicEventHandlers = new CopyOnWriteArrayList<>();
@@ -103,7 +103,9 @@ public class HandlerRegistry {
     }
 
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), queryClass));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+                handler.handle(message), queryClass
+        ));
         return this;
     }
 
@@ -113,8 +115,9 @@ public class HandlerRegistry {
     }
 
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message),
-                CloudEvent.class));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) ->
+                handler.handle(message), CloudEvent.class
+        ));
         return this;
     }
 

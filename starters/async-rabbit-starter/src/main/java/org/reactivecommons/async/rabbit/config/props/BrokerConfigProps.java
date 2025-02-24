@@ -68,9 +68,8 @@ public class BrokerConfigProps implements IBrokerConfigProps {
             final String replyName = generateNameFrom(getAppName(), suffix);
             if (property.compareAndSet(null, replyName)) {
                 return replyName;
-            } else {
-                return property.get();
             }
+            return property.get();
         }
         return name;
     }

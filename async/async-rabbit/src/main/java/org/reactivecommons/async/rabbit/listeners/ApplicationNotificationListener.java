@@ -53,28 +53,21 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
 
         final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declare(
-                queue(queueName)
-                        .durable(false)
-                        .autoDelete(true)
-                        .exclusive(true));
+                queue(queueName).durable(false).autoDelete(true).exclusive(true)
+        );
 
         final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getNotificationListeners())
-                .flatMap(listener -> creator.bind(binding(exchangeName, listener.getPath(), queueName)));
+                .flatMap(listener -> creator.bind(
+                        binding(exchangeName, listener.getPath(), queueName))
+                );
 
         if (createTopology) {
-            final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(exchange(exchangeName)
-                    .type("topic")
-                    .durable(true));
-
-            return declareExchange
+            return creator.declare(exchange(exchangeName).type("topic").durable(true))
                     .then(declareQueue)
                     .thenMany(bindings)
                     .then();
-        } else {
-            return declareQueue
-                    .thenMany(bindings)
-                    .then();
         }
+        return declareQueue.thenMany(bindings).then();
     }
 
     @Override
@@ -84,15 +77,12 @@ public class ApplicationNotificationListener extends GenericMessageListener {
         Function<Message, Object> converter = resolveConverter(eventListener);
         final EventExecutor<Object> executor = new EventExecutor<>(eventListener.getHandler(), converter);
 
-        return message -> executor
-                .execute(message)
-                .cast(Object.class);
+        return message -> executor.execute(message).cast(Object.class);
     }
 
     @Override
     protected String getExecutorPath(AcknowledgableDelivery message) {
-        return message.getEnvelope()
-                .getRoutingKey();
+        return message.getEnvelope().getRoutingKey();
     }
 
     @Override

@@ -2,13 +2,15 @@ allprojects {
     apply plugin: 'java'
     apply plugin: 'jacoco'
 
-    sourceCompatibility = JavaVersion.VERSION_11
-    targetCompatibility = JavaVersion.VERSION_17
+    java {
+        sourceCompatibility = JavaVersion.VERSION_11
+        targetCompatibility = JavaVersion.VERSION_17
+    }
 
     repositories {
         mavenCentral()
-        maven { url 'https://repo.spring.io/snapshot' }
-        maven { url 'https://repo.spring.io/milestone' }
+        maven { url = 'https://repo.spring.io/snapshot' }
+        maven { url = 'https://repo.spring.io/milestone' }
     }
 
     if (toPublish.split(',').contains(project.name) || project.name == rootProject.name) {
@@ -31,7 +33,7 @@ allprojects {
         }
     }
 
-    group 'org.reactivecommons'
+    group = 'org.reactivecommons'
 }
 
 nexusPublishing {
@@ -72,7 +74,7 @@ subprojects {
 
     test {
         useJUnitPlatform()
-        if (System.getProperty("env.ci").equals("true")) {
+        if (System.getProperty("env.ci") == "true") {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
 
@@ -80,7 +82,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.4.1'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.4.2'
         }
     }
 
@@ -88,7 +90,7 @@ subprojects {
         apply plugin: 'maven-publish'
         apply plugin: 'signing'
 
-        group groupId
+        group = groupId
 
         tasks.named("jar") {
             enabled = true
@@ -176,5 +178,5 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '8.11.1'
+    gradleVersion = '8.12.1'
 }

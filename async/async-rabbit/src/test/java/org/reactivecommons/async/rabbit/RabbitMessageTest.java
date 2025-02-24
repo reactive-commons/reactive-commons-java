@@ -16,7 +16,9 @@ class RabbitMessageTest {
     void shouldCreateFromDelivery() {
         Envelope env = new Envelope(2, false, "exchange", "routeKey");
         Map<String, Object> headers = new HashMap<>();
-        AMQP.BasicProperties props = new AMQP.BasicProperties.Builder().contentType("content").contentEncoding("utf8").headers(headers).build();
+        AMQP.BasicProperties props = new AMQP.BasicProperties.Builder()
+                .contentType("content").contentEncoding("utf8").headers(headers)
+                .build();
         byte[] body = new byte[]{3, 4, 5, 6};
         Delivery delivery = new Delivery(env, props, body);
 

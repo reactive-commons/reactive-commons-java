@@ -1,6 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
@@ -13,7 +13,7 @@ import org.reactivecommons.async.starter.broker.DiscardProvider;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RabbitMQDiscardProvider implements DiscardProvider {
     private final AsyncProps props;
     private final BrokerConfig config;

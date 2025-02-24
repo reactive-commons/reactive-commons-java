@@ -1,13 +1,13 @@
 package org.reactivecommons.async.commons;
 
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.commons.communications.Message;
 import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class EventExecutor<T> {
     private final EventHandler<T> eventHandler;
     private final Function<Message, T> converter;

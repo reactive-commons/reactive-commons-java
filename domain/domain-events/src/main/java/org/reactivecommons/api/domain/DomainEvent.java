@@ -1,10 +1,10 @@
 package org.reactivecommons.api.domain;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 
 @Data
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class DomainEvent<T> {
     private final String name;
     private final String eventId;

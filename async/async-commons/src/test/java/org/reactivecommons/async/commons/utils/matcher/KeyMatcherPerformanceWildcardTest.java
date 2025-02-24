@@ -13,6 +13,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -21,7 +22,7 @@ class KeyMatcherPerformanceWildcardTest {
 
     Map<String, String> candidates = new HashMap<>();
 
-    private KeyMatcher keyMatcher = new KeyMatcher();
+    private final KeyMatcher keyMatcher = new KeyMatcher();
     private List<String> testList;
     private List<String> testResultList;
 
@@ -29,8 +30,12 @@ class KeyMatcherPerformanceWildcardTest {
     @BeforeEach
     public void setUp() {
         ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(classLoader.getResource("wildcard_names_for_matching.txt").getFile());
-        File file2 = new File(classLoader.getResource("concrete_names_for_matching.txt").getFile());
+        var file = new File(Objects.requireNonNull(
+                classLoader.getResource("wildcard_names_for_matching.txt")).getFile()
+        );
+        var file2 = new File(
+                Objects.requireNonNull(classLoader.getResource("concrete_names_for_matching.txt")).getFile()
+        );
         try {
             Set<String> names = new HashSet<>(Files
                     .readAllLines(Paths.get(file.getAbsolutePath())));

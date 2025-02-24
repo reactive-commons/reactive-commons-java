@@ -30,8 +30,9 @@ class GenericAsyncPropsDomainTest {
         configured.put(OTHER, other);
         MyBrokerSecretFiller secretFiller = (domain, props) -> {
         };
-        MyBrokerAsyncPropsDomain propsDomain = new MyBrokerAsyncPropsDomain(defaultAppName, defaultMyBrokerProps, configured,
-                secretFiller);
+        MyBrokerAsyncPropsDomain propsDomain = new MyBrokerAsyncPropsDomain(
+                defaultAppName, defaultMyBrokerProps, configured, secretFiller
+        );
         // Act
         MyBrokerAsyncProps props = propsDomain.getProps(DEFAULT_DOMAIN);
         MyBrokerAsyncProps otherProps = propsDomain.getProps(OTHER);
@@ -49,7 +50,9 @@ class GenericAsyncPropsDomainTest {
         MyBrokerAsyncProps propsConfigured = new MyBrokerAsyncProps();
         MyBrokerAsyncPropsDomain propsDomain = MyBrokerAsyncPropsDomain.builder(MyBrokerConnProps.class,
                         AsyncMyBrokerPropsDomainProperties.class,
-                        (Constructor<MyBrokerAsyncPropsDomain>) MyBrokerAsyncPropsDomain.class.getDeclaredConstructors()[0])
+                        (Constructor<MyBrokerAsyncPropsDomain>) MyBrokerAsyncPropsDomain.class
+                                .getDeclaredConstructors()[0]
+                )
                 .withDefaultAppName(defaultAppName)
                 .withDefaultProperties(defaultMyBrokerProps)
                 .withDomain(DEFAULT_DOMAIN, propsConfigured)

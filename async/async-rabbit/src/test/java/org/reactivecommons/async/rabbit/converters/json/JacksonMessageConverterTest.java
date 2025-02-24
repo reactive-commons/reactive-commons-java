@@ -69,7 +69,9 @@ class JacksonMessageConverterTest {
                 .withId(UUID.randomUUID().toString()) //
                 .withSource(URI.create("https://spring.io/foos"))//
                 .withType("command")
-                .withData("application/json", JsonCloudEventData.wrap(objectMapper.valueToTree(new SampleClass("35", "name1", date))))
+                .withData("application/json", JsonCloudEventData.wrap(
+                        objectMapper.valueToTree(new SampleClass("35", "name1", date)))
+                )
                 .build();
         Message message = converter.toMessage(command);
         CloudEvent result = converter.readCloudEvent(message);

@@ -14,23 +14,35 @@ import java.util.UUID;
 import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("unchecked")
 public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass {
 
-    private DomainEvent<DummyMessage> event1 = new DomainEvent<>("app.event.test", UUID.randomUUID().toString(), new DummyMessage());
-    private DomainEvent<DummyMessage> event2 = new DomainEvent<>("app.event.test2", UUID.randomUUID().toString(), new DummyMessage());
+    private final DomainEvent<DummyMessage> event1 = new DomainEvent<>(
+            "app.event.test", UUID.randomUUID().toString(), new DummyMessage()
+    );
+
+    private final DomainEvent<DummyMessage> event2 = new DomainEvent<>(
+            "app.event.test2", UUID.randomUUID().toString(), new DummyMessage()
+    );
 
     @Test
     void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
-                .listenEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+                .listenEvent("app.event.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                );
         assertSendErrorToCustomReporter(registry, createSource(DomainEvent::getName, event1));
     }
 
     @Test
     void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
-                .listenEvent("app.event.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
-                .listenEvent("app.event.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);
+                .listenEvent("app.event.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                )
+                .listenEvent("app.event.test2",
+                        m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
+                );
 
         assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(DomainEvent::getName, event1, event2));
     }
@@ -42,7 +54,8 @@ public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass
 
     class StubGenericMessageListener extends ApplicationEventListener {
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", "domainEvents", handlerResolver, messageConverter, true, true,10, 10, Optional.empty(), discardNotifier, errorReporter, "");
+            super(reactiveMessageListener, "queueName", "domainEvents", handlerResolver, messageConverter, true, true,
+                    10, 10, Optional.empty(), discardNotifier, errorReporter, "");
         }
     }
 }

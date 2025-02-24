@@ -1,14 +1,14 @@
 package org.reactivecommons.async.kafka;
 
 import io.cloudevents.CloudEvent;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivestreams.Publisher;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class KafkaDomainEventBus implements DomainEventBus {
     public static final String NOT_IMPLEMENTED_YET = "Not implemented yet";
     private final ReactiveMessageSender sender;

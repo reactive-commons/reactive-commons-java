@@ -17,21 +17,27 @@ import static reactor.core.publisher.Mono.error;
 @ExtendWith(MockitoExtension.class)
 public class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuperClass {
 
-    private AsyncQuery<DummyMessage> event1 = new AsyncQuery<>("app.query.test", new DummyMessage());
-    private AsyncQuery<DummyMessage> event2 = new AsyncQuery<>("app.query.test2", new DummyMessage());
+    private final AsyncQuery<DummyMessage> event1 = new AsyncQuery<>("app.query.test", new DummyMessage());
+    private final AsyncQuery<DummyMessage> event2 = new AsyncQuery<>("app.query.test2", new DummyMessage());
 
     @Test
     void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
-                .serveQuery("app.query.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+                .serveQuery("app.query.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                );
         assertSendErrorToCustomReporter(registry, createSource(AsyncQuery::getResource, event1));
     }
 
     @Test
     void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
-                .serveQuery("app.query.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
-                .serveQuery("app.query.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);
+                .serveQuery("app.query.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                )
+                .serveQuery("app.query.test2",
+                        m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
+                );
 
         assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(AsyncQuery::getResource, event1, event2));
     }

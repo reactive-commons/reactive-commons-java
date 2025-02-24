@@ -80,10 +80,7 @@ public class HandlerResolver {
     }
 
     private <T> Function<String, T> getMatchHandler(Map<String, T> handlers) {
-        return name -> {
-            String matched = matcher.match(handlers.keySet(), name);
-            return handlers.get(matched);
-        };
+        return name -> handlers.get(matcher.match(handlers.keySet(), name));
     }
 
 }

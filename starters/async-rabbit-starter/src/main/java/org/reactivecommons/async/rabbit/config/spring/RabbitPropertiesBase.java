@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.config.spring;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.springframework.boot.convert.DurationUnit;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -14,77 +16,95 @@ public class RabbitPropertiesBase {
     /**
      * RabbitMQ host.
      */
+    @Setter
+    @Getter
     private String host = "localhost";
 
     /**
      * RabbitMQ port.
      */
+    @Setter
+    @Getter
     private int port = 5672;
 
     /**
      * Login user to authenticate to the communications.
      */
+    @Setter
+    @Getter
     private String username = "guest";
 
     /**
      * Login to authenticate against the communications.
      */
+    @Setter
+    @Getter
     private String password = "guest"; //NOSONAR
 
     /**
      * SSL configuration.
      */
+    @Getter
     private final Ssl ssl = new Ssl();
 
     /**
      * Virtual host to use when connecting to the communications.
      */
+    @Getter
     private String virtualHost;
 
     /**
      * Comma-separated list of addresses to which the client should connect.
      */
+    @Getter
     private String addresses;
 
     /**
      * Requested heartbeat timeout; zero for none. If a duration suffix is not specified,
      * seconds will be used.
      */
+    @Getter
+    @Setter
     @DurationUnit(ChronoUnit.SECONDS)
     private Duration requestedHeartbeat;
 
     /**
      * Whether to enable publisher confirms.
      */
+    @Setter
+    @Getter
     private boolean publisherConfirms;
 
     /**
      * Whether to enable publisher returns.
      */
+    @Setter
+    @Getter
     private boolean publisherReturns;
 
     /**
      * Connection timeout. Set it to zero to wait forever.
      */
+    @Getter
+    @Setter
     private Duration connectionTimeout;
 
     /**
      * Cache configuration.
      */
+    @Getter
     private final Cache cache = new Cache();
 
     /**
      * Listener container configuration.
      */
+    @Getter
     private final Listener listener = new Listener();
 
+    @Getter
     private final Template template = new Template();
 
     private List<Address> parsedAddresses;
-
-    public String getHost() {
-        return this.host;
-    }
 
     /**
      * Returns the host from the first address, or the configured host if no addresses
@@ -101,14 +121,6 @@ public class RabbitPropertiesBase {
         return this.parsedAddresses.get(0).host;
     }
 
-    public void setHost(String host) {
-        this.host = host;
-    }
-
-    public int getPort() {
-        return this.port;
-    }
-
     /**
      * Returns the port from the first address, or the configured port if no addresses
      * have been set.
@@ -123,14 +135,6 @@ public class RabbitPropertiesBase {
         }
         Address address = this.parsedAddresses.get(0);
         return address.port;
-    }
-
-    public void setPort(int port) {
-        this.port = port;
-    }
-
-    public String getAddresses() {
-        return this.addresses;
     }
 
     /**
@@ -163,10 +167,6 @@ public class RabbitPropertiesBase {
         return parsedAddressesLocal;
     }
 
-    public String getUsername() {
-        return this.username;
-    }
-
     /**
      * If addresses have been set and the first address has a username it is returned.
      * Otherwise returns the result of calling {@code getUsername()}.
@@ -183,14 +183,6 @@ public class RabbitPropertiesBase {
         return (address.username != null) ? address.username : this.username;
     }
 
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return this.password;
-    }
-
     /**
      * If addresses have been set and the first address has a password it is returned.
      * Otherwise returns the result of calling {@code getPassword()}.
@@ -205,18 +197,6 @@ public class RabbitPropertiesBase {
         }
         Address address = this.parsedAddresses.get(0);
         return (address.password != null) ? address.password : getPassword();
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public Ssl getSsl() {
-        return this.ssl;
-    }
-
-    public String getVirtualHost() {
-        return this.virtualHost;
     }
 
     /**
@@ -239,50 +219,8 @@ public class RabbitPropertiesBase {
         this.virtualHost = "".equals(virtualHost) ? "/" : virtualHost;
     }
 
-    public Duration getRequestedHeartbeat() {
-        return this.requestedHeartbeat;
-    }
-
-    public void setRequestedHeartbeat(Duration requestedHeartbeat) {
-        this.requestedHeartbeat = requestedHeartbeat;
-    }
-
-    public boolean isPublisherConfirms() {
-        return this.publisherConfirms;
-    }
-
-    public void setPublisherConfirms(boolean publisherConfirms) {
-        this.publisherConfirms = publisherConfirms;
-    }
-
-    public boolean isPublisherReturns() {
-        return this.publisherReturns;
-    }
-
-    public void setPublisherReturns(boolean publisherReturns) {
-        this.publisherReturns = publisherReturns;
-    }
-
-    public Duration getConnectionTimeout() {
-        return this.connectionTimeout;
-    }
-
-    public void setConnectionTimeout(Duration connectionTimeout) {
-        this.connectionTimeout = connectionTimeout;
-    }
-
-    public Cache getCache() {
-        return this.cache;
-    }
-
-    public Listener getListener() {
-        return this.listener;
-    }
-
-    public Template getTemplate() {
-        return this.template;
-    }
-
+    @Getter
+    @Setter
     public static class Ssl {
 
         /**
@@ -335,102 +273,17 @@ public class RabbitPropertiesBase {
          */
         private boolean verifyHostname = true;
 
-        public boolean isEnabled() {
-            return this.enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public String getKeyStore() {
-            return this.keyStore;
-        }
-
-        public void setKeyStore(String keyStore) {
-            this.keyStore = keyStore;
-        }
-
-        public String getKeyStoreType() {
-            return this.keyStoreType;
-        }
-
-        public void setKeyStoreType(String keyStoreType) {
-            this.keyStoreType = keyStoreType;
-        }
-
-        public String getKeyStorePassword() {
-            return this.keyStorePassword;
-        }
-
-        public void setKeyStorePassword(String keyStorePassword) {
-            this.keyStorePassword = keyStorePassword;
-        }
-
-        public String getTrustStore() {
-            return this.trustStore;
-        }
-
-        public void setTrustStore(String trustStore) {
-            this.trustStore = trustStore;
-        }
-
-        public String getTrustStoreType() {
-            return this.trustStoreType;
-        }
-
-        public void setTrustStoreType(String trustStoreType) {
-            this.trustStoreType = trustStoreType;
-        }
-
-        public String getTrustStorePassword() {
-            return this.trustStorePassword;
-        }
-
-        public void setTrustStorePassword(String trustStorePassword) {
-            this.trustStorePassword = trustStorePassword;
-        }
-
-        public String getAlgorithm() {
-            return this.algorithm;
-        }
-
-        public void setAlgorithm(String sslAlgorithm) {
-            this.algorithm = sslAlgorithm;
-        }
-
-        public boolean isValidateServerCertificate() {
-            return this.validateServerCertificate;
-        }
-
-        public void setValidateServerCertificate(boolean validateServerCertificate) {
-            this.validateServerCertificate = validateServerCertificate;
-        }
-
-        public boolean getVerifyHostname() {
-            return this.verifyHostname;
-        }
-
-        public void setVerifyHostname(boolean verifyHostname) {
-            this.verifyHostname = verifyHostname;
-        }
-
     }
 
+    @Getter
     public static class Cache {
 
         private final Channel channel = new Channel();
 
         private final Connection connection = new Connection();
 
-        public Channel getChannel() {
-            return this.channel;
-        }
-
-        public Connection getConnection() {
-            return this.connection;
-        }
-
+        @Getter
+        @Setter
         public static class Channel {
 
             /**
@@ -445,24 +298,10 @@ public class RabbitPropertiesBase {
              */
             private Duration checkoutTimeout;
 
-            public Integer getSize() {
-                return this.size;
-            }
-
-            public void setSize(Integer size) {
-                this.size = size;
-            }
-
-            public Duration getCheckoutTimeout() {
-                return this.checkoutTimeout;
-            }
-
-            public void setCheckoutTimeout(Duration checkoutTimeout) {
-                this.checkoutTimeout = checkoutTimeout;
-            }
-
         }
 
+        @Getter
+        @Setter
         public static class Connection {
 
             /**
@@ -474,22 +313,6 @@ public class RabbitPropertiesBase {
              * Number of connections to cache. Only applies when mode is CONNECTION.
              */
             private Integer size;
-
-            public String getMode() {
-                return this.mode;
-            }
-
-            public void setMode(String mode) {
-                this.mode = mode;
-            }
-
-            public Integer getSize() {
-                return this.size;
-            }
-
-            public void setSize(Integer size) {
-                this.size = size;
-            }
 
         }
 
@@ -510,6 +333,9 @@ public class RabbitPropertiesBase {
 
     }
 
+
+    @Getter
+    @Setter
     public static class Listener {
 
         /**
@@ -521,24 +347,10 @@ public class RabbitPropertiesBase {
 
         private final DirectContainer direct = new DirectContainer();
 
-        public ContainerType getType() {
-            return this.type;
-        }
-
-        public void setType(ContainerType containerType) {
-            this.type = containerType;
-        }
-
-        public SimpleContainer getSimple() {
-            return this.simple;
-        }
-
-        public DirectContainer getDirect() {
-            return this.direct;
-        }
-
     }
 
+    @Getter
+    @Setter
     public abstract static class AmqpContainer {
 
         /**
@@ -572,57 +384,16 @@ public class RabbitPropertiesBase {
          */
         private final ListenerRetry retry = new ListenerRetry();
 
-        public boolean isAutoStartup() {
-            return this.autoStartup;
-        }
-
-        public void setAutoStartup(boolean autoStartup) {
-            this.autoStartup = autoStartup;
-        }
-
-        public Integer getAcknowledgeMode() {
-            return this.acknowledgeMode;
-        }
-
-        public void setAcknowledgeMode(Integer acknowledgeMode) {
-            this.acknowledgeMode = acknowledgeMode;
-        }
-
-        public Integer getPrefetch() {
-            return this.prefetch;
-        }
-
-        public void setPrefetch(Integer prefetch) {
-            this.prefetch = prefetch;
-        }
-
-        public Boolean getDefaultRequeueRejected() {
-            return this.defaultRequeueRejected;
-        }
-
-        public void setDefaultRequeueRejected(Boolean defaultRequeueRejected) {
-            this.defaultRequeueRejected = defaultRequeueRejected;
-        }
-
-        public Duration getIdleEventInterval() {
-            return this.idleEventInterval;
-        }
-
-        public void setIdleEventInterval(Duration idleEventInterval) {
-            this.idleEventInterval = idleEventInterval;
-        }
 
         public abstract boolean isMissingQueuesFatal();
-
-        public ListenerRetry getRetry() {
-            return this.retry;
-        }
 
     }
 
     /**
      * Configuration properties for {@code SimpleMessageListenerContainer}.
      */
+    @Getter
+    @Setter
     public static class SimpleContainer extends AmqpContainer {
 
         /**
@@ -648,44 +419,13 @@ public class RabbitPropertiesBase {
          */
         private boolean missingQueuesFatal = true;
 
-        public Integer getConcurrency() {
-            return this.concurrency;
-        }
-
-        public void setConcurrency(Integer concurrency) {
-            this.concurrency = concurrency;
-        }
-
-        public Integer getMaxConcurrency() {
-            return this.maxConcurrency;
-        }
-
-        public void setMaxConcurrency(Integer maxConcurrency) {
-            this.maxConcurrency = maxConcurrency;
-        }
-
-        public Integer getTransactionSize() {
-            return this.transactionSize;
-        }
-
-        public void setTransactionSize(Integer transactionSize) {
-            this.transactionSize = transactionSize;
-        }
-
-        @Override
-        public boolean isMissingQueuesFatal() {
-            return this.missingQueuesFatal;
-        }
-
-        public void setMissingQueuesFatal(boolean missingQueuesFatal) {
-            this.missingQueuesFatal = missingQueuesFatal;
-        }
-
     }
 
     /**
      * Configuration properties for {@code DirectMessageListenerContainer}.
      */
+    @Getter
+    @Setter
     public static class DirectContainer extends AmqpContainer {
 
         /**
@@ -699,25 +439,10 @@ public class RabbitPropertiesBase {
          */
         private boolean missingQueuesFatal = false;
 
-        public Integer getConsumersPerQueue() {
-            return this.consumersPerQueue;
-        }
-
-        public void setConsumersPerQueue(Integer consumersPerQueue) {
-            this.consumersPerQueue = consumersPerQueue;
-        }
-
-        @Override
-        public boolean isMissingQueuesFatal() {
-            return this.missingQueuesFatal;
-        }
-
-        public void setMissingQueuesFatal(boolean missingQueuesFatal) {
-            this.missingQueuesFatal = missingQueuesFatal;
-        }
-
     }
 
+    @Getter
+    @Setter
     public static class Template {
 
         private final Retry retry = new Retry();
@@ -753,60 +478,10 @@ public class RabbitPropertiesBase {
          */
         private String queue;
 
-        public Retry getRetry() {
-            return this.retry;
-        }
-
-        public Boolean getMandatory() {
-            return this.mandatory;
-        }
-
-        public void setMandatory(Boolean mandatory) {
-            this.mandatory = mandatory;
-        }
-
-        public Duration getReceiveTimeout() {
-            return this.receiveTimeout;
-        }
-
-        public void setReceiveTimeout(Duration receiveTimeout) {
-            this.receiveTimeout = receiveTimeout;
-        }
-
-        public Duration getReplyTimeout() {
-            return this.replyTimeout;
-        }
-
-        public void setReplyTimeout(Duration replyTimeout) {
-            this.replyTimeout = replyTimeout;
-        }
-
-        public String getExchange() {
-            return this.exchange;
-        }
-
-        public void setExchange(String exchange) {
-            this.exchange = exchange;
-        }
-
-        public String getRoutingKey() {
-            return this.routingKey;
-        }
-
-        public void setRoutingKey(String routingKey) {
-            this.routingKey = routingKey;
-        }
-
-        public String getQueue() {
-            return this.queue;
-        }
-
-        public void setQueue(String queue) {
-            this.queue = queue;
-        }
-
     }
 
+    @Getter
+    @Setter
     public static class Retry {
 
         /**
@@ -834,63 +509,16 @@ public class RabbitPropertiesBase {
          */
         private Duration maxInterval = Duration.ofMillis(10000);
 
-        public boolean isEnabled() {
-            return this.enabled;
-        }
-
-        public void setEnabled(boolean enabled) {
-            this.enabled = enabled;
-        }
-
-        public int getMaxAttempts() {
-            return this.maxAttempts;
-        }
-
-        public void setMaxAttempts(int maxAttempts) {
-            this.maxAttempts = maxAttempts;
-        }
-
-        public Duration getInitialInterval() {
-            return this.initialInterval;
-        }
-
-        public void setInitialInterval(Duration initialInterval) {
-            this.initialInterval = initialInterval;
-        }
-
-        public double getMultiplier() {
-            return this.multiplier;
-        }
-
-        public void setMultiplier(double multiplier) {
-            this.multiplier = multiplier;
-        }
-
-        public Duration getMaxInterval() {
-            return this.maxInterval;
-        }
-
-        public void setMaxInterval(Duration maxInterval) {
-            this.maxInterval = maxInterval;
-        }
-
     }
 
+    @Getter
+    @Setter
     public static class ListenerRetry extends Retry {
 
         /**
          * Whether retries are stateless or stateful.
          */
         private boolean stateless = true;
-
-        public boolean isStateless() {
-            return this.stateless;
-        }
-
-        public void setStateless(boolean stateless) {
-            this.stateless = stateless;
-        }
-
     }
 
     private static final class Address {
@@ -960,7 +588,7 @@ public class RabbitPropertiesBase {
                 this.port = DEFAULT_PORT;
             } else {
                 this.host = input.substring(0, portIndex);
-                this.port = Integer.valueOf(input.substring(portIndex + 1));
+                this.port = Integer.parseInt(input.substring(portIndex + 1));
             }
         }
 

@@ -60,7 +60,7 @@ app:
         virtual-host: /
 ```
 
-You can override this settings programmatically through a `AsyncPropsDomainProperties` bean.
+You can override this settings programmatically through a `AsyncRabbitPropsDomainProperties` bean.
 
 ```java
 package sample;
@@ -76,7 +76,7 @@ public class MyDomainConfig {
 
     @Bean
     @Primary
-    public AsyncPropsDomainProperties customDomainProperties() {
+    public AsyncRabbitPropsDomainProperties customDomainProperties() {
         RabbitProperties propertiesApp = new RabbitProperties();
         propertiesApp.setHost("localhost");
         propertiesApp.setPort(5672);
@@ -84,7 +84,7 @@ public class MyDomainConfig {
         propertiesApp.setUsername("guest");
         propertiesApp.setPassword("guest");
 
-        return AsyncPropsDomainProperties.builder()
+        return AsyncRabbitPropsDomainProperties.builder()
                 .withDomain("app", AsyncProps.builder()
                         .connectionProperties(propertiesApp)
                         .build())
@@ -93,13 +93,13 @@ public class MyDomainConfig {
 }
 ```
 
-Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.SecretFiller` class.
+Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.RabbitSecretFiller` class.
 
 ```java
 
 @Bean
 @Primary
-public AsyncPropsDomain.SecretFiller customFiller() {
+public AsyncPropsDomain.RabbitSecretFiller customFiller() {
     return (domain, asyncProps) -> {
         // customize asyncProps here by domain
     };

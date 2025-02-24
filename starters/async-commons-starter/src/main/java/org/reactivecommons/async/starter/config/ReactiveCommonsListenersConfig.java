@@ -33,11 +33,15 @@ public class ReactiveCommonsListenersConfig {
             registries.put("primaryHandlerRegistry", primaryRegistry);
         }
         final Map<String, GenericAsyncPropsDomain> props = context.getBeansOfType(GenericAsyncPropsDomain.class);
-        props.forEach((beanName, properties) -> properties.forEach((domain, asyncProps) -> {
-            String domainName = (String) domain;
-            HandlerResolver resolver = HandlerResolverBuilder.buildResolver(domainName, registries, commandHandler);
-            handlers.add(domainName, resolver);
-        }));
+        props.forEach((beanName, properties) -> properties
+                .forEach((domain, asyncProps) -> {
+                    String domainName = (String) domain;
+                    HandlerResolver resolver = HandlerResolverBuilder.buildResolver(
+                            domainName, registries, commandHandler
+                    );
+                    handlers.add(domainName, resolver);
+                })
+        );
         return handlers;
     }
 

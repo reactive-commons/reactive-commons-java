@@ -1,7 +1,7 @@
 package org.reactivecommons.async.kafka;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
@@ -20,7 +20,7 @@ import org.springframework.boot.ssl.SslBundles;
 import org.springframework.stereotype.Service;
 
 @Service("kafka")
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class KafkaBrokerProviderFactory implements BrokerProviderFactory<AsyncKafkaProps> {
     private final ReactiveReplyRouter router;
     private final KafkaJacksonMessageConverter converter;
@@ -40,7 +40,8 @@ public class KafkaBrokerProviderFactory implements BrokerProviderFactory<AsyncKa
     }
 
     @Override
-    public BrokerProvider<AsyncKafkaProps> getProvider(String domain, AsyncKafkaProps props, DiscardProvider discardProvider) {
+    public BrokerProvider<AsyncKafkaProps> getProvider(String domain, AsyncKafkaProps props,
+                                                       DiscardProvider discardProvider) {
         TopologyCreator creator = KafkaSetupUtils.createTopologyCreator(props, customizations, sslBundles);
         ReactiveMessageSender sender = KafkaSetupUtils.createMessageSender(props, converter, creator, sslBundles);
         ReactiveMessageListener listener = KafkaSetupUtils.createMessageListener(props, sslBundles);

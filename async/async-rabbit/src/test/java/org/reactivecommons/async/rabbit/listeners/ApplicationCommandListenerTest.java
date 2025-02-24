@@ -17,31 +17,45 @@ import static org.mockito.Mockito.verify;
 import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
-public class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass{
+@SuppressWarnings("unchecked")
+public class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass {
 
-    private final Command<DummyMessage> command = new Command<>("app.command.test", UUID.randomUUID().toString(), new DummyMessage());
-    private final Command<DummyMessage> command2 = new Command<>("app.command.test2", UUID.randomUUID().toString(), new DummyMessage());
+    private final Command<DummyMessage> command = new Command<>(
+            "app.command.test", UUID.randomUUID().toString(), new DummyMessage()
+    );
+    private final Command<DummyMessage> command2 = new Command<>(
+            "app.command.test2", UUID.randomUUID().toString(), new DummyMessage()
+    );
 
     @Test
     void shouldSendErrorToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
-            .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+                .handleCommand("app.command.test", m ->
+                        error(new RuntimeException("testEx")), DummyMessage.class
+                );
         assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
     }
 
     @Test
     void shouldSendErrorMetricToCustomErrorReporter() throws InterruptedException {
         final HandlerRegistry registry = HandlerRegistry.register()
-            .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class);
+                .handleCommand("app.command.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                );
         assertSendErrorToCustomReporter(registry, createSource(Command::getName, command));
-        verify(errorReporter).reportMetric(eq("command"), eq("app.command.test"), longThat(time -> time >= 0 ), eq(false));
+        verify(errorReporter)
+                .reportMetric(eq("command"), eq("app.command.test"), longThat(time -> time >= 0), eq(false));
     }
 
     @Test
     void shouldContinueAfterReportError() throws InterruptedException {
         final HandlerRegistry handlerRegistry = HandlerRegistry.register()
-            .handleCommand("app.command.test", m -> error(new RuntimeException("testEx")), DummyMessage.class)
-            .handleCommand("app.command.test2", m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class);
+                .handleCommand("app.command.test",
+                        m -> error(new RuntimeException("testEx")), DummyMessage.class
+                )
+                .handleCommand("app.command.test2",
+                        m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
+                );
 
         assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(Command::getName, command, command2));
     }
@@ -54,7 +68,8 @@ public class ApplicationCommandListenerTest extends ListenerReporterTestSuperCla
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,  false,false,10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,
+                    false, false, 10, 10, Optional.empty(), discardNotifier, errorReporter);
         }
     }
 }

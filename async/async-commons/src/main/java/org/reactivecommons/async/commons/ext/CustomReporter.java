@@ -13,23 +13,27 @@ public interface CustomReporter {
     String QUERY_CLASS = "org.reactivecommons.async.api.AsyncQuery";
 
     default Mono<Void> reportError(Throwable ex, Message rawMessage, Object message, boolean redelivered) {
-        switch (message.getClass().getName()){
-            case COMMAND_CLASS:
-                return reportError(ex, rawMessage, (Command<?>) message, redelivered);
-            case EVENT_CLASS:
-                return reportError(ex, rawMessage, (DomainEvent<?>) message, redelivered);
-            case QUERY_CLASS:
-                return reportError(ex, rawMessage, (AsyncQuery<?>) message, redelivered);
-            default:
-                return Mono.empty();
-        }
+        var name = message.getClass().getName();
+        return Mono.just(name)
+                .filter(COMMAND_CLASS::equals)
+                .flatMap(n -> reportError(ex, rawMessage, (Command<?>) message, redelivered))
+                .switchIfEmpty(Mono.just(name)
+                        .filter(EVENT_CLASS::equals)
+                        .flatMap(n -> reportError(ex, rawMessage, (DomainEvent<?>) message, redelivered))
+                        .switchIfEmpty(Mono.just(name)
+                                .filter(QUERY_CLASS::equals)
+                                .flatMap(n -> reportError(ex, rawMessage, (AsyncQuery<?>) message, redelivered))
+                        )
+                );
     }
 
     default void reportMetric(String type, String handlerPath, Long duration, boolean success) {
     }
 
     Mono<Void> reportError(Throwable ex, Message rawMessage, Command<?> message, boolean redelivered);
+
     Mono<Void> reportError(Throwable ex, Message rawMessage, DomainEvent<?> message, boolean redelivered);
+
     Mono<Void> reportError(Throwable ex, Message rawMessage, AsyncQuery<?> message, boolean redelivered);
 
 }

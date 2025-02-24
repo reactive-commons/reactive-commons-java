@@ -28,7 +28,6 @@ import static java.util.function.Function.identity;
 
 @Log
 public abstract class GenericMessageListener {
-    public static final int DEFAULT_RETRIES = 10;
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final ReactiveMessageListener messageListener;
     private final Scheduler scheduler = Schedulers.newParallel(getClass().getSimpleName(), 12);
@@ -46,9 +45,10 @@ public abstract class GenericMessageListener {
     private final CustomReporter customReporter;
     private volatile Flux<ReceiverRecord<String, byte[]>> messageFlux;
 
-    public GenericMessageListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology,
-                                  long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
-                                  String objectType, CustomReporter customReporter, String groupId, List<String> topics) {
+    protected GenericMessageListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology,
+                                     long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
+                                     String objectType, CustomReporter customReporter, String groupId,
+                                     List<String> topics) {
         this.groupId = groupId;
         this.topics = topics;
         this.messageListener = listener;
@@ -71,8 +71,8 @@ public abstract class GenericMessageListener {
 
     public void startListener(TopologyCreator creator) {
         log.log(Level.INFO, "Using max concurrency {0}, in receiver for topics: {1}",
-
                 new Object[]{messageListener.getMaxConcurrency(), topics});
+
         if (useDLQ) {
             log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!",
                     new Object[]{maxRetries});
@@ -103,7 +103,7 @@ public abstract class GenericMessageListener {
         return messageFlux.flatMap(msj -> {
             final Instant init = Instant.now();
             return handle(msj, init)
-                    .doOnSuccess(record -> record.receiverOffset().acknowledge())
+                    .doOnSuccess(r -> r.receiverOffset().acknowledge())
                     .onErrorResume(err -> requeueOrAck(msj, err, init));
         }, messageListener.getMaxConcurrency());
     }
@@ -187,7 +187,9 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, ReceiverRecord<String, byte[]> msj, FallbackStrategy strategy) {
         String messageID = msj.key();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s: %s", messageID, err.toString()), err);
+            log.log(Level.SEVERE,
+                    format("Error encounter while processing message %s: %s", messageID, err.toString()), err
+            );
             log.warning(format("Message %s Headers: %s", messageID, msj.headers().toString()));
             log.warning(format("Message %s Body: %s", messageID, new String(msj.value())));
         } catch (Exception e) {

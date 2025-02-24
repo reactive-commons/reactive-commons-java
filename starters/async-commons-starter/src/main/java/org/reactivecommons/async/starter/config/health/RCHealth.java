@@ -1,15 +1,15 @@
 package org.reactivecommons.async.starter.config.health;
 
-import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Getter
 @Builder
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class RCHealth {
     private final Status status;
     private final Map<String, Object> details;
