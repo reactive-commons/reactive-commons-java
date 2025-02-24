@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import io.cloudevents.CloudEvent;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivestreams.Publisher;
@@ -49,4 +50,15 @@ public class RabbitDomainEventBus implements DomainEventBus {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public Publisher<Void> emit(RawMessage rawEvent) {
+        return sender.sendWithConfirm(rawEvent, exchange, rawEvent.getType(),
+                        Collections.emptyMap(), persistentEvents)
+                .onErrorMap(err -> new RuntimeException("Event send failure: " + rawEvent.getType(), err));
+    }
+
+    @Override
+    public Publisher<Void> emit(String domain, RawMessage event) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
 }

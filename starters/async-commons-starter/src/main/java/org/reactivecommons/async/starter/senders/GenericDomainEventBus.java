@@ -4,6 +4,7 @@ import io.cloudevents.CloudEvent;
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
@@ -38,6 +39,20 @@ public class GenericDomainEventBus implements DomainEventBus {
 
     @Override
     public Publisher<Void> emit(String domain, CloudEvent event) {
+        DomainEventBus domainEventBus = domainEventBuses.get(domain);
+        if (domainEventBus == null) {
+            return Mono.error(() -> new InvalidConfigurationException("Domain not found: " + domain));
+        }
+        return domainEventBus.emit(event);
+    }
+
+    @Override
+    public Publisher<Void> emit(RawMessage event) {
+        return emit(DEFAULT_DOMAIN, event);
+    }
+
+    @Override
+    public Publisher<Void> emit(String domain, RawMessage event) {
         DomainEventBus domainEventBus = domainEventBuses.get(domain);
         if (domainEventBus == null) {
             return Mono.error(() -> new InvalidConfigurationException("Domain not found: " + domain));

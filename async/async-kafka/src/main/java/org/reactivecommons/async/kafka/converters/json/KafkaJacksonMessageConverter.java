@@ -22,6 +22,9 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
 
     @Override
     public Message toMessage(Object object) {
+        if (object instanceof KafkaMessage) {
+            return (KafkaMessage) object;
+        }
         byte[] bytes;
         try {
             String jsonString = this.objectMapper.writeValueAsString(object);
@@ -30,7 +33,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
         KafkaMessageProperties props = buildProperties(object);
-        return new KafkaMessage(bytes, props);
+        return new KafkaMessage(bytes, props, null);
     }
 
     private KafkaMessageProperties buildProperties(Object message) {

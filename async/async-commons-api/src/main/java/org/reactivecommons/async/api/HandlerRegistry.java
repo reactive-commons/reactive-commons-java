@@ -4,12 +4,14 @@ import io.cloudevents.CloudEvent;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -37,7 +39,8 @@ public class HandlerRegistry {
         return instance;
     }
 
-    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, DomainEventHandler<T> handler,
+                                                 Class<T> eventClass) {
         domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
                 .add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
@@ -46,6 +49,12 @@ public class HandlerRegistry {
     public HandlerRegistry listenDomainCloudEvent(String domain, String eventName, CloudEventHandler handler) {
         domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
                 .add(new RegisteredEventListener<>(eventName, handler, CloudEvent.class));
+        return this;
+    }
+
+    public HandlerRegistry listenDomainRawEvent(String domain, String eventName, RawEventHandler handler) {
+        domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
+                .add(new RegisteredEventListener<>(eventName, handler, RawMessage.class));
         return this;
     }
 
@@ -61,7 +70,8 @@ public class HandlerRegistry {
         return this;
     }
 
-    public <T> HandlerRegistry listenNotificationEvent(String eventName, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry listenNotificationEvent(String eventName, DomainEventHandler<T> handler,
+                                                       Class<T> eventClass) {
         eventNotificationListener.add(new RegisteredEventListener<>(eventName, handler, eventClass));
         return this;
     }
@@ -71,7 +81,8 @@ public class HandlerRegistry {
         return this;
     }
 
-    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler, Class<T> eventClass) {
+    public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler,
+                                                   Class<T> eventClass) {
         dynamicEventHandlers.add(new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
         return this;
     }
@@ -102,7 +113,8 @@ public class HandlerRegistry {
     }
 
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler) {
-        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message), CloudEvent.class));
+        handlers.add(new RegisteredQueryHandler<>(resource, (ignored, message) -> handler.handle(message),
+                CloudEvent.class));
         return this;
     }
 

@@ -9,4 +9,7 @@ public interface DomainEventBus {
 
     Publisher<Void> emit(CloudEvent event);
     Publisher<Void> emit(String domain, CloudEvent event);
+
+    Publisher<Void> emit(RawMessage event);
+    Publisher<Void> emit(String domain, RawMessage event);
 }

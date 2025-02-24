@@ -1,5 +1,7 @@
 package org.reactivecommons.async.commons.communications;
 
+import org.reactivecommons.api.domain.RawMessage;
+
 import java.util.Map;
 
 /**
@@ -7,7 +9,7 @@ import java.util.Map;
  *
  * @author Daniel Bustamante Ospina
  */
-public interface Message {
+public interface Message extends RawMessage {
 
     byte[] getBody();
 

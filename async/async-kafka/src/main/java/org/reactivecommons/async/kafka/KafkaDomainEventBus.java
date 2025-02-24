@@ -4,6 +4,7 @@ import io.cloudevents.CloudEvent;
 import lombok.AllArgsConstructor;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivestreams.Publisher;
 
@@ -29,6 +30,16 @@ public class KafkaDomainEventBus implements DomainEventBus {
 
     @Override
     public Publisher<Void> emit(String domain, CloudEvent event) {
+        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+    }
+
+    @Override
+    public Publisher<Void> emit(RawMessage event) {
+        return sender.send(event);
+    }
+
+    @Override
+    public Publisher<Void> emit(String domain, RawMessage event) {
         throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
     }
 }

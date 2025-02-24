@@ -11,6 +11,7 @@ import java.util.Map;
 public class RabbitMessage implements Message {
     private final byte[] body;
     private final Properties properties;
+    private final String type;
 
     @Data
     public static class RabbitMessageProperties implements Properties {
@@ -22,7 +23,11 @@ public class RabbitMessage implements Message {
     }
 
     public static RabbitMessage fromDelivery(Delivery delivery) {
-        return new RabbitMessage(delivery.getBody(), createMessageProps(delivery));
+        return fromDelivery(delivery, null);
+    }
+
+    public static RabbitMessage fromDelivery(Delivery delivery, String executorPath) {
+        return new RabbitMessage(delivery.getBody(), createMessageProps(delivery), executorPath);
     }
 
     private static Message.Properties createMessageProps(Delivery msj) {

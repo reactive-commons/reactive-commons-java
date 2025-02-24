@@ -112,7 +112,7 @@ public abstract class GenericMessageListener {
         try {
             final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
-            final Message message = KafkaMessage.fromDelivery(msj);
+            final Message message = KafkaMessage.fromDelivery(msj, executorPath);
 
             Mono<Object> flow = Mono.defer(() -> handler.apply(message))
                     .transform(enrichPostProcess(message));

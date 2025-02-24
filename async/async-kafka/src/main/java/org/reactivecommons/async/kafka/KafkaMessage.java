@@ -15,6 +15,7 @@ import static org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessag
 public class KafkaMessage implements Message {
     private final byte[] body;
     private final Properties properties;
+    private final String type;
 
     @Data
     public static class KafkaMessageProperties implements Properties {
@@ -30,7 +31,11 @@ public class KafkaMessage implements Message {
     }
 
     public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> record) {
-        return new KafkaMessage(record.value(), createMessageProps(record));
+        return fromDelivery(record, null);
+    }
+
+    public static KafkaMessage fromDelivery(ReceiverRecord<String, byte[]> record, String type) {
+        return new KafkaMessage(record.value(), createMessageProps(record), type);
     }
 
     private static Properties createMessageProps(ReceiverRecord<String, byte[]> record) {
