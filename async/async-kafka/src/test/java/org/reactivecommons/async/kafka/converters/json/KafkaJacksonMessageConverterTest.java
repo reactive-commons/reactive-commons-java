@@ -42,6 +42,7 @@ class KafkaJacksonMessageConverterTest {
         String expectedJson = "{\"name\":\"test\",\"eventId\":\"" + id + "\",\"data\":{\"name\":\"name\",\"age\":1}}";
         // Act
         Message message = converter.toMessage(testEvent);
+        assertEquals(message, converter.toMessage(message));
         // Assert
         assertEquals("test", message.getProperties().getTopic());
         assertEquals(id, message.getProperties().getKey());

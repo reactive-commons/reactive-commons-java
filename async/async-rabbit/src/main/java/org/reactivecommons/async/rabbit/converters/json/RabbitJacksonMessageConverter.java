@@ -18,6 +18,9 @@ public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
 
     @Override
     public Message toMessage(Object object) {
+        if (object instanceof RabbitMessage) {
+            return (RabbitMessage) object;
+        }
         byte[] bytes;
         try {
             String jsonString = this.objectMapper.writeValueAsString(object);
@@ -29,10 +32,10 @@ public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
         if (object instanceof CloudEvent) {
             props.setContentType(APPLICATION_CLOUD_EVENT_JSON);
         } else {
-            props.setContentType(CONTENT_TYPE);
+            props.setContentType(APPLICATION_JSON);
         }
         props.setContentEncoding(StandardCharsets.UTF_8.name());
         props.setContentLength(bytes.length);
-        return new RabbitMessage(bytes, props);
+        return new RabbitMessage(bytes, props, null);
     }
 }

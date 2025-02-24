@@ -121,7 +121,7 @@ public abstract class GenericMessageListener {
         try {
             final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
-            final Message message = RabbitMessage.fromDelivery(msj);
+            final Message message = RabbitMessage.fromDelivery(msj, executorPath);
 
             Mono<Object> flow = defer(() -> handler.apply(message))
                     .transform(enrichPostProcess(message));

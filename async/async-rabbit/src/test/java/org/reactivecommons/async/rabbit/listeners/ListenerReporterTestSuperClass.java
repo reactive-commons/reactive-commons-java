@@ -65,7 +65,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected final CustomReporter errorReporter = mock(CustomReporter.class);
     protected final Semaphore semaphore = new Semaphore(0);
     protected final Semaphore successSemaphore = new Semaphore(0);
-    private final ObjectMapper mapper = new ObjectMapper();
+    private final ObjectMapper mapper = new DefaultObjectMapperSupplier().get();
     private final Receiver receiver = mock(Receiver.class);
     protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(
             receiver, topologyCreator
@@ -147,9 +147,15 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
-        final Map<String, RegisteredEventListener<?, ?>> eventHandlers = Stream.concat(
-                        registry.getDynamicEventHandlers().stream(),
-                        registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream())
+        Stream<RegisteredEventListener<?, ?>> listenerStream = Stream.concat(
+                registry.getDynamicEventHandlers().stream(),
+                registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream());
+        if (registry.getDomainEventListeners().containsKey("domain")) {
+            listenerStream = Stream.concat(
+                    listenerStream,
+                    registry.getDomainEventListeners().get("domain").stream());
+        }
+        final Map<String, RegisteredEventListener<?, ?>> eventHandlers = listenerStream
                 .collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners()
                 .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));

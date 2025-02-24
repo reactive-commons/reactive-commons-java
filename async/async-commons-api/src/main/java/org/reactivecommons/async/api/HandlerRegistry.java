@@ -4,12 +4,14 @@ import io.cloudevents.CloudEvent;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -47,6 +49,12 @@ public final class HandlerRegistry {
     public HandlerRegistry listenDomainCloudEvent(String domain, String eventName, CloudEventHandler handler) {
         domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
                 .add(new RegisteredEventListener<>(eventName, handler, CloudEvent.class));
+        return this;
+    }
+
+    public HandlerRegistry listenDomainRawEvent(String domain, String eventName, RawEventHandler<?> handler) {
+        domainEventListeners.computeIfAbsent(domain, ignored -> new CopyOnWriteArrayList<>())
+                .add(new RegisteredEventListener<>(eventName, handler, RawMessage.class));
         return this;
     }
 

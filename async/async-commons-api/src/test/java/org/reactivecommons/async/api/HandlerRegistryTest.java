@@ -5,12 +5,14 @@ import lombok.Data;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
+import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -52,6 +54,20 @@ class HandlerRegistryTest {
                                 RegisteredEventListener::getHandler
                         )
                         .containsExactly(name, CloudEvent.class, eventHandler)).hasSize(1);
+    }
+
+    @Test
+    void shouldListenDomainRawEvent() {
+        SomeRawEventHandler eventHandler = new SomeRawEventHandler();
+
+        registry.listenDomainRawEvent(domain, name, eventHandler);
+
+        assertThat(registry.getDomainEventListeners().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass,
+                                RegisteredEventListener::getHandler
+                        )
+                        .containsExactly(name, RawMessage.class, eventHandler)).hasSize(1);
     }
 
     @Test
@@ -265,6 +281,13 @@ class HandlerRegistryTest {
     private static class SomeCloudEventHandler implements CloudEventHandler {
         @Override
         public Mono<Void> handle(CloudEvent message) {
+            return null;
+        }
+    }
+
+    private static class SomeRawEventHandler implements RawEventHandler<RawMessage> {
+        @Override
+        public Mono<Void> handle(RawMessage message) {
             return null;
         }
     }
