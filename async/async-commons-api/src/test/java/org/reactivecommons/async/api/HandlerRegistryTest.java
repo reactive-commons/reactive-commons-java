@@ -27,6 +27,7 @@ class HandlerRegistryTest {
     private final HandlerRegistry registry = HandlerRegistry.register();
     private final String name = "some.event";
     private final String nameRaw = "some.raw.event";
+    private final String nameRawNotification = "some.raw.notification.event";
     private final String domain = "some-domain";
 
 
@@ -137,14 +138,14 @@ class HandlerRegistryTest {
     void shouldRegisterNotificationRawEventListener() {
         SomeRawEventHandler eventHandler = new SomeRawEventHandler();
 
-        registry.listenRawEvent(nameRaw, eventHandler);
+        registry.listenNotificationRawEvent(nameRawNotification, eventHandler);
 
         assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass,
                                 RegisteredEventListener::getHandler
                         )
-                        .containsExactly(nameRaw, RawMessage.class, eventHandler)).hasSize(1);
+                        .containsExactly(nameRawNotification, RawMessage.class, eventHandler)).hasSize(1);
     }
 
     @Test

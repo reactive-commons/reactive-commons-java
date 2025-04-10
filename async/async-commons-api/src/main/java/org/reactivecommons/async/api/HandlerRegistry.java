@@ -97,7 +97,7 @@ public final class HandlerRegistry {
 
     // notifications: RawMessage
     public HandlerRegistry listenNotificationRawEvent(String eventName, RawEventHandler<?> handler) {
-        return listenDomainRawEvent(DEFAULT_DOMAIN, eventName, handler);
+        return listenNotificationRawEvent(DEFAULT_DOMAIN, eventName, handler);
     }
 
     public HandlerRegistry listenNotificationRawEvent(String domain, String eventName, RawEventHandler<?> handler) {
