@@ -60,11 +60,31 @@ class HandlerResolverTest {
     }
 
     @Test
+    void shouldThrowError() {
+        // Arrange
+        RegisteredQueryHandler<?, ?> handler = new RegisteredQueryHandler<>("*",
+                (from, message) -> Mono.empty(),
+                String.class);
+        // Act
+        // Assert
+        Assertions.assertThatThrownBy(() -> resolver.addQueryHandler(handler)).isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
     void shouldMatchForAnExactEvent() {
         // Act
         RegisteredEventListener<Object, Object> eventListener = resolver.getEventListener("event.name");
         // Assert
         Assertions.assertThat(eventListener.getPath()).isEqualTo("event.name");
+    }
+
+    @Test
+    void shouldCheckIfHasListenerTypes() {
+        // Act
+        // Assert
+        Assertions.assertThat(resolver.hasCommandHandlers()).isFalse();
+        Assertions.assertThat(resolver.hasQueryHandlers()).isFalse();
+        Assertions.assertThat(resolver.hasNotificationListeners()).isFalse();
     }
 
 }

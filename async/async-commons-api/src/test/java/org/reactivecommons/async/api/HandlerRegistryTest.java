@@ -12,6 +12,7 @@ import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
+import org.reactivecommons.async.api.handlers.RawCommandHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
@@ -25,6 +26,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 class HandlerRegistryTest {
     private final HandlerRegistry registry = HandlerRegistry.register();
     private final String name = "some.event";
+    private final String nameRaw = "some.raw.event";
     private final String domain = "some-domain";
 
 
@@ -60,9 +62,9 @@ class HandlerRegistryTest {
     void shouldListenDomainRawEvent() {
         SomeRawEventHandler eventHandler = new SomeRawEventHandler();
 
-        registry.listenDomainRawEvent(domain, name, eventHandler);
+        registry.listenRawEvent(name, eventHandler);
 
-        assertThat(registry.getDomainEventListeners().get(domain))
+        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass,
                                 RegisteredEventListener::getHandler
@@ -129,6 +131,20 @@ class HandlerRegistryTest {
         registry.listenNotificationCloudEvent(name, message -> Mono.empty());
         assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
                 .anySatisfy(listener -> assertThat(listener.getPath()).isEqualTo(name));
+    }
+
+    @Test
+    void shouldRegisterNotificationRawEventListener() {
+        SomeRawEventHandler eventHandler = new SomeRawEventHandler();
+
+        registry.listenRawEvent(nameRaw, eventHandler);
+
+        assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::getPath, RegisteredEventListener::getInputClass,
+                                RegisteredEventListener::getHandler
+                        )
+                        .containsExactly(nameRaw, RawMessage.class, eventHandler)).hasSize(1);
     }
 
     @Test
@@ -199,6 +215,20 @@ class HandlerRegistryTest {
                                 RegisteredCommandHandler::getHandler
                         )
                         .containsExactly(name, CloudEvent.class, cloudCommandHandler)).hasSize(1);
+    }
+
+    @Test
+    void handleRawCommand() {
+        SomeRawCommandEventHandler eventHandler = new SomeRawCommandEventHandler();
+
+        registry.handleRawCommand(nameRaw, eventHandler);
+
+        assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::getPath, RegisteredCommandHandler::getInputClass,
+                                RegisteredCommandHandler::getHandler
+                        )
+                        .containsExactly(nameRaw, RawMessage.class, eventHandler)).hasSize(1);
     }
 
     @Test
@@ -303,6 +333,13 @@ class HandlerRegistryTest {
         @Override
         public Mono<Void> handle(CloudEvent message) {
             return null;
+        }
+    }
+
+    private static class SomeRawCommandEventHandler implements RawCommandHandler<RawMessage> {
+        @Override
+        public Mono<Void> handle(RawMessage message) {
+            return Mono.empty();
         }
     }
 
