@@ -84,7 +84,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     @Override
     public void listenNotificationEvents(HandlerResolver resolver) {
-        if (!resolver.getNotificationListeners().isEmpty()) {
+        if (resolver.hasNotificationListeners()) {
             final ApplicationNotificationListener listener = new ApplicationNotificationListener(
                     receiver,
                     props.getBrokerConfigProps().getDomainEventsExchangeName(),
@@ -100,44 +100,48 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     @Override
     public void listenCommands(HandlerResolver resolver) {
-        ApplicationCommandListener commandListener = new ApplicationCommandListener(
-                receiver,
-                props.getBrokerConfigProps().getCommandsQueue(),
-                resolver,
-                props.getDirect().getExchange(),
-                converter,
-                props.getWithDLQRetry(),
-                props.getCreateTopology(),
-                props.getDelayedCommands(),
-                props.getMaxRetries(),
-                props.getRetryDelay(),
-                props.getDirect().getMaxLengthBytes(),
-                discardNotifier,
-                errorReporter);
+        if (resolver.hasCommandHandlers()) {
+            ApplicationCommandListener commandListener = new ApplicationCommandListener(
+                    receiver,
+                    props.getBrokerConfigProps().getCommandsQueue(),
+                    resolver,
+                    props.getDirect().getExchange(),
+                    converter,
+                    props.getWithDLQRetry(),
+                    props.getCreateTopology(),
+                    props.getDelayedCommands(),
+                    props.getMaxRetries(),
+                    props.getRetryDelay(),
+                    props.getDirect().getMaxLengthBytes(),
+                    discardNotifier,
+                    errorReporter);
 
-        commandListener.startListener();
+            commandListener.startListener();
+        }
     }
 
     @Override
     public void listenQueries(HandlerResolver resolver) {
-        final ApplicationQueryListener listener = new ApplicationQueryListener(
-                receiver,
-                props.getBrokerConfigProps().getQueriesQueue(),
-                resolver,
-                sender,
-                props.getBrokerConfigProps().getDirectMessagesExchangeName(),
-                converter,
-                props.getBrokerConfigProps().getGlobalReplyExchangeName(),
-                props.getWithDLQRetry(),
-                props.getCreateTopology(),
-                props.getMaxRetries(),
-                props.getRetryDelay(),
-                props.getGlobal().getMaxLengthBytes(),
-                props.getDirect().isDiscardTimeoutQueries(),
-                discardNotifier,
-                errorReporter);
+        if (resolver.hasQueryHandlers()) {
+            final ApplicationQueryListener listener = new ApplicationQueryListener(
+                    receiver,
+                    props.getBrokerConfigProps().getQueriesQueue(),
+                    resolver,
+                    sender,
+                    props.getBrokerConfigProps().getDirectMessagesExchangeName(),
+                    converter,
+                    props.getBrokerConfigProps().getGlobalReplyExchangeName(),
+                    props.getWithDLQRetry(),
+                    props.getCreateTopology(),
+                    props.getMaxRetries(),
+                    props.getRetryDelay(),
+                    props.getGlobal().getMaxLengthBytes(),
+                    props.getDirect().isDiscardTimeoutQueries(),
+                    discardNotifier,
+                    errorReporter);
 
-        listener.startListener();
+            listener.startListener();
+        }
     }
 
     @Override

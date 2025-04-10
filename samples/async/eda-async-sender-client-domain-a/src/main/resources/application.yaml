@@ -17,7 +17,7 @@ app:
   async:
     app: # domain-a
       connectionProperties:
-        virtualHost: domain-a
+        virtualHost: /
     teams:
       connectionProperties:
         virtualHost: /

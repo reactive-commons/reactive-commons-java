@@ -139,6 +139,7 @@ class RabbitMQBrokerProviderTest {
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
     void shouldListenNotificationEvents() {
+        when(handlerResolver.hasNotificationListeners()).thenReturn(true);
         when(listener.getTopologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
@@ -148,7 +149,6 @@ class RabbitMQBrokerProviderTest {
         when(listener.getMaxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         List mockedListeners = spy(List.of());
-        when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
@@ -158,6 +158,7 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldListenCommands() {
+        when(handlerResolver.hasCommandHandlers()).thenReturn(true);
         when(listener.getTopologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
@@ -176,6 +177,7 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldListenQueries() {
+        when(handlerResolver.hasQueryHandlers()).thenReturn(true);
         when(listener.getTopologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));

@@ -37,16 +37,16 @@ public class SampleRestController {
 
     // Query
     @GetMapping(path = "/api/teams", produces = APPLICATION_JSON_VALUE)
-    public Mono<Teams> getTeams() {
-        CloudEvent query = CloudEventBuilder.v1()
+    public Mono<Void> getTeams() {
+        RemovedMemberEvent eventData = RemovedMemberEvent.builder().teamName("team").username("member").build();
+        CloudEvent event = CloudEventBuilder.v1()
                 .withId(UUID.randomUUID().toString())
                 .withSource(URI.create("https://reactive-commons.org/foos"))
-                .withType(Constants.GET_TEAMS)
+                .withType(Constants.MEMBER_REMOVED_EXTERNAL_DOMAIN)
                 .withTime(OffsetDateTime.now())
-                .withData("application/json", CloudEventBuilderExt.asBytes(""))
+                .withData("application/json", CloudEventBuilderExt.asBytes(eventData))
                 .build();
-        return directAsyncGateway.requestReply(query, target, CloudEvent.class, externalDomain)
-                .map(event -> CloudEventBuilderExt.fromCloudEventData(event, Teams.class));
+        return Mono.from(domainEventBus.emit(event));
     }
 
     // Query
