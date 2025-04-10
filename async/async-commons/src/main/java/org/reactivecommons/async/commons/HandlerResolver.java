@@ -25,6 +25,18 @@ public class HandlerResolver {
 
     private final Matcher matcher = new KeyMatcher();
 
+    public boolean hasNotificationListeners() {
+        return !eventNotificationListeners.isEmpty();
+    }
+
+    public boolean hasCommandHandlers() {
+        return !commandHandlers.isEmpty();
+    }
+
+    public boolean hasQueryHandlers() {
+        return !queryHandlers.isEmpty();
+    }
+
     @SuppressWarnings("unchecked")
     public <T, M> RegisteredQueryHandler<T, M> getQueryHandler(String path) {
         return (RegisteredQueryHandler<T, M>) queryHandlers
@@ -74,7 +86,8 @@ public class HandlerResolver {
 
     public void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
         if (handler.getPath().contains("*") || handler.getPath().contains("#")) {
-            throw new RuntimeException("avoid * or # in dynamic handlers, make sure you have no conflicts with cached patterns");
+            throw new RuntimeException("avoid * or # in dynamic handlers, make sure you have no conflicts with cached" +
+                    " patterns");
         }
         queryHandlers.put(handler.getPath(), handler);
     }

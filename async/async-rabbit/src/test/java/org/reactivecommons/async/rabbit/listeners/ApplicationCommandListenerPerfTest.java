@@ -44,6 +44,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.core.publisher.Flux.range;
 
 @ExtendWith(MockitoExtension.class)
@@ -277,6 +278,7 @@ class ApplicationCommandListenerPerfTest {
                 )
                 .block();
         final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
+                .get(DEFAULT_DOMAIN)
                 .stream()
                 .collect(ConcurrentHashMap::new, (map, handler) ->
                         map.put(handler.getPath(), handler), ConcurrentHashMap::putAll

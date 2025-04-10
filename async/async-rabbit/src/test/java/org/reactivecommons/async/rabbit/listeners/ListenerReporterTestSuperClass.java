@@ -148,7 +148,7 @@ public abstract class ListenerReporterTestSuperClass {
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
         Stream<RegisteredEventListener<?, ?>> listenerStream = Stream.concat(
-                registry.getDynamicEventHandlers().stream(),
+                registry.getDynamicEventHandlers().get(DEFAULT_DOMAIN).stream(),
                 registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream());
         if (registry.getDomainEventListeners().containsKey("domain")) {
             listenerStream = Stream.concat(
@@ -160,10 +160,13 @@ public abstract class ListenerReporterTestSuperClass {
         final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners()
                 .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
         final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener()
+                .get(DEFAULT_DOMAIN)
                 .stream().collect(toMap(RegisteredEventListener::getPath, identity()));
-        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().stream()
+        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().get(DEFAULT_DOMAIN)
+                .stream()
                 .collect(toMap(RegisteredQueryHandler::getPath, identity()));
         final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
+                .get(DEFAULT_DOMAIN)
                 .stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
