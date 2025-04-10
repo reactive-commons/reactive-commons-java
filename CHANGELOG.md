@@ -1,5 +1,14 @@
 # Changelog
 
+## [v5.4.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.4.0) (2025-04-10)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.3.1...v5.4.0)
+
+**Merged pull requests:**
+
+- feat\(open-multi-domain-api\): Allow use any domain as source or destination [\#139](https://github.com/reactive-commons/reactive-commons-java/pull/139) ([juancgalvis](https://github.com/juancgalvis))
+- fix\(deps\): update dependencies [\#138](https://github.com/reactive-commons/reactive-commons-java/pull/138) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.3.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.3.1) (2025-02-24)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.3.0...v5.3.1)
