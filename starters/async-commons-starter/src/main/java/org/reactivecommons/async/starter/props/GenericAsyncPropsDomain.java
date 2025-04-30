@@ -22,6 +22,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
     private Class<P> propsClass;
 
     public GenericAsyncPropsDomain(String defaultAppName,
+                                   String groupId,
                                    P defaultProperties,
                                    GenericAsyncPropsDomainProperties<T, P> configured,
                                    SecretFiller<P> secretFiller,
@@ -44,7 +45,10 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
                             + " has not set the property appName. please use respective property or " +
                             " spring.application.name property or withDefaultAppName in builder");
                 }
-                value.setAppName(defaultAppName);
+                if(value.getGroupId() != null){
+                    value.setAppName(groupId);
+                }
+                value.setAppName(defaultAppName + "-events");
             }
             if (value.getConnectionProperties() == null) {
                 if (defaultProperties == null) {
