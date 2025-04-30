@@ -34,7 +34,7 @@ public class ApplicationEventListener extends GenericMessageListener {
                                     CustomReporter errorReporter,
                                     String appName) {
         super(receiver, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "event", errorReporter, appName + "-events", resolver.getEventNames());
+                "event", errorReporter, appName, resolver.getEventNames());
         this.resolver = resolver;
         this.messageConverter = messageConverter;
     }
