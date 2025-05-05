@@ -48,7 +48,10 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
                 if(value.getGroupId() != null){
                     value.setAppName(groupId);
                 }
-                value.setAppName(defaultAppName + "-events");
+                else {
+                    value.setAppName(defaultAppName + "-events");
+                }
+
             }
             if (value.getConnectionProperties() == null) {
                 if (defaultProperties == null) {
