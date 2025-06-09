@@ -12,11 +12,12 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
-class RabbitMQDiscardProviderTest {
+class RabbitMQDiscardProviderImplTest {
     @Mock
     private RabbitJacksonMessageConverter converter;
 
@@ -28,7 +29,7 @@ class RabbitMQDiscardProviderTest {
         IBrokerConfigProps brokerConfigProps = new BrokerConfigProps(props);
         props.setBrokerConfigProps(brokerConfigProps);
         BrokerConfig brokerConfig = new BrokerConfig();
-        RabbitMQDiscardProvider discardProvider = new RabbitMQDiscardProvider(props, brokerConfig, converter);
+        RabbitMQDiscardProviderImpl discardProvider = new RabbitMQDiscardProviderImpl(props, brokerConfig, converter);
         // Act
         DiscardNotifier notifier = discardProvider.get();
         // Assert

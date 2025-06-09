@@ -1,9 +1,10 @@
-package org.reactivecommons.async.rabbit;
+package org.reactivecommons.async.rabbit.discard;
 
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.rabbit.RabbitMQSetupUtils;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
@@ -14,7 +15,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 @RequiredArgsConstructor
-public class RabbitMQDiscardProvider implements DiscardProvider {
+public class RabbitMQDiscardProviderImpl implements DiscardProvider {
     private final AsyncProps props;
     private final BrokerConfig config;
     private final MessageConverter converter;
