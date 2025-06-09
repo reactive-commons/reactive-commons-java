@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.4.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.4.1) (2025-06-09)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.4.0...v5.4.1)
+
+**Merged pull requests:**
+
+- fix\(discard\): Allow easy discard notifier overriding [\#144](https://github.com/reactive-commons/reactive-commons-java/pull/144) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.4.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.4.0) (2025-04-10)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.3.1...v5.4.0)
