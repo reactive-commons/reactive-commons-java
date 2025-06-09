@@ -14,6 +14,8 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderFactory;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderImpl;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
@@ -36,7 +38,8 @@ class RabbitMQBrokerProviderFactoryTest {
 
     @BeforeEach
     public void setUp() {
-        providerFactory = new RabbitMQBrokerProviderFactory(config, router, converter, meterRegistry, errorReporter);
+        providerFactory = new RabbitMQBrokerProviderFactory(config, router, converter, meterRegistry, errorReporter,
+                RabbitMQDiscardProviderImpl::new);
     }
 
     @Test
@@ -55,7 +58,7 @@ class RabbitMQBrokerProviderFactoryTest {
         // Act
         DiscardProvider discardProvider = providerFactory.getDiscardProvider(props);
         // Assert
-        assertThat(discardProvider).isInstanceOf(RabbitMQDiscardProvider.class);
+        assertThat(discardProvider).isInstanceOf(RabbitMQDiscardProviderImpl.class);
     }
 
     @Test

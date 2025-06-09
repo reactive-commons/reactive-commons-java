@@ -9,6 +9,7 @@ import org.reactivecommons.async.rabbit.config.RabbitPropertiesAutoConfig;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderConfig;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -19,7 +20,7 @@ import org.springframework.context.annotation.Import;
 @Configuration
 @RequiredArgsConstructor
 @EnableConfigurationProperties({RabbitPropertiesAutoConfig.class, AsyncRabbitPropsDomainProperties.class})
-@Import({AsyncPropsDomain.class, RabbitMQBrokerProviderFactory.class})
+@Import({AsyncPropsDomain.class, RabbitMQBrokerProviderFactory.class, RabbitMQDiscardProviderConfig.class})
 public class RabbitMQConfig {
 
     @Bean

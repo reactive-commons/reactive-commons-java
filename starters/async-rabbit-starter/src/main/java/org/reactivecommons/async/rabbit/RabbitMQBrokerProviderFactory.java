@@ -12,6 +12,7 @@ import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderFactory;
 import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
@@ -26,6 +27,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
     private final RabbitJacksonMessageConverter converter;
     private final MeterRegistry meterRegistry;
     private final CustomReporter errorReporter;
+    private final RabbitMQDiscardProviderFactory discardProvider;
 
     @Override
     public String getBrokerType() {
@@ -34,7 +36,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
 
     @Override
     public DiscardProvider getDiscardProvider(AsyncProps props) {
-        return new RabbitMQDiscardProvider(props, config, converter);
+        return discardProvider.build(props, config, converter);
     }
 
     @Override
