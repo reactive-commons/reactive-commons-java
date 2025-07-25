@@ -274,60 +274,46 @@ public AsyncKafkaPropsDomain.KafkaSecretFiller customKafkaFiller() {
   </TabItem>
 </Tabs>
 
-## Propiedad mandatoy en RabbitMQ
-La propiedad mandatory es un parámetro de publicación de mensajes en RabbitMQ que determina el comportamiento cuando un
-mensaje no puede ser enrutado a ninguna cola. Esto puede ocurrir si no hay colas enlazadas al exchange o si la clave de
-enrutamiento no coincide con ninguna de las colas disponibles.
+## Mandatory property in RabbitMQ
+The mandatory property is a message publishing parameter in RabbitMQ that determines the behavior when a message cannot be routed to any queue. This can happen if there are no queues bound to the exchange or if the routing key does not match any of the available queues.
 
-Por defecto, esta opción está desactivada, pero si se activa (`mandatory = true`) funciona justo después de que el
-mensaje es publicado en un exchange, pero antes de que se enrute a una cola.
+By default, this option is disabled, but if activated (`mandatory = true`), it works right after the message is published to an exchange, but before it is routed to a queue.
 
-Cuando se publica un mensaje con `mandatory = true`, RabbitMQ intentará enrutarlo desde el exchange hacia una o más
-colas. Si ninguna cola recibe el mensaje, entonces:
+When a message is published with `mandatory = true`, RabbitMQ will try to route it from the exchange to one or more queues. If no queue receives the message, then:
 
-- El mensaje no se pierde, pero no se entrega a ninguna cola.
-- RabbitMQ activa un evento basic.return en el canal del productor.
-- El productor debe tener un ReturnListener o un manejador equivalente para recibir y procesar el mensaje devuelto. Si
-  no se define uno el mensaje se pierde.
+- The message is not lost, but it is not delivered to any queue.
+- RabbitMQ triggers a basic.return event on the producer's channel.
+- The producer must have a ReturnListener or an equivalent handler to receive and process the returned message. If one is not defined, the message is lost.
 
-#### Ejemplo
+#### Example
 
-Suponiendo que tenemos:
+Assuming we have:
 
-- Un exchange tipo direct.
-- Una cola enlazada con la clave `orden.creada`.
-- Se publica un mensaje con clave `orden.cancelada` y `mandatory = true`.
+- A direct type exchange.
+- A queue bound with the key `order.created`.
+- A message is published with the key `order.cancelled` and `mandatory = true`.
 
-Resultado:
+Result:
 
-- Si no hay ninguna cola enlazada con `orden.cancelada`, el mensaje no se enruta.
-- Como `mandatory = true`, RabbitMQ intenta devolverlo al productor.
-- Si se tiene un ReturnListener, se puede capturar y manejar ese mensaje, por ejemplo enviarlo a una cola de otro
-  consumidor, colas DLQ, guardarlo en un archivo logs o en una base de datos.
+- If there is no queue bound with `order.cancelled`, the message is not routed.
+- Since `mandatory = true`, RabbitMQ tries to return it to the producer.
+- If there is a ReturnListener, this message can be captured and handled, for example, by sending it to another consumer's queue, DLQ queues, saving it in a log file, or in a database.
 
-### Ventajas
+### Advantages
 
-- Detección temprana de errores de enrutamiento: Evita que mensajes críticos “desaparezcan” sin rastro lo que facilita
-  la identificación de configuraciones erróneas en bindings o patrones.
-- Integridad y fiabilidad: Garantiza que cada mensaje encuentre un consumidor o, en su defecto, regrese al productor
-  para un manejo alternativo (colas DLQ, logs, base de datos).
-- Visibilidad operacional: Facilita métricas de “mensajes no enrutados” y alertas cuando el flujo de eventos no cumple
-  las rutas previstas.
+- Early detection of routing errors: Prevents critical messages from "disappearing" without a trace, which facilitates the identification of erroneous configurations in bindings or patterns.
+- Integrity and reliability: Ensures that each message finds a consumer or, failing that, returns to the producer for alternative handling (DLQ queues, logs, database).
+- Operational visibility: Facilitates metrics of "unrouted messages" and alerts when the event flow does not follow the planned routes.
 
-### Consideraciones
+### Considerations
 
-Aunque esta propiedad no evita problemas de rendimiento o degradación del clúster RabbitMQ, sí es útil para evitar la
-pérdida de mensajes no enrutados y para detectar errores de configuración en el enrutamiento.
+Although this property does not prevent performance problems or degradation of the RabbitMQ cluster, it is useful for preventing the loss of unrouted messages and for detecting configuration errors in routing.
 
-Cuando mandatory está activo, en condiciones normales (todas las rutas existen) no hay prácticamente impacto. En
-situaciones anómalas, habrá un tráfico adicional de retorno por cada mensaje no enrutable. Esto supone carga extra
-tanto para RabbitMQ (que debe enviar de vuelta el mensaje al productor) como para la aplicación emisora (que debe
-procesar el mensaje devuelto).
+When mandatory is active, under normal conditions (all routes exist), there is practically no impact. In anomalous situations, there will be additional return traffic for each unroutable message. This implies an extra load for both RabbitMQ (which must send the message back to the producer) and the sending application (which must process the returned message).
 
-### Implementación
+### Implementation
 
-Para habilitar la propiedad `mandatory` en Reactive Commons, puedes configurarla en el archivo `application.yaml` de tu
-proyecto:
+To enable the `mandatory` property in Reactive Commons, you can configure it in your project's `application.yaml` file:
 
 ```yaml
 app:
@@ -336,10 +322,8 @@ app:
       mandatory: true # enable mandatory property
 ```
 
-Ahora configuramos el handler de retorno para manejar los mensajes que no pudieron ser entregados correctamente, por
-defecto estos mensajes se muestran en un log.
-Para personalizar este comportamiento se crea una clase que implemente la interfaz `UnroutableMessageHandler` y se
-registra como un bean de Spring:
+Now we configure the return handler to manage messages that could not be delivered correctly. By default, these messages are displayed in a log.
+To customize this behavior, a class that implements the `UnroutableMessageHandler` interface is created and registered as a Spring bean:
 
 ```java
 package sample;
@@ -377,15 +361,15 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
 }
 ```
 
-#### Enviar mensajes no enrutados a una cola
+#### Send unrouted messages to a queue
 
-Para enviar el mensaje no enrutado a una cola, utilizamos las anotaciones `@EnableDomainEventBus` para 
-[eventos de dominio](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event), y `@EnableDirectAsyncGateway` 
-para [comandos](/reactive-commons-java/docs/reactive-commons/sending-a-command) y 
-[consultas asíncronas](/reactive-commons-java/docs/reactive-commons/making-an-async-query), según corresponda.
+To send the unrouted message to a queue, we use the `@EnableDomainEventBus` annotations for
+[domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event), and `@EnableDirectAsyncGateway`
+for [commands](/reactive-commons-java/docs/reactive-commons/sending-a-command) and
+[asynchronous queries](/reactive-commons-java/docs/reactive-commons/making-an-async-query), as appropriate.
 
-Es importante asegurarse de que la cola exista antes de enviar el mensaje, ya que, de lo contrario, este se perderá. 
-Por lo tanto, se recomienda verificar o crear la cola previamente para garantizar una entrega exitosa.
+It is important to ensure that the queue exists before sending the message, as it will otherwise be lost.
+Therefore, it is recommended to verify or create the queue beforehand to ensure successful delivery.
 
 ```java
 package sample;
@@ -449,7 +433,7 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
 }
 ```
 
-En la clase de configuración de RabbitMQ creamos el bean `UnroutableMessageProcessor` para registrar el handler de mensajes no enrutados.
+In the RabbitMQ configuration class, we create the `UnroutableMessageProcessor` bean to register the unrouted message handler.
 
 ```java
 package sample;
