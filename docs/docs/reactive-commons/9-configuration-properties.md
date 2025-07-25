@@ -275,15 +275,21 @@ public AsyncKafkaPropsDomain.KafkaSecretFiller customKafkaFiller() {
 </Tabs>
 
 ## Mandatory property in RabbitMQ
-The mandatory property is a message publishing parameter in RabbitMQ that determines the behavior when a message cannot be routed to any queue. This can happen if there are no queues bound to the exchange or if the routing key does not match any of the available queues.
 
-By default, this option is disabled, but if activated (`mandatory = true`), it works right after the message is published to an exchange, but before it is routed to a queue.
+The mandatory property is a message publishing parameter in RabbitMQ that determines the behavior when a message cannot
+be routed to any queue. This can happen if there are no queues bound to the exchange or if the routing key does not
+match any of the available queues.
 
-When a message is published with `mandatory = true`, RabbitMQ will try to route it from the exchange to one or more queues. If no queue receives the message, then:
+By default, this option is disabled, but if activated (`mandatory = true`), it works right after the message is
+published to an exchange, but before it is routed to a queue.
+
+When a message is published with `mandatory = true`, RabbitMQ will try to route it from the exchange to one or more
+queues. If no queue receives the message, then:
 
 - The message is not lost, but it is not delivered to any queue.
 - RabbitMQ triggers a basic.return event on the producer's channel.
-- The producer must have a ReturnListener or an equivalent handler to receive and process the returned message. If one is not defined, the message is lost.
+- The producer must have a ReturnListener or an equivalent handler to receive and process the returned message. If one
+  is not defined, the message is lost.
 
 #### Example
 
@@ -297,19 +303,27 @@ Result:
 
 - If there is no queue bound with `order.cancelled`, the message is not routed.
 - Since `mandatory = true`, RabbitMQ tries to return it to the producer.
-- If there is a ReturnListener, this message can be captured and handled, for example, by sending it to another consumer's queue, DLQ queues, saving it in a log file, or in a database.
+- If there is a ReturnListener, this message can be captured and handled, for example, by sending it to another
+- consumer's queue, DLQ queues, saving it in a log file, or in a database.
 
 ### Advantages
 
-- Early detection of routing errors: Prevents critical messages from "disappearing" without a trace, which facilitates the identification of erroneous configurations in bindings or patterns.
-- Integrity and reliability: Ensures that each message finds a consumer or, failing that, returns to the producer for alternative handling (DLQ queues, logs, database).
-- Operational visibility: Facilitates metrics of "unrouted messages" and alerts when the event flow does not follow the planned routes.
+- Early detection of routing errors: Prevents critical messages from "disappearing" without a trace, which facilitates
+  the identification of erroneous configurations in bindings or patterns.
+- Integrity and reliability: Ensures that each message finds a consumer or, failing that, returns to the producer for
+  alternative handling (DLQ queues, logs, database).
+- Operational visibility: Facilitates metrics of "unrouted messages" and alerts when the event flow does not follow the
+  planned routes.
 
 ### Considerations
 
-Although this property does not prevent performance problems or degradation of the RabbitMQ cluster, it is useful for preventing the loss of unrouted messages and for detecting configuration errors in routing.
+Although this property does not prevent performance problems or degradation of the RabbitMQ cluster, it is useful for
+preventing the loss of unrouted messages and for detecting configuration errors in routing.
 
-When mandatory is active, under normal conditions (all routes exist), there is practically no impact. In anomalous situations, there will be additional return traffic for each unroutable message. This implies an extra load for both RabbitMQ (which must send the message back to the producer) and the sending application (which must process the returned message).
+When mandatory is active, under normal conditions (all routes exist), there is practically no impact. In anomalous
+situations, there will be additional return traffic for each unroutable message. This implies an extra load for both
+RabbitMQ (which must send the message back to the producer) and the sending application (which must process the returned
+message).
 
 ### Implementation
 
@@ -322,8 +336,10 @@ app:
       mandatory: true # enable mandatory property
 ```
 
-Now we configure the return handler to manage messages that could not be delivered correctly. By default, these messages are displayed in a log.
-To customize this behavior, a class that implements the `UnroutableMessageHandler` interface is created and registered as a Spring bean:
+Now we configure the return handler to manage messages that could not be delivered correctly. By default, these messages
+are displayed in a log.
+To customize this behavior, a class that implements the `UnroutableMessageHandler` interface is created and registered
+as a Spring bean:
 
 ```java
 package sample;
@@ -354,7 +370,7 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
                 + ", body=" + new String(returned.getBody(), StandardCharsets.UTF_8)
                 + ", properties=" + returned.getProperties()
         );
-        
+
         // Process the unroutable message
         return useCase.sendMessage(new String(returned.getBody(), StandardCharsets.UTF_8));
     }
@@ -421,7 +437,7 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
             // Use the DomainEvent class for domain events and the AsyncQuery class for asynchronous queries.
             Command<JsonNode> command = objectMapper.readValue(returned.getBody(), new TypeReference<>() {
             });
-            
+
             // Send the message to the queue
             return emitCommand(command.getName(), command.getCommandId(), command.getData())
                     .doOnError(e -> log.severe("Failed to send the returned message: " + e.getMessage()));
@@ -433,7 +449,8 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
 }
 ```
 
-In the RabbitMQ configuration class, we create the `UnroutableMessageProcessor` bean to register the unrouted message handler.
+In the RabbitMQ configuration class, we create the `UnroutableMessageProcessor` bean to register the unrouted message
+handler.
 
 ```java
 package sample;
@@ -509,9 +526,9 @@ public class RabbitMQConfig {
     @Bean
     UnroutableMessageProcessor registerUnroutableMessageHandler(UnroutableMessageNotifier unroutableMessageNotifier,
                                                                 ResendUnroutableMessageHandler handler) {
-      var factory = new UnroutableMessageProcessor();
-      unroutableMessageNotifier.listenToUnroutableMessages(handler);
-      return factory;
+        var factory = new UnroutableMessageProcessor();
+        unroutableMessageNotifier.listenToUnroutableMessages(handler);
+        return factory;
     }
 
 }
