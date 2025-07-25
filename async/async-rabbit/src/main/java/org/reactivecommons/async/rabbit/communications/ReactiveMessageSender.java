@@ -10,7 +10,6 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.SendOptions;
@@ -62,10 +61,6 @@ public class ReactiveMessageSender {
         this.topologyCreator = topologyCreator;
         this.isMandatory = isMandatory;
         this.unroutableMessageNotifier = unroutableMessageNotifier;
-
-        System.out.println("ReactiveMessageSender initialized with mandatory: " + isMandatory);
-        System.out.println("onReturnedCallback: " + unroutableMessageNotifier);
-
         initializeSenders();
     }
 
@@ -74,9 +69,7 @@ public class ReactiveMessageSender {
             final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
             sender.sendWithTypedPublishConfirms(messageSource, new SendOptions().trackReturned(isMandatory))
                     .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
-                        System.out.println("MANDATORY: " + isMandatory);
                         if (outboundMessageResult.isReturned()) {
-                            System.out.println("CALLBACK: " + unroutableMessageNotifier);
                             this.unroutableMessageNotifier.notifyUnroutableMessage(outboundMessageResult);
                         }
                         final Consumer<Boolean> ackNotifier =
@@ -119,12 +112,6 @@ public class ReactiveMessageSender {
                         Mono.empty() :
                         Mono.error(new SendFailureNoAckException("Event no ACK in communications"))
                 );
-    }
-
-    public Mono<Void> sendMessage(Object message, String exchange, String routingKey, Map<String, Object> headers) {
-        return sendNoConfirm(message, exchange, routingKey, headers, true)
-                .subscribeOn(Schedulers.boundedElastic())
-                .doOnError(e -> log.severe("Failed to send unroutable message: " + e.getMessage()));
     }
 
     private record AckNotifier(MonoSink<Void> monoSink) implements Consumer<Boolean> {

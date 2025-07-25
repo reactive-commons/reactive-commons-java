@@ -17,7 +17,7 @@ public class MyBrokerProvider implements BrokerProvider<MyBrokerAsyncProps> {
     private final DiscardProvider discardProvider;
 
     @Override
-    public MyBrokerAsyncProps getProps() {
+    public MyBrokerAsyncProps props() {
         return null;
     }
 

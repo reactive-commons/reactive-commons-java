@@ -9,7 +9,7 @@ import reactor.core.publisher.Mono;
 
 @SuppressWarnings("rawtypes")
 public interface BrokerProvider<T extends GenericAsyncProps> {
-    T getProps();
+    T props();
 
     DomainEventBus getDomainBus();
 

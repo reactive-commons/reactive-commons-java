@@ -1,8 +1,6 @@
 package org.reactivecommons.async.kafka;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -23,23 +21,19 @@ import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.boot.ssl.SslBundles;
 import reactor.core.publisher.Mono;
 
-@Getter
-@RequiredArgsConstructor
-public class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
-    private final String domain;
-    private final AsyncKafkaProps props;
-    private final ReactiveReplyRouter router;
-    private final KafkaJacksonMessageConverter converter;
-    private final MeterRegistry meterRegistry;
-    private final CustomReporter errorReporter;
-    private final KafkaReactiveHealthIndicator healthIndicator;
-    private final ReactiveMessageListener receiver;
-    private final ReactiveMessageSender sender;
-    private final DiscardNotifier discardNotifier;
-    private final TopologyCreator topologyCreator;
-    private final KafkaCustomizations customizations;
-    private final SslBundles sslBundles;
-
+public record KafkaBrokerProvider(String domain,
+                                  AsyncKafkaProps props,
+                                  ReactiveReplyRouter router,
+                                  KafkaJacksonMessageConverter converter,
+                                  MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter,
+                                  KafkaReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver,
+                                  ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier,
+                                  TopologyCreator topologyCreator,
+                                  KafkaCustomizations customizations,
+                                  SslBundles sslBundles) implements BrokerProvider<AsyncKafkaProps> {
     @Override
     public DomainEventBus getDomainBus() {
         return new KafkaDomainEventBus(sender);

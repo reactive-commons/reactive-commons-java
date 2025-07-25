@@ -1,8 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -28,20 +26,17 @@ import reactor.core.publisher.Mono;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
-@Getter
-@RequiredArgsConstructor
-public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
-    private final String domain;
-    private final AsyncProps props;
-    private final BrokerConfig config;
-    private final ReactiveReplyRouter router;
-    private final RabbitJacksonMessageConverter converter;
-    private final MeterRegistry meterRegistry;
-    private final CustomReporter errorReporter;
-    private final RabbitReactiveHealthIndicator healthIndicator;
-    private final ReactiveMessageListener receiver;
-    private final ReactiveMessageSender sender;
-    private final DiscardNotifier discardNotifier;
+public record RabbitMQBrokerProvider(String domain,
+                                     AsyncProps props,
+                                     BrokerConfig config,
+                                     ReactiveReplyRouter router,
+                                     RabbitJacksonMessageConverter converter,
+                                     MeterRegistry meterRegistry,
+                                     CustomReporter errorReporter,
+                                     RabbitReactiveHealthIndicator healthIndicator,
+                                     ReactiveMessageListener receiver,
+                                     ReactiveMessageSender sender,
+                                     DiscardNotifier discardNotifier) implements BrokerProvider<AsyncProps> {
 
     @Override
     public DomainEventBus getDomainBus() {

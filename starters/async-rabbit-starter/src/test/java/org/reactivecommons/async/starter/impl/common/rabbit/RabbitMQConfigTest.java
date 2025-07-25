@@ -5,10 +5,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
-import org.reactivecommons.async.rabbit.RabbitMQFactory;
 import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -22,6 +22,9 @@ import reactor.test.StepVerifier;
 import java.nio.charset.StandardCharsets;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,22 +66,19 @@ class RabbitMQConfigTest {
     void shouldHasManager() {
         assertThat(manager).isNotNull();
         assertThat(manager.getProviders()).isNotEmpty();
-        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("test-app");
+        assertThat(manager.getProviders().get("app").props().getAppName()).isEqualTo("test-app");
     }
 
     @Test
     void shouldProcessAndLogWhenMessageIsReturned() {
-        // Arrange
-        UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageHandler(unroutableMessageNotifier);
+        UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageProcessor(unroutableMessageNotifier);
         when(resultMock.getOutboundMessage()).thenReturn(outboundMessageMock);
         when(outboundMessageMock.getExchange()).thenReturn("test.exchange");
         when(outboundMessageMock.getRoutingKey()).thenReturn("test.key");
         when(outboundMessageMock.getBody()).thenReturn("test message".getBytes(StandardCharsets.UTF_8));
         when(outboundMessageMock.getProperties()).thenReturn(new AMQP.BasicProperties());
 
-        // Act & Assert
-        StepVerifier.create(handler.processMessage(resultMock))
-                .verifyComplete();
+        StepVerifier.create(handler.processMessage(resultMock)).verifyComplete();
 
         verify(resultMock).getOutboundMessage();
         verify(outboundMessageMock).getExchange();
@@ -88,8 +88,34 @@ class RabbitMQConfigTest {
     }
 
     @Test
-    void shouldCreateReactiveMQFactory() {
-        RabbitMQFactory factory = rabbitMQConfig.reactiveMQFactory(converter);
-        assertThat(factory).isNotNull();
+    void shouldCreateDefaultUnroutableMessageProcessorAndSubscribeToNotifier() {
+        doNothing().when(unroutableMessageNotifier).listenToUnroutableMessages(any(UnroutableMessageHandler.class));
+
+        var processor = rabbitMQConfig.defaultUnroutableMessageProcessor(unroutableMessageNotifier);
+
+        assertThat(processor).isNotNull();
+        verify(unroutableMessageNotifier).listenToUnroutableMessages(processor);
+    }
+
+    @Test
+    void shouldReturnDefaultUnroutableMessageNotifier() {
+        UnroutableMessageNotifier notifier = rabbitMQConfig.defaultUnroutableMessageNotifier();
+
+        assertThat(notifier).isNotNull();
+    }
+
+    @Test
+    void shouldSubscribeProcessorToNotifierWhenNotifierIsProvided() {
+        doNothing().when(unroutableMessageNotifier).listenToUnroutableMessages(any(UnroutableMessageProcessor.class));
+
+        var processor = rabbitMQConfig.defaultUnroutableMessageProcessor(unroutableMessageNotifier);
+
+        assertThat(processor).isNotNull();
+        verify(unroutableMessageNotifier).listenToUnroutableMessages(processor);
+    }
+
+    @Test
+    void shouldThrowNullPointerExceptionWhenNotifierIsNull() {
+        assertThrows(NullPointerException.class, () -> rabbitMQConfig.defaultUnroutableMessageProcessor(null));
     }
 }

@@ -27,8 +27,8 @@ import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
+@ExtendWith(MockitoExtension.class)
 class ReactiveMessageSenderTest {
 
     private ReactiveMessageSender messageSender;
@@ -83,19 +83,6 @@ class ReactiveMessageSenderTest {
 
         verify(unroutableMessageNotifier, timeout(1000).times(1))
                 .notifyUnroutableMessage(any(OutboundMessageResult.class));
-    }
-
-
-    @Test
-    void shouldSendMessageSuccessfully() {
-        Object message = new SomeClass("id", "name", new Date());
-        String exchange = "test.exchange";
-        String routingKey = "test.routingKey";
-        Map<String, Object> headers = new HashMap<>();
-
-        Mono<Void> result = messageSender.sendMessage(message, exchange, routingKey, headers);
-
-        StepVerifier.create(result).verifyComplete();
     }
 
     @Test
