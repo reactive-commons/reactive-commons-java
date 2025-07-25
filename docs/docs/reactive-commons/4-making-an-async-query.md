@@ -33,6 +33,8 @@ public interface DirectAsyncGateway {
     <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type); // Query with CloudEvent format
 
     <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain); // Query with CloudEvent format to specific domain
+
+    <T> Mono<Void> reply(T response, From from); // Reply to a query
 }
 ```
 

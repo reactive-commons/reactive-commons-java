@@ -307,7 +307,7 @@ Resultado:
 
 ### Ventajas
 
-- Detección temprana de errores de enrutamiento: Evita que mensajes críticos “desaparezcan” sin rastro lo que facilita 
+- Detección temprana de errores de enrutamiento: Evita que mensajes críticos “desaparezcan” sin rastro lo que facilita
   la identificación de configuraciones erróneas en bindings o patrones.
 - Integridad y fiabilidad: Garantiza que cada mensaje encuentre un consumidor o, en su defecto, regrese al productor
   para un manejo alternativo (colas DLQ, logs, base de datos).
@@ -320,8 +320,8 @@ Aunque esta propiedad no evita problemas de rendimiento o degradación del clús
 pérdida de mensajes no enrutados y para detectar errores de configuración en el enrutamiento.
 
 Cuando mandatory está activo, en condiciones normales (todas las rutas existen) no hay prácticamente impacto. En
-situaciones anómalas, habrá un tráfico adicional de retorno por cada mensaje no enrutable. Esto supone carga extra 
-tanto para RabbitMQ (que debe enviar de vuelta el mensaje al productor) como para la aplicación emisora (que debe 
+situaciones anómalas, habrá un tráfico adicional de retorno por cada mensaje no enrutable. Esto supone carga extra
+tanto para RabbitMQ (que debe enviar de vuelta el mensaje al productor) como para la aplicación emisora (que debe
 procesar el mensaje devuelto).
 
 ### Implementación
@@ -347,6 +347,7 @@ package sample;
 import co.com.mypackage.usecase.MyUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
@@ -362,7 +363,7 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
     private final MyUseCase useCase;
 
     @Override
-    public Mono<Void> processMessage(OutboundMessageResult result) {
+    public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
         var returned = result.getOutboundMessage();
         log.severe("Unroutable message: exchange=" + returned.getExchange()
                 + ", routingKey=" + returned.getRoutingKey()
@@ -376,26 +377,89 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
 }
 ```
 
-#### Reenviar mensajes no enrutados a una cola
+#### Enviar mensajes no enrutados a una cola
 
-Si queremos volver a enviar el mensaje a una cola es importante tener en cuenta que si la cola no existe el mensaje se
-perderá, por lo que antes de enviar el mensaje debemos asegurarnos de que la cola esté creada.
+Para enviar el mensaje no enrutado a una cola, utilizamos las anotaciones `@EnableDomainEventBus` para 
+[eventos de dominio](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event), y `@EnableDirectAsyncGateway` 
+para [comandos](/reactive-commons-java/docs/reactive-commons/sending-a-command) y 
+[consultas asíncronas](/reactive-commons-java/docs/reactive-commons/making-an-async-query), según corresponda.
 
-En la clase de configuración de RabbitMQ creamos el bean `ReactiveMessageSender` para obtener la conexión al
-broker y usamos las propiedades de conexión definidas a través del bean `AsyncRabbitPropsDomainProperties` para indicar
-a que broker nos conectamos:
+Es importante asegurarse de que la cola exista antes de enviar el mensaje, ya que, de lo contrario, este se perderá. 
+Por lo tanto, se recomienda verificar o crear la cola previamente para garantizar una entrega exitosa.
 
 ```java
 package sample;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import org.reactivecommons.async.rabbit.RabbitMQSetupUtils;
-import org.reactivecommons.async.rabbit.RabbitMQFactory;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
+import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
+import reactor.rabbitmq.OutboundMessageResult;
+
+@Component
+@EnableDirectAsyncGateway
+public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
+
+    private final ObjectMapper objectMapper;
+    private final String retryQueueName;
+    private final DirectAsyncGateway gateway;
+
+    public ResendUnroutableMessageHandler(
+            ObjectMapper objectMapper,
+            DirectAsyncGateway gateway,
+            @Value("${adapters.rabbitmq.retry-queue-name}") String retryQueueName) {
+        this.objectMapper = objectMapper;
+        this.retryQueueName = retryQueueName;
+        this.gateway = gateway;
+    }
+
+    public Mono<Void> emitCommand(String name, String commandId, Object data) {
+        return Mono.from(gateway.sendCommand(
+                // Connection with broker using the properties defined through the
+                // AsyncRabbitPropsDomainProperties bean with the "logs" domain
+                new Command<>(name, commandId, data), retryQueueName, "logs")
+        );
+    }
+
+    @Override
+    public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
+        OutboundMessage returned = result.getOutboundMessage();
+        try {
+            // The unroutable message is a command, so the message body is deserialized to the Command class.
+            // Use the DomainEvent class for domain events and the AsyncQuery class for asynchronous queries.
+            Command<JsonNode> command = objectMapper.readValue(returned.getBody(), new TypeReference<>() {
+            });
+            
+            // Send the message to the queue
+            return emitCommand(command.getName(), command.getCommandId(), command.getData())
+                    .doOnError(e -> log.severe("Failed to send the returned message: " + e.getMessage()));
+        } catch (Exception e) {
+            log.severe("Error deserializing the returned message: " + e.getMessage());
+            return Mono.empty();
+        }
+    }
+}
+```
+
+En la clase de configuración de RabbitMQ creamos el bean `UnroutableMessageProcessor` para registrar el handler de mensajes no enrutados.
+
+```java
+package sample;
+
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -411,7 +475,7 @@ public class RabbitMQConfig {
     private final Integer retryDelay;
 
     public RabbitMQConfig(@Qualifier("rabbit") RabbitMQConnectionProperties properties,
-                          @Qualifier("rabbitDual") RabbitMQConnectionProperties propertiesLogs,
+                          @Qualifier("rabbitLogs") RabbitMQConnectionProperties propertiesLogs,
                           @Value("${adapters.rabbitmq.withDLQRetry}") Boolean withDLQRetry,
                           @Value("${adapters.rabbitmq.maxRetries}") Integer maxRetries,
                           @Value("${adapters.rabbitmq.retryDelay}") Integer retryDelay) {
@@ -422,6 +486,7 @@ public class RabbitMQConfig {
         this.retryDelay = retryDelay;
     }
 
+    // This bean is used to create the RabbitMQ connection properties for the application
     @Bean
     @Primary
     public AsyncRabbitPropsDomainProperties customDomainProperties() {
@@ -456,64 +521,14 @@ public class RabbitMQConfig {
                 .build();
     }
 
-    // This bean is used to create the RabbitMQ connection and the message sender
+    // This bean is used to register the handler for unroutable messages
     @Bean
-    public ReactiveMessageSender reactiveMessageSender(ReactiveMQFactory providerFactory,
-                                                       AsyncRabbitPropsDomainProperties properties) {
-        return providerFactory.createMessageSenderFromProperties(properties.get("app"));
+    UnroutableMessageProcessor registerUnroutableMessageHandler(UnroutableMessageNotifier unroutableMessageNotifier,
+                                                                ResendUnroutableMessageHandler handler) {
+      var factory = new UnroutableMessageProcessor();
+      unroutableMessageNotifier.listenToUnroutableMessages(handler);
+      return factory;
     }
 
-}
-```
-
-Ahora, en el handler de mensajes no enrutados podemos enviar el mensaje a una cola específica:
-```java
-package sample;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.java.Log;
-import org.reactivecommons.api.domain.Command;
-import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
-import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
-import reactor.core.publisher.Mono;
-import reactor.rabbitmq.OutboundMessage;
-import reactor.rabbitmq.OutboundMessageResult;
-
-@Log
-@Component
-public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
-
-    private final ReactiveMessageSender sender;
-    private final ObjectMapper objectMapper;
-    private final String retryQueueName;
-
-    public ResendUnroutableMessageHandler(ReactiveMessageSender sender,
-                                          ObjectMapper objectMapper,
-                                          @Value("${adapters.rabbitmq.retry-queue-name}") String retryQueueName) {
-        this.sender = sender;
-        this.objectMapper = objectMapper;
-        this.retryQueueName = retryQueueName;
-    }
-
-    @Override
-    public Mono<Void> processMessage(OutboundMessageResult result) {
-        OutboundMessage returned = result.getOutboundMessage();
-        try {
-            // The message we get is of command type, so the message body is deserialized to the Command class.
-            // For domain events the DomainEvent class should be used and for asynchronous queries the AsyncQuery class.
-            Command<JsonNode> command = objectMapper.readValue(returned.getBody(), new TypeReference<>() {
-            });
-
-            // Send the message to the queue
-            return sender.sendMessage(command, returned.getExchange(), retryQueueName, returned.getProperties().getHeaders());
-        } catch (Exception e) {
-            log.severe("Error deserializing the returned message: " + e.getMessage());
-            return Mono.empty();
-        }
-    }
 }
 ```

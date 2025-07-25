@@ -25,9 +25,9 @@ Where name is the command name, commandId is an unique command identifier and da
 ```java
 public interface DirectAsyncGateway {
 
-    <T> Mono<Void> sendCommand(Command<T> command, String targetName);
+    <T> Mono<Void> sendCommand(Command<T> command, String targetName); 
 
-    <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis);
+    <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis);    
 
     <T> Mono<Void> sendCommand(Command<T> command, String targetName, String domain); // Send to specific domain
 
@@ -35,7 +35,11 @@ public interface DirectAsyncGateway {
 
     Mono<Void> sendCommand(CloudEvent command, String targetName); // Send with CloudEvent format
 
-    Mono<Void> sendCommand(CloudEvent command, String targetName, String domain); // Send with CloudEvent format to an specific domain
+    Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis); // Send with CloudEvent format and delay
+
+    Mono<Void> sendCommand(CloudEvent command, String targetName, String domain); // Send with CloudEvent format to specific domain
+    
+    Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis, String domain);
 }
 ```
 
@@ -44,7 +48,7 @@ You can send a CloudEvent or a Command\<T> to a target application. You also can
 
 ## Enabling autoconfiguration
 
-To send Commands you should enable the respecting spring boot autoconfiguration using the `@EnableDomainEventBus` annotation
+To send Commands you should enable the respecting spring boot autoconfiguration using the `@EnableDirectAsyncGateway` annotation
 For example:
 
 ```java
