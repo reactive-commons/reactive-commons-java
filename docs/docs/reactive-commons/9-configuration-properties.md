@@ -29,6 +29,7 @@ app:
       prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this settings acts per instance of your service
       useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
       enabled: true # if you want to disable this domain you can set it to false
+      mandatory: false # if you want to enable mandatory messages, you can set it to true, this will throw an exception if the message cannot be routed to any queue
       brokerType: "rabbitmq" # please don't change this value
       flux:
         maxConcurrency: 250 # max concurrency of listener flow
@@ -123,6 +124,7 @@ For example if you use the [Secrets Manager](https://github.com/bancolombia/secr
 the next code to load the properties from a secret:
 
 1. Create a class with the properties that you will load from the secret:
+
 ```java
 import lombok.Builder;
 import lombok.Data;
@@ -150,6 +152,7 @@ public class RabbitConnectionProperties {
     }
 }
 ```
+
 2. Use the `SecretsManager` to load the properties from the secret:
 
 ```java
@@ -270,3 +273,247 @@ public AsyncKafkaPropsDomain.KafkaSecretFiller customKafkaFiller() {
 
   </TabItem>
 </Tabs>
+
+## Propiedad mandatoy en RabbitMQ
+La propiedad mandatory es un parámetro de publicación de mensajes en RabbitMQ que determina el comportamiento cuando un
+mensaje no puede ser enrutado a ninguna cola. Esto puede ocurrir si no hay colas enlazadas al exchange o si la clave de
+enrutamiento no coincide con ninguna de las colas disponibles.
+
+Por defecto, esta opción está desactivada, pero si se activa (`mandatory = true`) funciona justo después de que el
+mensaje es publicado en un exchange, pero antes de que se enrute a una cola.
+
+Cuando se publica un mensaje con `mandatory = true`, RabbitMQ intentará enrutarlo desde el exchange hacia una o más
+colas. Si ninguna cola recibe el mensaje, entonces:
+
+- El mensaje no se pierde, pero no se entrega a ninguna cola.
+- RabbitMQ activa un evento basic.return en el canal del productor.
+- El productor debe tener un ReturnListener o un manejador equivalente para recibir y procesar el mensaje devuelto. Si
+  no se define uno el mensaje se pierde.
+
+#### Ejemplo
+
+Suponiendo que tenemos:
+
+- Un exchange tipo direct.
+- Una cola enlazada con la clave `orden.creada`.
+- Se publica un mensaje con clave `orden.cancelada` y `mandatory = true`.
+
+Resultado:
+
+- Si no hay ninguna cola enlazada con `orden.cancelada`, el mensaje no se enruta.
+- Como `mandatory = true`, RabbitMQ intenta devolverlo al productor.
+- Si se tiene un ReturnListener, se puede capturar y manejar ese mensaje, por ejemplo enviarlo a una cola de otro
+  consumidor, colas DLQ, guardarlo en un archivo logs o en una base de datos.
+
+### Ventajas
+
+- Detección temprana de errores de enrutamiento: Evita que mensajes críticos “desaparezcan” sin rastro lo que facilita 
+  la identificación de configuraciones erróneas en bindings o patrones.
+- Integridad y fiabilidad: Garantiza que cada mensaje encuentre un consumidor o, en su defecto, regrese al productor
+  para un manejo alternativo (colas DLQ, logs, base de datos).
+- Visibilidad operacional: Facilita métricas de “mensajes no enrutados” y alertas cuando el flujo de eventos no cumple
+  las rutas previstas.
+
+### Consideraciones
+
+Aunque esta propiedad no evita problemas de rendimiento o degradación del clúster RabbitMQ, sí es útil para evitar la
+pérdida de mensajes no enrutados y para detectar errores de configuración en el enrutamiento.
+
+Cuando mandatory está activo, en condiciones normales (todas las rutas existen) no hay prácticamente impacto. En
+situaciones anómalas, habrá un tráfico adicional de retorno por cada mensaje no enrutable. Esto supone carga extra 
+tanto para RabbitMQ (que debe enviar de vuelta el mensaje al productor) como para la aplicación emisora (que debe 
+procesar el mensaje devuelto).
+
+### Implementación
+
+Para habilitar la propiedad `mandatory` en Reactive Commons, puedes configurarla en el archivo `application.yaml` de tu
+proyecto:
+
+```yaml
+app:
+  async:
+    app: # this is the name of the default domain
+      mandatory: true # enable mandatory property
+```
+
+Ahora configuramos el handler de retorno para manejar los mensajes que no pudieron ser entregados correctamente, por
+defecto estos mensajes se muestran en un log.
+Para personalizar este comportamiento se crea una clase que implemente la interfaz `UnroutableMessageHandler` y se
+registra como un bean de Spring:
+
+```java
+package sample;
+
+import co.com.mypackage.usecase.MyUseCase;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.java.Log;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessageResult;
+
+import java.nio.charset.StandardCharsets;
+
+@Log
+@Component
+@RequiredArgsConstructor
+public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
+
+    private final MyUseCase useCase;
+
+    @Override
+    public Mono<Void> processMessage(OutboundMessageResult result) {
+        var returned = result.getOutboundMessage();
+        log.severe("Unroutable message: exchange=" + returned.getExchange()
+                + ", routingKey=" + returned.getRoutingKey()
+                + ", body=" + new String(returned.getBody(), StandardCharsets.UTF_8)
+                + ", properties=" + returned.getProperties()
+        );
+        
+        // Process the unroutable message
+        return useCase.sendMessage(new String(returned.getBody(), StandardCharsets.UTF_8));
+    }
+}
+```
+
+#### Reenviar mensajes no enrutados a una cola
+
+Si queremos volver a enviar el mensaje a una cola es importante tener en cuenta que si la cola no existe el mensaje se
+perderá, por lo que antes de enviar el mensaje debemos asegurarnos de que la cola esté creada.
+
+En la clase de configuración de RabbitMQ creamos el bean `ReactiveMessageSender` para obtener la conexión al
+broker y usamos las propiedades de conexión definidas a través del bean `AsyncRabbitPropsDomainProperties` para indicar
+a que broker nos conectamos:
+
+```java
+package sample;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.reactivecommons.async.rabbit.RabbitMQSetupUtils;
+import org.reactivecommons.async.rabbit.RabbitMQFactory;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Primary;
+
+@Configuration("rabbitMQConfiguration")
+public class RabbitMQConfig {
+
+    private final RabbitMQConnectionProperties properties;
+    private final RabbitMQConnectionProperties propertiesLogs;
+    private final Boolean withDLQRetry;
+    private final Integer maxRetries;
+    private final Integer retryDelay;
+
+    public RabbitMQConfig(@Qualifier("rabbit") RabbitMQConnectionProperties properties,
+                          @Qualifier("rabbitDual") RabbitMQConnectionProperties propertiesLogs,
+                          @Value("${adapters.rabbitmq.withDLQRetry}") Boolean withDLQRetry,
+                          @Value("${adapters.rabbitmq.maxRetries}") Integer maxRetries,
+                          @Value("${adapters.rabbitmq.retryDelay}") Integer retryDelay) {
+        this.properties = properties;
+        this.propertiesLogs = propertiesLogs;
+        this.withDLQRetry = withDLQRetry;
+        this.maxRetries = maxRetries;
+        this.retryDelay = retryDelay;
+    }
+
+    @Bean
+    @Primary
+    public AsyncRabbitPropsDomainProperties customDomainProperties() {
+        var propertiesApp = new RabbitProperties();
+        propertiesApp.setHost(properties.hostname());
+        propertiesApp.setPort(properties.port());
+        propertiesApp.setVirtualHost(properties.virtualhost());
+        propertiesApp.setUsername(properties.username());
+        propertiesApp.setPassword(properties.password());
+        propertiesApp.getSsl().setEnabled(properties.ssl());
+
+        var propertiesLogs = new RabbitProperties();
+        propertiesLogs.setHost(propertiesDual.hostname());
+        propertiesLogs.setPort(propertiesDual.port());
+        propertiesLogs.setVirtualHost(propertiesDual.virtualhost());
+        propertiesLogs.setUsername(propertiesDual.username());
+        propertiesLogs.setPassword(propertiesDual.password());
+        propertiesLogs.getSsl().setEnabled(propertiesDual.ssl());
+
+        return AsyncRabbitPropsDomainProperties.builder()
+                .withDomain("app", AsyncProps.builder()
+                        .connectionProperties(propertiesApp)
+                        .withDLQRetry(withDLQRetry)
+                        .maxRetries(maxRetries)
+                        .retryDelay(retryDelay)
+                        .mandatory(Boolean.TRUE)
+                        .build())
+                .withDomain("logs", AsyncProps.builder()
+                        .connectionProperties(propertiesLogs)
+                        .mandatory(Boolean.TRUE)
+                        .build())
+                .build();
+    }
+
+    // This bean is used to create the RabbitMQ connection and the message sender
+    @Bean
+    public ReactiveMessageSender reactiveMessageSender(ReactiveMQFactory providerFactory,
+                                                       AsyncRabbitPropsDomainProperties properties) {
+        return providerFactory.createMessageSenderFromProperties(properties.get("app"));
+    }
+
+}
+```
+
+Ahora, en el handler de mensajes no enrutados podemos enviar el mensaje a una cola específica:
+```java
+package sample;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
+import reactor.rabbitmq.OutboundMessageResult;
+
+@Log
+@Component
+public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
+
+    private final ReactiveMessageSender sender;
+    private final ObjectMapper objectMapper;
+    private final String retryQueueName;
+
+    public ResendUnroutableMessageHandler(ReactiveMessageSender sender,
+                                          ObjectMapper objectMapper,
+                                          @Value("${adapters.rabbitmq.retry-queue-name}") String retryQueueName) {
+        this.sender = sender;
+        this.objectMapper = objectMapper;
+        this.retryQueueName = retryQueueName;
+    }
+
+    @Override
+    public Mono<Void> processMessage(OutboundMessageResult result) {
+        OutboundMessage returned = result.getOutboundMessage();
+        try {
+            // The message we get is of command type, so the message body is deserialized to the Command class.
+            // For domain events the DomainEvent class should be used and for asynchronous queries the AsyncQuery class.
+            Command<JsonNode> command = objectMapper.readValue(returned.getBody(), new TypeReference<>() {
+            });
+
+            // Send the message to the queue
+            return sender.sendMessage(command, returned.getExchange(), retryQueueName, returned.getProperties().getHeaders());
+        } catch (Exception e) {
+            log.severe("Error deserializing the returned message: " + e.getMessage());
+            return Mono.empty();
+        }
+    }
+}
+```

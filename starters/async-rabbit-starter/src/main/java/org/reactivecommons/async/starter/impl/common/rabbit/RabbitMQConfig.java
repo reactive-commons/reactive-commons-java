@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
+import org.reactivecommons.async.rabbit.RabbitMQFactory;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.RabbitPropertiesAutoConfig;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
@@ -15,6 +17,10 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
+
+import java.nio.charset.StandardCharsets;
 
 @Log
 @Configuration
@@ -43,4 +49,23 @@ public class RabbitMQConfig {
         return supplier.get().convertValue(properties, RabbitProperties.class);
     }
 
+    @Bean
+    @ConditionalOnMissingBean(UnroutableMessageHandler.class)
+    public UnroutableMessageHandler defaultUnroutableMessageHandler() {
+        return (result -> {
+            System.out.println("MENSAJE DEVUELTO: " + result.isReturned());
+            OutboundMessage returned = result.getOutboundMessage();
+            log.severe("Unroutable message: exchange=" + returned.getExchange()
+                    + ", routingKey=" + returned.getRoutingKey()
+                    + ", body=" + new String(returned.getBody(), StandardCharsets.UTF_8)
+                    + ", properties=" + returned.getProperties()
+            );
+            return Mono.empty();
+        });
+    }
+
+    @Bean
+    RabbitMQFactory reactiveMQFactory(RabbitJacksonMessageConverter messageConverter) {
+        return new RabbitMQFactory(messageConverter);
+    }
 }

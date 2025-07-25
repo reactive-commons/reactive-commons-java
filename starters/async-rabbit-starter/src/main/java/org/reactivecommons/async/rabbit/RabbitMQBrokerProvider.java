@@ -46,7 +46,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public DomainEventBus getDomainBus() {
         final String exchangeName = props.getBrokerConfigProps().getDomainEventsExchangeName();
-        if (props.getCreateTopology()) {
+        if (Boolean.TRUE.equals(props.getCreateTopology())) {
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
         }
         return new RabbitDomainEventBus(sender, exchangeName, config);
@@ -55,7 +55,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public DirectAsyncGateway getDirectAsyncGateway() {
         String exchangeName = props.getBrokerConfigProps().getDirectMessagesExchangeName();
-        if (props.getCreateTopology()) {
+        if (Boolean.TRUE.equals(props.getCreateTopology())) {
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
         }
         listenReplies();

@@ -1,8 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -14,14 +12,19 @@ import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConv
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
+import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
 
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
 
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -38,18 +41,82 @@ class ReactiveMessageSenderTest {
     @Spy
     private final MessageConverter messageConverter = new RabbitJacksonMessageConverter(objectMapper);
 
+    @Mock
+    private final SendOptions sendOptions = new SendOptions();
+
+    @Mock
+    private UnroutableMessageHandler unroutableMessageHandler;
+
     @BeforeEach
-    public void init() {
-        when(sender.sendWithTypedPublishConfirms(any(Publisher.class))).then(invocation -> {
-            final Flux<ReactiveMessageSender.MyOutboundMessage> argument = invocation.getArgument(0);
+    void init() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<MyOutboundMessage> argument = invocation.getArgument(0);
             return argument
                     .map(myOutboundMessage -> new OutboundMessageResult<>(myOutboundMessage, true));
         });
-        when(sender.send(any(Publisher.class))).thenReturn(Mono.empty());
+        when(sender.send(any(Publisher.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            argument.subscribe(); // Suscribirse para inicializar el sink
+            return Mono.empty();
+        });
         String sourceApplication = "TestApp";
-        messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null);
+
+        messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null, false, unroutableMessageHandler);
     }
 
+    @Test
+    void shouldCallUnroutableMessageHandlerWhenMessageIsReturned() {
+        String sourceApplication = "TestApp";
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            Flux<MyOutboundMessage> argument = invocation.getArgument(0);
+            return argument.map(msg -> new OutboundMessageResult<>(msg, false, true));
+        });
+
+        messageSender = new ReactiveMessageSender(
+                sender, sourceApplication, messageConverter, null, true, unroutableMessageHandler
+        );
+        SomeClass messageContent = new SomeClass("id", "name", new Date());
+
+        messageSender.sendWithConfirm(messageContent, "exchange", "rkey", new HashMap<>(), true)
+                .subscribe();
+
+        verify(unroutableMessageHandler, timeout(1000).times(1))
+                .processMessage(any(OutboundMessageResult.class));
+    }
+
+
+    @Test
+    void shouldSendMessageSuccessfully() {
+        Object message = new SomeClass("id", "name", new Date());
+        String exchange = "test.exchange";
+        String routingKey = "test.routingKey";
+        Map<String, Object> headers = new HashMap<>();
+
+        Mono<Void> result = messageSender.sendMessage(message, exchange, routingKey, headers);
+
+        StepVerifier.create(result).verifyComplete();
+    }
+
+    @Test
+    void shouldSendBatchWithConfirmSuccessfully() {
+        Flux<SomeClass> messages = Flux.just(
+                new SomeClass("id1", "name1", new Date()),
+                new SomeClass("id2", "name2", new Date())
+        );
+        String exchange = "test.exchange";
+        String routingKey = "test.routingKey";
+        Map<String, Object> headers = new HashMap<>();
+
+        OutboundMessageResult<OutboundMessage> result1 = new OutboundMessageResult<>(null, true);
+        OutboundMessageResult<OutboundMessage> result2 = new OutboundMessageResult<>(null, true);
+
+        when(sender.sendWithPublishConfirms(any(Publisher.class)))
+                .thenReturn(Flux.just(result1, result2));
+
+        Flux<OutboundMessageResult> resultFlux = messageSender.sendWithConfirmBatch(messages, exchange, routingKey, headers, true);
+
+        StepVerifier.create(resultFlux).verifyComplete();
+    }
 
     @Test
     void sendWithConfirmEmptyNullMessage() {
@@ -66,12 +133,7 @@ class ReactiveMessageSenderTest {
         StepVerifier.create(voidMono).verifyComplete();
     }
 
-    @RequiredArgsConstructor
-    @Getter
-    private static class SomeClass {
-        private final String id;
-        private final String name;
-        private final Date date;
+    private record SomeClass(String id, String name, Date date) {
     }
 
 }

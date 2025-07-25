@@ -14,6 +14,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
@@ -93,10 +94,13 @@ public final class RabbitMQSetupUtils {
 
     public static ReactiveMessageSender createMessageSender(ConnectionFactoryProvider provider,
                                                             AsyncProps props,
-                                                            MessageConverter converter) {
+                                                            MessageConverter converter,
+                                                            UnroutableMessageHandler unroutableMessageHandler) {
         final Sender sender = RabbitFlux.createSender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
-        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender));
+        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender),
+                props.getMandatory(), unroutableMessageHandler
+        );
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
@@ -234,9 +238,8 @@ public final class RabbitMQSetupUtils {
     private static void logDetails(TrustManager[] managers) {
         var found = false;
         for (var trustManager : managers) {
-            if (trustManager instanceof X509TrustManager) {
+            if (trustManager instanceof X509TrustManager x509TrustManager) {
                 found = true;
-                var x509TrustManager = (X509TrustManager) trustManager;
                 log.info("Loaded " + x509TrustManager.getAcceptedIssuers().length + " accepted issuers for rabbitmq");
             }
         }

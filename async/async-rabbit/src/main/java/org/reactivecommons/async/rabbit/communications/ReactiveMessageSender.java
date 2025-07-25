@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.communications;
 
 import com.rabbitmq.client.AMQP;
 import lombok.Getter;
+import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
@@ -9,8 +10,10 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
+import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 
 import java.util.Date;
@@ -26,6 +29,7 @@ import java.util.function.Consumer;
 import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
+@Log
 public class ReactiveMessageSender {
     @Getter
     private final Sender sender;
@@ -33,6 +37,8 @@ public class ReactiveMessageSender {
     private final MessageConverter messageConverter;
     @Getter
     private final TopologyCreator topologyCreator;
+    private final boolean isMandatory;
+    private final UnroutableMessageHandler unroutableMessageHandler;
 
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
     private final CopyOnWriteArrayList<FluxSink<MyOutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
@@ -47,18 +53,32 @@ public class ReactiveMessageSender {
             13, r -> new Thread(r, "RMessageSender2-" + counter.getAndIncrement())
     );
 
-
     public ReactiveMessageSender(Sender sender, String sourceApplication,
-                                 MessageConverter messageConverter, TopologyCreator topologyCreator) {
+                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
+                                 boolean isMandatory, UnroutableMessageHandler unroutableMessageHandler) {
         this.sender = sender;
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
+        this.isMandatory = isMandatory && unroutableMessageHandler != null;
+        this.unroutableMessageHandler = unroutableMessageHandler;
 
+        System.out.println("ReactiveMessageSender initialized with mandatory: " + isMandatory);
+        System.out.println("onReturnedCallback: " + unroutableMessageHandler);
+
+        initializeSenders();
+    }
+
+    private void initializeSenders() {
         for (int i = 0; i < NUMBER_OF_SENDER_SUBSCRIPTIONS; ++i) {
             final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
-            sender.sendWithTypedPublishConfirms(messageSource)
+            sender.sendWithTypedPublishConfirms(messageSource, new SendOptions().trackReturned(isMandatory))
                     .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
+                        System.out.println("MANDATORY: " + isMandatory);
+                        if (outboundMessageResult.isReturned()) {
+                            System.out.println("CALLBACK: " + unroutableMessageHandler);
+                            this.unroutableMessageHandler.processMessage(outboundMessageResult);
+                        }
                         final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
                         executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
                     }).subscribe();
@@ -68,7 +88,6 @@ public class ReactiveMessageSender {
                 this.fluxSinkNoConfirm = fluxSink
         );
         sender.send(messageSourceNoConfirm).subscribe();
-
     }
 
     public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey,
@@ -101,12 +120,13 @@ public class ReactiveMessageSender {
                 );
     }
 
-    private static class AckNotifier implements Consumer<Boolean> {
-        private final MonoSink<Void> monoSink;
+    public Mono<Void> sendMessage(Object message, String exchange, String routingKey, Map<String, Object> headers) {
+        return sendNoConfirm(message, exchange, routingKey, headers, true)
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(e -> log.severe("Failed to send unroutable message: " + e.getMessage()));
+    }
 
-        public AckNotifier(MonoSink<Void> monoSink) {
-            this.monoSink = monoSink;
-        }
+    private record AckNotifier(MonoSink<Void> monoSink) implements Consumer<Boolean> {
 
         @Override
         public void accept(Boolean ack) {
@@ -115,21 +135,6 @@ public class ReactiveMessageSender {
             } else {
                 monoSink.error(new SendFailureNoAckException("No ACK when sending message"));
             }
-        }
-    }
-
-
-    @Getter
-    static class MyOutboundMessage extends OutboundMessage {
-
-        private final Consumer<Boolean> ackNotifier;
-
-        public MyOutboundMessage(
-                String exchange, String routingKey, AMQP.BasicProperties properties,
-                byte[] body, Consumer<Boolean> ackNotifier
-        ) {
-            super(exchange, routingKey, properties, body);
-            this.ackNotifier = ackNotifier;
         }
     }
 

@@ -29,7 +29,7 @@ public class RabbitMQDiscardProviderImpl implements DiscardProvider {
     private DiscardNotifier buildDiscardNotifier(boolean ignored) {
         RabbitProperties properties = props.getConnectionProperties();
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(properties);
-        ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter);
+        ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter, null);
         return RabbitMQSetupUtils.createDiscardNotifier(sender, props, config, converter);
     }
 }
