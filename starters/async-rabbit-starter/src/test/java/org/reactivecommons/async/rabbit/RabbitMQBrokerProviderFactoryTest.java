@@ -10,7 +10,7 @@ import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
-import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
@@ -34,14 +34,14 @@ class RabbitMQBrokerProviderFactoryTest {
     @Mock
     private CustomReporter errorReporter;
     @Mock
-    private UnroutableMessageHandler unroutableMessageHandler;
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     private BrokerProviderFactory<AsyncProps> providerFactory;
 
     @BeforeEach
     void setUp() {
         providerFactory = new RabbitMQBrokerProviderFactory(config, router, converter, meterRegistry, errorReporter,
-                RabbitMQDiscardProviderImpl::new, unroutableMessageHandler);
+                RabbitMQDiscardProviderImpl::new, unroutableMessageNotifier);
     }
 
     @Test

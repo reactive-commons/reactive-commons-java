@@ -19,7 +19,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
-import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
@@ -68,7 +68,7 @@ class RabbitDirectAsyncGatewayTest {
     @Mock
     private ReactiveMessageSender senderMock;
     @Mock
-    private UnroutableMessageHandler unroutableMessageHandler;
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     private RabbitDirectAsyncGateway asyncGateway;
@@ -208,7 +208,7 @@ class RabbitDirectAsyncGatewayTest {
 
     private ReactiveMessageSender getReactiveMessageSender() {
         Sender sender = new StubSender();
-        return new ReactiveMessageSender(sender, "sourceApplication", converter, null, true, unroutableMessageHandler);
+        return new ReactiveMessageSender(sender, "sourceApplication", converter, null, true, unroutableMessageNotifier);
     }
 
     private Flux<Command<DummyMessage>> createMessagesHot(int count) {

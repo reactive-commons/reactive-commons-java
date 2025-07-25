@@ -6,6 +6,7 @@ import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
 import org.reactivecommons.async.rabbit.RabbitMQFactory;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.RabbitPropertiesAutoConfig;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
@@ -51,8 +52,8 @@ public class RabbitMQConfig {
 
     @Bean
     @ConditionalOnMissingBean(UnroutableMessageHandler.class)
-    public UnroutableMessageHandler defaultUnroutableMessageHandler() {
-        return (result -> {
+    public UnroutableMessageHandler defaultUnroutableMessageHandler(UnroutableMessageNotifier notifier) {
+        UnroutableMessageHandler handler = (result -> {
             System.out.println("MENSAJE DEVUELTO: " + result.isReturned());
             OutboundMessage returned = result.getOutboundMessage();
             log.severe("Unroutable message: exchange=" + returned.getExchange()
@@ -62,6 +63,14 @@ public class RabbitMQConfig {
             );
             return Mono.empty();
         });
+        notifier.listenToUnroutableMessages(handler);
+        return handler;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(UnroutableMessageNotifier.class)
+    public UnroutableMessageNotifier defaultUnroutableMessageNotifier() {
+        return new UnroutableMessageNotifier();
     }
 
     @Bean

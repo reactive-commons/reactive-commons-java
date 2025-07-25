@@ -8,6 +8,7 @@ import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
 import org.reactivecommons.async.rabbit.RabbitMQFactory;
 import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -43,6 +44,8 @@ class RabbitMQConfigTest {
 
     @Mock
     private MyOutboundMessage outboundMessageMock;
+    @Mock
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     private RabbitMQConfig rabbitMQConfig;
 
@@ -66,7 +69,7 @@ class RabbitMQConfigTest {
     @Test
     void shouldProcessAndLogWhenMessageIsReturned() {
         // Arrange
-        UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageHandler();
+        UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageHandler(unroutableMessageNotifier);
         when(resultMock.getOutboundMessage()).thenReturn(outboundMessageMock);
         when(outboundMessageMock.getExchange()).thenReturn("test.exchange");
         when(outboundMessageMock.getRoutingKey()).thenReturn("test.key");

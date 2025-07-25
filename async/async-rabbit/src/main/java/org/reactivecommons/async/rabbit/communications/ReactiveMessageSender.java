@@ -38,7 +38,7 @@ public class ReactiveMessageSender {
     @Getter
     private final TopologyCreator topologyCreator;
     private final boolean isMandatory;
-    private final UnroutableMessageHandler unroutableMessageHandler;
+    private final UnroutableMessageNotifier unroutableMessageNotifier;
 
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
     private final CopyOnWriteArrayList<FluxSink<MyOutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
@@ -55,16 +55,16 @@ public class ReactiveMessageSender {
 
     public ReactiveMessageSender(Sender sender, String sourceApplication,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 boolean isMandatory, UnroutableMessageHandler unroutableMessageHandler) {
+                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier) {
         this.sender = sender;
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
-        this.isMandatory = isMandatory && unroutableMessageHandler != null;
-        this.unroutableMessageHandler = unroutableMessageHandler;
+        this.isMandatory = isMandatory;
+        this.unroutableMessageNotifier = unroutableMessageNotifier;
 
         System.out.println("ReactiveMessageSender initialized with mandatory: " + isMandatory);
-        System.out.println("onReturnedCallback: " + unroutableMessageHandler);
+        System.out.println("onReturnedCallback: " + unroutableMessageNotifier);
 
         initializeSenders();
     }
@@ -76,10 +76,11 @@ public class ReactiveMessageSender {
                     .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
                         System.out.println("MANDATORY: " + isMandatory);
                         if (outboundMessageResult.isReturned()) {
-                            System.out.println("CALLBACK: " + unroutableMessageHandler);
-                            this.unroutableMessageHandler.processMessage(outboundMessageResult);
+                            System.out.println("CALLBACK: " + unroutableMessageNotifier);
+                            this.unroutableMessageNotifier.notifyUnroutableMessage(outboundMessageResult);
                         }
-                        final Consumer<Boolean> ackNotifier = outboundMessageResult.getOutboundMessage().getAckNotifier();
+                        final Consumer<Boolean> ackNotifier =
+                                outboundMessageResult.getOutboundMessage().getAckNotifier();
                         executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
                     }).subscribe();
         }

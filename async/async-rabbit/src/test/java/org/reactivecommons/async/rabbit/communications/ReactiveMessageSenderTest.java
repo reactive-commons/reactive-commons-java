@@ -45,7 +45,7 @@ class ReactiveMessageSenderTest {
     private final SendOptions sendOptions = new SendOptions();
 
     @Mock
-    private UnroutableMessageHandler unroutableMessageHandler;
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     @BeforeEach
     void init() {
@@ -61,7 +61,8 @@ class ReactiveMessageSenderTest {
         });
         String sourceApplication = "TestApp";
 
-        messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null, false, unroutableMessageHandler);
+        messageSender = new ReactiveMessageSender(sender, sourceApplication, messageConverter, null, false,
+                unroutableMessageNotifier);
     }
 
     @Test
@@ -73,15 +74,15 @@ class ReactiveMessageSenderTest {
         });
 
         messageSender = new ReactiveMessageSender(
-                sender, sourceApplication, messageConverter, null, true, unroutableMessageHandler
+                sender, sourceApplication, messageConverter, null, true, unroutableMessageNotifier
         );
         SomeClass messageContent = new SomeClass("id", "name", new Date());
 
         messageSender.sendWithConfirm(messageContent, "exchange", "rkey", new HashMap<>(), true)
                 .subscribe();
 
-        verify(unroutableMessageHandler, timeout(1000).times(1))
-                .processMessage(any(OutboundMessageResult.class));
+        verify(unroutableMessageNotifier, timeout(1000).times(1))
+                .notifyUnroutableMessage(any(OutboundMessageResult.class));
     }
 
 
@@ -113,7 +114,8 @@ class ReactiveMessageSenderTest {
         when(sender.sendWithPublishConfirms(any(Publisher.class)))
                 .thenReturn(Flux.just(result1, result2));
 
-        Flux<OutboundMessageResult> resultFlux = messageSender.sendWithConfirmBatch(messages, exchange, routingKey, headers, true);
+        Flux<OutboundMessageResult> resultFlux = messageSender.sendWithConfirmBatch(messages, exchange, routingKey,
+                headers, true);
 
         StepVerifier.create(resultFlux).verifyComplete();
     }

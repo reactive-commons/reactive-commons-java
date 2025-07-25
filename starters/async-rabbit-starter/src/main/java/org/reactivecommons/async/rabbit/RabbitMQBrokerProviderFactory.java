@@ -8,7 +8,7 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
-import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
@@ -29,7 +29,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
     private final MeterRegistry meterRegistry;
     private final CustomReporter errorReporter;
     private final RabbitMQDiscardProviderFactory discardProvider;
-    private final UnroutableMessageHandler unroutableMessageHandler;
+    private final UnroutableMessageNotifier unroutableMessageNotifier;
 
     @Override
     public String getBrokerType() {
@@ -47,7 +47,8 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(properties);
         RabbitReactiveHealthIndicator healthIndicator =
                 new RabbitReactiveHealthIndicator(domain, provider.getConnectionFactory());
-        ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter, unroutableMessageHandler);
+        ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter,
+                unroutableMessageNotifier);
         ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props);
         DiscardNotifier discardNotifier;
         if (props.isUseDiscardNotifierPerDomain()) {
