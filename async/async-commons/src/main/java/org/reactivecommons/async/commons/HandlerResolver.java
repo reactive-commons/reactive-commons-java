@@ -15,6 +15,7 @@ import java.util.function.Function;
 
 @Log
 @RequiredArgsConstructor
+@SuppressWarnings("unchecked")
 public class HandlerResolver {
 
     private final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers;
@@ -37,19 +38,16 @@ public class HandlerResolver {
         return !queryHandlers.isEmpty();
     }
 
-    @SuppressWarnings("unchecked")
     public <T, M> RegisteredQueryHandler<T, M> getQueryHandler(String path) {
         return (RegisteredQueryHandler<T, M>) queryHandlers
                 .computeIfAbsent(path, getMatchHandler(queryHandlers));
     }
 
-    @SuppressWarnings("unchecked")
     public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
         return (RegisteredCommandHandler<T, D>) commandHandlers
                 .computeIfAbsent(path, getMatchHandler(commandHandlers));
     }
 
-    @SuppressWarnings("unchecked")
     public <T, D> RegisteredEventListener<T, D> getEventListener(String path) {
         if (eventListeners.containsKey(path)) {
             return (RegisteredEventListener<T, D>) eventListeners.get(path);
@@ -81,15 +79,15 @@ public class HandlerResolver {
     }
 
     public void addEventListener(RegisteredEventListener<?, ?> listener) {
-        eventListeners.put(listener.getPath(), listener);
+        eventListeners.put(listener.path(), listener);
     }
 
     public void addQueryHandler(RegisteredQueryHandler<?, ?> handler) {
-        if (handler.getPath().contains("*") || handler.getPath().contains("#")) {
+        if (handler.path().contains("*") || handler.path().contains("#")) {
             throw new RuntimeException("avoid * or # in dynamic handlers, make sure you have no conflicts with cached" +
                     " patterns");
         }
-        queryHandlers.put(handler.getPath(), handler);
+        queryHandlers.put(handler.path(), handler);
     }
 
     private <T> Function<String, T> getMatchHandler(Map<String, T> handlers) {

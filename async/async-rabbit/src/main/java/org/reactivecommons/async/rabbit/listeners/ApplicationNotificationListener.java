@@ -58,7 +58,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
 
         final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getNotificationListeners())
                 .flatMap(listener -> creator.bind(
-                        binding(exchangeName, listener.getPath(), queueName))
+                        binding(exchangeName, listener.path(), queueName))
                 );
 
         if (createTopology) {
@@ -75,7 +75,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
         final RegisteredEventListener<Object, Object> eventListener = resolver.getNotificationListener(executorPath);
 
         Function<Message, Object> converter = resolveConverter(eventListener);
-        final EventExecutor<Object> executor = new EventExecutor<>(eventListener.getHandler(), converter);
+        final EventExecutor<Object> executor = new EventExecutor<>(eventListener.handler(), converter);
 
         return message -> executor.execute(message).cast(Object.class);
     }
@@ -91,11 +91,11 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     }
 
     private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
-        if (registeredEventListener.getHandler() instanceof DomainEventHandler) {
-            final Class<T> eventClass = registeredEventListener.getInputClass();
+        if (registeredEventListener.handler() instanceof DomainEventHandler) {
+            final Class<T> eventClass = registeredEventListener.inputClass();
             return msj -> messageConverter.readDomainEvent(msj, eventClass);
         }
-        if (registeredEventListener.getHandler() instanceof CloudEventHandler) {
+        if (registeredEventListener.handler() instanceof CloudEventHandler) {
             return messageConverter::readCloudEvent;
         }
         throw new RuntimeException("Unknown handler type");

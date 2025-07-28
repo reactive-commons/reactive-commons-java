@@ -29,7 +29,7 @@ public final class HandlerResolverBuilder {
                         .getOrDefault(domain, List.of())
                         .stream())
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
 
         final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
@@ -39,7 +39,7 @@ public final class HandlerResolverBuilder {
                         .getOrDefault(domain, List.of())
                         .stream())
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
 
         final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
@@ -49,7 +49,7 @@ public final class HandlerResolverBuilder {
                         .getOrDefault(domain, List.of())
                         .stream())
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
 
         final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain,
@@ -81,7 +81,7 @@ public final class HandlerResolverBuilder {
                                 .stream(),
                         getDynamics(domain, r)))
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
     }
 
@@ -100,7 +100,7 @@ public final class HandlerResolverBuilder {
                     return Stream.empty();
                 })
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
     }
 }

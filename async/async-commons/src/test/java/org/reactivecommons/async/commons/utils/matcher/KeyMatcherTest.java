@@ -15,7 +15,7 @@ class KeyMatcherTest {
     private Set<String> listeners;
 
     @BeforeEach
-    public void init() {
+    void init() {
         keyMatcher = new KeyMatcher();
         listeners = new HashSet<>();
         listeners.add("A.*");

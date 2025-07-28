@@ -1,7 +1,7 @@
 package org.reactivecommons.async.starter.senders;
 
 import io.cloudevents.CloudEvent;
-import lombok.AllArgsConstructor;
+import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -12,7 +12,7 @@ import java.util.concurrent.ConcurrentMap;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class GenericDirectAsyncGateway implements DirectAsyncGateway {
     private final ConcurrentMap<String, DirectAsyncGateway> directAsyncGateways;
 

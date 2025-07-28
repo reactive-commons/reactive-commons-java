@@ -56,7 +56,7 @@ class HandlerResolverTest {
         // Act
         RegisteredEventListener<Object, Object> eventListener = resolver.getEventListener("some.sample");
         // Assert
-        Assertions.assertThat(eventListener.getPath()).isEqualTo("some.*");
+        Assertions.assertThat(eventListener.path()).isEqualTo("some.*");
     }
 
     @Test
@@ -75,7 +75,7 @@ class HandlerResolverTest {
         // Act
         RegisteredEventListener<Object, Object> eventListener = resolver.getEventListener("event.name");
         // Assert
-        Assertions.assertThat(eventListener.getPath()).isEqualTo("event.name");
+        Assertions.assertThat(eventListener.path()).isEqualTo("event.name");
     }
 
     @Test

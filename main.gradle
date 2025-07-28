@@ -54,6 +54,7 @@ subprojects {
 
     dependencies {
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         testImplementation 'io.projectreactor:reactor-test'
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
@@ -82,7 +83,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.4.4'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.4'
         }
     }
 

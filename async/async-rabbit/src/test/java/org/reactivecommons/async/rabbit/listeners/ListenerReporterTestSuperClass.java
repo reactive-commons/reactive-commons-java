@@ -40,7 +40,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.function.Function.identity;
@@ -73,7 +72,7 @@ public abstract class ListenerReporterTestSuperClass {
     private GenericMessageListener messageListener;
 
     @BeforeEach
-    public void init() {
+    void init() {
         Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
         Mockito.when(topologyCreator.declareDLQ
@@ -95,8 +94,7 @@ public abstract class ListenerReporterTestSuperClass {
 
         messageListener = createMessageListener(handlerResolver);
 
-        Flux<AcknowledgableDelivery> messageFlux = source;
-        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(messageFlux);
+        when(receiver.consumeManualAck(Mockito.anyString(), any(ConsumeOptions.class))).thenReturn(source);
 
         messageListener.startListener();
 
@@ -139,7 +137,7 @@ public abstract class ListenerReporterTestSuperClass {
             );
             final Delivery delivery = new Delivery(envelope, props, data.getBytes());
             return new AcknowledgableDelivery(delivery, new ChannelDummy(), null);
-        }).collect(Collectors.toList());
+        }).toList();
 
         return Flux.fromIterable(new ArrayList<>(list));
     }
@@ -156,18 +154,18 @@ public abstract class ListenerReporterTestSuperClass {
                     registry.getDomainEventListeners().get("domain").stream());
         }
         final Map<String, RegisteredEventListener<?, ?>> eventHandlers = listenerStream
-                .collect(toMap(RegisteredEventListener::getPath, identity()));
+                .collect(toMap(RegisteredEventListener::path, identity()));
         final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners()
-                .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+                .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::path, identity()));
         final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener()
                 .get(DEFAULT_DOMAIN)
-                .stream().collect(toMap(RegisteredEventListener::getPath, identity()));
+                .stream().collect(toMap(RegisteredEventListener::path, identity()));
         final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().get(DEFAULT_DOMAIN)
                 .stream()
-                .collect(toMap(RegisteredQueryHandler::getPath, identity()));
+                .collect(toMap(RegisteredQueryHandler::path, identity()));
         final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
                 .get(DEFAULT_DOMAIN)
-                .stream().collect(toMap(RegisteredCommandHandler::getPath, identity()));
+                .stream().collect(toMap(RegisteredCommandHandler::path, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),
