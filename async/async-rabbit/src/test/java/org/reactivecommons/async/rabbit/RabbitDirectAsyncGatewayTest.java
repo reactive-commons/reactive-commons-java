@@ -19,6 +19,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
@@ -26,6 +27,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
+import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
 
@@ -36,7 +38,6 @@ import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeoutException;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -59,11 +60,15 @@ class RabbitDirectAsyncGatewayTest {
 
     private final BrokerConfig config = new BrokerConfig();
     private final Semaphore semaphore = new Semaphore(0);
-    private final MessageConverter converter = new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
+    private final MessageConverter converter = new RabbitJacksonMessageConverter(
+            new DefaultObjectMapperSupplier().get()
+    );
     @Mock
     private ReactiveReplyRouter router;
     @Mock
     private ReactiveMessageSender senderMock;
+    @Mock
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     private RabbitDirectAsyncGateway asyncGateway;
@@ -101,6 +106,7 @@ class RabbitDirectAsyncGatewayTest {
                 messages.flatMap(dummyMessageCommand ->
                         asyncGateway.sendCommand(dummyMessageCommand, "testTarget")
                                 .doOnSuccess(aVoid -> semaphore.release())
+                                .doOnError(Throwable::printStackTrace)
                 );
 
         final long init = System.currentTimeMillis();
@@ -137,7 +143,7 @@ class RabbitDirectAsyncGatewayTest {
                 .sendNoConfirm(eq(response), eq("globalReply"), eq("replyId"),
                         headersCaptor.capture(), anyBoolean()
                 );
-        assertThat(headersCaptor.getValue().get(CORRELATION_ID)).isEqualTo("correlationId");
+        assertThat(headersCaptor.getValue()).containsEntry(CORRELATION_ID, "correlationId");
     }
 
     @Test
@@ -156,8 +162,9 @@ class RabbitDirectAsyncGatewayTest {
         ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
         verify(senderMock, times(1))
                 .sendNoConfirm(eq(null), eq("globalReply"), eq("replyId"), headersCaptor.capture(), anyBoolean());
-        assertThat(headersCaptor.getValue().get(CORRELATION_ID)).isEqualTo("correlationId");
-        assertThat(headersCaptor.getValue().get(COMPLETION_ONLY_SIGNAL)).isEqualTo(Boolean.TRUE.toString());
+        assertThat(headersCaptor.getValue())
+                .containsEntry(CORRELATION_ID, "correlationId")
+                .containsEntry(COMPLETION_ONLY_SIGNAL, Boolean.TRUE.toString());
     }
 
     @Test
@@ -180,8 +187,8 @@ class RabbitDirectAsyncGatewayTest {
         verify(senderMock, times(1))
                 .sendNoConfirm(eq(query), eq("exchange"), eq("app-target.query"), headersCaptor.capture(),
                         anyBoolean());
-        assertThat(headersCaptor.getValue().get(REPLY_ID).toString().length()).isEqualTo(32);
-        assertThat(headersCaptor.getValue().get(CORRELATION_ID).toString().length()).isEqualTo(32);
+        assertThat(headersCaptor.getValue().get(REPLY_ID).toString()).hasSize(32);
+        assertThat(headersCaptor.getValue().get(CORRELATION_ID).toString()).hasSize(32);
     }
 
     private void senderMock() {
@@ -201,19 +208,25 @@ class RabbitDirectAsyncGatewayTest {
 
     private ReactiveMessageSender getReactiveMessageSender() {
         Sender sender = new StubSender();
-        return new ReactiveMessageSender(sender, "sourceApplication", converter, null);
+        return new ReactiveMessageSender(sender, "sourceApplication", converter, null, true, unroutableMessageNotifier);
     }
 
     private Flux<Command<DummyMessage>> createMessagesHot(int count) {
         final List<Command<DummyMessage>> commands = IntStream.range(0, count).mapToObj(value -> new Command<>("app" +
-                ".command.test", UUID.randomUUID().toString(), new DummyMessage())).collect(Collectors.toList());
+                ".command.test", UUID.randomUUID().toString(), new DummyMessage())).toList();
         return Flux.fromIterable(commands);
     }
 
     static class StubSender extends Sender {
 
         @Override
-        public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(Publisher<OMSG> messages) {
+        public Mono<Void> send(Publisher<OutboundMessage> messages) {
+            return Flux.from(messages).then();
+        }
+
+        @Override
+        public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(
+                Publisher<OMSG> messages, SendOptions options) {
             return Flux.from(messages).map(omsg -> new OutboundMessageResult<>(omsg, true));
         }
 

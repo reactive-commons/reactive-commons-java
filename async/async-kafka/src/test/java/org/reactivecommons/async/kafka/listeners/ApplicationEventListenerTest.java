@@ -63,8 +63,8 @@ class ApplicationEventListenerTest {
         DomainEventHandler domainEventHandler = mock(DomainEventHandler.class);
         when(domainEventHandler.handle(event)).thenReturn(Mono.just("Handled"));
         RegisteredEventListener<Object, Object> registeredEventListenerMock = mock(RegisteredEventListener.class);
-        when(registeredEventListenerMock.getHandler()).thenReturn(domainEventHandler);
-        when(registeredEventListenerMock.getInputClass()).thenReturn(Object.class);
+        when(registeredEventListenerMock.handler()).thenReturn(domainEventHandler);
+        when(registeredEventListenerMock.inputClass()).thenReturn(Object.class);
         when(resolver.getEventListener(anyString())).thenReturn(registeredEventListenerMock);
         when(messageConverter.readDomainEvent(any(Message.class), any(Class.class))).thenReturn(event);
 
@@ -84,7 +84,7 @@ class ApplicationEventListenerTest {
         EventHandler domainEventHandler = mock(CloudEventHandler.class);
         when(domainEventHandler.handle(event)).thenReturn(Mono.empty());
         RegisteredEventListener<Object, Object> registeredEventListenerMock = mock(RegisteredEventListener.class);
-        when(registeredEventListenerMock.getHandler()).thenReturn(domainEventHandler);
+        when(registeredEventListenerMock.handler()).thenReturn(domainEventHandler);
         when(resolver.getEventListener(anyString())).thenReturn(registeredEventListenerMock);
         when(messageConverter.readCloudEvent(any(Message.class))).thenReturn(event);
 

@@ -20,7 +20,8 @@ import static reactor.core.publisher.Mono.error;
 import static reactor.core.publisher.Mono.just;
 
 @ExtendWith(MockitoExtension.class)
-public class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass {
+@SuppressWarnings("unchecked")
+class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass {
 
     private final DomainEvent<DummyMessage> event1 = new DomainEvent<>(
             "app.event.test", UUID.randomUUID().toString(), new DummyMessage()
@@ -30,7 +31,7 @@ public class ApplicationNotificationListenerTest extends ListenerReporterTestSup
     );
 
     @BeforeEach
-    public void initCreator() {
+    void initCreator() {
         Mockito.when(topologyCreator.declare(any(QueueSpecification.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
     }
 

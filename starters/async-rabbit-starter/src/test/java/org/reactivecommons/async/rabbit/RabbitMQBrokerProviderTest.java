@@ -75,7 +75,7 @@ class RabbitMQBrokerProviderTest {
 
 
     @BeforeEach
-    public void init() {
+    void init() {
         IBrokerConfigProps configProps = new BrokerConfigProps(props);
         props.setBrokerConfigProps(configProps);
         props.setAppName("test");
@@ -201,7 +201,7 @@ class RabbitMQBrokerProviderTest {
         Mono<RCHealth> flow = brokerProvider.healthCheck();
         // Assert
         StepVerifier.create(flow)
-                .expectNextMatches(health -> health.getStatus().equals(RCHealth.Status.UP))
+                .expectNextMatches(health -> health.status().equals(RCHealth.Status.UP))
                 .verifyComplete();
     }
 }

@@ -71,7 +71,7 @@ class KafkaBrokerProviderTest {
 
 
     @BeforeEach
-    public void init() {
+    void init() {
         props.setAppName("test");
         brokerProvider = new KafkaBrokerProvider(DEFAULT_DOMAIN,
                 props,
@@ -141,7 +141,7 @@ class KafkaBrokerProviderTest {
         Mono<RCHealth> flow = brokerProvider.healthCheck();
         // Assert
         StepVerifier.create(flow)
-                .expectNextMatches(health -> health.getStatus().equals(RCHealth.Status.UP))
+                .expectNextMatches(health -> health.status().equals(RCHealth.Status.UP))
                 .verifyComplete();
     }
 }

@@ -25,7 +25,7 @@ const ThemeImage = ({ scenario }) => {
   const Svg = scenarios[scenario][colorMode];
 
   return (
-    <Svg role="img" width="100%" height=""/>
+    <Svg role="img" width="100%" height="100%"/>
   );
 };
 

@@ -41,6 +41,6 @@ class KafkaConfigTest {
         // Assert
         assertThat(manager).isNotNull();
         assertThat(manager.getProviders()).isNotEmpty();
-        assertThat(manager.getProviders().get("app").getProps().getAppName()).isEqualTo("async-kafka-starter");
+        assertThat(manager.getProviders().get("app").props().getAppName()).isEqualTo("async-kafka-starter");
     }
 }

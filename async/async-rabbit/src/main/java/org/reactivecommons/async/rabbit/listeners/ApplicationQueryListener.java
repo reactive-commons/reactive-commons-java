@@ -69,8 +69,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
             return message ->
                     Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
         }
-        Function<Message, Object> messageConverter = resolveConverter(handler.getQueryClass());
-        final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.getHandler(), messageConverter);
+        Function<Message, Object> messageConverter = resolveConverter(handler.queryClass());
+        final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.handler(), messageConverter);
         return executor::execute;
     }
 

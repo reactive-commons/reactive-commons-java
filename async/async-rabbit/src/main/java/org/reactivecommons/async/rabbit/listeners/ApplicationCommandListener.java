@@ -116,9 +116,9 @@ public class ApplicationCommandListener extends GenericMessageListener {
 
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-        final RegisteredCommandHandler<Object, Object> handler = resolver.getCommandHandler(executorPath);
-        Function<Message, Object> converter = resolveConverter(handler);
-        final CommandExecutor<Object> executor = new CommandExecutor<>(handler.getHandler(), converter);
+        final RegisteredCommandHandler<Object, Object> commandHandler = resolver.getCommandHandler(executorPath);
+        Function<Message, Object> converter = resolveConverter(commandHandler);
+        final CommandExecutor<Object> executor = new CommandExecutor<>(commandHandler.handler(), converter);
         return msj -> executor.execute(msj).cast(Object.class);
     }
 
@@ -137,10 +137,10 @@ public class ApplicationCommandListener extends GenericMessageListener {
     }
 
     private <T, D> Function<Message, Object> resolveConverter(RegisteredCommandHandler<T, D> registeredCommandHandler) {
-        if (registeredCommandHandler.getHandler() instanceof DomainCommandHandler) {
-            final Class<T> commandClass = registeredCommandHandler.getInputClass();
+        if (registeredCommandHandler.handler() instanceof DomainCommandHandler) {
+            final Class<T> commandClass = registeredCommandHandler.inputClass();
             return msj -> messageConverter.readCommand(msj, commandClass);
-        } else if (registeredCommandHandler.getHandler() instanceof CloudCommandHandler) {
+        } else if (registeredCommandHandler.handler() instanceof CloudCommandHandler) {
             return messageConverter::readCloudEvent;
         }
         throw new RuntimeException("Unknown handler type");

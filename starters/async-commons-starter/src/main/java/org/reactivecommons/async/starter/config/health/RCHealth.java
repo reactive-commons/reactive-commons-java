@@ -1,19 +1,12 @@
 package org.reactivecommons.async.starter.config.health;
 
 import lombok.Builder;
-import lombok.Getter;
-import lombok.RequiredArgsConstructor;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@Getter
 @Builder
-@RequiredArgsConstructor
-public class RCHealth {
-    private final Status status;
-    private final Map<String, Object> details;
-
+public record RCHealth(Status status, Map<String, Object> details) {
     public enum Status {
         UP,
         DOWN

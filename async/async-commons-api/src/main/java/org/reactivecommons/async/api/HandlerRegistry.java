@@ -23,6 +23,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PACKAGE)
+@SuppressWarnings({"unchecked", "unused"})
 public final class HandlerRegistry {
     public static final String DEFAULT_DOMAIN = "app";
     private final RegisteredDomainHandlers<RegisteredEventListener<?, ?>> domainEventListeners =

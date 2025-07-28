@@ -41,9 +41,9 @@ class KafkaReactiveHealthIndicatorTest {
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
-                    assertEquals("cluster123", health.getDetails().get("version"));
-                    assertEquals(RCHealth.Status.UP, health.getStatus());
+                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
+                    assertEquals("cluster123", health.details().get("version"));
+                    assertEquals(RCHealth.Status.UP, health.status());
                 })
                 .verifyComplete();
     }
@@ -60,8 +60,8 @@ class KafkaReactiveHealthIndicatorTest {
         // Assert
         StepVerifier.create(result)
                 .expectNextMatches(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
-                    assertEquals(RCHealth.Status.DOWN, health.getStatus());
+                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
+                    assertEquals(RCHealth.Status.DOWN, health.status());
                     return true;
                 })
                 .verifyComplete();

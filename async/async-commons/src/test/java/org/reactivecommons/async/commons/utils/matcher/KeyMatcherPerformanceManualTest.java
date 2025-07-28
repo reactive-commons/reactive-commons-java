@@ -28,7 +28,7 @@ class KeyMatcherPerformanceManualTest {
 
 
     @BeforeEach
-    public void init() {
+    void init() {
         ClassLoader classLoader = getClass().getClassLoader();
         File file = new File(Objects.requireNonNull(classLoader.getResource("candidateNamesForMatching.txt")).getFile());
         try {

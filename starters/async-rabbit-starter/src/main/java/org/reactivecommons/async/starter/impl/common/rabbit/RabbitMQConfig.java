@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.RabbitPropertiesAutoConfig;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
@@ -43,4 +45,17 @@ public class RabbitMQConfig {
         return supplier.get().convertValue(properties, RabbitProperties.class);
     }
 
+    @Bean
+    @ConditionalOnMissingBean(UnroutableMessageNotifier.class)
+    public UnroutableMessageNotifier defaultUnroutableMessageNotifier() {
+        return new UnroutableMessageNotifier();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(UnroutableMessageProcessor.class)
+    UnroutableMessageProcessor defaultUnroutableMessageProcessor(UnroutableMessageNotifier notifier) {
+        final UnroutableMessageProcessor factory = new UnroutableMessageProcessor();
+        notifier.listenToUnroutableMessages(factory);
+        return factory;
+    }
 }

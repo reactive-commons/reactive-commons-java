@@ -44,7 +44,7 @@ public class ApplicationEventListener extends GenericMessageListener {
         final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
 
         Function<Message, Object> converter = resolveConverter(handler);
-        final EventExecutor<Object> executor = new EventExecutor<>(handler.getHandler(), converter);
+        final EventExecutor<Object> executor = new EventExecutor<>(handler.handler(), converter);
 
         return msj -> executor
                 .execute(msj)
@@ -61,11 +61,11 @@ public class ApplicationEventListener extends GenericMessageListener {
     }
 
     private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
-        if (registeredEventListener.getHandler() instanceof DomainEventHandler) {
-            final Class<T> eventClass = registeredEventListener.getInputClass();
+        if (registeredEventListener.handler() instanceof DomainEventHandler) {
+            final Class<T> eventClass = registeredEventListener.inputClass();
             return msj -> messageConverter.readDomainEvent(msj, eventClass);
         }
-        if (registeredEventListener.getHandler() instanceof CloudEventHandler) {
+        if (registeredEventListener.handler() instanceof CloudEventHandler) {
             return messageConverter::readCloudEvent;
         }
         throw new RuntimeException("Unknown handler type");

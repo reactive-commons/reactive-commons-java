@@ -15,7 +15,8 @@ import static org.mockito.Mockito.mock;
 import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
-public class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuperClass {
+@SuppressWarnings("unchecked")
+class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuperClass {
 
     private final AsyncQuery<DummyMessage> event1 = new AsyncQuery<>("app.query.test", new DummyMessage());
     private final AsyncQuery<DummyMessage> event2 = new AsyncQuery<>("app.query.test2", new DummyMessage());

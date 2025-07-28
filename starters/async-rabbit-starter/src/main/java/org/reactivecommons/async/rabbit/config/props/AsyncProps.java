@@ -67,6 +67,9 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private boolean useDiscardNotifierPerDomain = false;
 
     @Builder.Default
+    private Boolean mandatory = false;
+
+    @Builder.Default
     private boolean enabled = true;
 
     @Builder.Default

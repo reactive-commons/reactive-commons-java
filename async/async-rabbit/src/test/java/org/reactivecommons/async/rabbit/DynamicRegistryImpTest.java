@@ -45,7 +45,6 @@ class DynamicRegistryImpTest {
 
 
     @BeforeEach
-    @SuppressWarnings("rawtypes")
     void setUp() {
         Map<String, RegisteredCommandHandler<?,?>> commandHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener<?,?>> eventListeners = new ConcurrentHashMap<>();
@@ -151,7 +150,7 @@ class DynamicRegistryImpTest {
         dynamicRegistry.serveQuery("dynamic.query", message -> Mono.just(message * 100), Integer.class);
 
         final RegisteredQueryHandler<Integer, Integer> handler = resolver.getQueryHandler("dynamic.query");
-        StepVerifier.create(handler.getHandler().handle(null, 50))
+        StepVerifier.create(handler.handler().handle(null, 50))
                 .expectNext(5000)
                 .verifyComplete();
     }

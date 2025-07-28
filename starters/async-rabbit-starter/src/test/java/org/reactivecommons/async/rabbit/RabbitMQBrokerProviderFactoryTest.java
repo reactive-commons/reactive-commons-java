@@ -10,11 +10,11 @@ import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.BrokerConfigProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
-import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderFactory;
 import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderImpl;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
@@ -33,13 +33,15 @@ class RabbitMQBrokerProviderFactoryTest {
     private MeterRegistry meterRegistry;
     @Mock
     private CustomReporter errorReporter;
+    @Mock
+    private UnroutableMessageNotifier unroutableMessageNotifier;
 
     private BrokerProviderFactory<AsyncProps> providerFactory;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         providerFactory = new RabbitMQBrokerProviderFactory(config, router, converter, meterRegistry, errorReporter,
-                RabbitMQDiscardProviderImpl::new);
+                RabbitMQDiscardProviderImpl::new, unroutableMessageNotifier);
     }
 
     @Test

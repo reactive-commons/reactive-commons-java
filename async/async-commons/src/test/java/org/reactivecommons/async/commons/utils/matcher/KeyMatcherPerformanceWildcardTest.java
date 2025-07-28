@@ -28,7 +28,7 @@ class KeyMatcherPerformanceWildcardTest {
 
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         ClassLoader classLoader = getClass().getClassLoader();
         var file = new File(Objects.requireNonNull(
                 classLoader.getResource("wildcard_names_for_matching.txt")).getFile()

@@ -32,7 +32,7 @@ class QueryExecutorTest {
     private QueryExecutor<Void, SampleClass> executor;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         executor = new QueryExecutor<>(queryHandlerDelegate, converter);
     }
 
@@ -53,7 +53,7 @@ class QueryExecutorTest {
         verify(queryHandlerDelegate).handle(fromCaptor.capture(), sampleClassCaptor.capture());
         assertThat(fromCaptor.getValue().getReplyID()).isEqualTo("reply");
         assertThat(fromCaptor.getValue().getCorrelationID()).isEqualTo("correlation");
-        assertThat(sampleClassCaptor.getValue()).extracting(SampleClass::getId, SampleClass::getName)
+        assertThat(sampleClassCaptor.getValue()).extracting(SampleClass::id, SampleClass::name)
                 .containsExactly("id", "name");
     }
 }

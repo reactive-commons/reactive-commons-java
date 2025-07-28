@@ -36,7 +36,7 @@ class KafkaBrokerProviderFactoryTest {
     private BrokerProviderFactory<AsyncKafkaProps> providerFactory;
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         providerFactory = new KafkaBrokerProviderFactory(router, converter, meterRegistry, errorReporter,
                 customizations, sslBundles);
     }

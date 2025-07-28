@@ -49,9 +49,9 @@ class RabbitReactiveHealthIndicatorTest {
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
-                    assertEquals("1.2.3", health.getDetails().get("version"));
-                    assertEquals(RCHealth.Status.UP, health.getStatus());
+                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
+                    assertEquals("1.2.3", health.details().get("version"));
+                    assertEquals(RCHealth.Status.UP, health.status());
                 })
                 .verifyComplete();
     }
@@ -69,9 +69,9 @@ class RabbitReactiveHealthIndicatorTest {
         // Assert
         StepVerifier.create(result)
                 .assertNext(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.getDetails().get("domain"));
-                    assertEquals("1.2.3", health.getDetails().get("version"));
-                    assertEquals(RCHealth.Status.UP, health.getStatus());
+                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
+                    assertEquals("1.2.3", health.details().get("version"));
+                    assertEquals(RCHealth.Status.UP, health.status());
                 })
                 .verifyComplete();
     }

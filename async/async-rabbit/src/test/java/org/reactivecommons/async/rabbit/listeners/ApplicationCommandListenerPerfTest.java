@@ -78,7 +78,7 @@ class ApplicationCommandListenerPerfTest {
     }
 
     @BeforeEach
-    public void setUp() {
+    void setUp() {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
     }
 
@@ -281,7 +281,7 @@ class ApplicationCommandListenerPerfTest {
                 .get(DEFAULT_DOMAIN)
                 .stream()
                 .collect(ConcurrentHashMap::new, (map, handler) ->
-                        map.put(handler.getPath(), handler), ConcurrentHashMap::putAll
+                        map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
         return new HandlerResolver(null, null, null, null, commandHandlers) {
             @Override
