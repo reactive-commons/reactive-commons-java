@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.5.0) (2025-07-28)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.4.1...v5.5.0)
+
+**Merged pull requests:**
+
+- feat: add support for RabbitMQ mandatory property [\#145](https://github.com/reactive-commons/reactive-commons-java/pull/145) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v5.4.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.4.1) (2025-06-09)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.4.0...v5.4.1)
