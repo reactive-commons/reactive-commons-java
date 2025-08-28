@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.6.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.0) (2025-08-28)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.5.0...v5.6.0)
+
+**Merged pull requests:**
+
+- feat\(queueType\): Allow to set queueType from client [\#146](https://github.com/reactive-commons/reactive-commons-java/pull/146) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.5.0) (2025-07-28)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.4.1...v5.5.0)
