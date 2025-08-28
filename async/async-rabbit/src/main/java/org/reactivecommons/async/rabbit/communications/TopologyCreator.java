@@ -14,14 +14,17 @@ import java.util.Optional;
 
 @Log
 /*
- Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0.0.RC2
+ Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0
+ .0.RC2
  */
 public class TopologyCreator {
 
     private final Sender sender;
+    private final String queueType;
 
-    public TopologyCreator(Sender sender) {
+    public TopologyCreator(Sender sender, String queueType) {
         this.sender = sender;
+        this.queueType = queueType != null ? queueType : "classic";
     }
 
     public Mono<AMQP.Exchange.DeclareOk> declare(ExchangeSpecification exchange) {
@@ -30,7 +33,7 @@ public class TopologyCreator {
     }
 
     public Mono<AMQP.Queue.DeclareOk> declare(QueueSpecification queue) {
-        return sender.declare(queue)
+        return sender.declare(fillQueueType(queue))
                 .onErrorMap(TopologyDefException::new);
     }
 
@@ -83,6 +86,20 @@ public class TopologyCreator {
         }
 
         return declare(specification);
+    }
+
+    protected QueueSpecification fillQueueType(QueueSpecification specification) {
+        String resolvedQueueType = this.queueType;
+        if (specification.isAutoDelete() || specification.isExclusive()) {
+            resolvedQueueType = "classic";
+        }
+        Map<String, Object> args = specification.getArguments();
+        if (args == null) {
+            args = new HashMap<>();
+        }
+        args.put("x-queue-type", resolvedQueueType);
+        specification.arguments(args);
+        return specification;
     }
 
     public static class TopologyDefException extends RuntimeException {

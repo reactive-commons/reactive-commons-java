@@ -5,7 +5,10 @@ spring:
     virtual-host: /
 app:
   async:
-    createTopology: true
-    listenReplies: false
-    maxRetries: 3
+    app:
+      createTopology: true
+      listenReplies: false
+      maxRetries: 3
+      withDLQRetry: true
+      queueType: quorum
 

@@ -183,6 +183,11 @@ public class ApplicationQueryListener extends GenericMessageListener {
     protected Object parseMessageForReporter(Message msj) {
         return converter.readAsyncQueryStructure(msj);
     }
+
+    @Override
+    protected String getKind() {
+        return "queries";
+    }
 }
 
 

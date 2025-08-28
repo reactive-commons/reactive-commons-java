@@ -101,4 +101,8 @@ public class ApplicationNotificationListener extends GenericMessageListener {
         throw new RuntimeException("Unknown handler type");
     }
 
+    @Override
+    protected String getKind() {
+        return "notifications";
+    }
 }

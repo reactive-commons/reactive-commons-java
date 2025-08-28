@@ -139,6 +139,11 @@ public class ApplicationEventListener extends GenericMessageListener {
         }
         throw new RuntimeException("Unknown handler type");
     }
+
+    @Override
+    protected String getKind() {
+        return "events";
+    }
 }
 
 

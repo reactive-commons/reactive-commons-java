@@ -146,6 +146,10 @@ public class ApplicationCommandListener extends GenericMessageListener {
         throw new RuntimeException("Unknown handler type");
     }
 
+    @Override
+    protected String getKind() {
+        return "commands";
+    }
 }
 
 

@@ -164,6 +164,11 @@ class GenericMessageListenerPerfTest {
         protected Object parseMessageForReporter(Message msj) {
             return null;
         }
+
+        @Override
+        protected String getKind() {
+            return "stub";
+        }
     }
 }
 

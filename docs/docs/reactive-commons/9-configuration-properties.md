@@ -31,6 +31,7 @@ app:
       enabled: true # if you want to disable this domain you can set it to false
       mandatory: false # if you want to enable mandatory messages, you can set it to true, this will throw an exception if the message cannot be routed to any queue
       brokerType: "rabbitmq" # please don't change this value
+      queueType: classic # you can change the queue type to 'quorum' if your RabbitMQ cluster supports it
       flux:
         maxConcurrency: 250 # max concurrency of listener flow
       domain:

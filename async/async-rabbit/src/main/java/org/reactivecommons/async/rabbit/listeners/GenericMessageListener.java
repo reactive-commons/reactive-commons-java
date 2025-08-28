@@ -1,12 +1,14 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
+import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -94,6 +96,7 @@ public abstract class GenericMessageListener {
 
         ConsumeOptions consumeOptions = new ConsumeOptions();
         consumeOptions.qos(messageListener.getPrefetchCount());
+        consumeOptions.consumerTag(InstanceIdentifier.getInstanceId(getKind()));
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.getTopologyCreator())
@@ -138,7 +141,8 @@ public abstract class GenericMessageListener {
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(scheduler).thenReturn(msj);
         } catch (Exception e) {
-            log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! Severe Warning! ", msj.getProperties().getMessageId()));
+            log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
+                    "Severe Warning! ", msj.getProperties().getMessageId()));
             return Mono.error(e);
         }
     }
@@ -247,6 +251,8 @@ public abstract class GenericMessageListener {
     }
 
     protected abstract Object parseMessageForReporter(Message msj);
+
+    protected abstract String getKind();
 }
 
 
