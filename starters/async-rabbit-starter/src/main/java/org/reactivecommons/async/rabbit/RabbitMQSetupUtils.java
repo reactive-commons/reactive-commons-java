@@ -57,6 +57,7 @@ import java.util.logging.Level;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RabbitMQSetupUtils {
     private static final String LISTENER_TYPE = "listener";
+    private static final String TOPOLOGY_TYPE = "topology";
     private static final String SENDER_TYPE = "sender";
     private static final String DEFAULT_PROTOCOL;
     public static final int START_INTERVAL = 300;
@@ -99,7 +100,7 @@ public final class RabbitMQSetupUtils {
                                                             UnroutableMessageNotifier unroutableMessageNotifier) {
         final Sender sender = RabbitFlux.createSender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
-        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender),
+        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender, props.getQueueType()),
                 props.getMandatory(), unroutableMessageNotifier
         );
     }
@@ -111,7 +112,7 @@ public final class RabbitMQSetupUtils {
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
 
         return new ReactiveMessageListener(receiver,
-                new TopologyCreator(sender),
+                new TopologyCreator(sender, props.getQueueType()),
                 props.getFlux().getMaxConcurrency(),
                 props.getPrefetchCount());
     }
@@ -119,9 +120,9 @@ public final class RabbitMQSetupUtils {
     public static TopologyCreator createTopologyCreator(AsyncProps props) {
         ConnectionFactoryProvider provider = connectionFactoryProvider(props.getConnectionProperties());
         final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(),
-                props.getAppName(), LISTENER_TYPE);
+                props.getAppName(), TOPOLOGY_TYPE);
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
-        return new TopologyCreator(sender);
+        return new TopologyCreator(sender, props.getQueueType());
     }
 
     public static DiscardNotifier createDiscardNotifier(ReactiveMessageSender sender, AsyncProps props,
@@ -154,6 +155,8 @@ public final class RabbitMQSetupUtils {
 
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix,
                                                          String connectionType) {
+        System.out.println("Creating connection mono to RabbitMQ Broker in host '" + factory.getHost() + "' with " +
+                "type: " + connectionType);
         return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
                         log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host '" +

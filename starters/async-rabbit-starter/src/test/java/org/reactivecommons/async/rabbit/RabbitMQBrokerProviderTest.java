@@ -27,6 +27,7 @@ import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 import reactor.rabbitmq.Receiver;
@@ -114,7 +115,7 @@ class RabbitMQBrokerProviderTest {
         when(creator.declare(any(QueueSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(listener.getReceiver()).thenReturn(receiver);
-        when(receiver.consumeAutoAck(any(String.class))).thenReturn(Flux.never());
+        when(receiver.consumeAutoAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         // Act
         DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
         // Assert

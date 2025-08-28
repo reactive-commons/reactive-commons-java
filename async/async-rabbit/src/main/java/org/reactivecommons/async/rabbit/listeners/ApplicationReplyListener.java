@@ -4,11 +4,13 @@ import com.rabbitmq.client.Delivery;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
+import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
 import java.util.logging.Level;
@@ -46,10 +48,12 @@ public class ApplicationReplyListener {
         if (createTopology) {
             flow = creator.declare(exchange(exchangeName).type("topic").durable(true)).then();
         }
+        ConsumeOptions consumeOptions = new ConsumeOptions();
+        consumeOptions.consumerTag(InstanceIdentifier.getInstanceId("replies"));
         deliveryFlux = flow
                 .then(creator.declare(queue(queueName).durable(false).autoDelete(true).exclusive(true)))
                 .then(creator.bind(binding(exchangeName, routeKey, queueName)))
-                .thenMany(receiver.consumeAutoAck(queueName).doOnNext(delivery -> {
+                .thenMany(receiver.consumeAutoAck(queueName, consumeOptions).doOnNext(delivery -> {
                     try {
                         final String correlationID = delivery.getProperties().getHeaders().get(CORRELATION_ID).toString();
                         final boolean isEmpty = delivery.getProperties().getHeaders().get(COMPLETION_ONLY_SIGNAL) != null;

@@ -18,6 +18,7 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
+import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.QueueSpecification;
 import reactor.rabbitmq.Receiver;
@@ -29,6 +30,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
@@ -165,7 +168,7 @@ class ApplicationReplyListenerTest {
     private void instructConsumerMock(Flux<Delivery> initialSource, Flux<Delivery> newSource) {
         AtomicReference<Flux<Delivery>> sourceReference = new AtomicReference<>(initialSource);
 
-        when(receiver.consumeAutoAck(REPLY_QUEUE))
+        when(receiver.consumeAutoAck(anyString(), any(ConsumeOptions.class)))
                 .thenAnswer(invocation -> Flux.defer(() -> sourceReference.getAndSet(newSource)));
     }
 
