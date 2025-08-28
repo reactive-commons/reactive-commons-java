@@ -14,7 +14,6 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
@@ -100,7 +99,8 @@ public final class RabbitMQSetupUtils {
                                                             UnroutableMessageNotifier unroutableMessageNotifier) {
         final Sender sender = RabbitFlux.createSender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
-        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender, props.getQueueType()),
+        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender,
+                props.getQueueType()),
                 props.getMandatory(), unroutableMessageNotifier
         );
     }
@@ -155,7 +155,7 @@ public final class RabbitMQSetupUtils {
 
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix,
                                                          String connectionType) {
-        System.out.println("Creating connection mono to RabbitMQ Broker in host '" + factory.getHost() + "' with " +
+        log.info("Creating connection mono to RabbitMQ Broker in host '" + factory.getHost() + "' with " +
                 "type: " + connectionType);
         return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
                 .doOnError(err ->
