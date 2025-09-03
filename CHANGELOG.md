@@ -1,5 +1,13 @@
 # Changelog
 
+## [v5.6.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.1) (2025-09-03)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.0...v5.6.1)
+
+**Merged pull requests:**
+
+- fix\(deps\): update dependencies [\#140](https://github.com/reactive-commons/reactive-commons-java/pull/140) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v5.6.0](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.0) (2025-08-28)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.5.0...v5.6.0)
@@ -371,7 +379,7 @@
 - updgrade actions [\#70](https://github.com/reactive-commons/reactive-commons-java/pull/70) ([juancgalvis](https://github.com/juancgalvis))
 - add metric to async query operation [\#69](https://github.com/reactive-commons/reactive-commons-java/pull/69) ([juancgalvis](https://github.com/juancgalvis))
 - Feature/upgrade spring [\#68](https://github.com/reactive-commons/reactive-commons-java/pull/68) ([juancgalvis](https://github.com/juancgalvis))
-- fix: propagate empty response [\#67](https://github.com/reactive-commons/reactive-commons-java/pull/67) ([juanpmarin](https://github.com/juanpmarin))
+- fix: propagate empty response [\#67](https://github.com/reactive-commons/reactive-commons-java/pull/67) ([juanmarin-co](https://github.com/juanmarin-co))
 
 ## [1.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.4) (2021-11-30)
 
@@ -426,7 +434,7 @@
 - ensure utf-8 charset from senders [\#61](https://github.com/reactive-commons/reactive-commons-java/pull/61) ([juancgalvis](https://github.com/juancgalvis))
 - add charset conversion when reading message body [\#60](https://github.com/reactive-commons/reactive-commons-java/pull/60) ([juancgalvis](https://github.com/juancgalvis))
 - Enable ssl using spring.rabbitmq.ssl.enabled property [\#59](https://github.com/reactive-commons/reactive-commons-java/pull/59) ([juancgalvis](https://github.com/juancgalvis))
-- Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53) ([juanpmarin](https://github.com/juanpmarin))
+- Discard timeout queries [\#53](https://github.com/reactive-commons/reactive-commons-java/pull/53) ([juanmarin-co](https://github.com/juanmarin-co))
 
 ## [1.0.0-beta10](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta10) (2021-05-21)
 
@@ -478,8 +486,8 @@
 
 **Merged pull requests:**
 
-- feat: dynamic events handlers [\#51](https://github.com/reactive-commons/reactive-commons-java/pull/51) ([juanpmarin](https://github.com/juanpmarin))
-- chore: upgrade dependencies [\#50](https://github.com/reactive-commons/reactive-commons-java/pull/50) ([juanpmarin](https://github.com/juanpmarin))
+- feat: dynamic events handlers [\#51](https://github.com/reactive-commons/reactive-commons-java/pull/51) ([juanmarin-co](https://github.com/juanmarin-co))
+- chore: upgrade dependencies [\#50](https://github.com/reactive-commons/reactive-commons-java/pull/50) ([juanmarin-co](https://github.com/juanmarin-co))
 
 ## [1.0.0-beta3](https://github.com/reactive-commons/reactive-commons-java/tree/1.0.0-beta3) (2020-12-12)
 
@@ -607,16 +615,16 @@
 
 **Merged pull requests:**
 
-- fix: set resourceManagementChannelMono from channelPool [\#36](https://github.com/reactive-commons/reactive-commons-java/pull/36) ([juanpmarin](https://github.com/juanpmarin))
+- fix: set resourceManagementChannelMono from channelPool [\#36](https://github.com/reactive-commons/reactive-commons-java/pull/36) ([juanmarin-co](https://github.com/juanmarin-co))
 - CI CD Pipelines [\#34](https://github.com/reactive-commons/reactive-commons-java/pull/34) ([dericop](https://github.com/dericop))
 - License MIT attached [\#33](https://github.com/reactive-commons/reactive-commons-java/pull/33) ([dericop](https://github.com/dericop))
-- test: connection factory tests [\#32](https://github.com/reactive-commons/reactive-commons-java/pull/32) ([juanpmarin](https://github.com/juanpmarin))
-- fix: bump reactor-rabbitmq version and use sender for topology creator [\#31](https://github.com/reactive-commons/reactive-commons-java/pull/31) ([juanpmarin](https://github.com/juanpmarin))
+- test: connection factory tests [\#32](https://github.com/reactive-commons/reactive-commons-java/pull/32) ([juanmarin-co](https://github.com/juanmarin-co))
+- fix: bump reactor-rabbitmq version and use sender for topology creator [\#31](https://github.com/reactive-commons/reactive-commons-java/pull/31) ([juanmarin-co](https://github.com/juanmarin-co))
 - modify connection name Rabbit [\#30](https://github.com/reactive-commons/reactive-commons-java/pull/30) ([miguel0393](https://github.com/miguel0393))
-- perf: use elastic scheduler in reactive message sender [\#29](https://github.com/reactive-commons/reactive-commons-java/pull/29) ([juanpmarin](https://github.com/juanpmarin))
-- fix: avoid publish blocking with channels pooling [\#27](https://github.com/reactive-commons/reactive-commons-java/pull/27) ([juanpmarin](https://github.com/juanpmarin))
-- fix\(jackson\): Spring compatible starter is not using the ObjectMapper instance configured by Spring [\#26](https://github.com/reactive-commons/reactive-commons-java/pull/26) ([juanpmarin](https://github.com/juanpmarin))
-- Unbind queue with topology creator [\#15](https://github.com/reactive-commons/reactive-commons-java/pull/15) ([juanpmarin](https://github.com/juanpmarin))
+- perf: use elastic scheduler in reactive message sender [\#29](https://github.com/reactive-commons/reactive-commons-java/pull/29) ([juanmarin-co](https://github.com/juanmarin-co))
+- fix: avoid publish blocking with channels pooling [\#27](https://github.com/reactive-commons/reactive-commons-java/pull/27) ([juanmarin-co](https://github.com/juanmarin-co))
+- fix\(jackson\): Spring compatible starter is not using the ObjectMapper instance configured by Spring [\#26](https://github.com/reactive-commons/reactive-commons-java/pull/26) ([juanmarin-co](https://github.com/juanmarin-co))
+- Unbind queue with topology creator [\#15](https://github.com/reactive-commons/reactive-commons-java/pull/15) ([juanmarin-co](https://github.com/juanmarin-co))
 
 ## [0.0.5-beta2](https://github.com/reactive-commons/reactive-commons-java/tree/0.0.5-beta2) (2019-01-02)
 
@@ -636,8 +644,8 @@
 
 **Merged pull requests:**
 
-- fix: command handler is not beign executed [\#4](https://github.com/reactive-commons/reactive-commons-java/pull/4) ([juanpmarin](https://github.com/juanpmarin))
-- Handle empty monos on served queries handlers [\#2](https://github.com/reactive-commons/reactive-commons-java/pull/2) ([juanpmarin](https://github.com/juanpmarin))
+- fix: command handler is not beign executed [\#4](https://github.com/reactive-commons/reactive-commons-java/pull/4) ([juanmarin-co](https://github.com/juanmarin-co))
+- Handle empty monos on served queries handlers [\#2](https://github.com/reactive-commons/reactive-commons-java/pull/2) ([juanmarin-co](https://github.com/juanmarin-co))
 
 
 
