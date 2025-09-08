@@ -32,11 +32,11 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         this.asyncPropsClass = asyncPropsClass;
         ObjectMapper mapper = new ObjectMapper();
         mapper.registerModule(new JavaTimeModule());
-        this.computeIfAbsent(DEFAULT_DOMAIN, k -> {
-            T defaultApp = AsyncPropsDomainBuilder.instantiate(asyncPropsClass);
-            defaultApp.setConnectionProperties(mapper.convertValue(defaultProperties, propsClass));
-            return defaultApp;
-        });
+
+        if (!this.containsKey(DEFAULT_DOMAIN)) {
+            throw new InvalidConfigurationException("Required domain '" + DEFAULT_DOMAIN + "' is not configured.");
+        }
+
         super.forEach((key, value) -> { // To ensure that each domain has an appName
             if (value.getAppName() == null) {
                 if (defaultAppName == null || defaultAppName.isEmpty()) {
