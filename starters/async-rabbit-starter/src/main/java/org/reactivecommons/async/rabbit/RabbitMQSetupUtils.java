@@ -4,7 +4,6 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.DLQDiscardNotifier;
@@ -50,17 +49,20 @@ import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
 
 @Log
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RabbitMQSetupUtils {
-    private static final String LISTENER_TYPE = "listener";
-    private static final String TOPOLOGY_TYPE = "topology";
-    private static final String SENDER_TYPE = "sender";
+    private static final String SHARED_TYPE = "shared";
     private static final String DEFAULT_PROTOCOL;
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
+
+    private static final ConcurrentMap<RabbitProperties, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
 
     static {
         String protocol = "TLSv1.1";
@@ -78,17 +80,23 @@ public final class RabbitMQSetupUtils {
         DEFAULT_PROTOCOL = protocol;
     }
 
-    @SneakyThrows
     public static ConnectionFactoryProvider connectionFactoryProvider(RabbitProperties properties) {
-        final ConnectionFactory factory = new ConnectionFactory();
-        PropertyMapper map = PropertyMapper.get();
-        map.from(properties::determineHost).whenNonNull().to(factory::setHost);
-        map.from(properties::determinePort).to(factory::setPort);
-        map.from(properties::determineUsername).whenNonNull().to(factory::setUsername);
-        map.from(properties::determinePassword).whenNonNull().to(factory::setPassword);
-        map.from(properties::determineVirtualHost).whenNonNull().to(factory::setVirtualHost);
-        factory.useNio();
-        setUpSSL(factory, properties);
+        final ConnectionFactory factory = FACTORY_CACHE.computeIfAbsent(properties, props -> {
+            try {
+                ConnectionFactory newFactory = new ConnectionFactory();
+                PropertyMapper map = PropertyMapper.get();
+                map.from(props::determineHost).whenNonNull().to(newFactory::setHost);
+                map.from(props::determinePort).to(newFactory::setPort);
+                map.from(props::determineUsername).whenNonNull().to(newFactory::setUsername);
+                map.from(props::determinePassword).whenNonNull().to(newFactory::setPassword);
+                map.from(props::determineVirtualHost).whenNonNull().to(newFactory::setVirtualHost);
+                newFactory.useNio();
+                setUpSSL(newFactory, props);
+                return newFactory;
+            } catch (Exception e) {
+                throw new RuntimeException("Error creating ConnectionFactory: ", e);
+            }
+        });
         return () -> factory;
     }
 
@@ -107,7 +115,7 @@ public final class RabbitMQSetupUtils {
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
         final Mono<Connection> connection =
-                createConnectionMono(provider.getConnectionFactory(), props.getAppName(), LISTENER_TYPE);
+                createConnectionMono(provider.getConnectionFactory(), props.getAppName());
         final Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
 
@@ -119,8 +127,7 @@ public final class RabbitMQSetupUtils {
 
     public static TopologyCreator createTopologyCreator(AsyncProps props) {
         ConnectionFactoryProvider provider = connectionFactoryProvider(props.getConnectionProperties());
-        final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(),
-                props.getAppName(), TOPOLOGY_TYPE);
+        final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName());
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
         return new TopologyCreator(sender, props.getQueueType());
     }
@@ -134,8 +141,7 @@ public final class RabbitMQSetupUtils {
 
     private static SenderOptions reactiveCommonsSenderOptions(String appName, ConnectionFactoryProvider provider,
                                                               RabbitProperties rabbitProperties) {
-        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName,
-                SENDER_TYPE);
+        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName);
         final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
         final PropertyMapper map = PropertyMapper.get();
 
@@ -153,18 +159,20 @@ public final class RabbitMQSetupUtils {
                         .transform(Utils::cache));
     }
 
-    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String connectionPrefix,
-                                                         String connectionType) {
-        log.info("Creating connection mono to RabbitMQ Broker in host '" + factory.getHost() + "' with " +
-                "type: " + connectionType);
-        return Mono.fromCallable(() -> factory.newConnection(connectionPrefix + " " + connectionType))
-                .doOnError(err ->
-                        log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host '" +
-                                factory.getHost() + "'. Starting retry process...", err)
-                )
-                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
-                        .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
-                .cache();
+    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName) {
+        return CONNECTION_CACHE.computeIfAbsent(factory, f -> {
+            log.info("Creating connection mono to RabbitMQ Broker in host '" + f.getHost() + "'");
+            return Mono.fromCallable(() -> f.newConnection(
+                            appName + "-" + InstanceIdentifier.getInstanceId(SHARED_TYPE, "")
+                    ))
+                    .doOnError(err ->
+                            log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host '"
+                                    + f.getHost() + "'. Starting retry process...", err)
+                    )
+                    .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
+                            .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
+                    .cache();
+        });
     }
 
     // SSL based on RabbitConnectionFactoryBean

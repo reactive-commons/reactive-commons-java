@@ -25,6 +25,8 @@ class GenericAsyncPropsDomainTest {
         String defaultAppName = "sample";
         MyBrokerConnProps defaultMyBrokerProps = new MyBrokerConnProps();
         AsyncMyBrokerPropsDomainProperties configured = new AsyncMyBrokerPropsDomainProperties();
+        configured.put(DEFAULT_DOMAIN, new MyBrokerAsyncProps());
+
         MyBrokerAsyncProps other = new MyBrokerAsyncProps();
         other.setAppName(OTHER);
         configured.put(OTHER, other);

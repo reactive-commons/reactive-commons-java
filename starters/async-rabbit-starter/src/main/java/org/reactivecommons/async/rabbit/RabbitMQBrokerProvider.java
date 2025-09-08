@@ -141,7 +141,7 @@ public record RabbitMQBrokerProvider(String domain,
 
     @Override
     public void listenReplies() {
-        if (props.isListenReplies()) {
+        if (Boolean.TRUE.equals(props.getListenReplies())) {
             final ApplicationReplyListener replyListener = new ApplicationReplyListener(router,
                     receiver,
                     props.getBrokerConfigProps().getReplyQueue(),

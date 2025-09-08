@@ -44,9 +44,9 @@ class UnroutableMessageNotifierTest {
 
     @BeforeEach
     void setUp() {
-        // Usar el constructor por defecto y espiar el sink interno
+        // Use the default constructor and spy on the internal sink
         unroutableMessageNotifier = new UnroutableMessageNotifier();
-        // Inyectar el mock del sink usando un spy para poder verificarlo
+        // Inject the sink mock using a spy to verify it
         try {
             java.lang.reflect.Field sinkField = UnroutableMessageNotifier.class.getDeclaredField("sink");
             sinkField.setAccessible(true);
