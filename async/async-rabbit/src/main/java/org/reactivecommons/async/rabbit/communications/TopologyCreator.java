@@ -24,7 +24,7 @@ public class TopologyCreator {
 
     public TopologyCreator(Sender sender, String queueType) {
         this.sender = sender;
-        this.queueType = queueType != null ? queueType : "classic";
+        this.queueType = queueType;
     }
 
     public Mono<AMQP.Exchange.DeclareOk> declare(ExchangeSpecification exchange) {
@@ -90,14 +90,17 @@ public class TopologyCreator {
 
     protected QueueSpecification fillQueueType(QueueSpecification specification) {
         String resolvedQueueType = this.queueType;
-        if (specification.isAutoDelete() || specification.isExclusive()) {
+        if ("quorum".equals(resolvedQueueType)
+                && (specification.isAutoDelete() || specification.isExclusive())) {
             resolvedQueueType = "classic";
         }
         Map<String, Object> args = specification.getArguments();
         if (args == null) {
             args = new HashMap<>();
         }
-        args.put("x-queue-type", resolvedQueueType);
+        if (resolvedQueueType != null) {
+            args.put("x-queue-type", resolvedQueueType);
+        }
         specification.arguments(args);
         return specification;
     }
