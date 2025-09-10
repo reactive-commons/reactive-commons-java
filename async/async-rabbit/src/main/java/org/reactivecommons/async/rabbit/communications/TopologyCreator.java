@@ -90,7 +90,8 @@ public class TopologyCreator {
 
     protected QueueSpecification fillQueueType(QueueSpecification specification) {
         String resolvedQueueType = this.queueType;
-        if (specification.isAutoDelete() || specification.isExclusive()) {
+        if ("quorum".equals(resolvedQueueType)
+                && (specification.isAutoDelete() || specification.isExclusive())) {
             resolvedQueueType = "classic";
         }
         Map<String, Object> args = specification.getArguments();
