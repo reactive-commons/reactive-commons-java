@@ -1,5 +1,21 @@
 # Changelog
 
+## [v5.6.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.2) (2025-09-10)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.2-beta.1...v5.6.2)
+
+**Merged pull requests:**
+
+- fix\(queueType\): Leave by default the queueType defined in virtualhost at server level [\#150](https://github.com/reactive-commons/reactive-commons-java/pull/150) ([juancgalvis](https://github.com/juancgalvis))
+
+## [v5.6.2-beta.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.2-beta.1) (2025-09-08)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.1...v5.6.2-beta.1)
+
+**Closed issues:**
+
+- Add support for quorum queues in RabbitMQ connections [\#148](https://github.com/reactive-commons/reactive-commons-java/issues/148)
+
 ## [v5.6.1](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.1) (2025-09-03)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.0...v5.6.1)

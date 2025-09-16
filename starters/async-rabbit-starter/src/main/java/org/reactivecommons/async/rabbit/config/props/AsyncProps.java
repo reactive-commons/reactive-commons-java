@@ -83,6 +83,6 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private String brokerType = "rabbitmq";
 
     @Builder.Default
-    private String queueType = "classic"; // or "quorum"
+    private String queueType = null; // "classic" or "quorum"
 
 }
