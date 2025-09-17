@@ -1,6 +1,7 @@
 {
   "label": "Reactive Commons",
   "position": 2,
+  "collapsed": false,
   "link": {
     "type": "generated-index",
     "description": "Learn how to build reactive systems using the Reactive Commons library."

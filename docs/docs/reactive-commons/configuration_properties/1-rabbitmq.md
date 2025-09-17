@@ -1,16 +1,10 @@
 ---
-sidebar_position: 8
+sidebar_position: 1
 ---
 
-# Configuration Properties
+# RabbitMQ Configuration
 
-import Tabs from '@theme/Tabs';
-import TabItem from '@theme/TabItem';
-
-<Tabs>
-  <TabItem value="rabbitmq" label="RabbitMQ" default>
-
-You can customize some predefined variables of Reactive Commons
+You can customize some predefined variables of Reactive Commons.
 
 This can be done by Spring Boot `application.yaml` or by overriding
 the [AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
@@ -23,7 +17,7 @@ app:
       withDLQRetry: false # if you want to have dlq queues with retries you can set it to true, you cannot change it after queues are created, because you will get an error, so you should delete topology before the change.
       maxRetries: -1 # -1 will be considered default value. When withDLQRetry is true, it will be retried 10 times. When withDLQRetry is false, it will be retried indefinitely.
       retryDelay: 1000 # interval for message retries, with and without DLQRetry
-      listenReplies: true # if you will not use ReqReply patter you can set it to false
+      listenReplies: null # Allows true or false values. If you're using the ReqReply pattern, set it to true. If you don't, set it to false.
       createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
       delayedCommands: false # Enable to send a delayed command to an external target
       prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this settings acts per instance of your service
@@ -64,7 +58,12 @@ app:
         virtual-host: /accounts
 ```
 
-You can override this settings programmatically through a `AsyncRabbitPropsDomainProperties` bean.
+You can override this settings programmatically through an `AsyncRabbitPropsDomainProperties` bean:
+
+:::caution[Mandatory `app` Domain Configuration]
+To ensure a correct configuration, you should always override the properties of the `app` domain. If it is not
+configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
+:::
 
 ```java
 package sample;
@@ -192,90 +191,126 @@ public class AsyncEventBusConfig {
 
 ```
 
-  </TabItem>
-  <TabItem value="kafka" label="Kafka">
-    You can customize some predefined variables of Reactive Commons
+## Connections and Channels
 
-This can be done by Spring Boot `application.yaml` or by overriding
-the [AsyncKafkaProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-kafka-starter/src/main/java/org/reactivecommons/async/kafka/config/props/AsyncKafkaProps.java)
-bean.
+Reactive Commons establishes **a single connection to the RabbitMQ broker**, which is reused for all messaging
+operations, both sending and listening. However, the number of open **channels** within that connection varies depending
+on the enabled annotations and the type of interaction (sending, listening, or both). Each scenario described below
+shows how the number of channels changes according to the applied configuration.
 
-```yaml
-reactive:
-  commons:
-    kafka:
-      app: # this is the name of the default domain
-        withDLQRetry: false # if you want to have dlq queues with retries you can set it to true, you cannot change it after queues are created, because you will get an error, so you should delete topology before the change.
-        maxRetries: -1 # -1 will be considered default value. When withDLQRetry is true, it will be retried 10 times. When withDLQRetry is false, it will be retried indefinitely.
-        retryDelay: 1000 # interval for message retries, with and without DLQRetry
-        checkExistingTopics: true # if you don't want to verify topic existence before send a record you can set it to false
-        createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
-        useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
-        enabled: true # if you want to disable this domain you can set it to false
-        brokerType: "kafka" # please don't change this value
-        domain:
-          ignoreThisListener: false # Allows you to disable event listener for this specific domain
-        connectionProperties: # you can override the connection properties of each domain
-          bootstrap-servers: localhost:9092
-      # Another domain can be configured with same properties structure that app
-      accounts: # this is a second domain name and can have another independent setup
-        connectionProperties: # you can override the connection properties of each domain
-          bootstrap-servers: localhost:9093
-```
+In the context of this documentation, a domain refers to a connection with a broker. The configuration supports up to
+two brokers, which means the described scenarios are limited to a maximum of two domains.
 
-You can override this settings programmatically through a `AsyncKafkaPropsDomainProperties` bean.
+### Annotations Used in the Tables
 
-```java
-package sample;
+**[1] Annotations for sending messages:**
 
-import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.kafka.config.props.AsyncProps;
-import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomainProperties;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+- `@EnableDomainEventBus` to send [domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event).
+- `@EnableDirectAsyncGateway` to send [commands](/reactive-commons-java/docs/reactive-commons/sending-a-command)
+  and [asynchronous queries](/reactive-commons-java/docs/reactive-commons/making-an-async-query).
 
-@Configuration
-public class MyDomainConfig {
+**[2] Annotations for listening to messages:**
 
-    @Bean
-    @Primary
-    public AsyncKafkaPropsDomainProperties customKafkaDomainProperties() {
-        KafkaProperties propertiesApp = new KafkaProperties();
-        propertiesApp.setBootstrapServers(List.of("localhost:9092"));
+- `@EnableEventListeners` to
+  listen [domain events](/reactive-commons-java/docs/reactive-commons/handling-domain-events).
+- `@EnableCommandListeners` to listen [commands](/reactive-commons-java/docs/reactive-commons/handling-commands).
+- `@EnableQueryListeners` to serve [async queries](/reactive-commons-java/docs/reactive-commons/serving-async-queries).
 
-        KafkaProperties propertiesAccounts = new KafkaProperties();
-        propertiesAccounts.setBootstrapServers(List.of("localhost:9093"));
+### 1. Sending messages (single domain)
 
-        return AsyncKafkaPropsDomainProperties.builder()
-                .withDomain("app", AsyncProps.builder()
-                        .connectionProperties(propertiesApp)
-                        .build())
-                .withDomain("accounts", AsyncProps.builder()
-                        .connectionProperties(propertiesAccounts)
-                        .build())
-                .build();
-    }
-}
-```
+> In this scenario we only use annotations to enable message sending only, along with different configurations for the
+`listenReplies` property:
 
-Additionally, if you want to set only connection properties you can use the `AsyncKafkaPropsDomain.KafkaSecretFiller`
-class.
+| Enabled annotations        | listenReplies | Broker     | Connections | Channels |
+|----------------------------|---------------|------------|-------------|----------|
+| One or all for sending [1] | true          | Broker app | 1           | 13       |
+|                            | false         | Broker app | 1           | 11       |
 
-```java
+### 2. Sending messages (multiple domains)
 
-@Bean
-@Primary
-public AsyncKafkaPropsDomain.KafkaSecretFiller customKafkaFiller() {
-    return (domain, asyncProps) -> {
-        // customize asyncProps here by domain
-    };
-}
-```
+> In this scenario, we only send messages to two brokers, using one or all of the annotations and configurations for the
+`listenReplies` property:
 
-  </TabItem>
-</Tabs>
+| Enabled annotations        | listenReplies | Broker            | Connections | Channels |
+|----------------------------|---------------|-------------------|-------------|----------|
+| One or all for sending [1] | true          | Broker app        | 1           | 18       |
+|                            |               | Additional broker | 1           | 8        |
+| One or all for sending [1] | false         | Broker app        | 1           | 16       |
+|                            |               | Additional broker | 1           | 6        |
 
-## Mandatory property in RabbitMQ
+### 3. Listening for messages (single domain)
+
+> This scenario enables only listening for messages from a single broker, using one or all available annotations:
+
+| Enabled annotations          | Broker     | Connections | Channels |
+|------------------------------|------------|-------------|----------|
+| One or all for listening [2] | Broker app | 1           | 14       |
+
+### 4. Listening for messages (multiple domains)
+
+> In this scenario, messages are listened to from two brokers, with variations in the annotations enabled:
+
+| Enabled annotations   | Broker            | Connections | Channels |
+|-----------------------|-------------------|-------------|----------|
+| All for listening [2] | Broker app        | 1           | 19       |
+|                       | Additional broker | 1           | 8        |
+| Two for listening [2] | Broker app        | 1           | 18       |
+|                       | Additional broker | 1           | 8        |
+| One for listening [2] | Broker app        | 1           | 17       |
+|                       | Additional broker | 1           | 7        |
+
+### 5. Sending and listening for messages (single domain)
+
+> This scenario enables both sending and listening for messages on a single broker, with all annotations enabled:
+
+| Enabled annotations                           | Broker     | Connections | Channels |
+|-----------------------------------------------|------------|-------------|----------|
+| All for sending [1] and all for listening [2] | Broker app | 1           | 16       |
+
+### 6. Sending and listening for messages (multiple domains)
+
+> In this scenario, messages are sent and listened from two brokers, with variations in the annotations enabled:
+
+| Enabled annotations                           | Broker            | Connections | Channels |
+|-----------------------------------------------|-------------------|-------------|----------|
+| All for sending [1] and all for listening [2] | Broker app        | 1           | 21       |
+|                                               | Additional broker | 1           | 10       |
+| One for sending [1] and all for listening [2] | Broker app        | 1           | 20       |
+|                                               | Additional broker | 1           | 9        |
+| All for sending [1] and two for listening [2] | Broker app        | 1           | 20       |
+|                                               | Additional broker | 1           | 10       |
+| All for sending [1] and one for listening [2] | Broker app        | 1           | 19       |
+|                                               | Additional broker | 1           | 8        |
+| All for sending [1]                           | Broker app        | 1           | 16       |
+|                                               | Additional broker | 1           | 6        |
+
+### Recommendations
+
+- **Resource Optimization:** If only sending commands and events is required, disabling the `listenReplies` property
+  reduces the number of open channels.
+- **Selective Annotation Activation:** Enabling only the necessary annotations for the use case can improve performance
+  and simplify configuration.
+- **Proper Use of Configuration Properties:** Adjusting configuration properties according to the specific use case
+  allows for resource optimization and avoids unnecessary configurations.
+
+### Connections in microservices with multiple replicas
+
+In a typical cloud production environment, such as AWS, microservices are deployed in containers orchestrated by
+Kubernetes, using managed services like Amazon EKS. For the messaging broker, Amazon MQ for RabbitMQ is used, configured
+in a 3-node cluster with a Multi-AZ deployment to ensure high availability and fault tolerance.
+
+When working with microservices that use multiple replicas (instances) and implement Reactive Commons, it is important
+to understand how connections to the message broker are managed. Each replica of a microservice establishes **a single
+connection** to the broker, which is used for both sending and listening to messages.
+
+The number of open channels within that single connection will depend on the configuration of the annotations used, as
+described in the connection scenarios above. This allows each replica to manage its messaging operations independently,
+distributing the workload efficiently.
+
+For example, if a microservice is deployed with **4 replicas**, each of them will establish its own connection to the
+broker. As a result, the entire microservice deployment will have a total of **4 connections** to the broker.
+
+## Mandatory property
 
 The mandatory property is a message publishing parameter in RabbitMQ that determines the behavior when a message cannot
 be routed to any queue. This can happen if there are no queues bound to the exchange or if the routing key does not
@@ -292,7 +327,7 @@ queues. If no queue receives the message, then:
 - The producer must have a ReturnListener or an equivalent handler to receive and process the returned message. If one
   is not defined, the message is lost.
 
-#### Example
+### Example
 
 Assuming we have:
 
@@ -328,7 +363,7 @@ message).
 
 ### Implementation
 
-To enable the `mandatory` property in Reactive Commons, you can configure it in your project's `application.yaml` file:
+To enable the `mandatory` property, you can configure it in your project's `application.yaml` file:
 
 ```yaml
 app:
@@ -467,7 +502,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
-@Configuration("rabbitMQConfiguration")
+@Configuration
 public class RabbitMQConfig {
 
     private final RabbitMQConnectionProperties properties;
@@ -534,3 +569,37 @@ public class RabbitMQConfig {
 
 }
 ```
+
+## Troubleshooting
+
+### PRECONDITION_FAILED - inequivalent arg 'x-dead-letter-exchange'
+
+This error occurs when there is a mismatch between the queue properties defined in your application and the properties
+of the queue that already exists in the RabbitMQ broker.
+It commonly happens when you try to:
+
+- Change the name of a domain.
+- Enable or disable DLQ (Dead Letter Queue) functionality for a queue that has already been created.
+
+**Error log example:**
+
+```text
+Caused by: com.rabbitmq.client.ShutdownSignalException: channel error; protocol method:
+#method<channel.close>(reply-code=406, reply-text=PRECONDITION_FAILED - inequivalent arg 'x-dead-letter-exchange' 
+for queue 'ms_example.query' in vhost '/': received none but current is the value 'directMessages.DLQ' 
+of type 'longstr', class-id=50, method-id=10)
+```
+
+**Cause:**
+
+RabbitMQ does not allow changing certain durable properties of a queue after it has been declared, such as the
+`x-dead-letter-exchange` argument.
+When your application starts, it tries to declare the queue with the new properties, but the broker rejects the
+declaration because it conflicts
+with the existing queue.
+
+**Solution:**
+
+To resolve this issue, you must manually delete the conflicting queues from the RabbitMQ broker. Once the queues are
+deleted,
+you can restart the microservice to recreate them with the correct, updated properties.

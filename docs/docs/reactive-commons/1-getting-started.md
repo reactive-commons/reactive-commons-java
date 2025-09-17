@@ -17,7 +17,7 @@ Commons.
 
 You need Java JRE installed (Java 17 or later).
 
-You also need to install RabbitMQ. Follow the [instructions from the website](https://www.rabbitmq.com/download.html)
+You also need to install RabbitMQ. Follow the [instructions from the website](https://www.rabbitmq.com/download.html).
 
 ## Start RabbitMQ
 
@@ -50,7 +50,8 @@ dependencies {
 }
 ```
 
-Note: If you will use Cloud Events, you should include the Cloud Events dependency:
+:::tip
+If you will use Cloud Events, you should include the Cloud Events dependency:
 
 ```groovy
 dependencies {
@@ -58,7 +59,7 @@ dependencies {
 }
 ```
 
-```groovy
+:::
 
 ### Configuration properties
 
