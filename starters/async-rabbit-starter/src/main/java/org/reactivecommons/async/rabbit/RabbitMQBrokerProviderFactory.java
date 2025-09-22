@@ -10,7 +10,6 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
-import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderFactory;
@@ -30,6 +29,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
     private final CustomReporter errorReporter;
     private final RabbitMQDiscardProviderFactory discardProvider;
     private final UnroutableMessageNotifier unroutableMessageNotifier;
+    private final ConnectionFactoryCustomizer cfCustomizer;
 
     @Override
     public String getBrokerType() {
@@ -38,13 +38,12 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
 
     @Override
     public DiscardProvider getDiscardProvider(AsyncProps props) {
-        return discardProvider.build(props, config, converter);
+        return discardProvider.build(props, config, converter, cfCustomizer);
     }
 
     @Override
     public BrokerProvider<AsyncProps> getProvider(String domain, AsyncProps props, DiscardProvider discardProvider) {
-        RabbitProperties properties = props.getConnectionProperties();
-        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(properties);
+        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
         RabbitReactiveHealthIndicator healthIndicator =
                 new RabbitReactiveHealthIndicator(domain, provider.getConnectionFactory());
         ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter,

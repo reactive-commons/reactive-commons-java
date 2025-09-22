@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit;
 
+import com.rabbitmq.client.ConnectionFactory;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -15,11 +17,22 @@ import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConv
 import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderImpl;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RabbitMQDiscardProviderImplTest {
     @Mock
     private RabbitJacksonMessageConverter converter;
+
+    @Mock
+    private ConnectionFactoryCustomizer cfCustomizer;
+
+    @BeforeEach
+    void setUp() {
+        when(cfCustomizer.customize(any(AsyncProps.class), any(ConnectionFactory.class)))
+                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(1));
+    }
 
     @Test
     void shouldCreateDiscardNotifier() {
@@ -29,7 +42,7 @@ class RabbitMQDiscardProviderImplTest {
         IBrokerConfigProps brokerConfigProps = new BrokerConfigProps(props);
         props.setBrokerConfigProps(brokerConfigProps);
         BrokerConfig brokerConfig = new BrokerConfig();
-        RabbitMQDiscardProviderImpl discardProvider = new RabbitMQDiscardProviderImpl(props, brokerConfig, converter);
+        var discardProvider = new RabbitMQDiscardProviderImpl(props, brokerConfig, converter, cfCustomizer);
         // Act
         DiscardNotifier notifier = discardProvider.get();
         // Assert

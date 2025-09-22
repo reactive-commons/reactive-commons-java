@@ -1,14 +1,17 @@
 package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.ConnectionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
+import org.reactivecommons.async.rabbit.ConnectionFactoryCustomizer;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
 import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -117,5 +120,23 @@ class RabbitMQConfigTest {
     @Test
     void shouldThrowNullPointerExceptionWhenNotifierIsNull() {
         assertThrows(NullPointerException.class, () -> rabbitMQConfig.defaultUnroutableMessageProcessor(null));
+    }
+
+    @Test
+    void shouldReturnDefaultConnectionFactoryCustomizer() {
+        ConnectionFactoryCustomizer customizer = rabbitMQConfig.defaultConnectionFactoryCustomizer();
+
+        assertThat(customizer).isNotNull();
+    }
+
+    @Test
+    void shouldReturnSameConnectionFactoryWhenCustomizing() {
+        ConnectionFactoryCustomizer customizer = rabbitMQConfig.defaultConnectionFactoryCustomizer();
+        ConnectionFactory originalFactory = new ConnectionFactory();
+        AsyncProps asyncProps = new AsyncProps();
+
+        ConnectionFactory result = customizer.customize(asyncProps, originalFactory);
+
+        assertThat(result).isSameAs(originalFactory);
     }
 }

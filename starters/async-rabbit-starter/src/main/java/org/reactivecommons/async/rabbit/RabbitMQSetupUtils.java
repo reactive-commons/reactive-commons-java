@@ -61,7 +61,7 @@ public final class RabbitMQSetupUtils {
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
 
-    private static final ConcurrentMap<RabbitProperties, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
 
     static {
@@ -80,26 +80,27 @@ public final class RabbitMQSetupUtils {
         DEFAULT_PROTOCOL = protocol;
     }
 
-    public static ConnectionFactoryProvider connectionFactoryProvider(RabbitProperties properties) {
-        final ConnectionFactory factory = FACTORY_CACHE.computeIfAbsent(properties, props -> {
+    public static ConnectionFactoryProvider connectionFactoryProvider(AsyncProps asyncProps,
+                                                                      ConnectionFactoryCustomizer cfCustomizer) {
+        final ConnectionFactory factory = FACTORY_CACHE.computeIfAbsent(asyncProps, props -> {
             try {
+                RabbitProperties rabbitProperties = props.getConnectionProperties();
                 ConnectionFactory newFactory = new ConnectionFactory();
                 PropertyMapper map = PropertyMapper.get();
-                map.from(props::determineHost).whenNonNull().to(newFactory::setHost);
-                map.from(props::determinePort).to(newFactory::setPort);
-                map.from(props::determineUsername).whenNonNull().to(newFactory::setUsername);
-                map.from(props::determinePassword).whenNonNull().to(newFactory::setPassword);
-                map.from(props::determineVirtualHost).whenNonNull().to(newFactory::setVirtualHost);
+                map.from(rabbitProperties::determineHost).whenNonNull().to(newFactory::setHost);
+                map.from(rabbitProperties::determinePort).to(newFactory::setPort);
+                map.from(rabbitProperties::determineUsername).whenNonNull().to(newFactory::setUsername);
+                map.from(rabbitProperties::determinePassword).whenNonNull().to(newFactory::setPassword);
+                map.from(rabbitProperties::determineVirtualHost).whenNonNull().to(newFactory::setVirtualHost);
                 newFactory.useNio();
-                setUpSSL(newFactory, props);
-                return newFactory;
+                setUpSSL(newFactory, rabbitProperties);
+                return cfCustomizer.customize(props, newFactory);
             } catch (Exception e) {
                 throw new RuntimeException("Error creating ConnectionFactory: ", e);
             }
         });
         return () -> factory;
     }
-
 
     public static ReactiveMessageSender createMessageSender(ConnectionFactoryProvider provider,
                                                             AsyncProps props,
@@ -125,8 +126,8 @@ public final class RabbitMQSetupUtils {
                 props.getPrefetchCount());
     }
 
-    public static TopologyCreator createTopologyCreator(AsyncProps props) {
-        ConnectionFactoryProvider provider = connectionFactoryProvider(props.getConnectionProperties());
+    public static TopologyCreator createTopologyCreator(AsyncProps props, ConnectionFactoryCustomizer cfCustomizer) {
+        ConnectionFactoryProvider provider = connectionFactoryProvider(props, cfCustomizer);
         final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName());
         final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
         return new TopologyCreator(sender, props.getQueueType());

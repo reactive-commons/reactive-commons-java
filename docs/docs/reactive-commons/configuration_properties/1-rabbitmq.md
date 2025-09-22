@@ -20,7 +20,7 @@ app:
       listenReplies: null # Allows true or false values. If you're using the ReqReply pattern, set it to true. If you don't, set it to false.
       createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
       delayedCommands: false # Enable to send a delayed command to an external target
-      prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this settings acts per instance of your service
+      prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this setting acts per instance of your service
       useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
       enabled: true # if you want to disable this domain you can set it to false
       mandatory: false # if you want to enable mandatory messages, you can set it to true, this will throw an exception if the message cannot be routed to any queue
@@ -168,7 +168,7 @@ import java.lang.reflect.GenericArrayType;
 
 @Log4j2
 @Configuration
-public class AsyncEventBusConfig {
+public class RabbitMQConfig {
 
     // TODO: You should create the GenericManager bean as indicated in Secrets Manager library
     @Bean
@@ -188,10 +188,27 @@ public class AsyncEventBusConfig {
         return genericManager.getSecret(secretName, RabbitConnectionProperties.class).toRabbitProperties();
     }
 }
-
 ```
 
-## Connections and Channels
+## Customizing the connection
+
+For advanced control over the RabbitMQ connection, you can define a `ConnectionFactoryCustomizer` bean. This allows you
+to configure options that are not exposed through standard properties, such as custom timeouts, SSL/TLS settings,
+or automatic recovery strategies:
+
+```java
+
+@Bean
+public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
+    return (ConnectionFactoryCustomizer) (asyncProps, connectionFactory) -> {
+        connectionFactory.setExceptionHandler(new MyCustomExceptionHandler()); // Optional custom exception handler
+        connectionFactory.setCredentialsProvider(new MyCustomCredentialsProvider()); // Optional custom credentials provider
+        return connectionFactory;
+    };
+}
+```
+
+## Connections and channels
 
 Reactive Commons establishes **a single connection to the RabbitMQ broker**, which is reused for all messaging
 operations, both sending and listening. However, the number of open **channels** within that connection varies depending
@@ -201,7 +218,7 @@ shows how the number of channels changes according to the applied configuration.
 In the context of this documentation, a domain refers to a connection with a broker. The configuration supports up to
 two brokers, which means the described scenarios are limited to a maximum of two domains.
 
-### Annotations Used in the Tables
+### Annotations used in the tables
 
 **[1] Annotations for sending messages:**
 

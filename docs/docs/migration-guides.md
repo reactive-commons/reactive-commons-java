@@ -6,6 +6,24 @@ sidebar_position: 4
 
 ## From 5.x.x to 6.x.x
 
+### New Features
+
+- **Connection customization:** You can now customize the RabbitMQ connection by defining a
+  `ConnectionFactoryCustomizer` bean. For more details,
+  see [Customizing the connection](/reactive-commons-java/docs/reactive-commons/configuration_properties/rabbitmq#customizing-the-connection).
+
+```java title="Programmatic configuration"
+
+@Bean
+public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
+    return (ConnectionFactoryCustomizer) (asyncProps, connectionFactory) -> {
+        connectionFactory.setExceptionHandler(new MyCustomExceptionHandler()); // Optional custom exception handler
+        connectionFactory.setCredentialsProvider(new MyCustomCredentialsProvider()); // Optional custom credentials provider
+        return connectionFactory;
+    };
+}
+```
+
 ### Change notes
 
 - The configuration property `listenReplies` for RabbitMQ now defaults to `null`. Previously, it was `true`, causing all
@@ -25,7 +43,6 @@ app:
 ```
 
 ```java title="Programmatic configuration"
-
 @Configuration
 public class MyDomainConfig {
 
@@ -56,7 +73,6 @@ app:
 ```
 
 ```java title="Programmatic configuration"
-
 @Configuration
 public class MyDomainConfig {
 
@@ -78,7 +94,8 @@ public class MyDomainConfig {
 
 ### New Features
 
-- Support for multiple brokers: It is now possible to configure and connect to up to two brokers simultaneously, using
+- **Support for multiple brokers:** It is now possible to configure and connect to up to two brokers simultaneously,
+  using
   independent domains in the configuration.
 
 ### Change notes
@@ -118,7 +135,6 @@ app:
 Before: the connection was defined manually in a Java class, as shown below:
 
 ```java
-
 @Log4j2
 @Configuration
 @RequiredArgsConstructor
@@ -180,7 +196,6 @@ app:
 Domains can also be configured programmatically:
 
 ```java title="Programmatic configuration"
-
 @Configuration
 public class MyDomainConfig {
 
