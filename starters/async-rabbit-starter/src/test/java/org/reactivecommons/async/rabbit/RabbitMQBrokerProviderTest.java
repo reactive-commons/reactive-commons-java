@@ -80,6 +80,7 @@ class RabbitMQBrokerProviderTest {
         IBrokerConfigProps configProps = new BrokerConfigProps(props);
         props.setBrokerConfigProps(configProps);
         props.setAppName("test");
+        props.setListenReplies(Boolean.TRUE);
         brokerProvider = new RabbitMQBrokerProvider(DEFAULT_DOMAIN,
                 props,
                 brokerConfig,

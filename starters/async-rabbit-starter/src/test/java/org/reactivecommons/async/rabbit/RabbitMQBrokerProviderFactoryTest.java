@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
+import com.rabbitmq.client.ConnectionFactory;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,8 @@ import org.reactivecommons.async.starter.broker.DiscardProvider;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class RabbitMQBrokerProviderFactoryTest {
@@ -35,13 +38,15 @@ class RabbitMQBrokerProviderFactoryTest {
     private CustomReporter errorReporter;
     @Mock
     private UnroutableMessageNotifier unroutableMessageNotifier;
+    @Mock
+    private ConnectionFactoryCustomizer cfCustomizer;
 
     private BrokerProviderFactory<AsyncProps> providerFactory;
 
     @BeforeEach
     void setUp() {
         providerFactory = new RabbitMQBrokerProviderFactory(config, router, converter, meterRegistry, errorReporter,
-                RabbitMQDiscardProviderImpl::new, unroutableMessageNotifier);
+                RabbitMQDiscardProviderImpl::new, unroutableMessageNotifier, cfCustomizer);
     }
 
     @Test
@@ -65,6 +70,9 @@ class RabbitMQBrokerProviderFactoryTest {
 
     @Test
     void shouldReturnBrokerProvider() {
+        when(cfCustomizer.customize(any(AsyncProps.class), any(ConnectionFactory.class)))
+                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(1));
+
         // Arrange
         AsyncProps props = new AsyncProps();
         props.setConnectionProperties(new RabbitProperties());

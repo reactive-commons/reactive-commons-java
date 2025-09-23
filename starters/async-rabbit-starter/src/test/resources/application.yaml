@@ -1,0 +1,10 @@
+# Default App Name
+spring:
+  application:
+    name: test-app
+
+# Async Props
+app:
+  async:
+    app: # this is the name of the default domain
+      listenReplies: true

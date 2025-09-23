@@ -54,7 +54,14 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private Integer retryDelay = 1000;
 
     @Builder.Default
-    private boolean listenReplies = true;
+    private Boolean listenReplies = null;
+
+    public Boolean getListenReplies() {
+        if (listenReplies == null) {
+            throw new IllegalArgumentException("The 'listenReplies' property is required, please specify a 'true' or 'false' value.");
+        }
+        return listenReplies;
+    }
 
     @Builder.Default
     private Boolean withDLQRetry = false;
