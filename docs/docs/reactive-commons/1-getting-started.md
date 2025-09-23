@@ -227,7 +227,6 @@ dependencies {
     implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }
 ```
-
 :::
 
 ### Configuration properties
