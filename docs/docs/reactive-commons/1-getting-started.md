@@ -52,13 +52,11 @@ dependencies {
 
 :::tip
 If you will use Cloud Events, you should include the Cloud Events dependency:
-
 ```groovy
 dependencies {
     implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }
 ```
-
 :::
 
 ### Configuration properties
@@ -113,8 +111,10 @@ public class MyRabbitMQConfig {
 }
 ```
 
-Please refer to [Configuration Properties](/reactive-commons-java/docs/reactive-commons/configuration-properties)
-Or with secrets [Loading properties from a secret](/reactive-commons-java/docs/reactive-commons/configuration-properties#loading-properties-from-a-secret)
+Please refer
+to [Configuration Properties](/reactive-commons-java/docs/reactive-commons/configuration_properties/rabbitmq)
+Or with
+secrets [Loading properties from a secret](/reactive-commons-java/docs/reactive-commons/configuration_properties/rabbitmq#loading-properties-from-a-secret)
 
 The 5.x.x stable version of Reactive Commons has been merged with the deprecated `-eda` variant, this means that
 the `async-commons-rabbit-starter` artifact is now the only one to use.
@@ -220,13 +220,15 @@ dependencies {
 }
 ```
 
-Note: If you will use Cloud Events, you should include the Cloud Events dependency:
-
+:::tip
+If you will use Cloud Events, you should include the Cloud Events dependency:
 ```groovy
 dependencies {
     implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }
 ```
+
+:::
 
 ### Configuration properties
 
