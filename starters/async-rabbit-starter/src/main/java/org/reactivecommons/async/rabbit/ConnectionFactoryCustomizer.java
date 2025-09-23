@@ -9,6 +9,6 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 @FunctionalInterface
 public interface ConnectionFactoryCustomizer {
 
-    ConnectionFactory customize(AsyncProps asyncProps, ConnectionFactory connectionFactory);
+    ConnectionFactory customize(ConnectionFactory connectionFactory, AsyncProps asyncProps);
 
 }

@@ -30,8 +30,8 @@ class RabbitMQDiscardProviderImplTest {
 
     @BeforeEach
     void setUp() {
-        when(cfCustomizer.customize(any(AsyncProps.class), any(ConnectionFactory.class)))
-                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(1));
+        when(cfCustomizer.customize(any(ConnectionFactory.class), any(AsyncProps.class)))
+                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(0));
     }
 
     @Test

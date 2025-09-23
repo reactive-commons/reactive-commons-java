@@ -16,7 +16,7 @@ sidebar_position: 4
 
 @Bean
 public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
-    return (ConnectionFactoryCustomizer) (asyncProps, connectionFactory) -> {
+    return (connectionFactory, asyncProps) -> {
         connectionFactory.setExceptionHandler(new MyCustomExceptionHandler()); // Optional custom exception handler
         connectionFactory.setCredentialsProvider(new MyCustomCredentialsProvider()); // Optional custom credentials provider
         return connectionFactory;

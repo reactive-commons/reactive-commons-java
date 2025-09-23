@@ -135,7 +135,7 @@ class RabbitMQConfigTest {
         ConnectionFactory originalFactory = new ConnectionFactory();
         AsyncProps asyncProps = new AsyncProps();
 
-        ConnectionFactory result = customizer.customize(asyncProps, originalFactory);
+        ConnectionFactory result = customizer.customize(originalFactory, asyncProps);
 
         assertThat(result).isSameAs(originalFactory);
     }

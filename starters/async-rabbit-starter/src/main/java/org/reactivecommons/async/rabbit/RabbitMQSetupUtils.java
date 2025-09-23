@@ -94,7 +94,7 @@ public final class RabbitMQSetupUtils {
                 map.from(rabbitProperties::determineVirtualHost).whenNonNull().to(newFactory::setVirtualHost);
                 newFactory.useNio();
                 setUpSSL(newFactory, rabbitProperties);
-                return cfCustomizer.customize(props, newFactory);
+                return cfCustomizer.customize(newFactory, props);
             } catch (Exception e) {
                 throw new RuntimeException("Error creating ConnectionFactory: ", e);
             }
