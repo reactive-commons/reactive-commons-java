@@ -1,5 +1,13 @@
 # Changelog
 
+## [v6.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/v6.0.0) (2025-09-23)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.0.0-beta.1...v6.0.0)
+
+**Merged pull requests:**
+
+- fix: reorder parameters in ConnectionFactoryCustomizer interface [\#154](https://github.com/reactive-commons/reactive-commons-java/pull/154) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v6.0.0-beta.1](https://github.com/reactive-commons/reactive-commons-java/tree/v6.0.0-beta.1) (2025-09-23)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.2...v6.0.0-beta.1)
