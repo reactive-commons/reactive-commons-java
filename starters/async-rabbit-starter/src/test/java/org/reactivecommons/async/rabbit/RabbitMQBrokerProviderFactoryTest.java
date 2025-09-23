@@ -71,7 +71,7 @@ class RabbitMQBrokerProviderFactoryTest {
     @Test
     void shouldReturnBrokerProvider() {
         when(cfCustomizer.customize(any(ConnectionFactory.class), any(AsyncProps.class)))
-                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(1));
+                .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(0));
 
         // Arrange
         AsyncProps props = new AsyncProps();
