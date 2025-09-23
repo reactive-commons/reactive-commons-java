@@ -63,7 +63,7 @@ public class RabbitMQConfig {
     @Bean
     @ConditionalOnMissingBean(ConnectionFactoryCustomizer.class)
     public ConnectionFactoryCustomizer defaultConnectionFactoryCustomizer() {
-        return ((asyncProps, connectionFactory) -> connectionFactory);
+        return (connectionFactory, asyncProps) -> connectionFactory;
     }
 
 }

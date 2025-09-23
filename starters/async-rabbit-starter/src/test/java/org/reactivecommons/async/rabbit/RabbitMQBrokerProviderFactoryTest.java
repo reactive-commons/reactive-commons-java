@@ -70,7 +70,7 @@ class RabbitMQBrokerProviderFactoryTest {
 
     @Test
     void shouldReturnBrokerProvider() {
-        when(cfCustomizer.customize(any(AsyncProps.class), any(ConnectionFactory.class)))
+        when(cfCustomizer.customize(any(ConnectionFactory.class), any(AsyncProps.class)))
                 .thenAnswer(invocation -> invocation.<ConnectionFactory>getArgument(1));
 
         // Arrange
