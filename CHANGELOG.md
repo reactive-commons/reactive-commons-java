@@ -1,5 +1,15 @@
 # Changelog
 
+## [v6.0.0-beta.1](https://github.com/reactive-commons/reactive-commons-java/tree/v6.0.0-beta.1) (2025-09-23)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.2...v6.0.0-beta.1)
+
+**Merged pull requests:**
+
+- fix!: update broken links [\#153](https://github.com/reactive-commons/reactive-commons-java/pull/153) ([luisgomez29](https://github.com/luisgomez29))
+- fix!: update package-lock.json [\#152](https://github.com/reactive-commons/reactive-commons-java/pull/152) ([luisgomez29](https://github.com/luisgomez29))
+- feat!: Single connection to the RabbitMQ broker and required listenReplies prop [\#151](https://github.com/reactive-commons/reactive-commons-java/pull/151) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v5.6.2](https://github.com/reactive-commons/reactive-commons-java/tree/v5.6.2) (2025-09-10)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v5.6.2-beta.1...v5.6.2)
