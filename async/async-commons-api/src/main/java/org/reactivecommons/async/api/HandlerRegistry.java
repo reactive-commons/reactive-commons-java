@@ -142,12 +142,12 @@ public final class HandlerRegistry {
     }
 
     // commands: RawMessage
-    public HandlerRegistry handleRawCommand(String commandName, RawCommandHandler<?> handler) {
-        return handleRawCommand(DEFAULT_DOMAIN, commandName, handler);
+    public HandlerRegistry handleRawCommand(RawCommandHandler<?> handler) {
+        return handleRawCommand(DEFAULT_DOMAIN, handler);
     }
 
-    public HandlerRegistry handleRawCommand(String domain, String commandName, RawCommandHandler<?> handler) {
-        commandHandlers.add(domain, new RegisteredCommandHandler<>(commandName, handler, RawMessage.class));
+    public HandlerRegistry handleRawCommand(String domain, RawCommandHandler<?> handler) {
+        commandHandlers.add(domain, new RegisteredCommandHandler<>("", handler, RawMessage.class));
         return this;
     }
 

@@ -23,7 +23,7 @@ public class RabbitMessage implements Message {
     }
 
     public static RabbitMessage fromDelivery(Delivery delivery) {
-        return fromDelivery(delivery, null);
+        return fromDelivery(delivery, "");
     }
 
     public static RabbitMessage fromDelivery(Delivery delivery, String executorPath) {

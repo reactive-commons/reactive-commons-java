@@ -26,7 +26,6 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 class HandlerRegistryTest {
     private final HandlerRegistry registry = HandlerRegistry.register();
     private final String name = "some.event";
-    private final String nameRaw = "some.raw.event";
     private final String nameRawNotification = "some.raw.notification.event";
     private final String domain = "some-domain";
 
@@ -222,14 +221,14 @@ class HandlerRegistryTest {
     void handleRawCommand() {
         SomeRawCommandEventHandler eventHandler = new SomeRawCommandEventHandler();
 
-        registry.handleRawCommand(nameRaw, eventHandler);
+        registry.handleRawCommand(eventHandler);
 
         assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass,
                                 RegisteredCommandHandler::handler
                         )
-                        .containsExactly(nameRaw, RawMessage.class, eventHandler)).hasSize(1);
+                        .containsExactly("", RawMessage.class, eventHandler)).hasSize(1);
     }
 
     @Test

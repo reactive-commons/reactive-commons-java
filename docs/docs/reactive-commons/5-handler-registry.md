@@ -55,8 +55,8 @@ public class HandlerRegistry {
     public HandlerRegistry handleCloudEventCommand(String domain, String commandName, CloudCommandHandler handler)
 
     // commands: RawMessage
-    public HandlerRegistry handleRawCommand(String commandName, RawCommandHandler<?> handler)
-    public HandlerRegistry handleRawCommand(String domain, String commandName, RawCommandHandler<?> handler)
+    public HandlerRegistry handleRawCommand(RawCommandHandler<?> handler)
+    public HandlerRegistry handleRawCommand(String domain, RawCommandHandler<?> handler)
 
     // queries: Query
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass)
