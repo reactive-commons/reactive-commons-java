@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.BrokerConfig;
@@ -34,6 +35,7 @@ import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -194,6 +196,62 @@ class RabbitMQBrokerProviderTest {
         brokerProvider.listenQueries(handlerResolver);
         // Assert
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
+    void shouldListenQueuesWithSingleQueue() {
+        RegisteredQueueListener queueListener = mock(RegisteredQueueListener.class);
+        when(queueListener.queueName()).thenReturn("test.queue");
+        when(queueListener.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
+
+        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.getReceiver()).thenReturn(receiver);
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
+        when(handlerResolver.getQueueListeners()).thenReturn(Map.of("test.queue", queueListener));
+
+        brokerProvider.listenQueues(handlerResolver);
+
+        verify(receiver, times(1)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
+    void shouldListenQueuesWithMultipleQueues() {
+        RegisteredQueueListener queueListener1 = mock(RegisteredQueueListener.class);
+        RegisteredQueueListener queueListener2 = mock(RegisteredQueueListener.class);
+        RegisteredQueueListener queueListener3 = mock(RegisteredQueueListener.class);
+
+        when(queueListener1.queueName()).thenReturn("test.queue1");
+        when(queueListener1.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
+        when(queueListener2.queueName()).thenReturn("test.queue2");
+        when(queueListener2.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
+        when(queueListener3.queueName()).thenReturn("test.queue3");
+        when(queueListener3.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
+
+        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.getReceiver()).thenReturn(receiver);
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
+        when(handlerResolver.getQueueListeners()).thenReturn(
+                Map.of(
+                        "test.queue1", queueListener1,
+                        "test.queue2", queueListener2,
+                        "test.queue3", queueListener3
+                )
+        );
+
+        brokerProvider.listenQueues(handlerResolver);
+
+        verify(receiver, times(3)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
+    void shouldNotListenQueuesWhenNoQueuesRegistered() {
+        when(handlerResolver.getQueueListeners()).thenReturn(java.util.Map.of());
+
+        brokerProvider.listenQueues(handlerResolver);
+
+        verify(receiver, times(0)).consumeManualAck(any(String.class), any());
     }
 
     @Test

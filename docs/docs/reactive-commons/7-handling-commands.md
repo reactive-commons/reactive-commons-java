@@ -64,7 +64,7 @@ public class CommandsHandler {
     
     public Mono<Void> handleRawCommandA(RawMessage command) {
         RabbitMessage rawMessage = (RabbitMessage) command;
-        System.out.println("RawEvent received: " + new String(rawMessage.getBody()));
+        System.out.println("RawCommand received: " + new String(rawMessage.getBody()));
         System.out.println("Content Type: " + rawMessage.getProperties().getContentType());
         System.out.println("Headers: " + rawMessage.getProperties().getHeaders());
         // Process the raw message

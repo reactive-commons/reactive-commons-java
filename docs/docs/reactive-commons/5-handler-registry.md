@@ -63,6 +63,12 @@ public class HandlerRegistry {
     public <R> HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass)
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler)
     public HandlerRegistry serveCloudEventQuery(String resource, QueryHandlerDelegate<Void, CloudEvent> handler)
+
+    // Queues
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
 }
 ```
 

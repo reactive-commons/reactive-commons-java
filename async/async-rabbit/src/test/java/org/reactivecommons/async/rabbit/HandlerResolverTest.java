@@ -6,6 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.HandlerResolver;
 import reactor.core.publisher.Mono;
 
@@ -38,8 +39,12 @@ class HandlerResolverTest {
         );
         Map<String, RegisteredEventListener<?, ?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredQueueListener> queueListeners = new ConcurrentHashMap<>();
+        queueListeners.put("queue.name", new RegisteredQueueListener(
+                "queue.name", message ->  Mono.empty(), null
+        ));
         resolver = new HandlerResolver(
-                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers
+                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers, queueListeners
         );
     }
 

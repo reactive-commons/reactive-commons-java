@@ -18,7 +18,7 @@ import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
-public class ApplicationEventListenerTest extends ListenerReporterTestSuperClass {
+class ApplicationEventListenerTest extends ListenerReporterTestSuperClass {
 
     private final DomainEvent<DummyMessage> event1 = new DomainEvent<>(
             "app.event.test", UUID.randomUUID().toString(), new DummyMessage()

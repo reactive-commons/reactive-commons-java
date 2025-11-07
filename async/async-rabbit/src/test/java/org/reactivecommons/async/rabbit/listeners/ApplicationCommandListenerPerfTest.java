@@ -41,7 +41,6 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
@@ -283,7 +282,7 @@ class ApplicationCommandListenerPerfTest {
                 .collect(ConcurrentHashMap::new, (map, handler) ->
                         map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
-        return new HandlerResolver(null, null, null, null, commandHandlers) {
+        return new HandlerResolver(null, null, null, null, commandHandlers, null) {
             @Override
             @SuppressWarnings("unchecked")
             public RegisteredCommandHandler<Object, ? extends Object> getCommandHandler(String path) {
@@ -308,7 +307,7 @@ class ApplicationCommandListenerPerfTest {
             Envelope envelope = new Envelope(count, true, data, data);
             Delivery delivery = new Delivery(envelope, props, data.getBytes());
             return new AcknowledgableDelivery(delivery, new ChannelDummy(), null);
-        }).collect(Collectors.toList());
+        }).toList();
 
         return Flux.fromIterable(new ArrayList<>(list));
     }

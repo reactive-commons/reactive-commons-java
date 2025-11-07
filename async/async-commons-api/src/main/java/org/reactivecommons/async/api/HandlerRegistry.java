@@ -13,10 +13,13 @@ import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.QueryHandlerDelegate;
 import org.reactivecommons.async.api.handlers.RawCommandHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
+import org.reactivecommons.async.api.handlers.TopologyHandlerSetup;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredDomainHandlers;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
+import reactor.core.publisher.Mono;
 
 import java.lang.reflect.ParameterizedType;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -34,6 +37,8 @@ public final class HandlerRegistry {
             new RegisteredDomainHandlers<>();
     private final RegisteredDomainHandlers<RegisteredQueryHandler<?, ?>> handlers = new RegisteredDomainHandlers<>();
     private final RegisteredDomainHandlers<RegisteredCommandHandler<?, ?>> commandHandlers =
+            new RegisteredDomainHandlers<>();
+    private final RegisteredDomainHandlers<RegisteredQueueListener> queueHandlers =
             new RegisteredDomainHandlers<>();
 
 
@@ -176,6 +181,26 @@ public final class HandlerRegistry {
         return this;
     }
 
+    // Queues
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler) {
+        return listenQueue(queueName, handler, creator -> Mono.empty());
+    }
+
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler) {
+        return listenQueue(domain, queueName, handler, creator -> Mono.empty());
+    }
+
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler,
+                                       TopologyHandlerSetup topologyCreator) {
+        queueHandlers.add(DEFAULT_DOMAIN, new RegisteredQueueListener(queueName, handler, topologyCreator));
+        return this;
+    }
+
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler,
+                                       TopologyHandlerSetup topologyCreator) {
+        queueHandlers.add(domain, new RegisteredQueueListener(queueName, handler, topologyCreator));
+        return this;
+    }
 
     @Deprecated(forRemoval = true)
     public <T> HandlerRegistry listenEvent(String eventName, DomainEventHandler<T> handler) {

@@ -64,6 +64,7 @@ public class ApplicationCommandListener extends GenericMessageListener {
         this.maxLengthBytes = maxLengthBytes;
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(directExchange).durable(true).type("direct")

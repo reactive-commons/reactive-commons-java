@@ -18,6 +18,7 @@ import org.reactivecommons.async.rabbit.listeners.ApplicationCommandListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationEventListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationNotificationListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
+import org.reactivecommons.async.rabbit.listeners.ApplicationQueueListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationReplyListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
@@ -75,6 +76,19 @@ public record RabbitMQBrokerProvider(String domain,
                     props.getAppName());
             listener.startListener();
         }
+    }
+
+    @Override
+    public void listenQueues(HandlerResolver resolver) {
+        resolver.getQueueListeners().values().forEach(registeredQueueListener ->
+                new ApplicationQueueListener(receiver,
+                props.getWithDLQRetry(),
+                props.getMaxRetries(),
+                props.getRetryDelay(),
+                registeredQueueListener,
+                discardNotifier,
+                errorReporter
+        ).startListener());
     }
 
     @Override

@@ -113,6 +113,18 @@ class GenericDomainEventBusTest {
     }
 
     @Test
+    void shouldEmitRawEventWithDefaultDomain() {
+        // Arrange
+        when(domainEventBus1.emit(rawMessage)).thenReturn(Mono.empty());
+        // Act
+        Mono<Void> flow = Mono.from(genericDomainEventBus.emit(rawMessage));
+        // Assert
+        StepVerifier.create(flow)
+                .verifyComplete();
+        verify(domainEventBus1).emit(rawMessage);
+    }
+
+    @Test
     void shouldEmitRawEventWithSpecificDomain() {
         // Arrange
         when(domainEventBus2.emit(rawMessage)).thenReturn(Mono.empty());

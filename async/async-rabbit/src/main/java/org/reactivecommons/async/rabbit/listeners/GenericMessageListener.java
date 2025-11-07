@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -101,14 +100,23 @@ public abstract class GenericMessageListener {
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.getTopologyCreator())
                     .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
+                            .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
                             .transform(this::consumeFaultTolerant));
         } else {
             this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
-                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
+                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
                     .transform(this::consumeFaultTolerant);
         }
 
         onTerminate();
+    }
+
+    private String getRootCauseMessage(Throwable err) {
+        Throwable root = err;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        return root.getMessage();
     }
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
@@ -179,7 +187,6 @@ public abstract class GenericMessageListener {
         log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
                 objectType, executorPath, timeElapsed));
     }
-
 
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         String messageID = msj.getProperties().getMessageId();

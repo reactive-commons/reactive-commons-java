@@ -6,16 +6,15 @@ buildscript {
     }
 
     dependencies {
-        classpath('com.github.ben-manes:gradle-versions-plugin:0.52.0')
+        classpath('com.github.ben-manes:gradle-versions-plugin:0.53.0')
     }
 }
 
 plugins {
     id 'jacoco'
-    id 'org.sonarqube' version '6.3.1.5724'
-    id 'org.springframework.boot' version '3.5.6' apply false
+    id 'org.sonarqube' version '7.0.1.6134'
+    id 'org.springframework.boot' version '3.5.7' apply false
     id 'io.github.gradle-nexus.publish-plugin' version '2.0.0'
-    id 'co.com.bancolombia.cleanArchitecture' version '3.26.1'
 }
 
 repositories {

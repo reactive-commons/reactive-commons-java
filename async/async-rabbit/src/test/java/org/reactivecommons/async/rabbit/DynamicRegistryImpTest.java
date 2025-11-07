@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -51,7 +52,10 @@ class DynamicRegistryImpTest {
         Map<String, RegisteredEventListener<?,?>> eventsToBind = new ConcurrentHashMap<>();
         Map<String, RegisteredEventListener<?,?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
-        resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers);
+        Map<String, RegisteredQueueListener> queueHandlers = new ConcurrentHashMap<>();
+        resolver = new HandlerResolver(
+                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers, queueHandlers
+        );
         dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
     }
 

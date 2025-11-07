@@ -8,6 +8,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.HandlerResolver;
 
 import java.util.List;
@@ -42,7 +43,17 @@ public final class HandlerResolverBuilder {
                         -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
 
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListener = registries
+        final ConcurrentMap<String, RegisteredQueueListener> queueListeners = registries
+                .values()
+                .stream()
+                .flatMap(r -> r.getQueueHandlers()
+                        .getOrDefault(domain, List.of())
+                        .stream())
+                .collect(ConcurrentHashMap::new, (map, handler)
+                        -> map.put(handler.queueName(), handler), ConcurrentHashMap::putAll
+                );
+
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListeners = registries
                 .values()
                 .stream()
                 .flatMap(r -> r.getEventNotificationListener()
@@ -55,11 +66,11 @@ public final class HandlerResolverBuilder {
         final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain,
                 registries);
 
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventHandlers =
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventListeners =
                 getEventHandlersWithDynamics(domain, registries);
 
-        return new HandlerResolver(queryHandlers, eventHandlers, eventsToBind, eventNotificationListener,
-                commandHandlers) {
+        return new HandlerResolver(queryHandlers, eventListeners, eventsToBind, eventNotificationListeners,
+                commandHandlers, queueListeners) {
             @Override
             @SuppressWarnings("unchecked")
             public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {

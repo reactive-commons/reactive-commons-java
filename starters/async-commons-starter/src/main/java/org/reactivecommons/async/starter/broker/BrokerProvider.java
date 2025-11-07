@@ -23,6 +23,8 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
 
     void listenQueries(HandlerResolver resolver);
 
+    void listenQueues(HandlerResolver resolver);
+
     void listenReplies();
 
     Mono<RCHealth> healthCheck();

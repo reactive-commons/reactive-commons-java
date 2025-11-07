@@ -1,10 +1,12 @@
 package org.reactivecommons.async.commons;
 
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.utils.matcher.KeyMatcher;
 import org.reactivecommons.async.commons.utils.matcher.Matcher;
 
@@ -23,6 +25,8 @@ public class HandlerResolver {
     private final Map<String, RegisteredEventListener<?, ?>> eventsToBind;
     private final Map<String, RegisteredEventListener<?, ?>> eventNotificationListeners;
     private final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers;
+    @Getter
+    private final Map<String, RegisteredQueueListener> queueListeners;
 
     private final Matcher matcher = new KeyMatcher();
 

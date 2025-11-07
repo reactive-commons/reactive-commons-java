@@ -89,6 +89,11 @@ public record KafkaBrokerProvider(String domain,
     }
 
     @Override
+    public void listenQueues(HandlerResolver resolver) {
+        // May be implemented in the future
+    }
+
+    @Override
     public void listenReplies() {
         // May be implemented in the future
     }

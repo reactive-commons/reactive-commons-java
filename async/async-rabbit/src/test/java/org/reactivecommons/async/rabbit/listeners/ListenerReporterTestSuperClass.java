@@ -12,6 +12,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.Headers;
@@ -166,12 +167,17 @@ public abstract class ListenerReporterTestSuperClass {
         final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
                 .get(DEFAULT_DOMAIN)
                 .stream().collect(toMap(RegisteredCommandHandler::path, identity()));
+        final Map<String, RegisteredQueueListener> queueHandlers = registry.getQueueHandlers()
+                .get(DEFAULT_DOMAIN)
+                .stream().collect(toMap(RegisteredQueueListener::queueName, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),
                 new ConcurrentHashMap<>(eventHandlers),
                 new ConcurrentHashMap<>(eventsToBind),
                 new ConcurrentHashMap<>(notificationHandlers),
-                new ConcurrentHashMap<>(commandHandlers));
+                new ConcurrentHashMap<>(commandHandlers),
+                new ConcurrentHashMap<>(queueHandlers)
+        );
     }
 
     protected String valueAsString(Object o) {
