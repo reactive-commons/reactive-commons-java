@@ -18,10 +18,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static reactor.core.publisher.Flux.range;
@@ -32,8 +29,6 @@ class QueryProcessPerfTest {
     private static final String QUERY_NAME = "app.command.test";
     private static final int MESSAGE_COUNT = 40000;
     private static final Semaphore semaphore = new Semaphore(0);
-    // private static final AtomicLong atomicLong = new AtomicLong(0);
-    // private static final CountDownLatch latch = new CountDownLatch(12 + 1);
 
     @Autowired
     private DirectAsyncGateway gateway;

@@ -57,7 +57,7 @@ CloudEvent eventCloudEvent = CloudEventBuilder.v1()
     .build();
 ```
 
-## Creating a CloudEvent instance with jackson wrapper Data wrapper
+## Creating a CloudEvent instance with Jackson wrapper Data wrapper
 
 add this classes:
 

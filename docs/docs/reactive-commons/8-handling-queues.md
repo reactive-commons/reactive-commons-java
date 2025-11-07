@@ -8,7 +8,7 @@ sidebar_position: 8
 
 To listen to a custom queue you should register it in the HandlerRegistry and make it available as a Bean. Queue listeners provide direct access to RabbitMQ queues with full control over queue configuration and topology.
 
-### Listening Queues
+### Listening queues
 
 The simplest way to listen to a queue is by providing the queue name and a handler:
 
@@ -19,7 +19,7 @@ public class HandlerRegistryConfiguration {
     @Bean
     public HandlerRegistry handlerRegistry(QueueHandler queueHandler) {
         return HandlerRegistry.register()
-                .listenQueue("my.custom.queue", queueHandler::handleQueueMessage);
+                .listenQueue("my.custom.queue", queueHandler::handleMessage);
     }
 }
 ```
@@ -30,7 +30,7 @@ To effectively start listening to queues you should add the annotation `@EnableQ
 @EnableQueueListeners
 public class QueueHandler {
     
-    public Mono<Void> handleQueueMessage(RawMessage message) {
+    public Mono<Void> handleMessage(RawMessage message) {
         RabbitMessage rawMessage = (RabbitMessage) message;
         System.out.println("Message received from queue: " + new String(rawMessage.getBody()));
         System.out.println("Headers: " + rawMessage.getProperties().getHeaders());
@@ -40,7 +40,7 @@ public class QueueHandler {
 }
 ```
 
-### Listening Queues with Custom Topology
+### Listening queues with custom topology
 
 If you need to configure the queue topology (exchange type, durability, bindings, etc.), you can use the `TopologyHandlerSetup` parameter:
 
@@ -51,7 +51,7 @@ public class HandlerRegistryConfiguration {
     @Bean
     public HandlerRegistry handlerRegistry(QueueHandler queueHandler) {
         return HandlerRegistry.register()
-                .listenQueue("my.custom.queue", queueHandler::handleQueueMessage, topologyCreator -> {
+                .listenQueue("my.custom.queue", queueHandler::handleMessage, topologyCreator -> {
                     var creator = (TopologyCreator) topologyCreator;
                     
                     var exchangeSpecification = ExchangeSpecification
@@ -88,7 +88,7 @@ The `TopologyHandlerSetup` allows you to:
 - Set queue types (classic, quorum)
 - Set queue properties like durability, auto-delete, and exclusivity
 
-### Listening Queues with Custom Domain
+### Listening queues with custom domain
 
 You can listen to queues in different domains by specifying the domain name:
 
@@ -99,19 +99,19 @@ public class HandlerRegistryConfiguration {
     @Bean
     public HandlerRegistry handlerRegistry(QueueHandler queueHandler) {
         return HandlerRegistry.register()
-                .listenQueue("customDomain", "my.custom.queue", queueHandler::handleQueueMessage);
+                .listenQueue("customDomain", "my.custom.queue", queueHandler::handleMessage);
     }
 }
 ```
 
-## Queue Configuration Examples
+## Queue configuration examples
 
-### Dead Letter Queue Configuration
+### Dead letter queue configuration
 
 Configure a queue with a dead letter exchange for failed messages:
 
 ```java
-.listenQueue("main.queue", handler::handleMessage, topologyCreator -> {
+.listenQueue("main.queue", queueHandler::handleMessage, topologyCreator -> {
     var creator = (TopologyCreator) topologyCreator;
     
     var mainQueue = QueueSpecification.queue("main.queue")
@@ -143,12 +143,12 @@ Configure a queue with a dead letter exchange for failed messages:
 })
 ```
 
-### Priority Queue Configuration
+### Priority queue configuration
 
 Configure a priority queue:
 
 ```java
-.listenQueue("priority.queue", handler::handleMessage, topologyCreator -> {
+.listenQueue("priority.queue", queueHandler::handleMessage, topologyCreator -> {
     var creator = (TopologyCreator) topologyCreator;
     
     var queueSpec = QueueSpecification.queue("priority.queue")
@@ -159,12 +159,12 @@ Configure a priority queue:
 })
 ```
 
-### Quorum Queue Configuration
+### Quorum queue configuration
 
 Configure a quorum queue for high availability:
 
 ```java
-.listenQueue("quorum.queue", handler::handleMessage, topologyCreator -> {
+.listenQueue("quorum.queue", queueHandler::handleMessage, topologyCreator -> {
     var creator = (TopologyCreator) topologyCreator;
     
     var queueSpec = QueueSpecification.queue("quorum.queue")
@@ -176,4 +176,64 @@ Configure a quorum queue for high availability:
     
     return creator.declare(queueSpec).then();
 })
+```
+
+### Temporary queue configuration
+
+Configure a temporary queue with a random name for short-lived, exclusive connections. Temporary queues are useful for reply-to patterns or ephemeral consumers:
+
+```java
+@Configuration
+public class HandlerRegistryConfiguration {
+
+    @Bean
+    public HandlerRegistry handlerRegistry(QueueHandler queueHandler) {
+        String queueName = "temp.queue.".concat(generateRandomQueueName());
+        
+        return HandlerRegistry.register()
+                .listenQueue(queueName, queueHandler::handleMessage, topologyCreator -> {
+                    var creator = (TopologyCreator) topologyCreator;
+                    String exchangeName = "temp.exchange";
+                    
+                    var exchangeSpec = ExchangeSpecification.exchange(exchangeName)
+                            .type("topic")
+                            .durable(true);
+                    
+                    var queueSpec = QueueSpecification.queue(queueName)
+                            .durable(false)
+                            .autoDelete(true)
+                            .exclusive(true);
+                    
+                    var binding = creator.bind(
+                            BindingSpecification.binding(exchangeName, queueName, queueName)
+                    );
+                    
+                    return creator.declare(exchangeSpec)
+                            .then(creator.declare(queueSpec))
+                            .then(binding)
+                            .then();
+                });
+    }
+    
+    private String generateRandomQueueName() {
+        UUID uuid = UUID.randomUUID();
+        ByteBuffer bb = ByteBuffer.wrap(new byte[16]);
+        bb.putLong(uuid.getMostSignificantBits())
+                .putLong(uuid.getLeastSignificantBits());
+        // Convert to base64 and remove trailing =
+        return encodeToUrlSafeString(bb.array())
+                .replace("=", "");
+    }
+    
+    private static String encodeToUrlSafeString(byte[] src) {
+        return new String(encodeUrlSafe(src));
+    }
+    
+    private static byte[] encodeUrlSafe(byte[] src) {
+        if (src.length == 0) {
+            return src;
+        }
+        return Base64.getUrlEncoder().encode(src);
+    }
+}
 ```

@@ -53,6 +53,3 @@ public class ApplicationQueueListener extends GenericMessageListener {
         return "queue";
     }
 }
-
-
-
