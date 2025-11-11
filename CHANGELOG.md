@@ -1,5 +1,13 @@
 # Changelog
 
+## [v6.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v6.1.0) (2025-11-11)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.0.0...v6.1.0)
+
+**Merged pull requests:**
+
+- feat\(rabbitmq\): Add direct queue listener which allows compatibility with existing queues [\#155](https://github.com/reactive-commons/reactive-commons-java/pull/155) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v6.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/v6.0.0) (2025-09-23)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.0.0-beta.1...v6.0.0)
