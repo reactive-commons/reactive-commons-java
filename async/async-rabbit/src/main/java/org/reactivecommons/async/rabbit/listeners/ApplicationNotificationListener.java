@@ -50,6 +50,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
         this.createTopology = createTopology;
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
 
         final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declare(

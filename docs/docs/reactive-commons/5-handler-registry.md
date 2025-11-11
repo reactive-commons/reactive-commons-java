@@ -55,14 +55,20 @@ public class HandlerRegistry {
     public HandlerRegistry handleCloudEventCommand(String domain, String commandName, CloudCommandHandler handler)
 
     // commands: RawMessage
-    public HandlerRegistry handleRawCommand(String commandName, RawCommandHandler<?> handler)
-    public HandlerRegistry handleRawCommand(String domain, String commandName, RawCommandHandler<?> handler)
+    public HandlerRegistry handleRawCommand(RawCommandHandler<?> handler)
+    public HandlerRegistry handleRawCommand(String domain, RawCommandHandler<?> handler)
 
     // queries: Query
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass)
     public <R> HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass)
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler)
     public HandlerRegistry serveCloudEventQuery(String resource, QueryHandlerDelegate<Void, CloudEvent> handler)
+
+    // Queues
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
+    public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
 }
 ```
 

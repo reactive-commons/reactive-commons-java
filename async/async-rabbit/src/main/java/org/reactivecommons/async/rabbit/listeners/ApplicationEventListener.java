@@ -61,6 +61,7 @@ public class ApplicationEventListener extends GenericMessageListener {
         this.appName = appName;
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic")

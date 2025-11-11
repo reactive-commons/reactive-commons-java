@@ -18,10 +18,7 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static reactor.core.publisher.Flux.range;
@@ -32,8 +29,6 @@ class QueryProcessPerfTest {
     private static final String QUERY_NAME = "app.command.test";
     private static final int MESSAGE_COUNT = 40000;
     private static final Semaphore semaphore = new Semaphore(0);
-    private static final AtomicLong atomicLong = new AtomicLong(0);
-    private static final CountDownLatch latch = new CountDownLatch(12 + 1);
 
     @Autowired
     private DirectAsyncGateway gateway;
@@ -75,7 +70,7 @@ class QueryProcessPerfTest {
     private Flux<AsyncQuery<DummyMessage>> createMessages(int count) {
         final List<AsyncQuery<DummyMessage>> queryList = IntStream.range(0, count)
                 .mapToObj(_v -> new AsyncQuery<>(QUERY_NAME, new DummyMessage()))
-                .collect(Collectors.toList());
+                .toList();
         return Flux.fromIterable(queryList);
     }
 
@@ -95,6 +90,7 @@ class QueryProcessPerfTest {
                             "app.command.name" + i, message -> Mono.empty(), Map.class
                     ))
                     .block();
+            assert registry != null;
             return registry
                     .serveQuery(QUERY_NAME, this::handleSimple, DummyMessage.class);
         }

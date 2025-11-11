@@ -18,7 +18,7 @@ import static reactor.core.publisher.Mono.error;
 
 @ExtendWith(MockitoExtension.class)
 @SuppressWarnings("unchecked")
-public class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass {
+class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass {
 
     private final Command<DummyMessage> command = new Command<>(
             "app.command.test", UUID.randomUUID().toString(), new DummyMessage()

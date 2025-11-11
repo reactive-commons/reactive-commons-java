@@ -6,7 +6,7 @@ sidebar_position: 4
 
 ## From 5.x.x to 6.x.x
 
-### New Features
+### New features
 
 - **Connection customization:** You can now customize the RabbitMQ connection by defining a
   `ConnectionFactoryCustomizer` bean. For more details,
@@ -92,7 +92,7 @@ public class MyDomainConfig {
 
 ## From 4.x.x to 5.x.x
 
-### New Features
+### New features
 
 - **Support for multiple brokers:** It is now possible to configure and connect to up to two brokers simultaneously,
   using

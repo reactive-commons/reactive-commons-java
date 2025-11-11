@@ -1,5 +1,5 @@
 ---
-sidebar_position: 8
+sidebar_position: 9
 ---
 
 # Serving Async Queries
@@ -54,7 +54,7 @@ public class HandlerRegistryConfiguration {
 
 So any consumer can send a query with a name that matches with pattern, for example: `my.some.query`
 
-### Delegated Queries
+### Delegated queries
 
 There is a concept introduced in queries that cannot be resolved locally and may require a later answer, in that case we are in front of the next scenario:
 

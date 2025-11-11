@@ -42,7 +42,6 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class GenericMessageListenerPerfTest {
 
-
     @Mock
     private Receiver receiver;
 
@@ -118,7 +117,7 @@ class GenericMessageListenerPerfTest {
             Envelope envelope = new Envelope(count, true, data, data);
             Delivery delivery = new Delivery(envelope, props, data.getBytes());
             return new AcknowledgableDelivery(delivery, new ChannelDummy(), null);
-        }).collect(Collectors.toList());
+        }).toList();
 
         return Flux.fromIterable(new ArrayList<>(list));
     }

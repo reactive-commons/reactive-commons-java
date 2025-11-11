@@ -5,6 +5,7 @@ import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
+import org.reactivecommons.async.api.handlers.RawCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.commons.CommandExecutor;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -63,6 +64,7 @@ public class ApplicationCommandListener extends GenericMessageListener {
         this.maxLengthBytes = maxLengthBytes;
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(directExchange).durable(true).type("direct")
@@ -128,7 +130,10 @@ public class ApplicationCommandListener extends GenericMessageListener {
         if (jsonNode.get(COMMAND_ID) != null) {
             return jsonNode.get(NAME).asText();
         }
-        return jsonNode.get(TYPE).asText();
+        if (jsonNode.get(TYPE) != null) {
+            return jsonNode.get(TYPE).asText();
+        }
+        return rabbitMessage.getType();
     }
 
     @Override
@@ -142,6 +147,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
             return msj -> messageConverter.readCommand(msj, commandClass);
         } else if (registeredCommandHandler.handler() instanceof CloudCommandHandler) {
             return messageConverter::readCloudEvent;
+        } else if (registeredCommandHandler.handler() instanceof RawCommandHandler) {
+            return message -> message;
         }
         throw new RuntimeException("Unknown handler type");
     }

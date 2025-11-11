@@ -56,6 +56,7 @@ import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 
 
 @ExtendWith(MockitoExtension.class)
+@SuppressWarnings("unchecked")
 class RabbitDirectAsyncGatewayTest {
 
     private final BrokerConfig config = new BrokerConfig();
@@ -74,13 +75,19 @@ class RabbitDirectAsyncGatewayTest {
     private RabbitDirectAsyncGateway asyncGateway;
 
     void init(ReactiveMessageSender sender) {
-        asyncGateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter, meterRegistry);
+        asyncGateway = new RabbitDirectAsyncGateway(
+                config, router, sender, "exchange", converter, meterRegistry
+        );
     }
 
     @Test
     void shouldReleaseRouterResourcesOnTimeout() {
-        BrokerConfig brokerConfig = new BrokerConfig(false, false, false, Duration.ofSeconds(1));
-        asyncGateway = new RabbitDirectAsyncGateway(brokerConfig, router, senderMock, "ex", converter, meterRegistry);
+        var brokerConfig = new BrokerConfig(
+                false, false, false, Duration.ofSeconds(1)
+        );
+        asyncGateway = new RabbitDirectAsyncGateway(
+                brokerConfig, router, senderMock, "ex", converter, meterRegistry
+        );
         when(router.register(anyString())).thenReturn(Mono.never());
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
                 .thenReturn(Mono.empty());
@@ -125,7 +132,6 @@ class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void shouldReplyQuery() {
         // Arrange
         senderMock();
@@ -147,7 +153,6 @@ class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void shouldReplyQueryWithout() {
         // Arrange
         senderMock();
@@ -161,25 +166,26 @@ class RabbitDirectAsyncGatewayTest {
         StepVerifier.create(result).verifyComplete();
         ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
         verify(senderMock, times(1))
-                .sendNoConfirm(eq(null), eq("globalReply"), eq("replyId"), headersCaptor.capture(), anyBoolean());
+                .sendNoConfirm(
+                        eq(null), eq("globalReply"), eq("replyId"), headersCaptor.capture(),
+                        anyBoolean()
+                );
         assertThat(headersCaptor.getValue())
                 .containsEntry(CORRELATION_ID, "correlationId")
                 .containsEntry(COMPLETION_ONLY_SIGNAL, Boolean.TRUE.toString());
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     void shouldHandleRequestReply() throws JsonProcessingException {
-        // Arrange
         senderMock();
         mockReply();
 
         String queryName = "my.query";
         String targetName = "app-target";
         AsyncQuery<DummyMessage> query = new AsyncQuery<>(queryName, new DummyMessage());
-        // Act
+
         Mono<DummyMessage> result = asyncGateway.requestReply(query, targetName, DummyMessage.class);
-        // Assert
+
         StepVerifier.create(result)
                 .assertNext(res -> assertThat(res.getName()).startsWith("Daniel"))
                 .verifyComplete();
@@ -189,6 +195,128 @@ class RabbitDirectAsyncGatewayTest {
                         anyBoolean());
         assertThat(headersCaptor.getValue().get(REPLY_ID).toString()).hasSize(32);
         assertThat(headersCaptor.getValue().get(CORRELATION_ID).toString()).hasSize(32);
+    }
+
+    @Test
+    void shouldSendCommandWithDefaultDomain() {
+        init(senderMock);
+        when(senderMock.sendWithConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+
+        Command<DummyMessage> command = new Command<>("test.command", "id", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.sendCommand(command, "target"))
+                .verifyComplete();
+
+        verify(senderMock)
+                .sendWithConfirm(eq(command), eq("exchange"), eq("target"), anyMap(), anyBoolean());
+    }
+
+    @Test
+    void shouldSendCommandWithDelay() {
+        init(senderMock);
+        when(senderMock.sendWithConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+
+        Command<DummyMessage> command = new Command<>("test.command", "id", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.sendCommand(command, "target", 5000L))
+                .verifyComplete();
+
+        ArgumentCaptor<String> routingKeyCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(senderMock).sendWithConfirm(eq(command), eq("exchange"), routingKeyCaptor.capture(),
+                headersCaptor.capture(), anyBoolean());
+        assertThat(routingKeyCaptor.getValue()).isEqualTo("target-delayed");
+        assertThat(headersCaptor.getValue()).containsEntry("rc-delay", "5000");
+    }
+
+    @Test
+    void shouldSendCommandWithZeroDelay() {
+        init(senderMock);
+        when(senderMock.sendWithConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+
+        Command<DummyMessage> command = new Command<>("test.command", "id", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.sendCommand(command, "target", 0L))
+                .verifyComplete();
+
+        ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(senderMock).sendWithConfirm(eq(command), eq("exchange"), eq("target"),
+                headersCaptor.capture(), anyBoolean());
+        assertThat(headersCaptor.getValue()).doesNotContainKey("rc-delay");
+    }
+
+    @Test
+    void shouldSendCommandWithCustomDomainNoDelay() {
+        init(senderMock);
+        when(senderMock.sendWithConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+
+        Command<DummyMessage> command = new Command<>("test.command", "id", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.sendCommand(command, "target", "customDomain"))
+                .verifyComplete();
+
+        verify(senderMock)
+                .sendWithConfirm(eq(command), eq("exchange"), eq("target"), anyMap(), anyBoolean());
+    }
+
+    @Test
+    void shouldSendCommandWithCustomDomainAndDelay() {
+        init(senderMock);
+        when(senderMock.sendWithConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+
+        Command<DummyMessage> command = new Command<>("test.command", "id", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.sendCommand(
+                        command, "target", 3000L, "customDomain"
+                ))
+                .verifyComplete();
+
+        ArgumentCaptor<String> routingKeyCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
+        verify(senderMock).sendWithConfirm(eq(command), eq("exchange"), routingKeyCaptor.capture(),
+                headersCaptor.capture(), anyBoolean());
+        assertThat(routingKeyCaptor.getValue()).isEqualTo("target-delayed");
+        assertThat(headersCaptor.getValue()).containsEntry("rc-delay", "3000");
+    }
+
+    @Test
+    void shouldSendCommandsInBatch() {
+        init(senderMock);
+        when(senderMock.sendWithConfirmBatch(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Flux.empty());
+
+        Flux<Command<DummyMessage>> commands = Flux.just(
+                new Command<>("cmd1", "id1", new DummyMessage()),
+                new Command<>("cmd2", "id2", new DummyMessage())
+        );
+
+        StepVerifier.create(asyncGateway.sendCommands(commands, "target"))
+                .verifyComplete();
+
+        verify(senderMock)
+                .sendWithConfirmBatch(any(), eq("exchange"), eq("target"), anyMap(), anyBoolean());
+    }
+
+    @Test
+    void shouldRequestReplyWithCustomDomain() throws JsonProcessingException {
+        senderMock();
+        mockReply();
+
+        AsyncQuery<DummyMessage> query = new AsyncQuery<>("my.query", new DummyMessage());
+
+        StepVerifier.create(asyncGateway.requestReply(
+                        query, "target", DummyMessage.class, "customDomain")
+                )
+                .assertNext(res -> assertThat(res.getName()).startsWith("Daniel"))
+                .verifyComplete();
+
+        verify(senderMock)
+                .sendNoConfirm(eq(query), eq("exchange"), eq("target.query"), anyMap(), anyBoolean());
     }
 
     private void senderMock() {
@@ -208,12 +336,18 @@ class RabbitDirectAsyncGatewayTest {
 
     private ReactiveMessageSender getReactiveMessageSender() {
         Sender sender = new StubSender();
-        return new ReactiveMessageSender(sender, "sourceApplication", converter, null, true, unroutableMessageNotifier);
+        return new ReactiveMessageSender(
+                sender, "sourceApplication", converter, null, true,
+                unroutableMessageNotifier
+        );
     }
 
     private Flux<Command<DummyMessage>> createMessagesHot(int count) {
-        final List<Command<DummyMessage>> commands = IntStream.range(0, count).mapToObj(value -> new Command<>("app" +
-                ".command.test", UUID.randomUUID().toString(), new DummyMessage())).toList();
+        final List<Command<DummyMessage>> commands = IntStream.range(0, count)
+                .mapToObj(value -> new Command<>(
+                        "app.command.test", UUID.randomUUID().toString(), new DummyMessage()
+                ))
+                .toList();
         return Flux.fromIterable(commands);
     }
 
