@@ -18,8 +18,8 @@ public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
 
     @Override
     public Message toMessage(Object object) {
-        if (object instanceof RabbitMessage) {
-            return (RabbitMessage) object;
+        if (object instanceof RabbitMessage rabbitMessage) {
+            return rabbitMessage;
         }
         byte[] bytes;
         try {

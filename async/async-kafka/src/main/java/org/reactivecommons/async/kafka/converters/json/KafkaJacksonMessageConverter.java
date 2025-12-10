@@ -22,8 +22,8 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
 
     @Override
     public Message toMessage(Object object) {
-        if (object instanceof KafkaMessage) {
-            return (KafkaMessage) object;
+        if (object instanceof KafkaMessage kafkaMessage) {
+            return kafkaMessage;
         }
         byte[] bytes;
         try {
@@ -41,8 +41,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
         Map<String, Object> headers = new HashMap<>();
         props.setHeaders(headers);
 
-        if (message instanceof CloudEvent) {
-            CloudEvent cloudEvent = (CloudEvent) message;
+        if (message instanceof CloudEvent cloudEvent) {
             props.setKey(cloudEvent.getId());
             props.setTopic(cloudEvent.getType());
 
@@ -50,8 +49,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
             return props;
         }
 
-        if (message instanceof DomainEvent<?>) {
-            DomainEvent<?> domainEvent = (DomainEvent<?>) message;
+        if (message instanceof DomainEvent<?> domainEvent) {
             props.setKey(domainEvent.getEventId());
             props.setTopic(domainEvent.getName());
 

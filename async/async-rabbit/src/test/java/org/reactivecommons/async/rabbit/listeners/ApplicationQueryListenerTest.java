@@ -74,7 +74,7 @@ class ApplicationQueryListenerTest {
 
     @BeforeEach
     void setUp() {
-        when(reactiveMessageListener.getReceiver()).thenReturn(receiver);
+        when(reactiveMessageListener.receiver()).thenReturn(receiver);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
         HandlerResolver resolver = getHandlerResolver();
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,

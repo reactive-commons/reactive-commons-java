@@ -110,14 +110,14 @@ class RabbitMQBrokerProviderTest {
     @Test
     void shouldCreateDirectAsyncGateway() {
         when(sender.getTopologyCreator()).thenReturn(creator);
-        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.bind(any(BindingSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
         when(creator.declare(any(QueueSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
-        when(listener.getReceiver()).thenReturn(receiver);
+        when(listener.receiver()).thenReturn(receiver);
         when(receiver.consumeAutoAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         // Act
         DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
@@ -127,12 +127,12 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldListenDomainEvents() {
-        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.declareQueue(any(String.class), any())).thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
@@ -144,13 +144,13 @@ class RabbitMQBrokerProviderTest {
     @SuppressWarnings({"rawtypes", "unchecked"})
     void shouldListenNotificationEvents() {
         when(handlerResolver.hasNotificationListeners()).thenReturn(true);
-        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.declare(any(QueueSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         List mockedListeners = spy(List.of());
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
@@ -163,15 +163,15 @@ class RabbitMQBrokerProviderTest {
     @Test
     void shouldListenCommands() {
         when(handlerResolver.hasCommandHandlers()).thenReturn(true);
-        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.declareQueue(any(String.class), any()))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(creator.bind(any(BindingSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenCommands(handlerResolver);
@@ -182,15 +182,15 @@ class RabbitMQBrokerProviderTest {
     @Test
     void shouldListenQueries() {
         when(handlerResolver.hasQueryHandlers()).thenReturn(true);
-        when(listener.getTopologyCreator()).thenReturn(creator);
+        when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
         when(creator.declareQueue(any(String.class), any()))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(creator.bind(any(BindingSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenQueries(handlerResolver);
@@ -204,9 +204,9 @@ class RabbitMQBrokerProviderTest {
         when(queueListener.queueName()).thenReturn("test.queue");
         when(queueListener.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
 
-        when(listener.getTopologyCreator()).thenReturn(creator);
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.topologyCreator()).thenReturn(creator);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         when(handlerResolver.getQueueListeners()).thenReturn(Map.of("test.queue", queueListener));
 
@@ -228,9 +228,9 @@ class RabbitMQBrokerProviderTest {
         when(queueListener3.queueName()).thenReturn("test.queue3");
         when(queueListener3.topologyHandlerSetup()).thenReturn(topologyCreator -> Mono.empty());
 
-        when(listener.getTopologyCreator()).thenReturn(creator);
-        when(listener.getReceiver()).thenReturn(receiver);
-        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.topologyCreator()).thenReturn(creator);
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         when(handlerResolver.getQueueListeners()).thenReturn(
                 Map.of(

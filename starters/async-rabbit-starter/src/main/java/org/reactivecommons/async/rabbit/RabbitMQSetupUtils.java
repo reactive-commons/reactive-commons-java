@@ -87,12 +87,12 @@ public final class RabbitMQSetupUtils {
                 RabbitProperties rabbitProperties = props.getConnectionProperties();
                 ConnectionFactory newFactory = new ConnectionFactory();
                 PropertyMapper map = PropertyMapper.get();
-                map.from(rabbitProperties::determineHost).whenNonNull().to(newFactory::setHost);
+                map.from(rabbitProperties::determineHost).to(newFactory::setHost);
                 map.from(rabbitProperties::determinePort).to(newFactory::setPort);
-                map.from(rabbitProperties::determineUsername).whenNonNull().to(newFactory::setUsername);
-                map.from(rabbitProperties::determinePassword).whenNonNull().to(newFactory::setPassword);
-                map.from(rabbitProperties::determineVirtualHost).whenNonNull().to(newFactory::setVirtualHost);
-                newFactory.useNio();
+                map.from(rabbitProperties::determineUsername).to(newFactory::setUsername);
+                map.from(rabbitProperties::determinePassword).to(newFactory::setPassword);
+                map.from(rabbitProperties::determineVirtualHost).to(newFactory::setVirtualHost);
+                newFactory.netty();
                 setUpSSL(newFactory, rabbitProperties);
                 return cfCustomizer.customize(newFactory, props);
             } catch (Exception e) {
@@ -146,8 +146,7 @@ public final class RabbitMQSetupUtils {
         final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
         final PropertyMapper map = PropertyMapper.get();
 
-        map.from(rabbitProperties.getCache().getChannel()::getSize).whenNonNull()
-                .to(channelPoolOptions::maxCacheSize);
+        map.from(rabbitProperties.getCache().getChannel()::getSize).to(channelPoolOptions::maxCacheSize);
 
         final ChannelPool channelPool = ChannelPoolFactory.createChannelPool(
                 senderConnection,

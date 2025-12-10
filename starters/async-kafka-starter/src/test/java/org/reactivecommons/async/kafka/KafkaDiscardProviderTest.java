@@ -10,7 +10,6 @@ import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizatio
 import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
-import org.springframework.boot.ssl.SslBundles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,8 +19,6 @@ class KafkaDiscardProviderTest {
     private KafkaJacksonMessageConverter converter;
     @Mock
     private KafkaCustomizations customizations;
-    @Mock
-    private SslBundles sslBundles;
 
     @Test
     void shouldCreateDiscardNotifier() {
@@ -29,7 +26,7 @@ class KafkaDiscardProviderTest {
         AsyncKafkaProps props = new AsyncKafkaProps();
         props.setCheckExistingTopics(false);
         props.setConnectionProperties(new KafkaProperties());
-        KafkaDiscardProvider discardProvider = new KafkaDiscardProvider(props, converter, customizations, sslBundles);
+        KafkaDiscardProvider discardProvider = new KafkaDiscardProvider(props, converter, customizations);
         // Act
         DiscardNotifier notifier = discardProvider.get();
         // Assert

@@ -8,7 +8,6 @@ import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizatio
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
-import org.springframework.boot.ssl.SslBundles;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,7 +17,6 @@ public class KafkaDiscardProvider implements DiscardProvider {
     private final AsyncKafkaProps props;
     private final MessageConverter converter;
     private final KafkaCustomizations customizations;
-    private final SslBundles sslBundles;
     private final Map<Boolean, DiscardNotifier> discardNotifier = new ConcurrentHashMap<>();
 
     @Override
@@ -27,8 +25,8 @@ public class KafkaDiscardProvider implements DiscardProvider {
     }
 
     private DiscardNotifier buildDiscardNotifier(boolean ignored) {
-        TopologyCreator creator = KafkaSetupUtils.createTopologyCreator(props, customizations, sslBundles);
-        ReactiveMessageSender sender = KafkaSetupUtils.createMessageSender(props, converter, creator, sslBundles);
+        TopologyCreator creator = KafkaSetupUtils.createTopologyCreator(props, customizations);
+        ReactiveMessageSender sender = KafkaSetupUtils.createMessageSender(props, converter, creator);
         return KafkaSetupUtils.createDiscardNotifier(sender, converter);
     }
 }
