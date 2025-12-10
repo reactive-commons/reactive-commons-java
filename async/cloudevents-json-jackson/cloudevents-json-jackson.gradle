@@ -1,0 +1,10 @@
+ext {
+    artifactId = 'cloudevents-json-jackson'
+    artifactDescription = 'Cloud Events JSON Jackson'
+}
+
+dependencies {
+    api 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'io.cloudevents:cloudevents-api:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.1'
+}

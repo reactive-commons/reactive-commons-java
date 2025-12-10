@@ -26,6 +26,23 @@ class DefaultObjectMapperSupplierTest {
         assertThat(result).usingRecursiveComparison().isEqualTo(base);
     }
 
+//    @Test
+//    void shouldSerializeAndDeserializeLocalDateTime() throws IOException {
+//        ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
+//
+//        LocalDateTime now = LocalDateTime.of(2025, 12, 10, 14, 30, 0);
+//        SampleClassWithLocalDateTime sample = new SampleClassWithLocalDateTime("123", "Test", now);
+//
+//        final String serialized = objectMapper.writeValueAsString(sample);
+//        assertThat(serialized).contains("2025-12-10");
+//
+//        final SampleClassWithLocalDateTime result = objectMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
+//
+//        assertThat(result.getId()).isEqualTo("123");
+//        assertThat(result.getName()).isEqualTo("Test");
+//        assertThat(result.getDateSend()).isEqualTo(now);
+//    }
+
     @Getter
     private static class SampleClassExtra extends SampleClass {
 
@@ -36,5 +53,14 @@ class DefaultObjectMapperSupplierTest {
 
         private final Long newProp;
     }
+
+//    @Getter
+//    @AllArgsConstructor
+//    @NoArgsConstructor
+//    private static class SampleClassWithLocalDateTime {
+//        private String id;
+//        private String name;
+//        private LocalDateTime dateSend;
+//    }
 
 }

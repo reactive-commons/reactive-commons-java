@@ -3,7 +3,7 @@ package org.reactivecommons.async.commons.converters.json;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import io.cloudevents.jackson.JsonFormat;
+import org.reactivecommons.cloudevents.jackson.JsonFormat;
 
 public class DefaultObjectMapperSupplier implements ObjectMapperSupplier {
 

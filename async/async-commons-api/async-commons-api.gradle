@@ -7,5 +7,4 @@ dependencies {
     api project(':domain-events-api')
     compileOnly 'io.projectreactor:reactor-core'
     testImplementation 'io.projectreactor:reactor-test'
-    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
 }

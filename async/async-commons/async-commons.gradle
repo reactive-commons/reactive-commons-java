@@ -6,12 +6,13 @@ ext {
 dependencies {
     api project(':async-commons-api')
     api project(':domain-events-api')
+    api project(':cloudevents-json-jackson')
 
     compileOnly 'io.projectreactor:reactor-core'
     api 'com.fasterxml.jackson.core:jackson-databind'
     api 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
     implementation 'commons-io:commons-io:2.21.0'
-    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.1'
 
     testImplementation 'io.projectreactor:reactor-test'
 }
