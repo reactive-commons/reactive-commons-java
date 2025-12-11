@@ -1,2 +1,2 @@
-org.reactivecommons.cloudevents.jackson.JsonFormat
+io.cloudevents.jackson.JsonFormat
 

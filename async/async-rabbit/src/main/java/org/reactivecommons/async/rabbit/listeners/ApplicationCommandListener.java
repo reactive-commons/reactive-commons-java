@@ -1,6 +1,5 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
@@ -20,6 +19,7 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
+import tools.jackson.databind.JsonNode;
 
 import java.util.Optional;
 import java.util.function.Function;
@@ -128,10 +128,10 @@ public class ApplicationCommandListener extends GenericMessageListener {
         RabbitMessage rabbitMessage = RabbitMessage.fromDelivery(msj);
         JsonNode jsonNode = messageConverter.readValue(rabbitMessage, JsonNode.class);
         if (jsonNode.get(COMMAND_ID) != null) {
-            return jsonNode.get(NAME).asText();
+            return jsonNode.get(NAME).asString();
         }
         if (jsonNode.get(TYPE) != null) {
-            return jsonNode.get(TYPE).asText();
+            return jsonNode.get(TYPE).asString();
         }
         return rabbitMessage.getType();
     }

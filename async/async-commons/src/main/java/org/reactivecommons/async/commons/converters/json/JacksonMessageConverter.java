@@ -1,7 +1,5 @@
 package org.reactivecommons.async.commons.converters.json;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -11,8 +9,8 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
-
-import java.io.IOException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 @RequiredArgsConstructor
 public abstract class JacksonMessageConverter implements MessageConverter {
@@ -25,35 +23,23 @@ public abstract class JacksonMessageConverter implements MessageConverter {
 
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {
-        try {
-            final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
-            final T value = objectMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
-            return new AsyncQuery<>(asyncQueryJson.getResource(), value);
-        } catch (IOException e) {
-            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
-        }
+        final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
+        final T value = objectMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
+        return new AsyncQuery<>(asyncQueryJson.getResource(), value);
     }
 
     @Override
     public <T> DomainEvent<T> readDomainEvent(Message message, Class<T> bodyClass) {
-        try {
-            final DomainEventJson domainEventJson = readValue(message, DomainEventJson.class);
-            final T value = objectMapper.treeToValue(domainEventJson.getData(), bodyClass);
-            return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
-        } catch (IOException e) {
-            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
-        }
+        final DomainEventJson domainEventJson = readValue(message, DomainEventJson.class);
+        final T value = objectMapper.treeToValue(domainEventJson.getData(), bodyClass);
+        return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
     }
 
     @Override
     public <T> Command<T> readCommand(Message message, Class<T> bodyClass) {
-        try {
-            final CommandJson commandJson = readValue(message, CommandJson.class);
-            final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
-            return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
-        } catch (IOException e) {
-            throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
-        }
+        final CommandJson commandJson = readValue(message, CommandJson.class);
+        final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
+        return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
     }
 
     @Override
@@ -65,7 +51,7 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     public <T> T readValue(Message message, Class<T> valueClass) {
         try {
             return objectMapper.readValue(message.getBody(), valueClass);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
     }

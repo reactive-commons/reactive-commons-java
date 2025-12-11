@@ -1,10 +1,12 @@
 package org.reactivecommons.async.commons.converters.json;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
+import java.time.LocalDateTime;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -15,7 +17,7 @@ class DefaultObjectMapperSupplierTest {
 
 
     @Test
-    void shouldMapWithUnknownProperties() throws IOException {
+    void shouldMapWithUnknownProperties() {
         ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
 
         SampleClassExtra base = new SampleClassExtra("23", "one", new Date(), 45L);
@@ -26,22 +28,22 @@ class DefaultObjectMapperSupplierTest {
         assertThat(result).usingRecursiveComparison().isEqualTo(base);
     }
 
-//    @Test
-//    void shouldSerializeAndDeserializeLocalDateTime() throws IOException {
-//        ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
-//
-//        LocalDateTime now = LocalDateTime.of(2025, 12, 10, 14, 30, 0);
-//        SampleClassWithLocalDateTime sample = new SampleClassWithLocalDateTime("123", "Test", now);
-//
-//        final String serialized = objectMapper.writeValueAsString(sample);
-//        assertThat(serialized).contains("2025-12-10");
-//
-//        final SampleClassWithLocalDateTime result = objectMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
-//
-//        assertThat(result.getId()).isEqualTo("123");
-//        assertThat(result.getName()).isEqualTo("Test");
-//        assertThat(result.getDateSend()).isEqualTo(now);
-//    }
+    @Test
+    void shouldSerializeAndDeserializeLocalDateTime() {
+        ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
+
+        LocalDateTime now = LocalDateTime.of(2025, 12, 10, 14, 30, 0);
+        SampleClassWithLocalDateTime sample = new SampleClassWithLocalDateTime("123", "Test", now);
+
+        final String serialized = objectMapper.writeValueAsString(sample);
+        assertThat(serialized).contains("2025-12-10");
+
+        final SampleClassWithLocalDateTime result = objectMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
+
+        assertThat(result.getId()).isEqualTo("123");
+        assertThat(result.getName()).isEqualTo("Test");
+        assertThat(result.getDateSend()).isEqualTo(now);
+    }
 
     @Getter
     private static class SampleClassExtra extends SampleClass {
@@ -54,13 +56,13 @@ class DefaultObjectMapperSupplierTest {
         private final Long newProp;
     }
 
-//    @Getter
-//    @AllArgsConstructor
-//    @NoArgsConstructor
-//    private static class SampleClassWithLocalDateTime {
-//        private String id;
-//        private String name;
-//        private LocalDateTime dateSend;
-//    }
+    @Getter
+    @AllArgsConstructor
+    @NoArgsConstructor
+    private static class SampleClassWithLocalDateTime {
+        private String id;
+        private String name;
+        private LocalDateTime dateSend;
+    }
 
 }

@@ -1,6 +1,7 @@
-package org.reactivecommons.cloudevents.jackson.mock;
+package io.cloudevents.jackson.mock;
 
 import io.cloudevents.CloudEventData;
+
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 

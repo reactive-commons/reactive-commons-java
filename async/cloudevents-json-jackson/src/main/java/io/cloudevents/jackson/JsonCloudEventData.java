@@ -14,10 +14,10 @@
  * limitations under the License.
  *
  */
-package org.reactivecommons.cloudevents.jackson;
+package io.cloudevents.jackson;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.cloudevents.CloudEventData;
+import tools.jackson.databind.JsonNode;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;

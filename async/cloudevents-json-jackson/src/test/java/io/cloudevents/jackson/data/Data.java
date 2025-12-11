@@ -15,7 +15,7 @@
  *
  */
 
-package org.reactivecommons.cloudevents.jackson.data;
+package io.cloudevents.jackson.data;
 
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;

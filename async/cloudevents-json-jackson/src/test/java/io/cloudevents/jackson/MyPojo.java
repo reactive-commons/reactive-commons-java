@@ -1,4 +1,4 @@
-package org.reactivecommons.cloudevents.jackson;
+package io.cloudevents.jackson;
 
 import java.util.Objects;
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-package org.reactivecommons.cloudevents.jackson;
+package io.cloudevents.jackson;
 
 public final class JsonFormatOptions {
     private final boolean forceDataBase64Serialization;

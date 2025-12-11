@@ -16,7 +16,6 @@ import reactor.core.publisher.Mono;
 import sample.model.Constants;
 import sample.model.Member;
 import sample.model.Members;
-import sample.model.Teams;
 import sample.model.broker.AddMemberCommand;
 import sample.model.broker.RemovedMemberEvent;
 

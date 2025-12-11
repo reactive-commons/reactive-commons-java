@@ -66,6 +66,7 @@ subprojects {
         testCompileOnly 'org.projectlombok:lombok'
     }
 
+    //TODO: Remove once it has been updated in spring boot 4.0.1
     ext["rabbit-amqp-client.version"] = '5.28.0'
 
     test.finalizedBy(project.tasks.jacocoTestReport)

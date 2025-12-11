@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
@@ -28,6 +26,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.math.BigInteger;
 import java.time.Duration;
@@ -96,7 +95,7 @@ class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    void shouldProcessMessagesInOptimalTime() throws JsonProcessingException, InterruptedException {
+    void shouldProcessMessagesInOptimalTime() throws InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
@@ -127,7 +126,7 @@ class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    void shouldProcessAsyncMessagesConcurrent() throws JsonProcessingException, InterruptedException {
+    void shouldProcessAsyncMessagesConcurrent() throws InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
@@ -183,7 +182,7 @@ class ApplicationCommandListenerPerfTest {
 
 
     @Test
-    void shouldProcessCPUMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessCPUMessagesInParallel() throws InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestCPUMessageDelay, DummyMessage.class)
         );
@@ -213,7 +212,7 @@ class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    void shouldProcessCPUWorkMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessCPUWorkMessagesInParallel() throws InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestCPUWorkMessageDelay, DummyMessage.class)
         );
@@ -242,7 +241,7 @@ class ApplicationCommandListenerPerfTest {
     }
 
     @Test
-    void shouldProcessPasiveBlockingMessagesInParallel() throws JsonProcessingException, InterruptedException {
+    void shouldProcessPasiveBlockingMessagesInParallel() throws InterruptedException {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestPassiveBlockMessageDelay, DummyMessage.class)
         );
@@ -296,8 +295,8 @@ class ApplicationCommandListenerPerfTest {
     }
 
 
-    private Flux<AcknowledgableDelivery> createSource(int count) throws JsonProcessingException {
-        ObjectMapper mapper = new ObjectMapper();
+    private Flux<AcknowledgableDelivery> createSource(int count) {
+        JsonMapper mapper = new JsonMapper();
         Command<DummyMessage> command = new Command<>(
                 "app.command.test", UUID.randomUUID().toString(), new DummyMessage()
         );

@@ -1,13 +1,13 @@
-package org.reactivecommons.cloudevents.jackson;
+package io.cloudevents.jackson;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JavaType;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEventData;
 import io.cloudevents.core.data.PojoCloudEventData;
 import io.cloudevents.rw.CloudEventDataMapper;
 import io.cloudevents.rw.CloudEventRWException;
+import tools.jackson.core.type.TypeReference;
+import tools.jackson.databind.JavaType;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -62,7 +62,7 @@ public class PojoCloudEventDataMapper<T> implements CloudEventDataMapper<PojoClo
      *
      * @param mapper {@link ObjectMapper} used for POJO deserialization
      * @param target target type as {@link Class}&lt;T&gt;
-     * @param <T> POJO Type
+     * @param <T>    POJO Type
      * @return {@link CloudEventDataMapper}
      */
     public static <T> PojoCloudEventDataMapper<T> from(ObjectMapper mapper, Class<T> target) {
@@ -80,7 +80,7 @@ public class PojoCloudEventDataMapper<T> implements CloudEventDataMapper<PojoClo
      *
      * @param mapper {@link ObjectMapper} used for POJO deserialization
      * @param target target type as {@link TypeReference}&lt;T&gt;
-     * @param <T> POJO Type
+     * @param <T>    POJO Type
      * @return {@link CloudEventDataMapper}
      */
     public static <T> PojoCloudEventDataMapper<T> from(ObjectMapper mapper, TypeReference<T> target) {

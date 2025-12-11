@@ -1,8 +1,6 @@
 package org.reactivecommons.async.kafka.converters.json;
 
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.AllArgsConstructor;
@@ -14,6 +12,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -51,7 +50,7 @@ class KafkaJacksonMessageConverterTest {
     }
 
     @Test
-    void shouldSerializeCloudEvent() throws JsonProcessingException {
+    void shouldSerializeCloudEvent() {
         // Arrange
         String id = UUID.randomUUID().toString();
         MyEvent event = new MyEvent("name", 1);

@@ -15,14 +15,9 @@
  *
  */
 
-package org.reactivecommons.cloudevents.jackson;
+package io.cloudevents.jackson;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.exc.MismatchedInputException;
-import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import io.cloudevents.CloudEvent;
-import io.cloudevents.SpecVersion;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.core.format.EventDeserializationException;
 import io.cloudevents.core.provider.EventFormatProvider;
@@ -31,6 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.exc.MismatchedInputException;
+import tools.jackson.databind.node.JsonNodeFactory;
 
 import java.io.IOException;
 import java.net.URISyntaxException;
@@ -40,9 +39,18 @@ import java.nio.file.Paths;
 import java.util.Objects;
 import java.util.stream.Stream;
 
-import static io.cloudevents.core.format.ContentType.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.reactivecommons.cloudevents.jackson.data.Data.*;
+import static io.cloudevents.core.format.ContentType.JSON;
+import static io.cloudevents.jackson.data.Data.V1_MIN;
+import static io.cloudevents.jackson.data.Data.V1_WITH_BINARY_EXT;
+import static io.cloudevents.jackson.data.Data.V1_WITH_JSON_DATA;
+import static io.cloudevents.jackson.data.Data.V1_WITH_JSON_DATA_WITH_EXT;
+import static io.cloudevents.jackson.data.Data.V1_WITH_JSON_DATA_WITH_FRACTIONAL_TIME;
+import static io.cloudevents.jackson.data.Data.V1_WITH_NUMERIC_EXT;
+import static io.cloudevents.jackson.data.Data.V1_WITH_TEXT_DATA;
+import static io.cloudevents.jackson.data.Data.V1_WITH_XML_DATA;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class JsonFormatTest {
 
@@ -66,35 +74,35 @@ class JsonFormatTest {
 
     @ParameterizedTest
     @MethodSource("serializeTestArgumentsDefault")
-    void serialize(CloudEvent input, String outputFile) throws IOException {
+    void serialize(CloudEvent input, String outputFile) {
         JsonNode jsonOutput = mapper.readValue(loadFile(outputFile), JsonNode.class);
 
         byte[] serialized = getFormat().serialize(input);
         JsonNode serializedJson = mapper.readValue(serialized, JsonNode.class);
         assertThat(serializedJson)
-            .isEqualTo(jsonOutput);
+                .isEqualTo(jsonOutput);
     }
 
     @ParameterizedTest
     @MethodSource("serializeTestArgumentsString")
-    void serializeWithStringData(CloudEvent input, String outputFile) throws IOException {
+    void serializeWithStringData(CloudEvent input, String outputFile) {
         JsonNode jsonOutput = mapper.readValue(loadFile(outputFile), JsonNode.class);
 
         byte[] serialized = getFormat().withForceNonJsonDataToString().serialize(input);
         JsonNode serializedJson = mapper.readValue(serialized, JsonNode.class);
         assertThat(serializedJson)
-            .isEqualTo(jsonOutput);
+                .isEqualTo(jsonOutput);
     }
 
     @ParameterizedTest
     @MethodSource("serializeTestArgumentsBase64")
-    void serializeWithBase64Data(CloudEvent input, String outputFile) throws IOException {
+    void serializeWithBase64Data(CloudEvent input, String outputFile) {
         JsonNode jsonOutput = mapper.readValue(loadFile(outputFile), JsonNode.class);
 
         byte[] serialized = getFormat().withForceJsonDataToBase64().serialize(input);
         JsonNode serializedJson = mapper.readValue(serialized, JsonNode.class);
         assertThat(serializedJson)
-            .isEqualTo(jsonOutput);
+                .isEqualTo(jsonOutput);
     }
 
     @ParameterizedTest
@@ -102,7 +110,7 @@ class JsonFormatTest {
     void deserialize(String inputFile, CloudEvent output) {
         CloudEvent deserialized = getFormat().deserialize(loadFile(inputFile));
         assertThat(deserialized)
-            .isEqualTo(output);
+                .isEqualTo(output);
     }
 
     @ParameterizedTest
@@ -110,7 +118,7 @@ class JsonFormatTest {
     void deserializeWithUpperCaseExtensionName(String inputFile, CloudEvent output) {
         CloudEvent deserialized = getFormat().withForceExtensionNameLowerCaseDeserialization().deserialize(loadFile(inputFile));
         assertThat(deserialized)
-            .isEqualTo(output);
+                .isEqualTo(output);
     }
 
     @ParameterizedTest
@@ -118,12 +126,12 @@ class JsonFormatTest {
     void deserializeWithInvalidExtensionName(String inputFile, CloudEvent output) {
         CloudEvent deserialized = getFormat().withForceIgnoreInvalidExtensionNameDeserialization().deserialize(loadFile(inputFile));
         assertThat(deserialized)
-            .isEqualTo(output);
+                .isEqualTo(output);
     }
 
     @ParameterizedTest
     @MethodSource("roundTripTestArguments")
-    void jsonRoundTrip(String inputFile) throws IOException {
+    void jsonRoundTrip(String inputFile) {
         byte[] input = loadFile(inputFile);
 
         JsonNode jsonInput = mapper.readTree(input);
@@ -133,11 +141,11 @@ class JsonFormatTest {
         byte[] output = getFormat().serialize(deserialized);
         JsonNode jsonOutput = mapper.readValue(output, JsonNode.class);
         assertThat(jsonOutput)
-            .isEqualTo(jsonInput);
+                .isEqualTo(jsonInput);
     }
 
     @ParameterizedTest
-    @MethodSource("org.reactivecommons.cloudevents.jackson.data.Data#allEvents")
+    @MethodSource("io.cloudevents.jackson.data.Data#allEvents")
     void eventRoundTrip(CloudEvent input) {
         byte[] serialized = getFormat().serialize(input);
         assertThat(serialized).isNotEmpty();
@@ -149,8 +157,8 @@ class JsonFormatTest {
     @Test
     void throwExpectedOnInvalidSpecversion() {
         assertThatCode(() -> getFormat().deserialize(("{\"specversion\":\"9000.1\"}").getBytes(StandardCharsets.UTF_8)))
-            .hasCauseInstanceOf(MismatchedInputException.class)
-            .hasMessageContaining(CloudEventRWException.newInvalidSpecVersion("9000.1").getMessage());
+                .hasCauseInstanceOf(MismatchedInputException.class)
+                .hasMessageContaining(CloudEventRWException.newInvalidSpecVersion("9000.1").getMessage());
     }
 
     @ParameterizedTest
@@ -160,7 +168,7 @@ class JsonFormatTest {
      * as it represents content that is not CE
      * specification compliant.
      */
-    void verifyDeserializeError(String inputFile){
+    void verifyDeserializeError(String inputFile) {
 
         byte[] input = loadFile(inputFile);
 
@@ -170,111 +178,111 @@ class JsonFormatTest {
 
     static Stream<Arguments> jsonContentTypes() {
         return Stream.of(
-            Arguments.of("application/json"),
-            Arguments.of("application/json;charset=utf-8"),
-            Arguments.of("application/json;\tcharset = \"utf-8\""),
-            Arguments.of("application/cloudevents+json;charset=UTF-8"),
-            Arguments.of("text/json"),
-            Arguments.of("text/json;charset=utf-8"),
-            Arguments.of("text/cloudevents+json;charset=UTF-8"),
-            Arguments.of("text/json;\twhatever"),
-            Arguments.of("text/json; boundary=something"),
-            Arguments.of("text/json;foo=\"bar\""),
-            Arguments.of("text/json; charset = \"us-ascii\""),
-            Arguments.of("text/json; \t"),
-            Arguments.of("text/json;"),
-            //https://www.rfc-editor.org/rfc/rfc2045#section-5.1
-            // any us-ascii char can be part of parameters (except CTRLs and tspecials)
-            Arguments.of("text/json; char-set = $!#$%&'*+.^_`|"),
-            Arguments.of((Object) null),
-            Arguments.of(JSON + ""),
-            Arguments.of(JSON.value()),
-            Arguments.of(JSON.toString())
+                Arguments.of("application/json"),
+                Arguments.of("application/json;charset=utf-8"),
+                Arguments.of("application/json;\tcharset = \"utf-8\""),
+                Arguments.of("application/cloudevents+json;charset=UTF-8"),
+                Arguments.of("text/json"),
+                Arguments.of("text/json;charset=utf-8"),
+                Arguments.of("text/cloudevents+json;charset=UTF-8"),
+                Arguments.of("text/json;\twhatever"),
+                Arguments.of("text/json; boundary=something"),
+                Arguments.of("text/json;foo=\"bar\""),
+                Arguments.of("text/json; charset = \"us-ascii\""),
+                Arguments.of("text/json; \t"),
+                Arguments.of("text/json;"),
+                //https://www.rfc-editor.org/rfc/rfc2045#section-5.1
+                // any us-ascii char can be part of parameters (except CTRLs and tspecials)
+                Arguments.of("text/json; char-set = $!#$%&'*+.^_`|"),
+                Arguments.of((Object) null),
+                Arguments.of(JSON + ""),
+                Arguments.of(JSON.value()),
+                Arguments.of(JSON.toString())
         );
     }
 
     static Stream<Arguments> wrongJsonContentTypes() {
         return Stream.of(
-            Arguments.of("applications/json"),
-            Arguments.of("application/jsom"),
-            Arguments.of("application/jsonwrong"),
-            Arguments.of("text/json "),
-            Arguments.of("text/json ;"),
-            Arguments.of("test/json")
+                Arguments.of("applications/json"),
+                Arguments.of("application/jsom"),
+                Arguments.of("application/jsonwrong"),
+                Arguments.of("text/json "),
+                Arguments.of("text/json ;"),
+                Arguments.of("test/json")
         );
     }
 
     public static Stream<Arguments> serializeTestArgumentsDefault() {
         return Stream.of(
-            Arguments.of(V1_MIN, "v1/min.json"),
-            Arguments.of(V1_WITH_JSON_DATA, "v1/json_data.json"),
-            Arguments.of(V1_WITH_JSON_DATA_WITH_FRACTIONAL_TIME, "v1/json_data_with_fractional_time.json"),
-            Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/json_data_with_ext.json"),
-            Arguments.of(V1_WITH_XML_DATA, "v1/base64_xml_data.json"),
-            Arguments.of(V1_WITH_TEXT_DATA, "v1/base64_text_data.json"),
-            Arguments.of(V1_WITH_BINARY_EXT, "v1/binary_attr.json"),
-            Arguments.of(V1_WITH_NUMERIC_EXT,"v1/numeric_ext.json")
+                Arguments.of(V1_MIN, "v1/min.json"),
+                Arguments.of(V1_WITH_JSON_DATA, "v1/json_data.json"),
+                Arguments.of(V1_WITH_JSON_DATA_WITH_FRACTIONAL_TIME, "v1/json_data_with_fractional_time.json"),
+                Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/json_data_with_ext.json"),
+                Arguments.of(V1_WITH_XML_DATA, "v1/base64_xml_data.json"),
+                Arguments.of(V1_WITH_TEXT_DATA, "v1/base64_text_data.json"),
+                Arguments.of(V1_WITH_BINARY_EXT, "v1/binary_attr.json"),
+                Arguments.of(V1_WITH_NUMERIC_EXT, "v1/numeric_ext.json")
         );
     }
 
     public static Stream<Arguments> serializeTestArgumentsString() {
         return Stream.of(
-            Arguments.of(V1_WITH_JSON_DATA, "v1/json_data.json"),
-            Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/json_data_with_ext.json"),
-            Arguments.of(V1_WITH_XML_DATA, "v1/xml_data.json"),
-            Arguments.of(V1_WITH_TEXT_DATA, "v1/text_data.json")
+                Arguments.of(V1_WITH_JSON_DATA, "v1/json_data.json"),
+                Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/json_data_with_ext.json"),
+                Arguments.of(V1_WITH_XML_DATA, "v1/xml_data.json"),
+                Arguments.of(V1_WITH_TEXT_DATA, "v1/text_data.json")
         );
     }
 
     public static Stream<Arguments> serializeTestArgumentsBase64() {
         return Stream.of(
-            Arguments.of(V1_WITH_JSON_DATA, "v1/base64_json_data.json"),
-            Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/base64_json_data_with_ext.json"),
-            Arguments.of(V1_WITH_XML_DATA, "v1/base64_xml_data.json"),
-            Arguments.of(V1_WITH_TEXT_DATA, "v1/base64_text_data.json")
+                Arguments.of(V1_WITH_JSON_DATA, "v1/base64_json_data.json"),
+                Arguments.of(V1_WITH_JSON_DATA_WITH_EXT, "v1/base64_json_data_with_ext.json"),
+                Arguments.of(V1_WITH_XML_DATA, "v1/base64_xml_data.json"),
+                Arguments.of(V1_WITH_TEXT_DATA, "v1/base64_text_data.json")
         );
     }
 
     public static Stream<Arguments> deserializeTestArguments() {
         return Stream.of(
-            Arguments.of("v1/min.json", V1_MIN),
-            Arguments.of("v1/min_subject_null.json", V1_MIN),
-            Arguments.of("v1/json_data.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA)),
-            Arguments.of("v1/json_data_with_ext.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT)),
-            Arguments.of("v1/base64_json_data.json", V1_WITH_JSON_DATA),
-            Arguments.of("v1/base64_json_data_with_ext.json", V1_WITH_JSON_DATA_WITH_EXT),
-            Arguments.of("v1/xml_data.json", V1_WITH_XML_DATA),
-            Arguments.of("v1/base64_xml_data.json", V1_WITH_XML_DATA),
-            Arguments.of("v1/text_data.json", V1_WITH_TEXT_DATA),
-            Arguments.of("v1/base64_text_data.json", V1_WITH_TEXT_DATA)
+                Arguments.of("v1/min.json", V1_MIN),
+                Arguments.of("v1/min_subject_null.json", V1_MIN),
+                Arguments.of("v1/json_data.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA)),
+                Arguments.of("v1/json_data_with_ext.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT)),
+                Arguments.of("v1/base64_json_data.json", V1_WITH_JSON_DATA),
+                Arguments.of("v1/base64_json_data_with_ext.json", V1_WITH_JSON_DATA_WITH_EXT),
+                Arguments.of("v1/xml_data.json", V1_WITH_XML_DATA),
+                Arguments.of("v1/base64_xml_data.json", V1_WITH_XML_DATA),
+                Arguments.of("v1/text_data.json", V1_WITH_TEXT_DATA),
+                Arguments.of("v1/base64_text_data.json", V1_WITH_TEXT_DATA)
         );
     }
 
     public static Stream<Arguments> deserializeTestArgumentsUpperCaseExtensionName() {
         return Stream.of(
-            Arguments.of("v1/json_data_with_ext_upper_case.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
+                Arguments.of("v1/json_data_with_ext_upper_case.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
         );
     }
 
     public static Stream<Arguments> deserializeTestArgumentsInvalidExtensionName() {
         return Stream.of(
-            Arguments.of("v1/json_data_with_ext_invalid.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
+                Arguments.of("v1/json_data_with_ext_invalid.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
         );
     }
 
     public static Stream<String> roundTripTestArguments() {
         return Stream.of(
-            "v1/min.json",
-            "v1/json_data.json",
-            "v1/base64_xml_data.json",
-            "v1/base64_text_data.json"
+                "v1/min.json",
+                "v1/json_data.json",
+                "v1/base64_xml_data.json",
+                "v1/base64_text_data.json"
         );
     }
 
     public static Stream<String> badJsonContent() {
         return Stream.of(
-            "v1/fail_numeric_decimal.json",
-            "v1/fail_numeric_long.json"
+                "v1/fail_numeric_decimal.json",
+                "v1/fail_numeric_long.json"
         );
     }
 
@@ -285,8 +293,8 @@ class JsonFormatTest {
     private static byte[] loadFile(String input) {
         try {
             return String.join(
-                "",
-                Files.readAllLines(Paths.get(Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource(input)).toURI()), StandardCharsets.UTF_8)
+                    "",
+                    Files.readAllLines(Paths.get(Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource(input)).toURI()), StandardCharsets.UTF_8)
             ).getBytes(StandardCharsets.UTF_8);
         } catch (IOException | URISyntaxException e) {
             throw new RuntimeException(e);
@@ -296,8 +304,8 @@ class JsonFormatTest {
     private static CloudEvent normalizeToJsonValueIfNeeded(CloudEvent event) {
         if (event.getData() != null && JsonFormat.dataIsJsonContentType(event.getDataContentType())) {
             return CloudEventBuilder.v1(event)
-                .withData(JsonCloudEventData.wrap(JsonNodeFactory.instance.objectNode()))
-                .build();
+                    .withData(JsonCloudEventData.wrap(JsonNodeFactory.instance.objectNode()))
+                    .build();
         } else {
             return event;
         }
