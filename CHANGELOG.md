@@ -1,5 +1,14 @@
 # Changelog
 
+## [v7.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.0) (2025-12-11)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.1.0...v7.0.0)
+
+**Merged pull requests:**
+
+- feat!: Upgrade to Spring Boot 4 and Jackson 3 [\#157](https://github.com/reactive-commons/reactive-commons-java/pull/157) ([luisgomez29](https://github.com/luisgomez29))
+- build\(deps\): downgrade SonarQube plugin version to 6.3.1 for compatibility [\#156](https://github.com/reactive-commons/reactive-commons-java/pull/156) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v6.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v6.1.0) (2025-11-11)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.0.0...v6.1.0)
