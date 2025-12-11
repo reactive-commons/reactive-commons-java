@@ -1,6 +1,5 @@
 package org.reactivecommons.async.rabbit.communications;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -17,6 +16,7 @@ import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -33,7 +33,7 @@ class ReactiveMessageSenderTest {
 
     private ReactiveMessageSender messageSender;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final JsonMapper objectMapper = new JsonMapper();
 
     @Mock
     private Sender sender;

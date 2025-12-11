@@ -1,6 +1,5 @@
 package org.reactivecommons.async.kafka.converters.json;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
@@ -8,8 +7,8 @@ import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.KafkaMessage.KafkaMessageProperties;
+import tools.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -22,14 +21,14 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
 
     @Override
     public Message toMessage(Object object) {
-        if (object instanceof KafkaMessage) {
-            return (KafkaMessage) object;
+        if (object instanceof KafkaMessage kafkaMessage) {
+            return kafkaMessage;
         }
         byte[] bytes;
         try {
             String jsonString = this.objectMapper.writeValueAsString(object);
             bytes = jsonString.getBytes(StandardCharsets.UTF_8);
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
         KafkaMessageProperties props = buildProperties(object);
@@ -41,8 +40,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
         Map<String, Object> headers = new HashMap<>();
         props.setHeaders(headers);
 
-        if (message instanceof CloudEvent) {
-            CloudEvent cloudEvent = (CloudEvent) message;
+        if (message instanceof CloudEvent cloudEvent) {
             props.setKey(cloudEvent.getId());
             props.setTopic(cloudEvent.getType());
 
@@ -50,8 +48,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
             return props;
         }
 
-        if (message instanceof DomainEvent<?>) {
-            DomainEvent<?> domainEvent = (DomainEvent<?>) message;
+        if (message instanceof DomainEvent<?> domainEvent) {
             props.setKey(domainEvent.getEventId());
             props.setTopic(domainEvent.getName());
 

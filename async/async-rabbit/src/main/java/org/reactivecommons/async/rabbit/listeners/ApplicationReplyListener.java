@@ -38,8 +38,8 @@ public class ApplicationReplyListener {
         this.router = router;
         this.queueName = queueName;
         this.exchangeName = exchangeName;
-        this.receiver = listener.getReceiver();
-        this.creator = listener.getTopologyCreator();
+        this.receiver = listener.receiver();
+        this.creator = listener.topologyCreator();
         this.createTopology = createTopology;
     }
 

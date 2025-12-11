@@ -1,11 +1,10 @@
 package org.reactivecommons.async.starter.props;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.SneakyThrows;
 import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.reflect.Constructor;
 import java.util.HashMap;
@@ -30,8 +29,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         super(configured);
         this.propsClass = propsClass;
         this.asyncPropsClass = asyncPropsClass;
-        ObjectMapper mapper = new ObjectMapper();
-        mapper.registerModule(new JavaTimeModule());
+        JsonMapper mapper = JsonMapper.builder().findAndAddModules().build();
 
         if (!this.containsKey(DEFAULT_DOMAIN)) {
             throw new InvalidConfigurationException("Required domain '" + DEFAULT_DOMAIN + "' is not configured.");

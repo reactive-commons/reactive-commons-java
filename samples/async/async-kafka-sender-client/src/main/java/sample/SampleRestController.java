@@ -1,6 +1,5 @@
 package sample;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.jackson.JsonCloudEventData;
@@ -45,7 +44,7 @@ public class SampleRestController {
 
     // Notification Event
     @DeleteMapping(path = "/api/teams/cloud/event", produces = APPLICATION_JSON_VALUE)
-    public Mono<CloudEvent> cloudEvent() throws JsonProcessingException {
+    public Mono<CloudEvent> cloudEvent() {
         SampleEvent eventData = new SampleEvent();
         eventData.setName("Juan");
         eventData.setDescription("A software developer");

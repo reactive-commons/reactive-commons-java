@@ -36,16 +36,16 @@ public class KafkaBrokerProviderFactory implements BrokerProviderFactory<AsyncKa
 
     @Override
     public DiscardProvider getDiscardProvider(AsyncKafkaProps props) {
-        return new KafkaDiscardProvider(props, converter, customizations, sslBundles);
+        return new KafkaDiscardProvider(props, converter, customizations);
     }
 
     @Override
     public BrokerProvider<AsyncKafkaProps> getProvider(String domain, AsyncKafkaProps props,
                                                        DiscardProvider discardProvider) {
-        TopologyCreator creator = KafkaSetupUtils.createTopologyCreator(props, customizations, sslBundles);
-        ReactiveMessageSender sender = KafkaSetupUtils.createMessageSender(props, converter, creator, sslBundles);
-        ReactiveMessageListener listener = KafkaSetupUtils.createMessageListener(props, sslBundles);
-        AdminClient adminClient = AdminClient.create(props.getConnectionProperties().buildAdminProperties(sslBundles));
+        TopologyCreator creator = KafkaSetupUtils.createTopologyCreator(props, customizations);
+        ReactiveMessageSender sender = KafkaSetupUtils.createMessageSender(props, converter, creator);
+        ReactiveMessageListener listener = KafkaSetupUtils.createMessageListener(props);
+        AdminClient adminClient = AdminClient.create(props.getConnectionProperties().buildAdminProperties());
         KafkaReactiveHealthIndicator healthIndicator = new KafkaReactiveHealthIndicator(domain, adminClient);
         DiscardNotifier discardNotifier;
         if (props.isUseDiscardNotifierPerDomain()) {

@@ -5,13 +5,10 @@ ext {
 dependencies {
     api 'io.projectreactor:reactor-core'
     api project(':async-commons')
-    compileOnly 'org.springframework.boot:spring-boot-starter'
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
-    implementation 'org.springframework.boot:spring-boot-starter-aop'
-    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
 
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     testImplementation 'io.projectreactor:reactor-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 }

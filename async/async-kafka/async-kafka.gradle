@@ -7,7 +7,7 @@ dependencies {
     api project(':async-commons-api')
     api project(':domain-events-api')
     api project(':async-commons')
-    api 'io.projectreactor.kafka:reactor-kafka:1.3.23'
-
-    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
+    api project(':cloudevents-json-jackson')
+    api 'io.projectreactor.kafka:reactor-kafka:1.3.25'
+    implementation 'io.cloudevents:cloudevents-core:4.0.1'
 }

@@ -16,7 +16,6 @@ import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizatio
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
-import org.springframework.boot.ssl.SslBundles;
 import reactor.kafka.receiver.ReceiverOptions;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
@@ -36,33 +35,29 @@ public final class KafkaSetupUtils {
 
     public static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
                                                             MessageConverter converter,
-                                                            TopologyCreator topologyCreator,
-                                                            SslBundles sslBundles) {
+                                                            TopologyCreator topologyCreator) {
         KafkaProperties props = config.getConnectionProperties();
         props.setClientId(config.getAppName());
         props.getProducer().setKeySerializer(StringSerializer.class);
         props.getProducer().setValueSerializer(ByteArraySerializer.class);
-        SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties(sslBundles));
+        SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties());
         KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
         return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
     }
 
     // Receiver
 
-    public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config, SslBundles sslBundles) {
+    public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config) {
         KafkaProperties props = config.getConnectionProperties();
         props.getConsumer().setKeyDeserializer(StringDeserializer.class);
         props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class);
-        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(
-                props.buildConsumerProperties(sslBundles)
-        );
+        ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props.buildConsumerProperties());
         return new ReactiveMessageListener(receiverOptions);
     }
 
     // Shared
-    public static TopologyCreator createTopologyCreator(AsyncKafkaProps config, KafkaCustomizations customizations,
-                                                        SslBundles sslBundles) {
-        AdminClient adminClient = AdminClient.create(config.getConnectionProperties().buildAdminProperties(sslBundles));
+    public static TopologyCreator createTopologyCreator(AsyncKafkaProps config, KafkaCustomizations customizations) {
+        AdminClient adminClient = AdminClient.create(config.getConnectionProperties().buildAdminProperties());
         return new TopologyCreator(adminClient, customizations, config.getCheckExistingTopics());
     }
 

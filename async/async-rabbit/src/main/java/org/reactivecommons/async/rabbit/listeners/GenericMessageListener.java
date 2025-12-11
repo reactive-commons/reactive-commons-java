@@ -57,7 +57,7 @@ public abstract class GenericMessageListener {
                                      boolean createTopology, long maxRetries, long retryDelay,
                                      DiscardNotifier discardNotifier, String objectType,
                                      CustomReporter customReporter) {
-        this.receiver = listener.getReceiver();
+        this.receiver = listener.receiver();
         this.queueName = queueName;
         this.messageListener = listener;
         this.createTopology = createTopology;
@@ -83,7 +83,7 @@ public abstract class GenericMessageListener {
 
     public void startListener() {
         log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}",
-                new Object[]{messageListener.getMaxConcurrency(), queueName}
+                new Object[]{messageListener.maxConcurrency(), queueName}
         );
         if (useDLQRetries) {
             log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!",
@@ -94,11 +94,11 @@ public abstract class GenericMessageListener {
         }
 
         ConsumeOptions consumeOptions = new ConsumeOptions();
-        consumeOptions.qos(messageListener.getPrefetchCount());
+        consumeOptions.qos(messageListener.prefetchCount());
         consumeOptions.consumerTag(InstanceIdentifier.getInstanceId(getKind()));
 
         if (createTopology) {
-            this.messageFlux = setUpBindings(messageListener.getTopologyCreator())
+            this.messageFlux = setUpBindings(messageListener.topologyCreator())
                     .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
                             .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
                             .transform(this::consumeFaultTolerant));
@@ -125,7 +125,7 @@ public abstract class GenericMessageListener {
             return handle(msj, init)
                     .doOnSuccess(AcknowledgableDelivery::ack)
                     .onErrorResume(err -> requeueOrAck(msj, err, init));
-        }, messageListener.getMaxConcurrency());
+        }, messageListener.maxConcurrency());
     }
 
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {

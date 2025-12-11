@@ -1,6 +1,5 @@
 package org.reactivecommons.async.commons;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.Data;
@@ -12,6 +11,7 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import reactor.core.publisher.Mono;
+import tools.jackson.databind.JsonNode;
 
 import java.util.logging.Level;
 

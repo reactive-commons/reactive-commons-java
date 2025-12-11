@@ -34,7 +34,7 @@ class SimpleEventNotificationTest {
     private final Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
-    void shouldReceiveEvent() throws InterruptedException {
+    void shouldReceiveEvent() {
         DomainEvent<?> event = new DomainEvent<>(EVENT_NAME, eventId, data);
         Sinks.Many<DomainEvent<Long>> listener = Sinks.many().unicast().onBackpressureBuffer();
         from(eventBus.emit(event)).subscribe();

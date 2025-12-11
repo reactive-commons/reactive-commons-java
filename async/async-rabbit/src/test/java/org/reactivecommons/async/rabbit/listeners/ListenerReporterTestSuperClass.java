@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
@@ -30,6 +28,8 @@ import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.Receiver;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -183,7 +183,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected String valueAsString(Object o) {
         try {
             return mapper.writeValueAsString(o);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new RuntimeException(e);
         }
     }

@@ -37,7 +37,7 @@ example:
 ```java
 
 @Component
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class DynamicSubscriber {
     private final DynamicRegistry registry;
 

@@ -4,6 +4,45 @@ sidebar_position: 4
 
 # Migration
 
+## From 6.x.x to 7.x.x
+
+### Change notes
+
+- Upgrade to Spring Boot 4 and Jackson 3.
+
+### Actions
+
+#### 1. Update Jackson imports
+
+If you have custom code using Jackson, update the imports from `com.fasterxml.jackson.*` to `tools.jackson.*`.
+
+**Before (Jackson 2):**
+
+```java
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.type.TypeReference;
+```
+
+**After (Jackson 3):**
+
+```java
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.core.type.TypeReference;
+```
+
+#### 2. Remove CloudEvents Jackson dependency
+
+If you were using CloudEvents, **remove** the `cloudevents-json-jackson` dependency as it only supports Jackson 2. A built-in module now provides Jackson 3 support for CloudEvents.
+
+```groovy
+// Remove this dependency
+implementation 'io.cloudevents:cloudevents-json-jackson:<version>'
+```
+
+---
+
 ## From 5.x.x to 6.x.x
 
 ### New features
@@ -32,17 +71,22 @@ public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
 
 ### Actions
 
-- If your application uses the ReqReply pattern, you must explicitly set `app.async.app.listenReplies` to `true`.
-  Otherwise, it should be `false` to avoid unnecessary resource usage:
+#### 1. Configure listenReplies property
 
-```yaml title="application.yaml"
+If your application uses the ReqReply pattern, you must explicitly set `app.async.app.listenReplies` to `true`. Otherwise, it should be `false` to avoid unnecessary resource usage.
+
+**YAML Configuration:**
+
+```yaml
 app:
   async:
     app:
       listenReplies: true # set to true if ReqReply is required, false if not
 ```
 
-```java title="Programmatic configuration"
+**Programmatic Configuration:**
+
+```java
 @Configuration
 public class MyDomainConfig {
 
@@ -61,18 +105,22 @@ public class MyDomainConfig {
 }
 ```
 
----
+#### 2. Define the app domain
 
-- The domain `app` must be defined in your configuration. Otherwise, the application will throw an exception at startup:
+The domain `app` must be defined in your configuration. Otherwise, the application will throw an exception at startup.
 
-```yaml title="application.yaml"
+**YAML Configuration:**
+
+```yaml
 app:
   async:
     app: # Configure the 'app' domain
     # domain configuration goes here
 ```
 
-```java title="Programmatic configuration"
+**Programmatic Configuration:**
+
+```java
 @Configuration
 public class MyDomainConfig {
 
@@ -89,6 +137,8 @@ public class MyDomainConfig {
     }
 }
 ```
+
+---
 
 ## From 4.x.x to 5.x.x
 
@@ -107,11 +157,13 @@ public class MyDomainConfig {
 
 ### Actions
 
-- The `app` domain needs to be defined to specify the configuration properties.
+#### 1. Update domain configuration structure
 
-Before:
+The `app` domain needs to be defined to specify the configuration properties.
 
-```yaml title="application.yaml"
+**Before:**
+
+```yaml
 app:
   async:
     withDLQRetry: true
@@ -119,9 +171,9 @@ app:
     retryDelay: 1000
 ```
 
-Now:
+**After:**
 
-```yaml title="application.yaml"
+```yaml
 app:
   async:
     app: # this is the name of the default domain
@@ -130,9 +182,11 @@ app:
       retryDelay: 1000
 ```
 
-- Migrate the connection configuration:
+#### 2. Migrate connection configuration
 
-Before: the connection was defined manually in a Java class, as shown below:
+**Before:**
+
+The connection was defined manually in a Java class:
 
 ```java
 @Log4j2
@@ -171,9 +225,11 @@ public class MyDomainConfig {
 }
 ```
 
-Now: the connection is configured directly in the `application.yaml` file per domain:
+**After:**
 
-```yaml title="application.yaml"
+The connection is configured directly in the `application.yaml` file per domain:
+
+```yaml
 app:
   async:
     app: # this is the name of the default domain
@@ -193,9 +249,11 @@ app:
         virtual-host: /accounts
 ```
 
+**Alternative - Programmatic Configuration:**
+
 Domains can also be configured programmatically:
 
-```java title="Programmatic configuration"
+```java
 @Configuration
 public class MyDomainConfig {
 

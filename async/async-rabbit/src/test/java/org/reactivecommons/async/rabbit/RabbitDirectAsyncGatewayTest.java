@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.Data;
@@ -30,6 +28,7 @@ import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.List;
@@ -176,7 +175,7 @@ class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    void shouldHandleRequestReply() throws JsonProcessingException {
+    void shouldHandleRequestReply() {
         senderMock();
         mockReply();
 
@@ -303,7 +302,7 @@ class RabbitDirectAsyncGatewayTest {
     }
 
     @Test
-    void shouldRequestReplyWithCustomDomain() throws JsonProcessingException {
+    void shouldRequestReplyWithCustomDomain() {
         senderMock();
         mockReply();
 
@@ -325,7 +324,7 @@ class RabbitDirectAsyncGatewayTest {
                 .thenReturn(Mono.empty());
     }
 
-    private void mockReply() throws JsonProcessingException {
+    private void mockReply() {
         Message message = mock(Message.class);
         ObjectMapper mapper = new ObjectMapper();
         when(message.getBody()).thenReturn(mapper.writeValueAsString(new DummyMessage()).getBytes());

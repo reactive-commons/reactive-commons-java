@@ -66,6 +66,9 @@ subprojects {
         testCompileOnly 'org.projectlombok:lombok'
     }
 
+    //TODO: Remove once it has been updated in spring boot 4.0.1
+    ext["rabbit-amqp-client.version"] = '5.28.0'
+
     test.finalizedBy(project.tasks.jacocoTestReport)
 
     jacocoTestReport {
@@ -87,7 +90,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.7'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.0'
         }
     }
 
@@ -183,7 +186,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.2.0'
+    gradleVersion = '9.2.1'
     validateDistributionUrl = true
-    distributionSha256Sum = "df67a32e86e3276d011735facb1535f64d0d88df84fa87521e90becc2d735444"
 }

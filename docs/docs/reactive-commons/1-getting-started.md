@@ -15,7 +15,7 @@ Commons.
 
 ## Requirements
 
-You need Java JRE installed (Java 17 or later).
+You need Java JRE installed (Java 17 or later) and Spring Boot 4.
 
 You also need to install RabbitMQ. Follow the [instructions from the website](https://www.rabbitmq.com/download.html).
 
@@ -54,7 +54,7 @@ dependencies {
 If you will use Cloud Events, you should include the Cloud Events dependency:
 ```groovy
 dependencies {
-    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.1'
 }
 ```
 :::
@@ -139,7 +139,7 @@ Commons.
 
 ## Requirements
 
-You need Java JRE installed (Java 17 or later).
+You need Java JRE installed (Java 17 or later) and Spring Boot 4.
 
 ## Start Kafka
 
@@ -224,8 +224,7 @@ dependencies {
 If you will use Cloud Events, you should include the Cloud Events dependency:
 ```groovy
 dependencies {
-    implementation 'io.cloudevents:cloudevents-json-jackson:4.0.1'
-}
+    implementation 'io.cloudevents:cloudevents-core:4.0.1'
 ```
 :::
 

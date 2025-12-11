@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
@@ -29,6 +27,7 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Instant;
 import java.util.Date;
@@ -49,7 +48,7 @@ import static reactor.core.publisher.Mono.just;
 @ExtendWith(MockitoExtension.class)
 class ApplicationQueryListenerTest {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    private static final JsonMapper OBJECT_MAPPER = new JsonMapper();
 
     private final MessageConverter messageConverter =
             new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
@@ -74,7 +73,7 @@ class ApplicationQueryListenerTest {
 
     @BeforeEach
     void setUp() {
-        when(reactiveMessageListener.getReceiver()).thenReturn(receiver);
+        when(reactiveMessageListener.receiver()).thenReturn(receiver);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
         HandlerResolver resolver = getHandlerResolver();
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
@@ -160,7 +159,7 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
-    void shouldUseBaseHandleIfNoTimeoutMetadataProvided() throws JsonProcessingException {
+    void shouldUseBaseHandleIfNoTimeoutMetadataProvided() {
         String queryName = "queryDirect";
 
         AsyncQuery<DummyMessage> query = new AsyncQuery<>(queryName, new DummyMessage());
@@ -185,7 +184,7 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
-    void shouldDiscardMessageIfItIsTimeout() throws JsonProcessingException {
+    void shouldDiscardMessageIfItIsTimeout() {
         String queryName = "queryDirect";
         int timeoutMillis = 15000;
 
@@ -212,7 +211,7 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
-    void shouldHandleMessageIfHasTimeAvailable() throws JsonProcessingException {
+    void shouldHandleMessageIfHasTimeAvailable() {
         String queryName = "queryDirect";
 
         AsyncQuery<DummyMessage> query = new AsyncQuery<>(queryName, new DummyMessage());

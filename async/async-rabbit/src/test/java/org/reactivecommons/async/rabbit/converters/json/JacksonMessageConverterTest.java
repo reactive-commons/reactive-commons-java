@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit.converters.json;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.jackson.JsonCloudEventData;
@@ -12,8 +10,9 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
-import java.io.IOException;
 import java.net.URI;
 import java.util.Date;
 import java.util.UUID;
@@ -40,7 +39,7 @@ class JacksonMessageConverterTest {
     }
 
     @Test
-    void toMessageWhenDataIsNull() throws IOException {
+    void toMessageWhenDataIsNull() {
         final Message message = converter.toMessage(null);
 
         final JsonNode jsonNode = objectMapper.readTree(message.getBody());
@@ -48,11 +47,11 @@ class JacksonMessageConverterTest {
     }
 
     @Test
-    void toMessageWhenDataIsEmpty() throws IOException {
+    void toMessageWhenDataIsEmpty() {
         final Message message = converter.toMessage("");
 
         final JsonNode jsonNode = objectMapper.readTree(message.getBody());
-        assertThat(jsonNode.asText()).isEmpty();
+        assertThat(jsonNode.asString()).isEmpty();
     }
 
     @Test
@@ -107,7 +106,7 @@ class JacksonMessageConverterTest {
         assertThat(event.getData()).isInstanceOf(JsonNode.class);
         assertThat(event.getName()).isEqualTo("event.name");
         final JsonNode jsonNode = (JsonNode) event.getData();
-        assertThat(jsonNode.findValue("name").asText()).isEqualTo("name1");
+        assertThat(jsonNode.findValue("name").asString()).isEqualTo("name1");
     }
 
     @Test
@@ -119,7 +118,7 @@ class JacksonMessageConverterTest {
         assertThat(query.getQueryData()).isInstanceOf(JsonNode.class);
         assertThat(query.getResource()).isEqualTo("query.name");
         final JsonNode jsonNode = (JsonNode) query.getQueryData();
-        assertThat(jsonNode.findValue("name").asText()).isEqualTo("sample1");
+        assertThat(jsonNode.findValue("name").asString()).isEqualTo("sample1");
     }
 
     @Test
@@ -134,7 +133,7 @@ class JacksonMessageConverterTest {
         assertThat(query.getQueryData()).isInstanceOf(JsonNode.class);
         assertThat(query.getResource()).isEqualTo("query.name");
         final JsonNode jsonNode = (JsonNode) query.getQueryData();
-        assertThat(jsonNode.findValue("name").asText()).isEqualTo(name);
+        assertThat(jsonNode.findValue("name").asString()).isEqualTo(name);
     }
 
 }

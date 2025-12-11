@@ -1,9 +1,9 @@
 package org.reactivecommons.async.starter.config.health;
 
 import org.reactivecommons.async.starter.config.ConnectionManager;
-import org.springframework.boot.actuate.health.AbstractReactiveHealthIndicator;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.health.contributor.AbstractReactiveHealthIndicator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

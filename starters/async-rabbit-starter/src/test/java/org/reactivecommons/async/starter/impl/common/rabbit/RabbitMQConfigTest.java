@@ -4,7 +4,9 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.ConnectionFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.rabbit.ConnectionFactoryCustomizer;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
 import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
@@ -38,6 +40,7 @@ import static org.mockito.Mockito.when;
         ReactiveCommonsConfig.class,
         ReactiveCommonsListenersConfig.class
 })
+@ExtendWith(MockitoExtension.class)
 class RabbitMQConfigTest {
     @Autowired
     private RabbitJacksonMessageConverter converter;
