@@ -9,7 +9,7 @@ dependencies {
     api project(':cloudevents-json-jackson')
 
     compileOnly 'io.projectreactor:reactor-core'
-    api 'tools.jackson.core:jackson-databind:3.0.3'
+    api 'tools.jackson.core:jackson-databind'
     implementation 'commons-io:commons-io:2.21.0'
     implementation 'io.cloudevents:cloudevents-core:4.0.1'
 
