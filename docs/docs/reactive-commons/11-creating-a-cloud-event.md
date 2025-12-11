@@ -16,8 +16,6 @@ In order to instantiate a CloudEvent you may need to include the dependencies:
 
 ```groovy
 implementation 'io.cloudevents:cloudevents-core:<version>'
-// or
-implementation 'io.cloudevents:cloudevents-json-jackson:<version>'
 ```
 
 ## Creating a CloudEvent instance with our Data wrapper
@@ -65,7 +63,7 @@ add this classes:
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.jackson.JsonCloudEventData;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.databind.ObjectMapper;
 ```
 
 ```java
