@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.0.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.1) (2025-12-19)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.0...v7.0.1)
+
+**Merged pull requests:**
+
+- fix\(rabbitmq\): use Netty SslContext for SSL setup [\#158](https://github.com/reactive-commons/reactive-commons-java/pull/158) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.0.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.0) (2025-12-11)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v6.1.0...v7.0.0)
