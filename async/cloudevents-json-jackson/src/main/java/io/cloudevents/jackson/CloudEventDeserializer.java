@@ -45,10 +45,6 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
     private final boolean forceIgnoreInvalidExtensionNameDeserialization;
     private final boolean disableDataContentTypeDefaulting;
 
-    protected CloudEventDeserializer() {
-        this(false, false, false);
-    }
-
     protected CloudEventDeserializer(
             boolean forceExtensionNameLowerCaseDeserialization,
             boolean forceIgnoreInvalidExtensionNameDeserialization,
