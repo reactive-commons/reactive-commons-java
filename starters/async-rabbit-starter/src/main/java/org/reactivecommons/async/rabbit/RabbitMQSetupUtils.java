@@ -2,6 +2,8 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import io.netty.handler.ssl.SslContext;
+import io.netty.handler.ssl.SslContextBuilder;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
@@ -31,24 +33,17 @@ import reactor.rabbitmq.SenderOptions;
 import reactor.rabbitmq.Utils;
 import reactor.util.retry.Retry;
 
-import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import javax.net.ssl.X509TrustManager;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.logging.Level;
@@ -57,28 +52,11 @@ import java.util.logging.Level;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RabbitMQSetupUtils {
     private static final String SHARED_TYPE = "shared";
-    private static final String DEFAULT_PROTOCOL;
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
 
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
-
-    static {
-        String protocol = "TLSv1.1";
-        try {
-            String[] protocols = SSLContext.getDefault().getSupportedSSLParameters().getProtocols();
-            for (String prot : protocols) {
-                if ("TLSv1.2".equals(prot)) {
-                    protocol = "TLSv1.2";
-                    break;
-                }
-            }
-        } catch (NoSuchAlgorithmException e) {
-            // nothing
-        }
-        DEFAULT_PROTOCOL = protocol;
-    }
 
     public static ConnectionFactoryProvider connectionFactoryProvider(AsyncProps asyncProps,
                                                                       ConnectionFactoryCustomizer cfCustomizer) {
@@ -177,25 +155,32 @@ public final class RabbitMQSetupUtils {
 
     // SSL based on RabbitConnectionFactoryBean
     // https://github.com/spring-projects/spring-amqp/blob/main/spring-rabbit/src/main/java/org/springframework/amqp/rabbit/connection/RabbitConnectionFactoryBean.java
+    // Adapted for Netty: https://www.rabbitmq.com/client-libraries/java-api-guide#netty
 
     private static void setUpSSL(ConnectionFactory factory, RabbitProperties properties)
-            throws NoSuchAlgorithmException, KeyManagementException, KeyStoreException, UnrecoverableKeyException,
+            throws NoSuchAlgorithmException, KeyStoreException, UnrecoverableKeyException,
             CertificateException, IOException {
         var ssl = properties.getSsl();
         if (ssl != null && ssl.isEnabled()) {
-            var keyManagers = configureKeyManagers(ssl);
-            var trustManagers = configureTrustManagers(ssl);
-            var secureRandom = SecureRandom.getInstanceStrong();
+            SslContextBuilder sslContextBuilder = SslContextBuilder.forClient();
 
-            if (log.isLoggable(Level.FINE)) {
-                log.fine("Initializing SSLContext with KM: " + Arrays.toString(keyManagers) +
-                        ", TM: " + Arrays.toString(trustManagers) + ", random: " + secureRandom);
+            // Configure TrustManager
+            var trustManagerFactory = configureTrustManagerFactory(ssl);
+            sslContextBuilder.trustManager(trustManagerFactory);
+
+            // Configure KeyManager if keystore is provided
+            if (ssl.getKeyStore() != null) {
+                var keyManagerFactory = configureKeyManagerFactory(ssl);
+                sslContextBuilder.keyManager(keyManagerFactory);
             }
-            var context = createSSLContext(ssl);
-            context.init(keyManagers, trustManagers, secureRandom);
-            factory.useSslProtocol(context);
 
-            logDetails(trustManagers);
+            // Set SSL protocol if specified
+            if (ssl.getAlgorithm() != null) {
+                log.info("Using SSL protocol: " + ssl.getAlgorithm());
+            }
+
+            SslContext sslContext = sslContextBuilder.build();
+            factory.netty().sslContext(sslContext);
 
             if (ssl.isVerifyHostname()) {
                 factory.enableHostnameVerification();
@@ -203,28 +188,23 @@ public final class RabbitMQSetupUtils {
         }
     }
 
-    private static KeyManager[] configureKeyManagers(RabbitPropertiesBase.Ssl ssl) throws KeyStoreException,
-            IOException,
-            NoSuchAlgorithmException,
+    private static KeyManagerFactory configureKeyManagerFactory(RabbitPropertiesBase.Ssl ssl)
+            throws KeyStoreException, IOException, NoSuchAlgorithmException,
             CertificateException, UnrecoverableKeyException {
-        KeyManager[] keyManagers = null;
-        if (ssl.getKeyStore() != null) {
-            var ks = KeyStore.getInstance(ssl.getKeyStoreType());
-            char[] keyPassphrase = null;
-            if (ssl.getKeyStorePassword() != null) {
-                keyPassphrase = ssl.getKeyStorePassword().toCharArray();
-            }
-            try (var inputStream = new FileInputStream(ssl.getKeyStore())) {
-                ks.load(inputStream, keyPassphrase);
-            }
-            var kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
-            kmf.init(ks, keyPassphrase);
-            keyManagers = kmf.getKeyManagers();
+        var ks = KeyStore.getInstance(ssl.getKeyStoreType());
+        char[] keyPassphrase = null;
+        if (ssl.getKeyStorePassword() != null) {
+            keyPassphrase = ssl.getKeyStorePassword().toCharArray();
         }
-        return keyManagers;
+        try (var inputStream = new FileInputStream(ssl.getKeyStore())) {
+            ks.load(inputStream, keyPassphrase);
+        }
+        var kmf = KeyManagerFactory.getInstance(KeyManagerFactory.getDefaultAlgorithm());
+        kmf.init(ks, keyPassphrase);
+        return kmf;
     }
 
-    private static TrustManager[] configureTrustManagers(RabbitPropertiesBase.Ssl ssl)
+    private static TrustManagerFactory configureTrustManagerFactory(RabbitPropertiesBase.Ssl ssl)
             throws KeyStoreException, IOException, NoSuchAlgorithmException, CertificateException {
         KeyStore tks = null;
         if (ssl.getTrustStore() != null) {
@@ -240,24 +220,7 @@ public final class RabbitMQSetupUtils {
 
         var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(tks);
-        return tmf.getTrustManagers();
-    }
-
-    private static SSLContext createSSLContext(RabbitPropertiesBase.Ssl ssl) throws NoSuchAlgorithmException {
-        return SSLContext.getInstance(ssl.getAlgorithm() != null ? ssl.getAlgorithm() : DEFAULT_PROTOCOL);
-    }
-
-    private static void logDetails(TrustManager[] managers) {
-        var found = false;
-        for (var trustManager : managers) {
-            if (trustManager instanceof X509TrustManager x509TrustManager) {
-                found = true;
-                log.info("Loaded " + x509TrustManager.getAcceptedIssuers().length + " accepted issuers for rabbitmq");
-            }
-        }
-        if (!found) {
-            log.warning("No X509TrustManager found in the truststore.");
-        }
+        return tmf;
     }
 
 }
