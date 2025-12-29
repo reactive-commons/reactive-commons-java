@@ -28,7 +28,7 @@ jobs:
           fi
       - name: Create Pull Request
         if: env.HAS_CHANGES == 'true'
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.PA_TOKEN }}
           committer: Dependencies Bot <release-bot@reactivecommons.org>
