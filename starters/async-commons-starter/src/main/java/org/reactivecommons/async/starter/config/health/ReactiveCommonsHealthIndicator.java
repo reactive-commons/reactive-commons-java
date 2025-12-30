@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndicator {
     public static final String DOMAIN = "domain";
     public static final String VERSION = "version";
+    public static final String UNKNOWN = "unknown";
     private final ConnectionManager manager;
 
     @Override
@@ -29,7 +30,7 @@ public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndica
     }
 
     private Health.Builder reduceHealth(Health.Builder builder, RCHealth health) {
-        String domain = health.details().get(DOMAIN).toString();
+        String domain = health.details().getOrDefault(DOMAIN, UNKNOWN).toString();
         if (health.status().equals(RCHealth.Status.DOWN)) {
             log.error("Broker of domain {} is down", domain);
             return builder.down().withDetail(domain, health.details());
