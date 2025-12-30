@@ -71,4 +71,17 @@ class ReactiveCommonsHealthIndicatorTest {
                 .expectNextMatches(health -> health.getStatus().toString().equals("DOWN"))
                 .verifyComplete();
     }
+
+    @Test
+    void shouldBeDownAndSetDomain() {
+        // Arrange
+        when(brokerProvider.healthCheck()).thenReturn(Mono.just(RCHealth.builder().down().build()));
+        when(brokerProvider2.healthCheck()).thenReturn(Mono.just(RCHealth.builder().up().build()));
+        // Act
+        Mono<Health> flow = healthIndicator.health();
+        // Assert
+        StepVerifier.create(flow)
+                .expectNextMatches(health -> health.getStatus().toString().equals("DOWN"))
+                .verifyComplete();
+    }
 }

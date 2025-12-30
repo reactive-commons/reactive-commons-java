@@ -5,9 +5,13 @@ import reactor.core.publisher.Mono;
 public abstract class RCHealthIndicator {
 
     public Mono<RCHealth> health() {
-        return doHealthCheck(RCHealth.builder())
+        var builder = RCHealth.builder();
+        return doHealthCheck(builder)
                 .onErrorResume(e ->
-                        Mono.just(RCHealth.builder().down().withDetail("error", e.getMessage()).build())
+                        Mono.just(builder
+                                .down()
+                                .withDetail("error", e.getMessage())
+                                .build())
                 );
     }
 
