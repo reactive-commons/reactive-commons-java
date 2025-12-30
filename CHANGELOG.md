@@ -1,5 +1,14 @@
 # Changelog
 
+## [v7.0.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.2) (2025-12-30)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.1...v7.0.2)
+
+**Merged pull requests:**
+
+- fix\(health\): fix null exception when DOWN [\#160](https://github.com/reactive-commons/reactive-commons-java/pull/160) ([juancgalvis](https://github.com/juancgalvis))
+- build\(tasks\): update actions [\#159](https://github.com/reactive-commons/reactive-commons-java/pull/159) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v7.0.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.1) (2025-12-19)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.0...v7.0.1)
