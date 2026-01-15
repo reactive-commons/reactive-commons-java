@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.3) (2026-01-15)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.2...v7.0.3)
+
+**Merged pull requests:**
+
+- fix\(health\): show health error details [\#161](https://github.com/reactive-commons/reactive-commons-java/pull/161) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v7.0.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.2) (2025-12-30)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.1...v7.0.2)
