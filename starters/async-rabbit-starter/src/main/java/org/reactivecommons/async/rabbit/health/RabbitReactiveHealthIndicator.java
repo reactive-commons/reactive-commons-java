@@ -18,7 +18,6 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     public RabbitReactiveHealthIndicator(String domain, ConnectionFactory connectionFactory) {
         this.domain = domain;
         this.connectionFactory = connectionFactory.clone();
-        this.connectionFactory.useBlockingIo();
     }
 
     @Override
