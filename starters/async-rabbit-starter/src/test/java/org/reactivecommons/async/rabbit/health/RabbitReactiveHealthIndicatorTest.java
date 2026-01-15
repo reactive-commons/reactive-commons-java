@@ -84,7 +84,7 @@ class RabbitReactiveHealthIndicatorTest {
         Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
         // Assert
         StepVerifier.create(result)
-                .expectError(TimeoutException.class)
+                .expectError(RabbitMQHealthException.class)
                 .verify();
     }
 

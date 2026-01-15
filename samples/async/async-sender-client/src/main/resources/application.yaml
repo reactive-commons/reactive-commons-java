@@ -15,5 +15,6 @@ management:
         include: health,prometheus
 app:
   async:
-    createTopology: true
-    listenReplies: true
+    app:
+      createTopology: true
+      listenReplies: true

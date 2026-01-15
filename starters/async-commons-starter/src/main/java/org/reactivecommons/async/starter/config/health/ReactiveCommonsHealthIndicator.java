@@ -32,7 +32,7 @@ public class ReactiveCommonsHealthIndicator extends AbstractReactiveHealthIndica
     private Health.Builder reduceHealth(Health.Builder builder, RCHealth health) {
         String domain = health.details().getOrDefault(DOMAIN, UNKNOWN).toString();
         if (health.status().equals(RCHealth.Status.DOWN)) {
-            log.error("Broker of domain {} is down", domain);
+            log.error("Broker of domain {} is down {}", domain, health.details());
             return builder.down().withDetail(domain, health.details());
         }
         return builder.withDetail(domain, health.details());
