@@ -2,13 +2,10 @@ package org.reactivecommons.async.rabbit.health;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import lombok.SneakyThrows;
 import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.config.health.RCHealthIndicator;
 import reactor.core.publisher.Mono;
-
-import java.net.SocketException;
 
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.DOMAIN;
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.VERSION;
@@ -31,13 +28,12 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
                 .map(status -> builder.up().withDetail(VERSION, status).build());
     }
 
-    @SneakyThrows
     private String getRawVersion(ConnectionFactory factory) {
         Connection connection = null;
         try {
             connection = factory.newConnection();
             return connection.getServerProperties().get(VERSION).toString();
-        } catch (SocketException e) {
+        } catch (Exception e) {
             log.warn("Identified error", e);
             throw new RabbitMQHealthException(e);
         } finally {
