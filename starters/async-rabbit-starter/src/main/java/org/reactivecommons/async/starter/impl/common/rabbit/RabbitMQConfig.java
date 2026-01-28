@@ -13,6 +13,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderConfig;
+import org.reactivecommons.async.rabbit.lifecycle.EventLoopGroupLifecycleManager;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -64,6 +65,12 @@ public class RabbitMQConfig {
     @ConditionalOnMissingBean(ConnectionFactoryCustomizer.class)
     public ConnectionFactoryCustomizer defaultConnectionFactoryCustomizer() {
         return (connectionFactory, asyncProps) -> connectionFactory;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(EventLoopGroupLifecycleManager.class)
+    public EventLoopGroupLifecycleManager eventLoopGroupLifecycleManager() {
+        return new EventLoopGroupLifecycleManager();
     }
 
 }

@@ -16,6 +16,7 @@ import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcesso
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.lifecycle.EventLoopGroupLifecycleManager;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
@@ -142,4 +143,22 @@ class RabbitMQConfigTest {
 
         assertThat(result).isSameAs(originalFactory);
     }
+
+    @Test
+    void shouldReturnEventLoopGroupLifecycleManager() {
+        EventLoopGroupLifecycleManager lifecycleManager = rabbitMQConfig.eventLoopGroupLifecycleManager();
+
+        assertThat(lifecycleManager).isNotNull();
+    }
+
+    @Test
+    void shouldReturnNewInstanceOfEventLoopGroupLifecycleManagerEachTime() {
+        EventLoopGroupLifecycleManager lifecycleManager1 = rabbitMQConfig.eventLoopGroupLifecycleManager();
+        EventLoopGroupLifecycleManager lifecycleManager2 = rabbitMQConfig.eventLoopGroupLifecycleManager();
+
+        assertThat(lifecycleManager1).isNotNull();
+        assertThat(lifecycleManager2).isNotNull();
+        assertThat(lifecycleManager1).isNotSameAs(lifecycleManager2);
+    }
+
 }
