@@ -2,11 +2,15 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import io.netty.channel.EventLoopGroup;
+import io.netty.channel.IoHandlerFactory;
+import io.netty.channel.MultiThreadIoEventLoopGroup;
+import io.netty.channel.nio.NioIoHandler;
 import io.netty.handler.ssl.SslContext;
 import io.netty.handler.ssl.SslContextBuilder;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -46,17 +50,23 @@ import java.security.cert.CertificateException;
 import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.logging.Level;
 
-@Log
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RabbitMQSetupUtils {
     private static final String SHARED_TYPE = "shared";
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
 
+    private static final EventLoopGroup SHARED_EVENT_LOOP_GROUP = createEventLoopGroup();
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
+
+    private static EventLoopGroup createEventLoopGroup() {
+        log.info("Creating shared Netty EventLoopGroup with default thread configuration for RabbitMQ connections");
+        IoHandlerFactory ioHandlerFactory = NioIoHandler.newFactory();
+        return new MultiThreadIoEventLoopGroup(ioHandlerFactory);
+    }
 
     public static ConnectionFactoryProvider connectionFactoryProvider(AsyncProps asyncProps,
                                                                       ConnectionFactoryCustomizer cfCustomizer) {
@@ -70,7 +80,8 @@ public final class RabbitMQSetupUtils {
                 map.from(rabbitProperties::determineUsername).to(newFactory::setUsername);
                 map.from(rabbitProperties::determinePassword).to(newFactory::setPassword);
                 map.from(rabbitProperties::determineVirtualHost).to(newFactory::setVirtualHost);
-                newFactory.netty();
+                newFactory.netty().eventLoopGroup(SHARED_EVENT_LOOP_GROUP);
+
                 setUpSSL(newFactory, rabbitProperties);
                 return cfCustomizer.customize(newFactory, props);
             } catch (Exception e) {
@@ -143,10 +154,10 @@ public final class RabbitMQSetupUtils {
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(SHARED_TYPE, "")
                     ))
-                    .doOnError(err ->
-                            log.log(Level.SEVERE, "Error creating connection to RabbitMQ Broker in host '"
-                                    + f.getHost() + "'. Starting retry process...", err)
-                    )
+                    .doOnError(err -> log.error(
+                            "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
+                            f.getHost(), err
+                    ))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
                     .cache();
@@ -221,6 +232,15 @@ public final class RabbitMQSetupUtils {
         var tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
         tmf.init(tks);
         return tmf;
+    }
+
+    public static void shutdownEventLoopGroup() {
+        if (!SHARED_EVENT_LOOP_GROUP.isShuttingDown() && !SHARED_EVENT_LOOP_GROUP.isShutdown()) {
+            log.info("Shutting down shared Netty EventLoopGroup for RabbitMQ connections");
+            SHARED_EVENT_LOOP_GROUP.shutdownGracefully();
+        } else {
+            log.info("Shared Netty EventLoopGroup is already shutting down or shutdown");
+        }
     }
 
 }
