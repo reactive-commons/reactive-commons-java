@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.4) (2026-01-28)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.3...v7.0.4)
+
+**Merged pull requests:**
+
+- fix\(rabbitmq\): use shared Netty EventLoopGroup to prevent resource leaks and shutdown issues [\#163](https://github.com/reactive-commons/reactive-commons-java/pull/163) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.0.3](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.3) (2026-01-15)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.2...v7.0.3)
