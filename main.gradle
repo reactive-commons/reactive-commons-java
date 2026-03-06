@@ -64,6 +64,18 @@ subprojects {
         annotationProcessor 'org.projectlombok:lombok'
         testAnnotationProcessor 'org.projectlombok:lombok'
         testCompileOnly 'org.projectlombok:lombok'
+
+        configurations.configureEach {
+            resolutionStrategy.eachDependency { DependencyResolveDetails details ->
+                if (details.requested.group == 'tools.jackson.core') {
+                    details.useVersion '3.1.0'
+                }
+                if (details.requested.group == 'com.fasterxml.jackson.core'
+                        && details.requested.name == 'jackson-annotations') {
+                    details.useVersion '2.21'
+                }
+            }
+        }
     }
 
     //TODO: Remove once it has been updated in spring boot
@@ -90,7 +102,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.2'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.3'
         }
     }
 
@@ -186,6 +198,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.3.0'
+    gradleVersion = '9.3.1'
     validateDistributionUrl = true
 }
