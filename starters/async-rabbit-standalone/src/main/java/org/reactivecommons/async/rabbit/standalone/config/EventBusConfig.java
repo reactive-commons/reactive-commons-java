@@ -5,7 +5,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.rabbit.RabbitDomainEventBus;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 
-import static reactor.rabbitmq.ExchangeSpecification.exchange;
+import static org.reactivecommons.async.rabbit.communications.ResourcesSpecification.exchange;
 
 
 @RequiredArgsConstructor

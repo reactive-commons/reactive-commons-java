@@ -9,11 +9,11 @@ import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import reactor.rabbitmq.OutboundMessageResult;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.OutboundMessageResult;
 import reactor.util.function.Tuple2;
 import reactor.util.function.Tuples;
 

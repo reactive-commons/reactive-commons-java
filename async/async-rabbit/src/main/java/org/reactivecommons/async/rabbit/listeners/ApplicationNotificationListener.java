@@ -13,16 +13,16 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.AcknowledgableDelivery;
 
 import java.util.function.Function;
 
+import static org.reactivecommons.async.rabbit.communications.ResourcesSpecification.binding;
+import static org.reactivecommons.async.rabbit.communications.ResourcesSpecification.exchange;
+import static org.reactivecommons.async.rabbit.communications.ResourcesSpecification.queue;
 import static reactor.core.publisher.Flux.fromIterable;
-import static reactor.rabbitmq.BindingSpecification.binding;
-import static reactor.rabbitmq.ExchangeSpecification.exchange;
-import static reactor.rabbitmq.QueueSpecification.queue;
 
 @Log
 public class ApplicationNotificationListener extends GenericMessageListener {
