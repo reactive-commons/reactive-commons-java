@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.0.5](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.5) (2026-03-09)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.4...v7.0.5)
+
+**Merged pull requests:**
+
+- fix: Update dependencies [\#164](https://github.com/reactive-commons/reactive-commons-java/pull/164) ([juancgalvis](https://github.com/juancgalvis))
+
 ## [v7.0.4](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.4) (2026-01-28)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.3...v7.0.4)
