@@ -33,13 +33,13 @@ class ReactiveMessageSenderTest {
 
     private ReactiveMessageSender messageSender;
 
-    private final JsonMapper objectMapper = new JsonMapper();
+    private final JsonMapper jsonMapper = new JsonMapper();
 
     @Mock
     private Sender sender;
 
     @Spy
-    private final MessageConverter messageConverter = new RabbitJacksonMessageConverter(objectMapper);
+    private final MessageConverter messageConverter = new RabbitJacksonMessageConverter(jsonMapper);
 
     @Mock
     private final SendOptions sendOptions = new SendOptions();
@@ -56,7 +56,7 @@ class ReactiveMessageSenderTest {
         });
         when(sender.send(any(Publisher.class))).then(invocation -> {
             final Flux<OutboundMessage> argument = invocation.getArgument(0);
-            argument.subscribe(); // Suscribirse para inicializar el sink
+            argument.subscribe(); // Subscribe to initialize the sink
             return Mono.empty();
         });
         String sourceApplication = "TestApp";

@@ -2,7 +2,6 @@ package io.cloudevents.jackson;
 
 import io.cloudevents.CloudEvent;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
 
@@ -37,7 +36,7 @@ class CloudEventDeserializerTest {
 
     @Test
     void impliedDataContentTypeNonBinaryData() {
-        ObjectMapper mapper = getObjectMapper(false);
+        JsonMapper mapper = getObjectMapper(false);
         StringReader reader = new StringReader(NON_BINARY_PAYLOAD);
         CloudEvent ce = mapper.readValue(reader, CloudEvent.class);
         assertThat(ce.getDataContentType()).isEqualTo("application/json");
@@ -50,13 +49,13 @@ class CloudEventDeserializerTest {
 
     @Test
     void impliedDataContentTypeBinaryData() {
-        final ObjectMapper mapper = getObjectMapper(false);
+        final JsonMapper mapper = getObjectMapper(false);
         StringReader reader = new StringReader(BINARY_PAYLOAD);
         CloudEvent ce = mapper.readValue(reader, CloudEvent.class);
         assertThat(ce.getDataContentType()).isNull();
     }
 
-    private static ObjectMapper getObjectMapper(boolean disableDataContentTypeDefaulting) {
+    private static JsonMapper getObjectMapper(boolean disableDataContentTypeDefaulting) {
         final SimpleModule module = getCloudEventJacksonModule(
                 JsonFormatOptions
                         .builder()

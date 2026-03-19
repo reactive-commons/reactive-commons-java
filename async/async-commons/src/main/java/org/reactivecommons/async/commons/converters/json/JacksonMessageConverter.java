@@ -10,7 +10,7 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @RequiredArgsConstructor
 public abstract class JacksonMessageConverter implements MessageConverter {
@@ -19,26 +19,26 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     public static final String APPLICATION_CLOUD_EVENT_JSON = "application/cloudevents+json";
     public static final String APPLICATION_JSON = "application/json";
 
-    protected final ObjectMapper objectMapper;
+    protected final JsonMapper jsonMapper;
 
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {
         final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
-        final T value = objectMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
+        final T value = jsonMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
         return new AsyncQuery<>(asyncQueryJson.getResource(), value);
     }
 
     @Override
     public <T> DomainEvent<T> readDomainEvent(Message message, Class<T> bodyClass) {
         final DomainEventJson domainEventJson = readValue(message, DomainEventJson.class);
-        final T value = objectMapper.treeToValue(domainEventJson.getData(), bodyClass);
+        final T value = jsonMapper.treeToValue(domainEventJson.getData(), bodyClass);
         return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
     }
 
     @Override
     public <T> Command<T> readCommand(Message message, Class<T> bodyClass) {
         final CommandJson commandJson = readValue(message, CommandJson.class);
-        final T value = objectMapper.treeToValue(commandJson.getData(), bodyClass);
+        final T value = jsonMapper.treeToValue(commandJson.getData(), bodyClass);
         return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
     }
 
@@ -50,7 +50,7 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     @Override
     public <T> T readValue(Message message, Class<T> valueClass) {
         try {
-            return objectMapper.readValue(message.getBody(), valueClass);
+            return jsonMapper.readValue(message.getBody(), valueClass);
         } catch (Exception e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }

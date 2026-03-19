@@ -11,7 +11,7 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.net.URI;
 import java.util.Date;
@@ -23,12 +23,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class JacksonMessageConverterTest {
 
     private static RabbitJacksonMessageConverter converter;
-    private static ObjectMapper objectMapper;
+    private static JsonMapper jsonMapper;
 
     @BeforeAll
     static void setUp() {
-        objectMapper = new DefaultObjectMapperSupplier().get();
-        converter = new RabbitJacksonMessageConverter(objectMapper);
+        jsonMapper = new DefaultObjectMapperSupplier().get();
+        converter = new RabbitJacksonMessageConverter(jsonMapper);
     }
 
     @Test
@@ -42,7 +42,7 @@ class JacksonMessageConverterTest {
     void toMessageWhenDataIsNull() {
         final Message message = converter.toMessage(null);
 
-        final JsonNode jsonNode = objectMapper.readTree(message.getBody());
+        final JsonNode jsonNode = jsonMapper.readTree(message.getBody());
         assertThat(jsonNode.isNull()).isTrue();
     }
 
@@ -50,7 +50,7 @@ class JacksonMessageConverterTest {
     void toMessageWhenDataIsEmpty() {
         final Message message = converter.toMessage("");
 
-        final JsonNode jsonNode = objectMapper.readTree(message.getBody());
+        final JsonNode jsonNode = jsonMapper.readTree(message.getBody());
         assertThat(jsonNode.asString()).isEmpty();
     }
 
@@ -71,7 +71,7 @@ class JacksonMessageConverterTest {
                 .withSource(URI.create("https://spring.io/foos"))//
                 .withType("command")
                 .withData("application/json", JsonCloudEventData.wrap(
-                        objectMapper.valueToTree(new SampleClass("35", "name1", date)))
+                        jsonMapper.valueToTree(new SampleClass("35", "name1", date)))
                 )
                 .build();
         Message message = converter.toMessage(command);

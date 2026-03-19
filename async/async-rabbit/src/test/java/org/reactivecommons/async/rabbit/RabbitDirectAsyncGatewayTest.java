@@ -28,7 +28,7 @@ import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
 import java.util.List;
@@ -326,7 +326,7 @@ class RabbitDirectAsyncGatewayTest {
 
     private void mockReply() {
         Message message = mock(Message.class);
-        ObjectMapper mapper = new ObjectMapper();
+        JsonMapper mapper = new JsonMapper();
         when(message.getBody()).thenReturn(mapper.writeValueAsString(new DummyMessage()).getBytes());
         final Sinks.One<Message> processor = Sinks.one();
         processor.tryEmitValue(message);

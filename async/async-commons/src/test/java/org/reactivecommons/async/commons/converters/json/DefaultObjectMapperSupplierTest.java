@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.junit.jupiter.api.Test;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.time.LocalDateTime;
 import java.util.Date;
@@ -15,30 +15,29 @@ class DefaultObjectMapperSupplierTest {
 
     private final DefaultObjectMapperSupplier defaultObjectMapperSupplier = new DefaultObjectMapperSupplier();
 
-
     @Test
     void shouldMapWithUnknownProperties() {
-        ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
+        JsonMapper jsonMapper = defaultObjectMapperSupplier.get();
 
         SampleClassExtra base = new SampleClassExtra("23", "one", new Date(), 45L);
-        final String serialized = objectMapper.writeValueAsString(base);
+        final String serialized = jsonMapper.writeValueAsString(base);
 
-        final SampleClass result = objectMapper.readValue(serialized, SampleClass.class);
+        final SampleClass result = jsonMapper.readValue(serialized, SampleClass.class);
 
         assertThat(result).usingRecursiveComparison().isEqualTo(base);
     }
 
     @Test
     void shouldSerializeAndDeserializeLocalDateTime() {
-        ObjectMapper objectMapper = defaultObjectMapperSupplier.get();
+        JsonMapper jsonMapper = defaultObjectMapperSupplier.get();
 
         LocalDateTime now = LocalDateTime.of(2025, 12, 10, 14, 30, 0);
         SampleClassWithLocalDateTime sample = new SampleClassWithLocalDateTime("123", "Test", now);
 
-        final String serialized = objectMapper.writeValueAsString(sample);
+        final String serialized = jsonMapper.writeValueAsString(sample);
         assertThat(serialized).contains("2025-12-10");
 
-        final SampleClassWithLocalDateTime result = objectMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
+        final SampleClassWithLocalDateTime result = jsonMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
 
         assertThat(result.getId()).isEqualTo("123");
         assertThat(result.getName()).isEqualTo("Test");

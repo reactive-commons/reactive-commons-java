@@ -1,25 +1,19 @@
 package io.cloudevents.jackson;
 
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+
 import java.util.Objects;
 
+@Getter
+@NoArgsConstructor
 public class MyPojo {
     public int a;
     public String b;
 
-    public MyPojo() {
-    }
-
     public MyPojo(int a, String b) {
         this.a = a;
         this.b = b;
-    }
-
-    public int getA() {
-        return a;
-    }
-
-    public void setA(int a) {
-        this.a = a;
     }
 
     @Override
