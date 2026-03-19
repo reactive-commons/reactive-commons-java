@@ -22,7 +22,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
 
@@ -75,7 +75,7 @@ public class ReactiveCommonsConfig {
 
     @Bean
     @ConditionalOnMissingBean
-    public ObjectMapper defaultReactiveCommonsObjectMapper(ObjectMapperSupplier supplier) {
+    public JsonMapper defaultReactiveCommonsObjectMapper(ObjectMapperSupplier supplier) {
         return supplier.get();
     }
 

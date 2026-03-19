@@ -455,21 +455,21 @@ import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 @Component
 @EnableDirectAsyncGateway
 public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
     private final String retryQueueName;
     private final DirectAsyncGateway gateway;
 
     public ResendUnroutableMessageHandler(
-            ObjectMapper objectMapper,
+            JsonMapper jsonMapper,
             DirectAsyncGateway gateway,
             @Value("${adapters.rabbitmq.retry-queue-name}") String retryQueueName) {
-        this.objectMapper = objectMapper;
+        this.jsonMapper = jsonMapper;
         this.retryQueueName = retryQueueName;
         this.gateway = gateway;
     }
@@ -488,7 +488,7 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
         try {
             // The unroutable message is a command, so the message body is deserialized to the Command class.
             // Use the DomainEvent class for domain events and the AsyncQuery class for asynchronous queries.
-            Command<JsonNode> command = objectMapper.readValue(returned.getBody(), new TypeReference<>() {
+            Command<JsonNode> command = jsonMapper.readValue(returned.getBody(), new TypeReference<>() {
             });
 
             // Send the message to the queue

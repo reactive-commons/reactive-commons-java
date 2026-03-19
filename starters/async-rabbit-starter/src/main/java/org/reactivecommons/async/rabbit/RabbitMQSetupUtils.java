@@ -63,7 +63,7 @@ public final class RabbitMQSetupUtils {
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
 
     private static EventLoopGroup createEventLoopGroup() {
-        log.info("Creating shared Netty EventLoopGroup with default thread configuration for RabbitMQ connections");
+        log.debug("Creating shared Netty EventLoopGroup with default thread configuration for RabbitMQ connections");
         IoHandlerFactory ioHandlerFactory = NioIoHandler.newFactory();
         return new MultiThreadIoEventLoopGroup(ioHandlerFactory);
     }

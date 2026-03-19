@@ -63,11 +63,11 @@ add this classes:
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.jackson.JsonCloudEventData;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 ```
 
 ```java
-ObjectMapper mapper = new ObjectMapper(); // You should convert your object to a JsonNode
+JsonMapper mapper = new JsonMapper(); // You should convert your object to a JsonNode
 
 CloudEvent commandCloudEvent = CloudEventBuilder.v1()
     .withId(UUID.randomUUID().toString())

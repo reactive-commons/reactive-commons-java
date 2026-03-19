@@ -7,7 +7,7 @@ import org.reactivecommons.async.commons.converters.json.JacksonMessageConverter
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.KafkaMessage.KafkaMessageProperties;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -15,8 +15,8 @@ import java.util.Map;
 
 public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
 
-    public KafkaJacksonMessageConverter(ObjectMapper objectMapper) {
-        super(objectMapper);
+    public KafkaJacksonMessageConverter(JsonMapper jsonMapper) {
+        super(jsonMapper);
     }
 
     @Override
@@ -26,7 +26,7 @@ public class KafkaJacksonMessageConverter extends JacksonMessageConverter {
         }
         byte[] bytes;
         try {
-            String jsonString = this.objectMapper.writeValueAsString(object);
+            String jsonString = this.jsonMapper.writeValueAsString(object);
             bytes = jsonString.getBytes(StandardCharsets.UTF_8);
         } catch (Exception e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);

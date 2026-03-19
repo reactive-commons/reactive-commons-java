@@ -48,16 +48,16 @@ public class JsonCloudEventDataTest {
                 .deserialize(serialized, data -> {
                     assertThat(data)
                             .isInstanceOf(JsonCloudEventData.class);
-                    assertThat(((JsonCloudEventData) data).getNode().isInt())
+                    assertThat(((JsonCloudEventData) data).node().isInt())
                             .isTrue();
-                    return new MyCloudEventData(((JsonCloudEventData) data).getNode().asInt());
+                    return new MyCloudEventData(((JsonCloudEventData) data).node().asInt());
                 });
 
         assertThat(deserialized.getDataContentType())
                 .isEqualTo(contentType);
         assertThat(deserialized.getData())
                 .isInstanceOf(MyCloudEventData.class);
-        assertThat(((MyCloudEventData) deserialized.getData()).getValue())
+        assertThat(((MyCloudEventData) deserialized.getData()).value())
                 .isEqualTo(10);
     }
 

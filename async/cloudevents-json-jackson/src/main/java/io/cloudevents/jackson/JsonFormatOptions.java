@@ -16,10 +16,16 @@
  */
 package io.cloudevents.jackson;
 
+import lombok.Getter;
+
 public final class JsonFormatOptions {
+    @Getter
     private final boolean forceDataBase64Serialization;
+    @Getter
     private final boolean forceStringSerialization;
+    @Getter
     private final boolean forceExtensionNameLowerCaseDeserialization;
+    @Getter
     private final boolean forceIgnoreInvalidExtensionNameDeserialization;
     private final boolean disableDataContentTypeDefaulting;
 
@@ -48,23 +54,9 @@ public final class JsonFormatOptions {
         return new JsonFormatOptionsBuilder();
     }
 
-    public boolean isForceDataBase64Serialization() {
-        return this.forceDataBase64Serialization;
+    public boolean isDataContentTypeDefaultingDisabled() {
+        return this.disableDataContentTypeDefaulting;
     }
-
-    public boolean isForceStringSerialization() {
-        return this.forceStringSerialization;
-    }
-
-    public boolean isForceExtensionNameLowerCaseDeserialization() {
-        return this.forceExtensionNameLowerCaseDeserialization;
-    }
-
-    public boolean isForceIgnoreInvalidExtensionNameDeserialization() {
-        return this.forceIgnoreInvalidExtensionNameDeserialization;
-    }
-
-    public boolean isDataContentTypeDefaultingDisabled() { return this.disableDataContentTypeDefaulting; }
 
     public static class JsonFormatOptionsBuilder {
         private boolean forceDataBase64Serialization = false;

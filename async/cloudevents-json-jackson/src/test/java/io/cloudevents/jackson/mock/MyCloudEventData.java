@@ -5,21 +5,11 @@ import io.cloudevents.CloudEventData;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
-public class MyCloudEventData implements CloudEventData {
-
-    private final int value;
-
-    public MyCloudEventData(int value) {
-        this.value = value;
-    }
+public record MyCloudEventData(int value) implements CloudEventData {
 
     @Override
     public byte[] toBytes() {
         return Integer.toString(value).getBytes(StandardCharsets.UTF_8);
-    }
-
-    public int getValue() {
-        return value;
     }
 
     @Override
@@ -27,16 +17,16 @@ public class MyCloudEventData implements CloudEventData {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         MyCloudEventData that = (MyCloudEventData) o;
-        return getValue() == that.getValue();
+        return value() == that.value();
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getValue());
+        return Objects.hash(value());
     }
 
     public static MyCloudEventData fromStringBytes(byte[] bytes) {
-        return new MyCloudEventData(Integer.valueOf(new String(bytes)));
+        return new MyCloudEventData(Integer.parseInt(new String(bytes)));
     }
 
 }
