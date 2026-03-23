@@ -29,7 +29,7 @@ import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.Receiver;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +65,7 @@ public abstract class ListenerReporterTestSuperClass {
     protected final CustomReporter errorReporter = mock(CustomReporter.class);
     protected final Semaphore semaphore = new Semaphore(0);
     protected final Semaphore successSemaphore = new Semaphore(0);
-    private final ObjectMapper mapper = new DefaultObjectMapperSupplier().get();
+    private final JsonMapper mapper = new DefaultObjectMapperSupplier().get();
     private final Receiver receiver = mock(Receiver.class);
     protected final ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(
             receiver, topologyCreator

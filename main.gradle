@@ -64,6 +64,7 @@ subprojects {
         annotationProcessor 'org.projectlombok:lombok'
         testAnnotationProcessor 'org.projectlombok:lombok'
         testCompileOnly 'org.projectlombok:lombok'
+
     }
 
     //TODO: Remove once it has been updated in spring boot
@@ -90,7 +91,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.2'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.0.4'
         }
     }
 
@@ -186,6 +187,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.3.0'
+    gradleVersion = '9.4.1'
     validateDistributionUrl = true
 }

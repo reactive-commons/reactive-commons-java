@@ -25,7 +25,6 @@ import io.cloudevents.core.format.EventSerializationException;
 import io.cloudevents.rw.CloudEventDataMapper;
 import io.cloudevents.rw.CloudEventRWException;
 import tools.jackson.core.JacksonException;
-import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.module.SimpleModule;
 
@@ -36,7 +35,7 @@ import java.util.regex.Pattern;
  * using Jackson. This format is resolvable with {@link io.cloudevents.core.provider.EventFormatProvider} using the content type {@link #CONTENT_TYPE}.
  * <p>
  * If you want to use the {@link CloudEvent} serializers/deserializers directly in your mapper, you can use {@link #getCloudEventJacksonModule()} or
- * {@link #getCloudEventJacksonModule(boolean, boolean)} to get a {@link SimpleModule} to register in your {@link ObjectMapper} instance.
+ * {@link #getCloudEventJacksonModule(boolean, boolean)} to get a {@link SimpleModule} to register in your {@link JsonMapper} instance.
  */
 public final class JsonFormat implements EventFormat {
 
@@ -47,8 +46,8 @@ public final class JsonFormat implements EventFormat {
     /**
      * JSON Data Content Type Discriminator
      */
-    private static final Pattern JSON_CONTENT_TYPE_PATTERN = Pattern.compile("^(application|text)\\/([a-zA-Z]+\\+)?json(;.*)*$");
-    private final ObjectMapper mapper;
+    private static final Pattern JSON_CONTENT_TYPE_PATTERN = Pattern.compile("^(application|text)/([a-zA-Z]+\\+)?json(;.*)*$");
+    private final JsonMapper mapper;
     private final JsonFormatOptions options;
 
     /**

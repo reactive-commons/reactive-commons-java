@@ -12,7 +12,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.net.URI;
 import java.time.OffsetDateTime;
@@ -23,13 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class KafkaJacksonMessageConverterTest {
     private static KafkaJacksonMessageConverter converter;
-    private static ObjectMapper objectMapper;
+    private static JsonMapper jsonMapper;
 
     @BeforeAll
     static void setUp() {
         ObjectMapperSupplier supplier = new DefaultObjectMapperSupplier();
-        objectMapper = supplier.get();
-        converter = new KafkaJacksonMessageConverter(objectMapper);
+        jsonMapper = supplier.get();
+        converter = new KafkaJacksonMessageConverter(jsonMapper);
     }
 
     @Test
@@ -61,21 +61,21 @@ class KafkaJacksonMessageConverterTest {
                 .withType("test")
                 .withDataContentType("application/json")
                 .withTime(dateTime)
-                .withData(objectMapper.writeValueAsBytes(event))
+                .withData(jsonMapper.writeValueAsBytes(event))
                 .build();
 
         String expectedJson = "{\"specversion\":\"1.0\",\"id\":\"" + id +
                 "\",\"source\":\"https://reactivecommons.org/events\",\"type\":\"test\"," +
                 "\"datacontenttype\":\"application/json\",\"time\":\"" + dateTime +
                 "\",\"data\":{\"name\":\"name\",\"age\":1}}";
-        JsonCloudEvent expectedJsonNode = objectMapper.readValue(expectedJson, JsonCloudEvent.class);
+        JsonCloudEvent expectedJsonNode = jsonMapper.readValue(expectedJson, JsonCloudEvent.class);
         // Act
         Message message = converter.toMessage(testCloudEvent);
         // Assert
         assertEquals("test", message.getProperties().getTopic());
         assertEquals(id, message.getProperties().getKey());
         assertEquals("application/cloudevents+json", message.getProperties().getContentType());
-        JsonCloudEvent receivedJsonNode = objectMapper.readValue(new String(message.getBody()), JsonCloudEvent.class);
+        JsonCloudEvent receivedJsonNode = jsonMapper.readValue(new String(message.getBody()), JsonCloudEvent.class);
         assertEquals(expectedJsonNode, receivedJsonNode);
     }
 

@@ -12,7 +12,7 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.JsonNodeFactory;
 
 import java.nio.charset.StandardCharsets;
@@ -63,11 +63,11 @@ class PojoCloudEventDataMapperTest {
     }
 
     private static Stream<Arguments> getPojoMappers() {
-        final ObjectMapper objectMapper = new ObjectMapper();
+        final JsonMapper jsonMapper = new JsonMapper();
         return Stream.of(
-                Arguments.of(PojoCloudEventDataMapper.from(objectMapper, new TypeReference<MyPojo>() {
+                Arguments.of(PojoCloudEventDataMapper.from(jsonMapper, new TypeReference<MyPojo>() {
                 })),
-                Arguments.of(PojoCloudEventDataMapper.from(objectMapper, MyPojo.class))
+                Arguments.of(PojoCloudEventDataMapper.from(jsonMapper, MyPojo.class))
         );
     }
 

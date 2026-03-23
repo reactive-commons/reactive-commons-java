@@ -25,29 +25,11 @@ import java.util.Objects;
 /**
  * This class is a wrapper for Jackson {@link JsonNode} implementing {@link CloudEventData}.
  */
-public class JsonCloudEventData implements CloudEventData {
-
-    private final JsonNode node;
-
-    /**
-     * @param node the json node to wrap
-     * @deprecated You should use {@link #wrap(JsonNode)}
-     */
-    public JsonCloudEventData(JsonNode node) {
-        Objects.requireNonNull(node);
-        this.node = node;
-    }
+public record JsonCloudEventData(JsonNode node) implements CloudEventData {
 
     @Override
     public byte[] toBytes() {
         return node.toString().getBytes(StandardCharsets.UTF_8);
-    }
-
-    /**
-     * @return the wrapped {@link JsonNode}
-     */
-    public JsonNode getNode() {
-        return node;
     }
 
     @Override
@@ -55,12 +37,12 @@ public class JsonCloudEventData implements CloudEventData {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         JsonCloudEventData that = (JsonCloudEventData) o;
-        return Objects.equals(getNode(), that.getNode());
+        return Objects.equals(node(), that.node());
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(getNode());
+        return Objects.hash(node());
     }
 
     @Override

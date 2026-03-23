@@ -91,7 +91,7 @@ class CloudEventSerializer extends StdSerializer<CloudEvent> {
         if (value.getData() != null) {
             CloudEventData data = value.getData();
             if (data instanceof JsonCloudEventData jsonCloudEventData) {
-                gen.writePOJOProperty("data", jsonCloudEventData.getNode());
+                gen.writePOJOProperty("data", jsonCloudEventData.node());
             } else {
                 byte[] dataBytes = data.toBytes();
                 String contentType = value.getDataContentType();
@@ -100,10 +100,8 @@ class CloudEventSerializer extends StdSerializer<CloudEvent> {
                     gen.writeName("data_base64");
                     gen.writeBinary(dataBytes);
                 } else if (JsonFormat.dataIsJsonContentType(contentType)) {
-                    // TODO really bad b/c it allocates stuff, is there another solution out there?
-                    char[] dataAsString = new String(dataBytes, StandardCharsets.UTF_8).toCharArray();
                     gen.writeName("data");
-                    gen.writeRawValue(dataAsString, 0, dataAsString.length);
+                    gen.writeRawValue(new String(dataBytes, StandardCharsets.UTF_8));
                 } else {
                     gen.writeName("data");
                     gen.writeUTF8String(dataBytes, 0, dataBytes.length);
