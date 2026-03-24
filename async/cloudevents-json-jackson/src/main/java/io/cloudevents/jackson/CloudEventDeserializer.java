@@ -21,6 +21,7 @@ import io.cloudevents.CloudEventData;
 import io.cloudevents.SpecVersion;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import io.cloudevents.core.data.BytesCloudEventData;
+import io.cloudevents.rw.CloudEventContextWriter;
 import io.cloudevents.rw.CloudEventDataMapper;
 import io.cloudevents.rw.CloudEventRWException;
 import io.cloudevents.rw.CloudEventReader;
@@ -60,13 +61,13 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
                                boolean forceIgnoreInvalidExtensionNameDeserialization,
                                boolean disableDataContentTypeDefaulting) implements CloudEventReader {
 
+        private static final String DATA_BASE64 = "data_base64";
+
         @Override
         public <T extends CloudEventWriter<V>, V> V read(CloudEventWriterFactory<T, V> writerFactory, CloudEventDataMapper<? extends CloudEventData> mapper) throws CloudEventRWException, IllegalStateException {
             try {
                 SpecVersion specVersion = SpecVersion.parse(getStringNode(this.node, this.p, "specversion"));
                 CloudEventWriter<V> writer = writerFactory.create(specVersion);
-
-                // TODO remove all the unnecessary code specversion aware
 
                 // Read mandatory attributes
                 for (String attr : specVersion.getMandatoryAttributes()) {
@@ -76,7 +77,7 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
                 }
 
                 // Parse datacontenttype if any
-                String contentType = getOptionalStringNode(this.node, this.p, "datacontenttype");
+                String contentType = getOptionalStringNode(this.node, "datacontenttype");
                 if (!this.disableDataContentTypeDefaulting && contentType == null && this.node.has("data")) {
                     contentType = "application/json";
                 }
@@ -86,105 +87,103 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
 
                 // Read optional attributes
                 for (String attr : specVersion.getOptionalAttributes()) {
-                    if (!"datacontentencoding".equals(attr)) { // Skip datacontentencoding, we need it later
-                        String val = getOptionalStringNode(this.node, this.p, attr);
-                        if (val != null) {
-                            writer.withContextAttribute(attr, val);
-                        }
+                    String val = getOptionalStringNode(this.node, attr);
+                    if (val != null) {
+                        writer.withContextAttribute(attr, val);
                     }
                 }
 
-                CloudEventData data = null;
-
-                // Now let's handle the data (V1 only)
-                if (node.has("data_base64") && node.has("data")) {
-                    throw MismatchedInputException.from(p, CloudEvent.class, "CloudEvent cannot have both 'data' and 'data_base64' fields");
-                }
-                if (node.has("data_base64")) {
-                    data = BytesCloudEventData.wrap(node.remove("data_base64").binaryValue());
-                } else if (node.has("data")) {
-                    if (JsonFormat.dataIsJsonContentType(contentType)) {
-                        // This solution is quite bad, but i see no alternatives now.
-                        // Hopefully in future we can improve it
-                        data = JsonCloudEventData.wrap(node.remove("data"));
-                    } else {
-                        JsonNode dataNode = node.remove("data");
-                        assertNodeType(dataNode, JsonNodeType.STRING, "data", "Because content type is not a json, only a string is accepted as data");
-                        data = BytesCloudEventData.wrap(dataNode.asString().getBytes(StandardCharsets.UTF_8));
-                    }
-                }
-
-                // Now let's process the extensions
-                node.properties().forEach(entry -> {
-                    String extensionName = entry.getKey();
-                    if (this.forceExtensionNameLowerCaseDeserialization) {
-                        extensionName = extensionName.toLowerCase();
-                    }
-
-                    if (this.shouldSkipExtensionName(extensionName)) {
-                        return;
-                    }
-
-                    JsonNode extensionValue = entry.getValue();
-
-                    switch (extensionValue.getNodeType()) {
-                        case BOOLEAN:
-                            writer.withContextAttribute(extensionName, extensionValue.booleanValue());
-                            break;
-                        case NUMBER:
-
-                            final Number numericValue = extensionValue.numberValue();
-
-                            // Only 'Int' values are supported by the specification
-
-                            if (numericValue instanceof Integer integer) {
-                                writer.withContextAttribute(extensionName, integer);
-                            } else {
-                                throw CloudEventRWException.newInvalidAttributeType(extensionName, numericValue);
-                            }
-
-                            break;
-                        case STRING:
-                            writer.withContextAttribute(extensionName, extensionValue.asString());
-                            break;
-                        default:
-                            writer.withContextAttribute(extensionName, extensionValue.toString());
-                    }
-
-                });
+                CloudEventData data = readData(contentType);
+                readExtensions(writer);
 
                 if (data != null) {
                     return writer.end(mapper.map(data));
                 }
                 return writer.end();
             } catch (IllegalArgumentException e) {
-                throw new RuntimeException(MismatchedInputException.from(this.p, CloudEvent.class, e.getMessage()));
+                throw MismatchedInputException.from(this.p, CloudEvent.class, e.getMessage());
+            }
+        }
+
+        private CloudEventData readData(String contentType) {
+            if (node.has(DATA_BASE64) && node.has("data")) {
+                throw MismatchedInputException.from(p, CloudEvent.class,
+                        "CloudEvent cannot have both 'data' and '" + DATA_BASE64 + "' fields");
+            }
+            if (node.has(DATA_BASE64)) {
+                return BytesCloudEventData.wrap(node.remove(DATA_BASE64).binaryValue());
+            }
+            if (node.has("data")) {
+                if (JsonFormat.dataIsJsonContentType(contentType)) {
+                    // This solution is quite bad, but i see no alternatives now.
+                    // Hopefully in future we can improve it
+                    return JsonCloudEventData.wrap(node.remove("data"));
+                }
+                JsonNode dataNode = node.remove("data");
+                assertNodeIsString(dataNode, "data", "Because content type is not a json, only a string is accepted as data");
+                return BytesCloudEventData.wrap(dataNode.asString().getBytes(StandardCharsets.UTF_8));
+            }
+            return null;
+        }
+
+        private void readExtensions(CloudEventContextWriter writer) {
+            node.properties().forEach(entry -> {
+                String extensionName = entry.getKey();
+                if (this.forceExtensionNameLowerCaseDeserialization) {
+                    extensionName = extensionName.toLowerCase();
+                }
+                if (this.shouldSkipExtensionName(extensionName)) {
+                    return;
+                }
+                writeExtensionAttribute(writer, extensionName, entry.getValue());
+            });
+        }
+
+        private void writeExtensionAttribute(CloudEventContextWriter writer, String extensionName, JsonNode extensionValue) {
+            switch (extensionValue.getNodeType()) {
+                case BOOLEAN:
+                    writer.withContextAttribute(extensionName, extensionValue.booleanValue());
+                    break;
+                case NUMBER:
+                    final Number numericValue = extensionValue.numberValue();
+                    if (numericValue instanceof Integer integer) {
+                        writer.withContextAttribute(extensionName, integer);
+                    } else {
+                        throw CloudEventRWException.newInvalidAttributeType(extensionName, numericValue);
+                    }
+                    break;
+                case STRING:
+                    writer.withContextAttribute(extensionName, extensionValue.asString());
+                    break;
+                default:
+                    writer.withContextAttribute(extensionName, extensionValue.toString());
             }
         }
 
         private String getStringNode(ObjectNode objNode, JsonParser p, String attributeName) {
-            String val = getOptionalStringNode(objNode, p, attributeName);
+            String val = getOptionalStringNode(objNode, attributeName);
             if (val == null) {
                 throw MismatchedInputException.from(p, CloudEvent.class, "Missing mandatory " + attributeName + " attribute");
             }
             return val;
         }
 
-        private String getOptionalStringNode(ObjectNode objNode, JsonParser p, String attributeName) {
+        private String getOptionalStringNode(ObjectNode objNode, String attributeName) {
             JsonNode unparsedAttribute = objNode.remove(attributeName);
             if (unparsedAttribute == null || unparsedAttribute instanceof NullNode) {
                 return null;
             }
-            assertNodeType(unparsedAttribute, JsonNodeType.STRING, attributeName, null);
+            assertNodeIsString(unparsedAttribute, attributeName, null);
             return unparsedAttribute.asString();
         }
 
-        private void assertNodeType(JsonNode node, JsonNodeType type, String attributeName, String desc) {
-            if (node.getNodeType() != type) {
+        private void assertNodeIsString(JsonNode node, String attributeName, String desc) {
+            if (node.getNodeType() != JsonNodeType.STRING) {
                 throw MismatchedInputException.from(
                         p,
                         CloudEvent.class,
-                        "Wrong type " + node.getNodeType() + " for attribute " + attributeName + ", expecting " + type + (desc != null ? ". " + desc : "")
+                        "Wrong type " + node.getNodeType() + " for attribute " + attributeName
+                                + ", expecting " + JsonNodeType.STRING + (desc != null ? ". " + desc : "")
                 );
             }
         }
