@@ -28,7 +28,7 @@ class UnroutableMessageProcessorTest {
 
     @Test
     void logsUnroutableMessageDetails() {
-        when(messageResult.getOutboundMessage()).thenReturn(myOutboundMessage);
+        when(messageResult.outboundMessage()).thenReturn(myOutboundMessage);
         when(myOutboundMessage.getExchange()).thenReturn("test-exchange");
         when(myOutboundMessage.getRoutingKey()).thenReturn("test-routingKey");
         when(myOutboundMessage.getBody()).thenReturn("test-body".getBytes(StandardCharsets.UTF_8));
@@ -37,7 +37,7 @@ class UnroutableMessageProcessorTest {
         StepVerifier.create(unroutableMessageProcessor.processMessage(messageResult))
                 .verifyComplete();
 
-        verify(messageResult).getOutboundMessage();
+        verify(messageResult).outboundMessage();
         verify(myOutboundMessage).getExchange();
         verify(myOutboundMessage).getRoutingKey();
         verify(myOutboundMessage).getBody();

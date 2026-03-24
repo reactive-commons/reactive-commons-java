@@ -8,6 +8,7 @@ dependencies {
     api project(':domain-events-api')
     api project(':async-commons')
     api project(':cloudevents-json-jackson')
+    api project(':reactor-rabbitmq')
 
     api 'io.projectreactor:reactor-core'
     api 'io.projectreactor:reactor-core-micrometer'

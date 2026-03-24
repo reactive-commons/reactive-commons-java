@@ -69,12 +69,12 @@ public class ReactiveMessageSender {
             final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
             sender.sendWithTypedPublishConfirms(messageSource, new SendOptions().trackReturned(isMandatory))
                     .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
-                        if (outboundMessageResult.isReturned()) {
+                        if (outboundMessageResult.returned()) {
                             this.unroutableMessageNotifier.notifyUnroutableMessage(outboundMessageResult);
                         }
                         final Consumer<Boolean> ackNotifier =
-                                outboundMessageResult.getOutboundMessage().getAckNotifier();
-                        executorService.submit(() -> ackNotifier.accept(outboundMessageResult.isAck()));
+                                outboundMessageResult.outboundMessage().getAckNotifier();
+                        executorService.submit(() -> ackNotifier.accept(outboundMessageResult.ack()));
                     }).subscribe();
         }
 
@@ -108,7 +108,7 @@ public class ReactiveMessageSender {
                                                                 Map<String, Object> headers, boolean persistent) {
         return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
                 .as(sender::sendWithPublishConfirms)
-                .flatMap(result -> result.isAck() ?
+                .flatMap(result -> result.ack() ?
                         Mono.empty() :
                         Mono.error(new SendFailureNoAckException("Event no ACK in communications"))
                 );

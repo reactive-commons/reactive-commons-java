@@ -14,7 +14,7 @@ public class UnroutableMessageProcessor implements UnroutableMessageHandler {
 
     @Override
     public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
-        var outboundMessage = result.getOutboundMessage();
+        var outboundMessage = result.outboundMessage();
         log.severe("Unroutable message: exchange=" + outboundMessage.getExchange()
                 + ", routingKey=" + outboundMessage.getRoutingKey()
                 + ", body=" + new String(outboundMessage.getBody(), StandardCharsets.UTF_8)

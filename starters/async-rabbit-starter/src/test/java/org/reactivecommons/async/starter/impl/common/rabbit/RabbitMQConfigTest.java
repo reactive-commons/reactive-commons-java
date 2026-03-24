@@ -79,7 +79,7 @@ class RabbitMQConfigTest {
     @Test
     void shouldProcessAndLogWhenMessageIsReturned() {
         UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageProcessor(unroutableMessageNotifier);
-        when(resultMock.getOutboundMessage()).thenReturn(outboundMessageMock);
+        when(resultMock.outboundMessage()).thenReturn(outboundMessageMock);
         when(outboundMessageMock.getExchange()).thenReturn("test.exchange");
         when(outboundMessageMock.getRoutingKey()).thenReturn("test.key");
         when(outboundMessageMock.getBody()).thenReturn("test message".getBytes(StandardCharsets.UTF_8));
@@ -87,7 +87,7 @@ class RabbitMQConfigTest {
 
         StepVerifier.create(handler.processMessage(resultMock)).verifyComplete();
 
-        verify(resultMock).getOutboundMessage();
+        verify(resultMock).outboundMessage();
         verify(outboundMessageMock).getExchange();
         verify(outboundMessageMock).getRoutingKey();
         verify(outboundMessageMock).getBody();
