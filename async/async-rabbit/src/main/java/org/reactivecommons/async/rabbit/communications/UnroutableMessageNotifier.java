@@ -6,10 +6,12 @@ import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.OutboundMessageResult;
 
+import java.util.concurrent.atomic.AtomicReference;
+
 @Log
 public class UnroutableMessageNotifier {
     private final Sinks.Many<OutboundMessageResult<MyOutboundMessage>> sink;
-    private volatile Disposable currentSubscription;
+    private final AtomicReference<Disposable> currentSubscription = new AtomicReference<>();
 
     public UnroutableMessageNotifier() {
         this.sink = Sinks.many().multicast().onBackpressureBuffer();
@@ -22,15 +24,15 @@ public class UnroutableMessageNotifier {
     }
 
     public void listenToUnroutableMessages(UnroutableMessageHandler handler) {
-        if (currentSubscription != null && !currentSubscription.isDisposed()) {
-            currentSubscription.dispose();
-        }
-        currentSubscription = sink.asFlux()
+        Disposable previous = currentSubscription.getAndSet(sink.asFlux()
                 .subscribeOn(Schedulers.boundedElastic())
                 .flatMap(handler::processMessage)
                 .onErrorContinue((throwable, o) ->
                         log.severe("Error processing unroutable message: " + throwable.getMessage())
                 )
-                .subscribe();
+                .subscribe());
+        if (previous != null && !previous.isDisposed()) {
+            previous.dispose();
+        }
     }
 }

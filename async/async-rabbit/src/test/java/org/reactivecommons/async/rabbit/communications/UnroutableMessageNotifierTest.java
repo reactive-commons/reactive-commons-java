@@ -15,6 +15,7 @@ import reactor.core.publisher.Sinks;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
@@ -93,7 +94,8 @@ class UnroutableMessageNotifierTest {
 
         Field field = UnroutableMessageNotifier.class.getDeclaredField("currentSubscription");
         field.setAccessible(true);
-        field.set(unroutableMessageNotifier, firstSubscription);
+        AtomicReference<Disposable> ref = (AtomicReference<Disposable>) field.get(unroutableMessageNotifier);
+        ref.set(firstSubscription);
 
         when(sink.asFlux()).thenReturn(Flux.never());
 
