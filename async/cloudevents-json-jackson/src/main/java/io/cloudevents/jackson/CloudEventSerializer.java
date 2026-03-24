@@ -54,12 +54,12 @@ class CloudEventSerializer extends StdSerializer<CloudEvent> {
         @Override
         @Deprecated(forRemoval = true)
         public CloudEventContextWriter withContextAttribute(String name, Number value) throws CloudEventRWException {
-            // Only Integer types are supported by the specification
             if (value instanceof Integer integer) {
-                this.withContextAttribute(name, integer);
+                gen.writeNumberProperty(name, integer);
             } else {
-                // Default to string representation for other numeric values
-                this.withContextAttribute(name, value.toString());
+                // Non-integer numeric types (Long, BigDecimal, Float…) are not supported by the
+                // CloudEvents spec; fall back to their string representation.
+                gen.writeStringProperty(name, value.toString());
             }
             return this;
         }
