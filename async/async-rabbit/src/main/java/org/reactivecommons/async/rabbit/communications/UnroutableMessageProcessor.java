@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.communications;
 import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.nio.charset.StandardCharsets;
@@ -13,7 +14,7 @@ public class UnroutableMessageProcessor implements UnroutableMessageHandler {
 
 
     @Override
-    public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
+    public Mono<Void> processMessage(OutboundMessageResult<OutboundMessage> result) {
         var outboundMessage = result.outboundMessage();
         log.severe("Unroutable message: exchange=" + outboundMessage.getExchange()
                 + ", routingKey=" + outboundMessage.getRoutingKey()

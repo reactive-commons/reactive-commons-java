@@ -41,7 +41,7 @@ public class ReactiveMessageSender {
     private final UnroutableMessageNotifier unroutableMessageNotifier;
 
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
-    private final CopyOnWriteArrayList<FluxSink<MyOutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
+    private final CopyOnWriteArrayList<FluxSink<OutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
 
     private final AtomicReference<FluxSink<OutboundMessage>> fluxSinkNoConfirm = new AtomicReference<>();
     private final AtomicLong counter = new AtomicLong();
@@ -67,9 +67,9 @@ public class ReactiveMessageSender {
 
     private void initializeSenders() {
         for (int i = 0; i < NUMBER_OF_SENDER_SUBSCRIPTIONS; ++i) {
-            final Flux<MyOutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
+            final Flux<OutboundMessage> messageSource = Flux.create(fluxSinkConfirm::add);
             sender.sendWithTypedPublishConfirms(messageSource, new SendOptions().trackReturned(isMandatory))
-                    .doOnNext((OutboundMessageResult<MyOutboundMessage> outboundMessageResult) -> {
+                    .doOnNext((OutboundMessageResult<OutboundMessage> outboundMessageResult) -> {
                         if (outboundMessageResult.returned()) {
                             this.unroutableMessageNotifier.notifyUnroutableMessage(outboundMessageResult);
                         }
@@ -87,7 +87,7 @@ public class ReactiveMessageSender {
                                           Map<String, Object> headers, boolean persistent) {
         return Mono.create(monoSink -> {
             Consumer<Boolean> notifier = new AckNotifier(monoSink);
-            final MyOutboundMessage outboundMessage = toOutboundMessage(
+            final OutboundMessage outboundMessage = toOutboundMessage(
                     message, exchange, routingKey, headers, notifier, persistent
             );
             executorService2.submit(() -> fluxSinkConfirm.get(
@@ -125,12 +125,12 @@ public class ReactiveMessageSender {
         }
     }
 
-    private <T> MyOutboundMessage toOutboundMessage(T object, String exchange,
+    private <T> OutboundMessage toOutboundMessage(T object, String exchange,
                                                     String routingKey, Map<String, Object> headers,
                                                     Consumer<Boolean> ackNotifier, boolean persistent) {
         final Message message = messageConverter.toMessage(object);
         final AMQP.BasicProperties props = buildMessageProperties(message, headers, persistent);
-        return new MyOutboundMessage(exchange, routingKey, props, message.getBody(), ackNotifier);
+        return new OutboundMessage(exchange, routingKey, props, message.getBody(), ackNotifier);
     }
 
     private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,

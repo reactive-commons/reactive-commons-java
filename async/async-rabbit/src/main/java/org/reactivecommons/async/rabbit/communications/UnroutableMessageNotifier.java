@@ -4,20 +4,21 @@ import lombok.extern.java.Log;
 import reactor.core.Disposable;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.util.concurrent.atomic.AtomicReference;
 
 @Log
 public class UnroutableMessageNotifier {
-    private final Sinks.Many<OutboundMessageResult<MyOutboundMessage>> sink;
+    private final Sinks.Many<OutboundMessageResult<OutboundMessage>> sink;
     private final AtomicReference<Disposable> currentSubscription = new AtomicReference<>();
 
     public UnroutableMessageNotifier() {
         this.sink = Sinks.many().multicast().onBackpressureBuffer();
     }
 
-    public void notifyUnroutableMessage(OutboundMessageResult<MyOutboundMessage> message) {
+    public void notifyUnroutableMessage(OutboundMessageResult<OutboundMessage> message) {
         if (sink.tryEmitNext(message).isFailure()) {
             log.warning("Failed to emit unroutable message: " + message);
         }

@@ -400,10 +400,10 @@ package sample;
 import co.com.mypackage.usecase.MyUseCase;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
-import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.nio.charset.StandardCharsets;
@@ -416,8 +416,8 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
     private final MyUseCase useCase;
 
     @Override
-    public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
-        var returned = result.getOutboundMessage();
+    public Mono<Void> processMessage(OutboundMessageResult<OutboundMessage> result) {
+        var returned = result.outboundMessage();
         log.severe("Unroutable message: exchange=" + returned.getExchange()
                 + ", routingKey=" + returned.getRoutingKey()
                 + ", body=" + new String(returned.getBody(), StandardCharsets.UTF_8)
@@ -443,10 +443,10 @@ Therefore, it is recommended to verify or create the queue beforehand to ensure 
 ```java
 package sample;
 
+import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
-import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -457,6 +457,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+@Log
 @Component
 @EnableDirectAsyncGateway
 public class ResendUnroutableMessageHandler implements UnroutableMessageHandler {
@@ -483,8 +484,8 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
     }
 
     @Override
-    public Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result) {
-        OutboundMessage returned = result.getOutboundMessage();
+    public Mono<Void> processMessage(OutboundMessageResult<OutboundMessage> result) {
+        OutboundMessage returned = result.outboundMessage();
         try {
             // The unroutable message is a command, so the message body is deserialized to the Command class.
             // Use the DomainEvent class for domain events and the AsyncQuery class for asynchronous queries.
