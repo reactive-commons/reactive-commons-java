@@ -13,7 +13,6 @@ The original library was archived by its maintainers on September 26, 2025 and i
 
 - Upgraded from Java 8/11 to Java 17
 - Removed dead code and unused APIs
-- Replaced `volatile` fields with thread-safe types (`AtomicReference`, `AtomicBoolean`)
 - `OutboundMessage` extended with optional `ackNotifier` callback, eliminating the need for a separate subclass
 - Java 17 modernizations (records, sealed classes patterns, text blocks)
 - SLF4J and SonarQube warning fixes
