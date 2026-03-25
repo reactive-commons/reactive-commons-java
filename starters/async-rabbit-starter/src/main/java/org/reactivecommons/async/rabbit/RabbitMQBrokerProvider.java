@@ -24,7 +24,7 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 
-import static reactor.rabbitmq.ResourcesSpecification.exchange;
+import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 public record RabbitMQBrokerProvider(String domain,

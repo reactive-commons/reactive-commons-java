@@ -19,9 +19,9 @@ import reactor.core.publisher.Mono;
 
 import java.util.function.Function;
 
-import static reactor.rabbitmq.ResourcesSpecification.binding;
-import static reactor.rabbitmq.ResourcesSpecification.exchange;
-import static reactor.rabbitmq.ResourcesSpecification.queue;
+import static reactor.rabbitmq.BindingSpecification.binding;
+import static reactor.rabbitmq.ExchangeSpecification.exchange;
+import static reactor.rabbitmq.QueueSpecification.queue;
 import static reactor.core.publisher.Flux.fromIterable;
 
 @Log
