@@ -19,7 +19,6 @@ package reactor.rabbitmq;
 import com.rabbitmq.client.AMQP.BasicProperties;
 import lombok.Getter;
 import java.util.Arrays;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 @Getter
@@ -31,7 +30,7 @@ public class OutboundMessage {
     private final byte[] body;
     private final Consumer<Boolean> ackNotifier;
 
-    private final AtomicBoolean published = new AtomicBoolean(false);
+    private volatile boolean published = false;
 
     public OutboundMessage(String exchange, String routingKey, byte[] body) {
         this(exchange, routingKey, null, body, null);
@@ -50,10 +49,6 @@ public class OutboundMessage {
         this.ackNotifier = ackNotifier;
     }
 
-    public boolean isPublished() {
-        return published.get();
-    }
-
     @Override
     public String toString() {
         return "OutboundMessage{" +
@@ -65,6 +60,6 @@ public class OutboundMessage {
     }
 
     void published() {
-        this.published.set(true);
+        this.published = true;
     }
 }
