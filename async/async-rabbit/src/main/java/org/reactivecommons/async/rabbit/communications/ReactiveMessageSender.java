@@ -23,7 +23,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
@@ -43,7 +42,7 @@ public class ReactiveMessageSender {
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
     private final CopyOnWriteArrayList<FluxSink<OutboundMessage>> fluxSinkConfirm = new CopyOnWriteArrayList<>();
 
-    private final AtomicReference<FluxSink<OutboundMessage>> fluxSinkNoConfirm = new AtomicReference<>();
+    private volatile FluxSink<OutboundMessage> fluxSinkNoConfirm;
     private final AtomicLong counter = new AtomicLong();
 
     private final ExecutorService executorService = Executors.newFixedThreadPool(
@@ -79,7 +78,9 @@ public class ReactiveMessageSender {
                     }).subscribe();
         }
 
-        final Flux<OutboundMessage> messageSourceNoConfirm = Flux.create(this.fluxSinkNoConfirm::set);
+        final Flux<OutboundMessage> messageSourceNoConfirm = Flux.create(fluxSink ->
+                this.fluxSinkNoConfirm = fluxSink
+        );
         sender.send(messageSourceNoConfirm).subscribe();
     }
 
@@ -99,7 +100,7 @@ public class ReactiveMessageSender {
 
     public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey,
                                         Map<String, Object> headers, boolean persistent) {
-        fluxSinkNoConfirm.get().next(toOutboundMessage(message, exchange, routingKey, headers, persistent));
+        fluxSinkNoConfirm.next(toOutboundMessage(message, exchange, routingKey, headers, persistent));
         return Mono.empty();
     }
 

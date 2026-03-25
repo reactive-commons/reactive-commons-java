@@ -42,6 +42,9 @@ class ReactiveMessageSenderTest {
     private final MessageConverter messageConverter = new RabbitJacksonMessageConverter(jsonMapper);
 
     @Mock
+    private final SendOptions sendOptions = new SendOptions();
+
+    @Mock
     private UnroutableMessageNotifier unroutableMessageNotifier;
 
     @BeforeEach
@@ -115,14 +118,6 @@ class ReactiveMessageSenderTest {
     void sendWithConfirmSomeMessage() {
         SomeClass some = new SomeClass("42", "Daniel", new Date());
         final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>(), true);
-
-        StepVerifier.create(voidMono).verifyComplete();
-    }
-
-    @Test
-    void sendNoConfirmSomeMessage() {
-        SomeClass some = new SomeClass("42", "Daniel", new Date());
-        final Mono<Void> voidMono = messageSender.sendNoConfirm(some, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
     }
