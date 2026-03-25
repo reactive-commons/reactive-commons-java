@@ -20,7 +20,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 
@@ -44,7 +43,7 @@ public abstract class GenericMessageListener {
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
-    private final AtomicReference<Flux<ReceiverRecord<String, byte[]>>> messageFlux = new AtomicReference<>();
+    private volatile Flux<ReceiverRecord<String, byte[]>> messageFlux;
 
     protected GenericMessageListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology,
                                      long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
@@ -82,21 +81,21 @@ public abstract class GenericMessageListener {
         }
 
         if (createTopology) {
-            this.messageFlux.set(setUpBindings(creator)
+            this.messageFlux = setUpBindings(creator)
                     .thenMany(this.messageListener.listen(groupId, topics)
                             .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
-                            .transform(this::consumeFaultTolerant)));
+                            .transform(this::consumeFaultTolerant));
         } else {
-            this.messageFlux.set(this.messageListener.listen(groupId, topics)
+            this.messageFlux = this.messageListener.listen(groupId, topics)
                     .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
-                    .transform(this::consumeFaultTolerant));
+                    .transform(this::consumeFaultTolerant);
         }
 
         onTerminate();
     }
 
     private void onTerminate() {
-        messageFlux.get().doOnTerminate(this::onTerminate)
+        messageFlux.doOnTerminate(this::onTerminate)
                 .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 

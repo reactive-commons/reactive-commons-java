@@ -13,7 +13,6 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
@@ -33,7 +32,7 @@ public class ApplicationReplyListener {
     private final String exchangeName;
 
     private final boolean createTopology;
-    private final AtomicReference<Flux<Delivery>> deliveryFlux = new AtomicReference<>();
+    private volatile Flux<Delivery> deliveryFlux;
 
     public ApplicationReplyListener(ReactiveReplyRouter router, ReactiveMessageListener listener, String queueName,
                                     String exchangeName, boolean createTopology) {
@@ -52,7 +51,7 @@ public class ApplicationReplyListener {
         }
         ConsumeOptions consumeOptions = new ConsumeOptions();
         consumeOptions.consumerTag(InstanceIdentifier.getInstanceId("replies"));
-        deliveryFlux.set(flow
+        deliveryFlux = flow
                 .then(creator.declare(queue(queueName).durable(false).autoDelete(true).exclusive(true)))
                 .then(creator.bind(binding(exchangeName, routeKey, queueName)))
                 .thenMany(receiver.consumeAutoAck(queueName, consumeOptions).doOnNext(delivery -> {
@@ -67,13 +66,13 @@ public class ApplicationReplyListener {
                     } catch (Exception e) {
                         log.log(Level.SEVERE, "Error in reply reception", e);
                     }
-                })));
+                }));
 
         onTerminate();
     }
 
     private void onTerminate() {
-        deliveryFlux.get().doOnTerminate(this::onTerminate)
+        deliveryFlux.doOnTerminate(this::onTerminate)
                 .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 

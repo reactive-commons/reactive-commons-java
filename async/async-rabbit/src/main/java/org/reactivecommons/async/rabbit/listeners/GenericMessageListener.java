@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 
@@ -52,7 +51,7 @@ public abstract class GenericMessageListener {
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
-    private final AtomicReference<Flux<AcknowledgableDelivery>> messageFlux = new AtomicReference<>();
+    private volatile Flux<AcknowledgableDelivery> messageFlux;
 
     protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                      boolean createTopology, long maxRetries, long retryDelay,
@@ -99,14 +98,14 @@ public abstract class GenericMessageListener {
         consumeOptions.consumerTag(InstanceIdentifier.getInstanceId(getKind()));
 
         if (createTopology) {
-            this.messageFlux.set(setUpBindings(messageListener.topologyCreator())
+            this.messageFlux = setUpBindings(messageListener.topologyCreator())
                     .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
                             .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
-                            .transform(this::consumeFaultTolerant)));
+                            .transform(this::consumeFaultTolerant));
         } else {
-            this.messageFlux.set(receiver.consumeManualAck(queueName, consumeOptions)
+            this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
                     .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
-                    .transform(this::consumeFaultTolerant));
+                    .transform(this::consumeFaultTolerant);
         }
 
         onTerminate();
@@ -157,7 +156,7 @@ public abstract class GenericMessageListener {
     }
 
     private void onTerminate() {
-        messageFlux.get()
+        messageFlux
                 .doOnTerminate(this::onTerminate)
                 .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
@@ -226,7 +225,7 @@ public abstract class GenericMessageListener {
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
             return discardNotifier
                     .notifyDiscard(rabbitMessage)
-                    .doOnSuccess(a -> msj.ack()).thenReturn(msj);
+                    .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
         } else if (useDLQRetries) { // DLQ retries
             logError(err, msj, FallbackStrategy.RETRY_DLQ);
             msj.nack(false);
