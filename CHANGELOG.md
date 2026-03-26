@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.1.0) (2026-03-26)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.6...v7.1.0)
+
+**Merged pull requests:**
+
+- feat: Remove reactor-rabbitmq dependencie [\#167](https://github.com/reactive-commons/reactive-commons-java/pull/167) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.0.6](https://github.com/reactive-commons/reactive-commons-java/tree/v7.0.6) (2026-03-19)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.5...v7.0.6)
