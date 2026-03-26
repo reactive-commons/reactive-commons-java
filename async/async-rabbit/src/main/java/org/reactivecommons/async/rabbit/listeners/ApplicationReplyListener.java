@@ -17,9 +17,10 @@ import java.util.logging.Level;
 
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
-import static reactor.rabbitmq.ResourcesSpecification.binding;
-import static reactor.rabbitmq.ResourcesSpecification.exchange;
-import static reactor.rabbitmq.ResourcesSpecification.queue;
+import static reactor.rabbitmq.BindingSpecification.binding;
+import static reactor.rabbitmq.ExchangeSpecification.exchange;
+import static reactor.rabbitmq.QueueSpecification.queue;
+
 
 @Log
 public class ApplicationReplyListener {

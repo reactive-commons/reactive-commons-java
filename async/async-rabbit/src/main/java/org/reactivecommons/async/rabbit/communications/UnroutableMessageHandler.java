@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
 @FunctionalInterface
@@ -10,5 +11,5 @@ public interface UnroutableMessageHandler {
      *
      * @param result The result of the outbound message, containing the original message and return details.
      */
-    Mono<Void> processMessage(OutboundMessageResult<MyOutboundMessage> result);
+    Mono<Void> processMessage(OutboundMessageResult<OutboundMessage> result);
 }

@@ -10,9 +10,9 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import reactor.rabbitmq.BindingSpecification;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.BindingSpecification;
 
 @RequiredArgsConstructor
 public class DynamicRegistryImp implements DynamicRegistry {

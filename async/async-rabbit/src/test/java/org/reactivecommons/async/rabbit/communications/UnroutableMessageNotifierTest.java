@@ -12,6 +12,7 @@ import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
 import java.lang.reflect.Field;
@@ -31,16 +32,16 @@ class UnroutableMessageNotifierTest {
     private UnroutableMessageNotifier unroutableMessageNotifier;
 
     @Mock
-    private Sinks.Many<OutboundMessageResult<MyOutboundMessage>> sink;
+    private Sinks.Many<OutboundMessageResult<OutboundMessage>> sink;
 
     @Mock
-    private OutboundMessageResult<MyOutboundMessage> messageResult;
+    private OutboundMessageResult<OutboundMessage> messageResult;
 
     @Mock
     private UnroutableMessageHandler handler;
 
     @Captor
-    private ArgumentCaptor<OutboundMessageResult<MyOutboundMessage>> messageCaptor;
+    private ArgumentCaptor<OutboundMessageResult<OutboundMessage>> messageCaptor;
 
     @BeforeEach
     void setUp() {
@@ -76,7 +77,7 @@ class UnroutableMessageNotifierTest {
 
     @Test
     void shouldSubscribeHandlerToFluxOfMessages() {
-        final Flux<OutboundMessageResult<MyOutboundMessage>> messageResultFlux = Flux.just(messageResult);
+        final Flux<OutboundMessageResult<OutboundMessage>> messageResultFlux = Flux.just(messageResult);
         when(sink.asFlux()).thenReturn(messageResultFlux);
         when(handler.processMessage(any(OutboundMessageResult.class))).thenReturn(Mono.empty());
 
@@ -104,7 +105,7 @@ class UnroutableMessageNotifierTest {
 
     @Test
     void shouldContinueProcessingWhenHandlerFails() {
-        OutboundMessageResult<MyOutboundMessage> messageResult2 = mock(OutboundMessageResult.class);
+        OutboundMessageResult<OutboundMessage> messageResult2 = mock(OutboundMessageResult.class);
         when(sink.asFlux()).thenReturn(Flux.just(messageResult, messageResult2));
         when(handler.processMessage(messageResult)).thenReturn(Mono.error(new RuntimeException("Processing Error")));
         when(handler.processMessage(messageResult2)).thenReturn(Mono.empty());

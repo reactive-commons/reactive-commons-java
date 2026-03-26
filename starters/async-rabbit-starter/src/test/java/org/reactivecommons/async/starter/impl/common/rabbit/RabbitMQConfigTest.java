@@ -9,7 +9,6 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.rabbit.ConnectionFactoryCustomizer;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
-import org.reactivecommons.async.rabbit.communications.MyOutboundMessage;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
@@ -22,6 +21,7 @@ import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.test.StepVerifier;
 
@@ -50,10 +50,10 @@ class RabbitMQConfigTest {
     private ConnectionManager manager;
 
     @Mock
-    private OutboundMessageResult<MyOutboundMessage> resultMock;
+    private OutboundMessageResult<OutboundMessage> resultMock;
 
     @Mock
-    private MyOutboundMessage outboundMessageMock;
+    private OutboundMessage outboundMessageMock;
     @Mock
     private UnroutableMessageNotifier unroutableMessageNotifier;
 
@@ -79,7 +79,7 @@ class RabbitMQConfigTest {
     @Test
     void shouldProcessAndLogWhenMessageIsReturned() {
         UnroutableMessageHandler handler = rabbitMQConfig.defaultUnroutableMessageProcessor(unroutableMessageNotifier);
-        when(resultMock.getOutboundMessage()).thenReturn(outboundMessageMock);
+        when(resultMock.outboundMessage()).thenReturn(outboundMessageMock);
         when(outboundMessageMock.getExchange()).thenReturn("test.exchange");
         when(outboundMessageMock.getRoutingKey()).thenReturn("test.key");
         when(outboundMessageMock.getBody()).thenReturn("test message".getBytes(StandardCharsets.UTF_8));
@@ -87,7 +87,7 @@ class RabbitMQConfigTest {
 
         StepVerifier.create(handler.processMessage(resultMock)).verifyComplete();
 
-        verify(resultMock).getOutboundMessage();
+        verify(resultMock).outboundMessage();
         verify(outboundMessageMock).getExchange();
         verify(outboundMessageMock).getRoutingKey();
         verify(outboundMessageMock).getBody();

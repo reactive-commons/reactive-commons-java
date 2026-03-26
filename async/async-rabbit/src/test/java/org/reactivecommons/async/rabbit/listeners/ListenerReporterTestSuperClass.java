@@ -75,7 +75,7 @@ public abstract class ListenerReporterTestSuperClass {
     @BeforeEach
     void init() {
         Mockito.when(topologyCreator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(empty());
         Mockito.when(topologyCreator.declareDLQ
                         (any(String.class), any(String.class), any(Integer.class), any(Optional.class))
                 )
@@ -83,7 +83,7 @@ public abstract class ListenerReporterTestSuperClass {
         Mockito.when(topologyCreator.declareQueue(any(String.class), any(String.class), any(Optional.class)))
                 .thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
         Mockito.when(topologyCreator.bind(any(BindingSpecification.class)))
-                .thenReturn(just(mock(AMQP.Queue.BindOk.class)));
+                .thenReturn(empty());
     }
 
     protected void assertContinueAfterSendErrorToCustomReporter(HandlerRegistry handlerRegistry,

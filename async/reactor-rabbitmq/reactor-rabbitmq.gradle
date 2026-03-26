@@ -1,0 +1,9 @@
+ext {
+    artifactId = 'reactor-rabbitmq'
+    artifactDescription = 'Reactor RabbitMQ'
+}
+
+dependencies {
+    api 'io.projectreactor:reactor-core'
+    api 'com.rabbitmq:amqp-client'
+}

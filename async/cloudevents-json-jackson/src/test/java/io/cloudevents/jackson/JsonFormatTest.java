@@ -161,13 +161,13 @@ class JsonFormatTest {
                 .hasMessageContaining(CloudEventRWException.newInvalidSpecVersion("9000.1").getMessage());
     }
 
-    @ParameterizedTest
-    @MethodSource("badJsonContent")
     /**
      * JSON content that should fail deserialization
      * as it represents content that is not CE
      * specification compliant.
      */
+    @ParameterizedTest
+    @MethodSource("badJsonContent")
     void verifyDeserializeError(String inputFile) {
 
         byte[] input = loadFile(inputFile);

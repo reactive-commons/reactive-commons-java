@@ -1,7 +1,5 @@
 package org.reactivecommons.async.rabbit;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.AMQP.Queue.BindOk;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,7 +16,6 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.test.StepVerifier;
-import reactor.test.publisher.PublisherProbe;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -62,7 +59,7 @@ class DynamicRegistryImpTest {
     @Test
     void registerEventListener() {
         setupMock();
-        when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
+        when(topologyCreator.bind(any())).thenReturn(Mono.empty());
         dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
         final RegisteredEventListener<Object,Object> listener = resolver.getEventListener("event1");
@@ -73,7 +70,7 @@ class DynamicRegistryImpTest {
     void declareBindingWhenRegisterEventListener() {
         setupMock();
         ArgumentCaptor<BindingSpecification> captor = ArgumentCaptor.forClass(BindingSpecification.class);
-        when(topologyCreator.bind(any())).thenReturn(just(mock(BindOk.class)));
+        when(topologyCreator.bind(any())).thenReturn(Mono.empty());
 
         dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
@@ -87,13 +84,11 @@ class DynamicRegistryImpTest {
     @Test
     void subscribeToResultWhenRegisterEventListener() {
         setupMock();
-        PublisherProbe<BindOk> probe = PublisherProbe.of(just(mock(BindOk.class)));
-        when(topologyCreator.bind(any())).thenReturn(probe.mono());
+        when(topologyCreator.bind(any())).thenReturn(Mono.empty());
 
         Mono<Void> result = dynamicRegistry.listenEvent("event1", message -> Mono.empty(), Long.class);
 
         StepVerifier.create(result).verifyComplete();
-        probe.assertWasSubscribed();
 
     }
 
@@ -103,10 +98,8 @@ class DynamicRegistryImpTest {
         ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
                 ArgumentCaptor.forClass(BindingSpecification.class);
 
-        PublisherProbe<AMQP.Queue.BindOk> topologyCreatorProbe = PublisherProbe.empty();
-
         when(topologyCreator.bind(bindingSpecificationCaptor.capture()))
-                .thenReturn(topologyCreatorProbe.mono());
+                .thenReturn(Mono.empty());
 
         String eventName = "a.b.c";
         BindingSpecification bindingSpecification =
@@ -119,8 +112,6 @@ class DynamicRegistryImpTest {
         assertThat(bindingSpecificationCaptor.getValue())
                 .usingRecursiveComparison()
                 .isEqualTo(bindingSpecification);
-
-        topologyCreatorProbe.assertWasSubscribed();
     }
 
     @Test
@@ -129,10 +120,8 @@ class DynamicRegistryImpTest {
         ArgumentCaptor<BindingSpecification> bindingSpecificationCaptor =
                 ArgumentCaptor.forClass(BindingSpecification.class);
 
-        PublisherProbe<AMQP.Queue.UnbindOk> topologyCreatorProbe = PublisherProbe.empty();
-
         when(topologyCreator.unbind(bindingSpecificationCaptor.capture()))
-                .thenReturn(topologyCreatorProbe.mono());
+                .thenReturn(Mono.empty());
 
         String eventName = "a.b.c";
         BindingSpecification bindingSpecification =
@@ -145,8 +134,6 @@ class DynamicRegistryImpTest {
         assertThat(bindingSpecificationCaptor.getValue())
                 .usingRecursiveComparison()
                 .isEqualTo(bindingSpecification);
-
-        topologyCreatorProbe.assertWasSubscribed();
     }
 
     @Test

@@ -296,6 +296,110 @@ class HandlerRegistryTest {
                 .hasSize(1);
     }
 
+    @Test
+    void handleCommandWithDomain() {
+        SomeDomainCommandHandler<SomeDataClass> handler = new SomeDomainCommandHandler<>();
+        registry.handleCommand(domain, name, handler, SomeDataClass.class);
+        assertThat(registry.getCommandHandlers().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass)
+                        .containsExactly(name, SomeDataClass.class)).hasSize(1);
+    }
+
+    @Test
+    void handleCloudEventCommandWithDomain() {
+        SomeCloudCommandHandler handler = new SomeCloudCommandHandler();
+        registry.handleCloudEventCommand(domain, name, handler);
+        assertThat(registry.getCommandHandlers().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass)
+                        .containsExactly(name, CloudEvent.class)).hasSize(1);
+    }
+
+    @Test
+    void handleRawCommandWithDomain() {
+        SomeRawCommandEventHandler handler = new SomeRawCommandEventHandler();
+        registry.handleRawCommand(domain, handler);
+        assertThat(registry.getCommandHandlers().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass)
+                        .containsExactly("", RawMessage.class)).hasSize(1);
+    }
+
+    @Test
+    void listenDomainRawEvent() {
+        SomeRawEventHandler handler = new SomeRawEventHandler();
+        registry.listenDomainRawEvent(domain, name, handler);
+        assertThat(registry.getDomainEventListeners().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass)
+                        .containsExactly(name, RawMessage.class)).hasSize(1);
+    }
+
+    @Test
+    void listenNotificationEventWithDomain() {
+        registry.listenNotificationEvent(domain, name, evt -> Mono.empty(), SomeDataClass.class);
+        assertThat(registry.getEventNotificationListener().get(domain))
+                .anySatisfy(listener -> assertThat(listener.path()).isEqualTo(name)).hasSize(1);
+    }
+
+    @Test
+    void listenNotificationCloudEventWithDomain() {
+        registry.listenNotificationCloudEvent(domain, name, ce -> Mono.empty());
+        assertThat(registry.getEventNotificationListener().get(domain))
+                .anySatisfy(listener -> assertThat(listener)
+                        .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass)
+                        .containsExactly(name, CloudEvent.class)).hasSize(1);
+    }
+
+    @Test
+    void listenNotificationRawEventWithDomain() {
+        SomeRawEventHandler handler = new SomeRawEventHandler();
+        registry.listenNotificationRawEvent(domain, name, handler);
+        assertThat(registry.getEventNotificationListener().get(domain))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass)
+                        .containsExactly(name, RawMessage.class)).hasSize(1);
+    }
+
+    @Test
+    void serveCloudEventQueryDelegate() {
+        QueryHandlerDelegate<Void, CloudEvent> delegate = (from, ce) -> Mono.empty();
+        registry.serveCloudEventQuery(name, delegate);
+        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(registered -> assertThat(registered)
+                        .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
+                        .containsExactly(name, CloudEvent.class)).hasSize(1);
+    }
+
+    @Test
+    void listenQueueSimple() {
+        registry.listenQueue("myQueue", msg -> Mono.empty());
+        assertThat(registry.getQueueHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
+    }
+
+    @Test
+    void listenQueueWithDomain() {
+        registry.listenQueue(domain, "myQueue", msg -> Mono.empty());
+        assertThat(registry.getQueueHandlers().get(domain))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
+    }
+
+    @Test
+    void listenQueueWithTopology() {
+        registry.listenQueue("myQueue", msg -> Mono.empty(), creator -> Mono.empty());
+        assertThat(registry.getQueueHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
+    }
+
+    @Test
+    void listenQueueWithDomainAndTopology() {
+        registry.listenQueue(domain, "myQueue", msg -> Mono.empty(), creator -> Mono.empty());
+        assertThat(registry.getQueueHandlers().get(domain))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
+    }
+
     private static class SomeQueryHandlerDelegate implements QueryHandlerDelegate<Void, SomeDataClass> {
         @Override
         public Mono<Void> handle(From from, SomeDataClass message) {

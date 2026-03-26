@@ -79,10 +79,10 @@ class ApplicationReplyListenerTest {
                 .thenReturn(Mono.just(new AMQImpl.Queue.DeclareOk(REPLY_QUEUE, 0, 0)));
 
         when(topologyCreator.declare(exchangeCaptor.capture()))
-                .thenReturn(Mono.just(new AMQImpl.Exchange.DeclareOk()));
+                .thenReturn(Mono.empty());
 
         when(topologyCreator.bind(bindingCaptor.capture()))
-                .thenReturn(Mono.just(new AMQImpl.Queue.BindOk()));
+                .thenReturn(Mono.empty());
     }
 
     @Test

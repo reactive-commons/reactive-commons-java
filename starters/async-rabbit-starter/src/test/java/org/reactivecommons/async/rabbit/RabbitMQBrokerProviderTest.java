@@ -100,7 +100,7 @@ class RabbitMQBrokerProviderTest {
     void shouldCreateDomainEventBus() {
         when(sender.getTopologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         // Act
         DomainEventBus domainBus = brokerProvider.getDomainBus();
         // Assert
@@ -112,9 +112,9 @@ class RabbitMQBrokerProviderTest {
         when(sender.getTopologyCreator()).thenReturn(creator);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.bind(any(BindingSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.declare(any(QueueSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(listener.receiver()).thenReturn(receiver);
@@ -129,7 +129,7 @@ class RabbitMQBrokerProviderTest {
     void shouldListenDomainEvents() {
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.declareQueue(any(String.class), any())).thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(listener.receiver()).thenReturn(receiver);
         when(listener.maxConcurrency()).thenReturn(1);
@@ -146,7 +146,7 @@ class RabbitMQBrokerProviderTest {
         when(handlerResolver.hasNotificationListeners()).thenReturn(true);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.declare(any(QueueSpecification.class)))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(listener.receiver()).thenReturn(receiver);
@@ -165,11 +165,11 @@ class RabbitMQBrokerProviderTest {
         when(handlerResolver.hasCommandHandlers()).thenReturn(true);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.declareQueue(any(String.class), any()))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(creator.bind(any(BindingSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
+                .thenReturn(Mono.empty());
         when(listener.receiver()).thenReturn(receiver);
         when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
@@ -184,11 +184,11 @@ class RabbitMQBrokerProviderTest {
         when(handlerResolver.hasQueryHandlers()).thenReturn(true);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Exchange.DeclareOk.class)));
+                .thenReturn(Mono.empty());
         when(creator.declareQueue(any(String.class), any()))
                 .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
         when(creator.bind(any(BindingSpecification.class)))
-                .thenReturn(Mono.just(mock(AMQP.Queue.BindOk.class)));
+                .thenReturn(Mono.empty());
         when(listener.receiver()).thenReturn(receiver);
         when(listener.maxConcurrency()).thenReturn(1);
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());

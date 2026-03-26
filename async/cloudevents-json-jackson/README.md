@@ -1,6 +1,11 @@
 # CloudEvents JSON Jackson Module
 
-This module was obtained from the official CloudEvents SDK Java repository at [https://github.com/cloudevents/sdk-java/blob/main/formats/json-jackson/](https://github.com/cloudevents/sdk-java/blob/main/formats/json-jackson/).
+This module is based on the source code from the official CloudEvents SDK Java repository.
+
+## Original Library
+
+- **Repository:** [https://github.com/cloudevents/sdk-java](https://github.com/cloudevents/sdk-java)
+- **License:** [Apache License 2.0](https://github.com/cloudevents/sdk-java/blob/main/LICENSE)
 
 ## Changes from Original
 

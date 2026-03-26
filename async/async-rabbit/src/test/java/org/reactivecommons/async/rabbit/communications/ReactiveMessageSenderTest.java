@@ -50,9 +50,9 @@ class ReactiveMessageSenderTest {
     @BeforeEach
     void init() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
-            final Flux<MyOutboundMessage> argument = invocation.getArgument(0);
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
             return argument
-                    .map(myOutboundMessage -> new OutboundMessageResult<>(myOutboundMessage, true));
+                    .map(outboundMessage -> new OutboundMessageResult<>(outboundMessage, true));
         });
         when(sender.send(any(Publisher.class))).then(invocation -> {
             final Flux<OutboundMessage> argument = invocation.getArgument(0);
@@ -69,7 +69,7 @@ class ReactiveMessageSenderTest {
     void shouldCallUnroutableMessageHandlerWhenMessageIsReturned() {
         String sourceApplication = "TestApp";
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
-            Flux<MyOutboundMessage> argument = invocation.getArgument(0);
+            Flux<OutboundMessage> argument = invocation.getArgument(0);
             return argument.map(msg -> new OutboundMessageResult<>(msg, false, true));
         });
 

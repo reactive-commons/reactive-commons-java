@@ -29,7 +29,6 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.ChannelPool;
 import reactor.rabbitmq.ChannelPoolFactory;
 import reactor.rabbitmq.ChannelPoolOptions;
-import reactor.rabbitmq.RabbitFlux;
 import reactor.rabbitmq.Receiver;
 import reactor.rabbitmq.ReceiverOptions;
 import reactor.rabbitmq.Sender;
@@ -95,7 +94,7 @@ public final class RabbitMQSetupUtils {
                                                             AsyncProps props,
                                                             MessageConverter converter,
                                                             UnroutableMessageNotifier unroutableMessageNotifier) {
-        final Sender sender = RabbitFlux.createSender(reactiveCommonsSenderOptions(props.getAppName(), provider,
+        final Sender sender = new Sender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
         return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender,
                 props.getQueueType()),
@@ -106,8 +105,8 @@ public final class RabbitMQSetupUtils {
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
         final Mono<Connection> connection =
                 createConnectionMono(provider.getConnectionFactory(), props.getAppName());
-        final Receiver receiver = RabbitFlux.createReceiver(new ReceiverOptions().connectionMono(connection));
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
+        final Receiver receiver = new Receiver(new ReceiverOptions().connectionMono(connection));
+        final Sender sender = new Sender(new SenderOptions().connectionMono(connection));
 
         return new ReactiveMessageListener(receiver,
                 new TopologyCreator(sender, props.getQueueType()),
@@ -118,7 +117,7 @@ public final class RabbitMQSetupUtils {
     public static TopologyCreator createTopologyCreator(AsyncProps props, ConnectionFactoryCustomizer cfCustomizer) {
         ConnectionFactoryProvider provider = connectionFactoryProvider(props, cfCustomizer);
         final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName());
-        final Sender sender = RabbitFlux.createSender(new SenderOptions().connectionMono(connection));
+        final Sender sender = new Sender(new SenderOptions().connectionMono(connection));
         return new TopologyCreator(sender, props.getQueueType());
     }
 
