@@ -41,6 +41,7 @@ subprojects {
         annotationProcessor 'org.projectlombok:lombok'
         testAnnotationProcessor 'org.projectlombok:lombok'
         testCompileOnly 'org.projectlombok:lombok'
+        implementation platform("org.springframework.boot:spring-boot-dependencies:3.5.13")
     }
 
     jacocoTestReport {
@@ -55,12 +56,6 @@ subprojects {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
 
-    }
-
-    dependencyManagement {
-        imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.13'
-        }
     }
 
     if (toPublish.split(',').contains(it.name)) {
