@@ -90,6 +90,12 @@ public abstract class GenericMessageListener {
             return;
         }
         stopListener();
+        log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
+        if (useDLQRetries) {
+            log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!", new Object[]{maxRetries});
+        } else {
+            log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
+        }
         var baseSubscriber = new LoggerSubscriber<>(getClass().getName());
         listenerSubscription = baseSubscriber;
         Flux.defer(this::buildConsumeFlux)
