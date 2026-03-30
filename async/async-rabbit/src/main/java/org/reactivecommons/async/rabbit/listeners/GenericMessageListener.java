@@ -1,8 +1,6 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ShutdownSignalException;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -12,7 +10,6 @@ import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -28,7 +25,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 
@@ -53,8 +49,7 @@ public abstract class GenericMessageListener {
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
-    private final AtomicReference<Channel> channelRef = new AtomicReference<>();
-    private Disposable listenerSubscription;
+    private volatile Flux<AcknowledgableDelivery> messageFlux;
 
     public GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                   boolean createTopology, long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
@@ -83,51 +78,43 @@ public abstract class GenericMessageListener {
         return Mono.empty();
     }
 
-    public synchronized void startListener() {
-        Channel current = channelRef.get();
-        if (current != null && current.isOpen()) {
-            log.warning("Channel is already open, no need to restart listener");
-            return;
-        }
-        stopListener();
+    public void startListener() {
         log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}", new Object[]{messageListener.getMaxConcurrency(), queueName});
         if (useDLQRetries) {
             log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!", new Object[]{maxRetries});
         } else {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
-        var baseSubscriber = new LoggerSubscriber<>(getClass().getName());
-        listenerSubscription = baseSubscriber;
-        Flux.defer(this::buildConsumeFlux)
-                .subscribe(baseSubscriber);
-    }
 
-
-    private Flux<AcknowledgableDelivery> buildConsumeFlux() {
-        ConsumeOptions options = new ConsumeOptions()
+        ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.getPrefetchCount())
-                .channelCallback(channel -> {
-                    channelRef.set(channel);
-                    channel.addShutdownListener(this::onChannelShutdown);
-                });
+                .channelCallback(channel -> channel.addShutdownListener(cause -> {
+                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                            + " channel open: " + channel.isOpen() +
+                            " connection open: " + channel.getConnection().isOpen());
+                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                        log.warning("Recovering listener for queue: " + queueName);
+                        onTerminate();
+                    }
+                }));
 
-        Flux<AcknowledgableDelivery> source = createTopology
-                ? setUpBindings(messageListener.getTopologyCreator())
-                  .thenMany(receiver.consumeManualAck(queueName, options))
-                : receiver.consumeManualAck(queueName, options);
-
-        return source.transform(this::consumeFaultTolerant);
-    }
-
-    private void onChannelShutdown(ShutdownSignalException cause) {
-        log.log(Level.SEVERE, "Channel shutdown detected in listener", cause);
-        startListener();
-    }
-
-    public synchronized void stopListener() {
-        if (listenerSubscription != null && !listenerSubscription.isDisposed()) {
-            listenerSubscription.dispose();
+        if (createTopology) {
+            this.messageFlux = setUpBindings(messageListener.getTopologyCreator())
+                    .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
+                            .transform(this::consumeFaultTolerant));
+        } else {
+            this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
+                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
+                    .transform(this::consumeFaultTolerant);
         }
+
+
+        onTerminate();
+    }
+
+    private void onTerminate() {
+        messageFlux.doOnTerminate(this::onTerminate)
+                .subscribe(new LoggerSubscriber<>(getClass().getName()));
     }
 
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
