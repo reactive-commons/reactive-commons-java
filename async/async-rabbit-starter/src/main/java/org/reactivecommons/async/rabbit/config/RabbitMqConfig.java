@@ -134,6 +134,7 @@ public class RabbitMqConfig {
     public ConnectionFactoryProvider rabbitRConnectionFactory(RabbitProperties properties)
             throws NoSuchAlgorithmException, KeyManagementException {
         final ConnectionFactory factory = new ConnectionFactory();
+        factory.setAutomaticRecoveryEnabled(true);
         PropertyMapper map = PropertyMapper.get();
         map.from(properties::determineHost).whenNonNull().to(factory::setHost);
         map.from(properties::determinePort).to(factory::setPort);

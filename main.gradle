@@ -16,7 +16,10 @@ allprojects {
 
 nexusPublishing {
     repositories {
-        sonatype()
+        sonatype {
+            nexusUrl.set(uri("https://ossrh-staging-api.central.sonatype.com/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://central.sonatype.com/repository/maven-snapshots/"))
+        }
     }
 }
 
@@ -32,6 +35,7 @@ subprojects {
 
     dependencies {
         testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
         testImplementation 'io.projectreactor:reactor-test'
         compileOnly 'org.projectlombok:lombok'
         annotationProcessor 'org.projectlombok:lombok'
@@ -55,7 +59,7 @@ subprojects {
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.3.1'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:3.5.13'
         }
     }
 
