@@ -13,10 +13,11 @@ import java.lang.reflect.Constructor;
 public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaProps, KafkaProperties> {
 
     public AsyncKafkaPropsDomain(@Value("${spring.application.name}") String defaultAppName,
+                                 @Value("${spring.kafka.consumer.group.id}") String groupId,
                                  KafkaProperties defaultKafkaProperties,
                                  AsyncKafkaPropsDomainProperties configured,
                                  KafkaSecretFiller kafkaSecretFiller) {
-        super(defaultAppName, defaultKafkaProperties, configured, kafkaSecretFiller, AsyncKafkaProps.class,
+        super(defaultAppName, groupId, defaultKafkaProperties, configured, kafkaSecretFiller, AsyncKafkaProps.class,
                 KafkaProperties.class);
     }
 
