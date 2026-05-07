@@ -3,12 +3,15 @@ package org.reactivecommons.async.rabbit.config.props;
 import lombok.Getter;
 import lombok.Setter;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
 import org.reactivecommons.async.starter.props.GenericAsyncPropsDomain;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Constructor;
+
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Getter
 @Setter
@@ -58,6 +61,14 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
             AsyncRabbitPropsDomainProperties configured, RabbitPropsCustomizer customizer) {
         if (customizer != null) {
             customizer.customize(configured);
+            if (!configured.containsKey(DEFAULT_DOMAIN)) {
+                throw new InvalidConfigurationException(
+                        "RabbitPropsCustomizer was applied but the '" + DEFAULT_DOMAIN + "' domain is not defined. " +
+                                "When using RabbitPropsCustomizer, you must declare at least the '" + DEFAULT_DOMAIN + "' " +
+                                "domain in your application.yaml (app.async.app.*). " +
+                                "If you want full programmatic control without YAML, define a @Primary @Bean " +
+                                "AsyncRabbitPropsDomainProperties using AsyncRabbitPropsDomainProperties.builder().build().");
+            }
         }
         return configured;
     }
