@@ -23,6 +23,12 @@ import java.util.Map;
 @ComponentScan("org.reactivecommons.async.starter.impl.listener")
 public class ReactiveCommonsListenersConfig {
 
+    /**
+     * Builds the {@link DomainHandlers} by resolving all registered {@link HandlerRegistry} beans against each
+     * configured domain. The first configured domain always gets {@link HandlerRegistry#DEFAULT_DOMAIN "app"} as
+     * its alias, ensuring that all handlers registered via the standard API (which internally stores them under
+     * "app") are always resolved by the default domain, regardless of its actual name.
+     */
     @Bean
     @SuppressWarnings({"rawtypes", "unchecked"})
     public DomainHandlers buildHandlers(ApplicationContext context,
@@ -33,15 +39,17 @@ public class ReactiveCommonsListenersConfig {
             registries.put("primaryHandlerRegistry", primaryRegistry);
         }
         final Map<String, GenericAsyncPropsDomain> props = context.getBeansOfType(GenericAsyncPropsDomain.class);
-        props.forEach((beanName, properties) -> properties
-                .forEach((domain, asyncProps) -> {
-                    String domainName = (String) domain;
-                    HandlerResolver resolver = HandlerResolverBuilder.buildResolver(
-                            domainName, registries, commandHandler
-                    );
-                    handlers.add(domainName, resolver);
-                })
-        );
+        props.forEach((beanName, properties) -> {
+            String defaultDomain = properties.getDefaultDomainName();
+            properties.forEach((domain, asyncProps) -> {
+                String domainName = (String) domain;
+                String aliasDomain = domainName.equals(defaultDomain) ? HandlerRegistry.DEFAULT_DOMAIN : null;
+                HandlerResolver resolver = HandlerResolverBuilder.buildResolver(
+                        domainName, aliasDomain, registries, commandHandler
+                );
+                handlers.add(domainName, resolver);
+            });
+        });
         return handlers;
     }
 

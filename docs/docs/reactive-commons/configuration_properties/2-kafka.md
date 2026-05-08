@@ -4,13 +4,18 @@ sidebar_position: 2
 
 # Kafka Configuration
 
-You can customize some predefined variables of Reactive Commons.
+This page describes how to configure Kafka connection and messaging properties for each **domain** in
+Reactive Commons. A domain represents an independent connection to a Kafka cluster. Your application can work
+with a single domain (one cluster) or multiple domains (several independent clusters), each with its own properties.
+See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for guidance on when
+to use multiple domains.
 
-This can be done by Spring Boot `application.yaml` or by overriding
-the [AsyncKafkaProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-kafka-starter/src/main/java/org/reactivecommons/async/kafka/config/props/AsyncKafkaProps.java)
-bean.
+All available properties are defined in the
+[AsyncKafkaProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-kafka-starter/src/main/java/org/reactivecommons/async/kafka/config/props/AsyncKafkaProps.java)
+class. There are three ways to provide these values — via `application.yaml`, programmatically, or a combination of
+both — as described in the [Configuration approaches](#configuration-approaches) section below.
 
-```yaml
+```yaml title="application.yaml"
 reactive:
   commons:
     kafka:
@@ -33,7 +38,20 @@ reactive:
           bootstrap-servers: localhost:9093
 ```
 
-You can override this settings programmatically through a `AsyncKafkaPropsDomainProperties` bean:
+## Configuration approaches
+
+There are three ways to supply domain properties. Choose the one that best fits your use case.
+
+### Approach 1 — YAML only
+
+Define all domains directly in `application.yaml` as shown above. No additional Java configuration is needed.
+This is the simplest approach and works well when properties do not depend on runtime values such as secrets.
+
+### Approach 2 — Fully programmatic (no YAML domains)
+
+Override the `AsyncKafkaPropsDomainProperties` bean to define all domains in code.
+**Do not declare any domain under `reactive.commons.kafka` in your YAML when using this approach**, as both sources
+would conflict.
 
 ```java
 package sample;
@@ -67,6 +85,78 @@ public class MyDomainConfig {
     }
 }
 ```
+
+### Approach 3 — Hybrid: YAML + `KafkaPropsCustomizer`
+
+Use this approach when you want to define the domain structure in YAML (topology, retry settings, etc.) but need to
+set some properties at runtime — for example, loading bootstrap servers or credentials from a secrets manager.
+
+Declare your domains in `application.yaml` as usual, then define a `KafkaPropsCustomizer` bean to override specific
+properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
+any property on any domain.
+
+:::caution[At least one domain must be declared in YAML]
+The `KafkaPropsCustomizer` works **on top of** YAML-loaded domains. You must declare at least one domain under
+`reactive.commons.kafka` in your `application.yaml`. If no domain is found, an `InvalidConfigurationException` will
+be thrown. Do not combine this approach with an `AsyncKafkaPropsDomainProperties` `@Primary` bean.
+:::
+
+```yaml title="application.yaml"
+reactive:
+  commons:
+    kafka:
+      app:           # first domain (will be treated as the default)
+        retryDelay: 60000
+        maxRetries: 3
+      accounts:        # second domain with independent cluster
+        retryDelay: 40000
+```
+
+```java
+package sample;
+
+import org.reactivecommons.async.kafka.config.KafkaProperties;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class KafkaConfig {
+
+    // Loads Kafka connection properties from a secrets manager at runtime.
+    // See the "Loading properties from a secret" section below for a complete implementation example.
+    private KafkaProperties loadFromSecret(String secretName) {
+        // ...
+        return new KafkaProperties();
+    }
+
+    @Bean
+    public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer() {
+        return domainProperties -> {
+            // Customize the "app" domain — overrides take precedence over YAML values
+            AsyncKafkaProps app = domainProperties.get("app");
+            if (app != null) {
+                app.setConnectionProperties(loadFromSecret("secret-app-kafka"));
+            }
+
+            // Customize the "accounts" domain independently
+            AsyncKafkaProps accounts = domainProperties.get("accounts");
+            if (accounts != null) {
+                accounts.setConnectionProperties(loadFromSecret("secret-accounts-kafka"));
+            }
+        };
+    }
+}
+```
+
+**Key rules for the hybrid approach:**
+
+- Properties set in the customizer **take precedence** over YAML values.
+- YAML values not touched by the customizer are **preserved**.
+- The customizer can also **add new domains** by calling `domainProperties.put("newDomain", asyncKafkaProps)`.
+- The first domain declared in YAML becomes the **default domain** and automatically resolves handlers registered
+  without an explicit domain (e.g., via `HandlerRegistry.register().listenEvent(...)`).
 
 ## Loading properties from a secret
 

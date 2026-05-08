@@ -4,13 +4,18 @@ sidebar_position: 1
 
 # RabbitMQ Configuration
 
-You can customize some predefined variables of Reactive Commons.
+This page describes how to configure RabbitMQ connection and messaging properties for each **domain** in
+Reactive Commons. A domain represents an independent connection to a RabbitMQ broker. Your application can work
+with a single domain (one broker) or multiple domains (several independent brokers), each with its own properties.
+See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for guidance on when
+to use multiple domains.
 
-This can be done by Spring Boot `application.yaml` or by overriding
-the [AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
-bean.
+All available properties are defined in the
+[AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
+class. There are three ways to provide these values — via `application.yaml`, programmatically, or a combination of
+both — as described in the [Configuration approaches](#configuration-approaches) section below.
 
-```yaml
+```yaml title="application.yaml"
 app:
   async:
     app: # this is the name of the default domain
@@ -58,12 +63,24 @@ app:
         virtual-host: /accounts
 ```
 
-You can override this settings programmatically through an `AsyncRabbitPropsDomainProperties` bean:
-
 :::caution[Mandatory `app` Domain Configuration]
 To ensure a correct configuration, you should always override the properties of the `app` domain. If it is not
 configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
 :::
+
+## Configuration approaches
+
+There are three ways to supply domain properties. Choose the one that best fits your use case.
+
+### Approach 1 — YAML only
+
+Define all domains directly in `application.yaml` as shown above. No additional Java configuration is needed.
+This is the simplest approach and works well when properties do not depend on runtime values such as secrets.
+
+### Approach 2 — Fully programmatic (no YAML domains)
+
+Override the `AsyncRabbitPropsDomainProperties` bean to define all domains in code.
+**Do not declare any domain under `app.async` in your YAML when using this approach**, as both sources would conflict.
 
 ```java
 package sample;
@@ -72,6 +89,7 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 
 @Configuration
@@ -105,6 +123,78 @@ public class MyDomainConfig {
     }
 }
 ```
+
+### Approach 3 — Hybrid: YAML + `RabbitPropsCustomizer`
+
+Use this approach when you want to define the domain structure in YAML (topology, retry settings, etc.) but need to
+set some properties at runtime — for example, loading connection credentials from a secrets manager.
+
+Declare your domains in `application.yaml` as usual, then define a `RabbitPropsCustomizer` bean to override specific
+properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
+any property on any domain.
+
+:::caution[At least one domain must be declared in YAML]
+The `RabbitPropsCustomizer` works **on top of** YAML-loaded domains. You must declare at least one domain under
+`app.async` in your `application.yaml`. If no domain is found, an `InvalidConfigurationException` will be thrown.
+Do not combine this approach with an `AsyncRabbitPropsDomainProperties` `@Primary` bean.
+:::
+
+```yaml title="application.yaml"
+app:
+  async:
+    push:             # first domain (will be treated as the default)
+      withDLQRetry: true
+      maxRetries: 3
+      listenReplies: true
+    accounts:         # second domain with independent broker
+      listenReplies: false
+```
+
+```java
+package sample;
+
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitMQConfig {
+
+  // Loads RabbitMQ connection properties from a secrets manager at runtime.
+  // See the "Loading properties from a secret" section below for a complete implementation example.
+  private RabbitProperties loadFromSecret(String secretName) {
+    // ...
+    return new RabbitProperties();
+  }
+
+  @Bean
+  public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+    return domainProperties -> {
+      // Customize the "push" domain — overrides take precedence over YAML values
+      AsyncProps push = domainProperties.get("push");
+      if (push != null) {
+        push.setConnectionProperties(loadFromSecret("secret-push-rabbit"));
+      }
+
+      // Customize the "accounts" domain independently
+      AsyncProps accounts = domainProperties.get("accounts");
+      if (accounts != null) {
+        accounts.setConnectionProperties(loadFromSecret("secret-accounts-rabbit"));
+      }
+    };
+  }
+}
+```
+
+**Key rules for the hybrid approach:**
+
+- Properties set in the customizer **take precedence** over YAML values.
+- YAML values not touched by the customizer are **preserved**.
+- The customizer can also **add new domains** by calling `domainProperties.put("newDomain", asyncProps)`.
+- The first domain declared in YAML becomes the **default domain** and automatically resolves handlers registered
+  without an explicit domain (e.g., via `HandlerRegistry.register().listenEvent(...)`).
 
 ## Loading properties from a secret
 

@@ -14,17 +14,16 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
 @Configuration
 public class RabbitMQListenerOnlyConfig {
 
     @Bean
     @ConditionalOnMissingBean(DynamicRegistry.class)
     public DynamicRegistry dynamicRegistry(AsyncPropsDomain asyncPropsDomain, DomainHandlers handlers, ConnectionFactoryCustomizer cfCustomizer) {
-        AsyncProps props = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
+        String defaultDomain = asyncPropsDomain.getDefaultDomainName();
+        AsyncProps props = asyncPropsDomain.getProps(defaultDomain);
         TopologyCreator topologyCreator = RabbitMQSetupUtils.createTopologyCreator(props, cfCustomizer);
-        IBrokerConfigProps brokerConfigProps = new BrokerConfigProps(asyncPropsDomain.getProps(DEFAULT_DOMAIN));
-        return new DynamicRegistryImp(handlers.get(DEFAULT_DOMAIN), topologyCreator, brokerConfigProps);
+        IBrokerConfigProps brokerConfigProps = new BrokerConfigProps(asyncPropsDomain.getProps(defaultDomain));
+        return new DynamicRegistryImp(handlers.get(defaultDomain), topologyCreator, brokerConfigProps);
     }
 }

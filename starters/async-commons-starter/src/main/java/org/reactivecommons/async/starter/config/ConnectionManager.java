@@ -1,5 +1,7 @@
 package org.reactivecommons.async.starter.config;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 
 import java.util.Map;
@@ -9,6 +11,9 @@ import java.util.function.BiConsumer;
 @SuppressWarnings("rawtypes")
 public class ConnectionManager {
     private final Map<String, BrokerProvider> connections = new TreeMap<>();
+    @Getter
+    @Setter
+    private String defaultDomain;
 
     public void forDomain(BiConsumer<String, BrokerProvider> consumer) {
         connections.forEach(consumer);

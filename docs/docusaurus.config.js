@@ -24,7 +24,12 @@ const config = {
   projectName: 'reactive-commons-java', // Usually your repo name.
 
   onBrokenLinks: 'throw',
-  onBrokenMarkdownLinks: 'warn',
+    markdown: {
+        hooks: {
+            onBrokenMarkdownLinks: 'warn',
+            onBrokenMarkdownImages: 'throw',
+        },
+    },
 
   // Even if you don't use internationalization, you can use this field to set
   // useful metadata like html lang. For example, if your site is Chinese, you
@@ -44,7 +49,7 @@ const config = {
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
           editUrl:
-          'https://github.com/reactive-commons/reactive-commons-java/tree/docs/docs',
+              'https://github.com/reactive-commons/reactive-commons-java/tree/docs/docs',
         },
         theme: {
           customCss: './src/css/custom.css',

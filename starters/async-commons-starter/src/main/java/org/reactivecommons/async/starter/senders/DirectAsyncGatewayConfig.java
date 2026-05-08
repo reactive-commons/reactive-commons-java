@@ -23,6 +23,6 @@ public class DirectAsyncGatewayConfig {
         ConcurrentMap<String, DirectAsyncGateway> directAsyncGateways = new ConcurrentHashMap<>();
         manager.forDomain((domain, provider) -> directAsyncGateways.put(domain,
                 provider.getDirectAsyncGateway()));
-        return new GenericDirectAsyncGateway(directAsyncGateways);
+        return new GenericDirectAsyncGateway(directAsyncGateways, manager.getDefaultDomain());
     }
 }

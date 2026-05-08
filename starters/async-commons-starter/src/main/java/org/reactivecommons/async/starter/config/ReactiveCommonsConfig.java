@@ -26,8 +26,6 @@ import tools.jackson.databind.json.JsonMapper;
 
 import java.util.Map;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
 @Log
 @Configuration
 @RequiredArgsConstructor
@@ -43,7 +41,11 @@ public class ReactiveCommonsConfig {
 
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((beanName, domainProps) -> {
-            final GenericAsyncProps defaultDomainProps = domainProps.getProps(DEFAULT_DOMAIN);
+            final String defaultDomainName = domainProps.getDefaultDomainName();
+            if (connectionManager.getDefaultDomain() == null) {
+                connectionManager.setDefaultDomain(defaultDomainName);
+            }
+            final GenericAsyncProps defaultDomainProps = domainProps.getProps(defaultDomainName);
             domainProps.forEach((domain, asyncPropsObject) -> {
                 String domainName = (String) domain;
                 final GenericAsyncProps asyncProps = (GenericAsyncProps) asyncPropsObject;

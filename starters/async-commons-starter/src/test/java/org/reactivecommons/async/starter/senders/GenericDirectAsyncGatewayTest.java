@@ -51,7 +51,7 @@ class GenericDirectAsyncGatewayTest {
         ConcurrentHashMap<String, DirectAsyncGateway> directAsyncGateways = new ConcurrentHashMap<>();
         directAsyncGateways.put(DEFAULT_DOMAIN, directAsyncGateway1);
         directAsyncGateways.put(DOMAIN_2, directAsyncGateway2);
-        genericDirectAsyncGateway = new GenericDirectAsyncGateway(directAsyncGateways);
+        genericDirectAsyncGateway = new GenericDirectAsyncGateway(directAsyncGateways, DEFAULT_DOMAIN);
     }
 
     @Test

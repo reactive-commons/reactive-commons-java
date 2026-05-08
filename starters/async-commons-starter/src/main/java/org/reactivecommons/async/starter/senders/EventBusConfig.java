@@ -18,6 +18,6 @@ public class EventBusConfig {
     public DomainEventBus genericDomainEventBus(ConnectionManager manager) {
         ConcurrentMap<String, DomainEventBus> domainEventBuses = new ConcurrentHashMap<>();
         manager.forDomain((domain, provider) -> domainEventBuses.put(domain, provider.getDomainBus()));
-        return new GenericDomainEventBus(domainEventBuses);
+        return new GenericDomainEventBus(domainEventBuses, manager.getDefaultDomain());
     }
 }

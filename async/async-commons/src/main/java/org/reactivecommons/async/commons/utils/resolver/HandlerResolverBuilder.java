@@ -11,68 +11,59 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.HandlerResolver;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.function.Function;
 import java.util.stream.Stream;
 
 @Log
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
+@SuppressWarnings({"unchecked", "rawtypes"})
 public final class HandlerResolverBuilder {
 
     public static HandlerResolver buildResolver(String domain, Map<String, HandlerRegistry> registries,
                                                 final DefaultCommandHandler defaultCommandHandler) {
-        final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getHandlers()
-                        .getOrDefault(domain, List.of())
-                        .stream())
-                .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
-                );
+        return buildResolver(domain, null, registries, defaultCommandHandler);
+    }
 
-        final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getCommandHandlers()
-                        .getOrDefault(domain, List.of())
-                        .stream())
-                .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
-                );
+    public static HandlerResolver buildResolver(String domain, String aliasDomain,
+                                                Map<String, HandlerRegistry> registries,
+                                                final DefaultCommandHandler defaultCommandHandler) {
+        Collection<HandlerRegistry> allRegistries = registries.values();
 
-        final ConcurrentMap<String, RegisteredQueueListener> queueListeners = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getQueueHandlers()
-                        .getOrDefault(domain, List.of())
-                        .stream())
-                .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.queueName(), handler), ConcurrentHashMap::putAll
-                );
+        final ConcurrentMap<String, RegisteredQueryHandler<?, ?>> queryHandlers = collectHandlers(
+                allRegistries, r -> mergeHandlers(r.getHandlers(), domain, aliasDomain),
+                RegisteredQueryHandler::path);
 
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListeners = registries
-                .values()
-                .stream()
-                .flatMap(r -> r.getEventNotificationListener()
-                        .getOrDefault(domain, List.of())
-                        .stream())
-                .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
-                );
+        final ConcurrentMap<String, RegisteredCommandHandler<?, ?>> commandHandlers = collectHandlers(
+                allRegistries, r -> mergeHandlers(r.getCommandHandlers(), domain, aliasDomain),
+                RegisteredCommandHandler::path);
 
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = getEventsToBind(domain,
-                registries);
+        final ConcurrentMap<String, RegisteredQueueListener> queueListeners = collectHandlers(
+                allRegistries, r -> mergeHandlers(r.getQueueHandlers(), domain, aliasDomain),
+                RegisteredQueueListener::queueName);
 
-        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventListeners =
-                getEventHandlersWithDynamics(domain, registries);
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListeners = collectHandlers(
+                allRegistries, r -> mergeHandlers(r.getEventNotificationListener(), domain, aliasDomain),
+                RegisteredEventListener::path);
+
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventsToBind = collectHandlers(
+                allRegistries, r -> mergeHandlers(r.getDomainEventListeners(), domain, aliasDomain),
+                RegisteredEventListener::path);
+
+        final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventListeners = collectHandlers(
+                allRegistries,
+                r -> Stream.concat(
+                        mergeHandlers(r.getDomainEventListeners(), domain, aliasDomain),
+                        mergeHandlers(r.getDynamicEventHandlers(), domain, aliasDomain)),
+                RegisteredEventListener::path);
 
         return new HandlerResolver(queryHandlers, eventListeners, eventsToBind, eventNotificationListeners,
                 commandHandlers, queueListeners) {
             @Override
-            @SuppressWarnings("unchecked")
             public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
                 final RegisteredCommandHandler<T, D> handler = super.getCommandHandler(path);
                 return handler != null ?
@@ -81,37 +72,22 @@ public final class HandlerResolverBuilder {
         };
     }
 
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventHandlersWithDynamics(
-            String domain, Map<String, HandlerRegistry> registries) {
-        // event handlers and dynamic handlers
-        return registries
-                .values()
-                .stream()
-                .flatMap(r -> Stream.concat(r.getDomainEventListeners()
-                                .getOrDefault(domain, List.of())
-                                .stream(),
-                        getDynamics(domain, r)))
+    private static <T> ConcurrentMap<String, T> collectHandlers(Collection<HandlerRegistry> registries,
+                                                                Function<HandlerRegistry, Stream<T>> extractor,
+                                                                Function<T, String> keyMapper) {
+        return registries.stream()
+                .flatMap(extractor)
                 .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
-                );
+                        -> map.put(keyMapper.apply(handler), handler), ConcurrentHashMap::putAll);
     }
 
-    private static Stream<RegisteredEventListener<?, ?>> getDynamics(String domain, HandlerRegistry r) {
-        return r.getDynamicEventHandlers().getOrDefault(domain, List.of()).stream();
-    }
-
-    private static ConcurrentMap<String, RegisteredEventListener<?, ?>> getEventsToBind(
-            String domain, Map<String, HandlerRegistry> registries) {
-        return registries
-                .values().stream()
-                .flatMap(r -> {
-                    if (r.getDomainEventListeners().containsKey(domain)) {
-                        return r.getDomainEventListeners().get(domain).stream();
-                    }
-                    return Stream.empty();
-                })
-                .collect(ConcurrentHashMap::new, (map, handler)
-                        -> map.put(handler.path(), handler), ConcurrentHashMap::putAll
-                );
+    private static <T> Stream<T> mergeHandlers(Map<String, ? extends List<T>> handlersMap,
+                                               String domain, String aliasDomain) {
+        Stream<T> primary = Stream.ofNullable(handlersMap.get(domain)).flatMap(List::stream);
+        if (aliasDomain != null && !aliasDomain.equals(domain)) {
+            Stream<T> alias = Stream.ofNullable(handlersMap.get(aliasDomain)).flatMap(List::stream);
+            return Stream.concat(primary, alias);
+        }
+        return primary;
     }
 }

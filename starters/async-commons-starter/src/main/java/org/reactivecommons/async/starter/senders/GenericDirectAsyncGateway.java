@@ -1,7 +1,6 @@
 package org.reactivecommons.async.starter.senders;
 
 import io.cloudevents.CloudEvent;
-import lombok.RequiredArgsConstructor;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -10,20 +9,23 @@ import reactor.core.publisher.Mono;
 
 import java.util.concurrent.ConcurrentMap;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
-@RequiredArgsConstructor
 public class GenericDirectAsyncGateway implements DirectAsyncGateway {
     private final ConcurrentMap<String, DirectAsyncGateway> directAsyncGateways;
+    private final String defaultDomain;
+
+    public GenericDirectAsyncGateway(ConcurrentMap<String, DirectAsyncGateway> directAsyncGateways, String defaultDomain) {
+        this.directAsyncGateways = directAsyncGateways;
+        this.defaultDomain = defaultDomain;
+    }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
-        return sendCommand(command, targetName, DEFAULT_DOMAIN);
+        return sendCommand(command, targetName, defaultDomain);
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis) {
-        return sendCommand(command, targetName, delayMillis, DEFAULT_DOMAIN);
+        return sendCommand(command, targetName, delayMillis, defaultDomain);
     }
 
     @Override
@@ -38,12 +40,12 @@ public class GenericDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName) {
-        return sendCommand(command, targetName, DEFAULT_DOMAIN);
+        return sendCommand(command, targetName, defaultDomain);
     }
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis) {
-        return sendCommand(command, targetName, delayMillis, DEFAULT_DOMAIN);
+        return sendCommand(command, targetName, delayMillis, defaultDomain);
     }
 
     @Override
@@ -58,7 +60,7 @@ public class GenericDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
-        return requestReply(query, targetName, type, DEFAULT_DOMAIN);
+        return requestReply(query, targetName, type, defaultDomain);
     }
 
     @Override
@@ -68,7 +70,7 @@ public class GenericDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
-        return requestReply(query, targetName, type, DEFAULT_DOMAIN);
+        return requestReply(query, targetName, type, defaultDomain);
     }
 
     @Override
@@ -78,6 +80,6 @@ public class GenericDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T> Mono<Void> reply(T response, From from) {
-        return directAsyncGateways.get(DEFAULT_DOMAIN).reply(response, from);
+        return directAsyncGateways.get(defaultDomain).reply(response, from);
     }
 }

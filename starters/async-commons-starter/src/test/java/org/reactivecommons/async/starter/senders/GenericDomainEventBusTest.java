@@ -39,7 +39,7 @@ class GenericDomainEventBusTest {
         ConcurrentHashMap<String, DomainEventBus> domainEventBuses = new ConcurrentHashMap<>();
         domainEventBuses.put(DEFAULT_DOMAIN, domainEventBus1);
         domainEventBuses.put(DOMAIN_2, domainEventBus2);
-        genericDomainEventBus = new GenericDomainEventBus(domainEventBuses);
+        genericDomainEventBus = new GenericDomainEventBus(domainEventBuses, DEFAULT_DOMAIN);
     }
 
     @Test

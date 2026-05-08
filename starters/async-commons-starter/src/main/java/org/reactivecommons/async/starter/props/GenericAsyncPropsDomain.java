@@ -11,14 +11,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
 
 @Getter
 @Setter
 public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends HashMap<String, T> {
     private Class<T> asyncPropsClass;
     private Class<P> propsClass;
+    private String defaultDomainName;
 
     public GenericAsyncPropsDomain(String defaultAppName,
                                    P defaultProperties,
@@ -31,9 +30,10 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         this.asyncPropsClass = asyncPropsClass;
         JsonMapper mapper = JsonMapper.builder().findAndAddModules().build();
 
-        if (!this.containsKey(DEFAULT_DOMAIN)) {
-            throw new InvalidConfigurationException("Required domain '" + DEFAULT_DOMAIN + "' is not configured.");
+        if (this.isEmpty()) {
+            throw new InvalidConfigurationException("At least one domain must be configured.");
         }
+        this.defaultDomainName = this.keySet().iterator().next();
 
         super.forEach((key, value) -> { // To ensure that each domain has an appName
             if (value.getAppName() == null) {

@@ -11,17 +11,15 @@ import reactor.core.publisher.Mono;
 
 import java.util.concurrent.ConcurrentMap;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
 @RequiredArgsConstructor
 public class GenericDomainEventBus implements DomainEventBus {
     private static final String DOMAIN_NOT_FOUND = "Domain not found: ";
     private final ConcurrentMap<String, DomainEventBus> domainEventBuses;
-
+    private final String defaultDomain;
 
     @Override
     public <T> Publisher<Void> emit(DomainEvent<T> event) {
-        return emit(DEFAULT_DOMAIN, event);
+        return emit(defaultDomain, event);
     }
 
     @Override
@@ -35,7 +33,7 @@ public class GenericDomainEventBus implements DomainEventBus {
 
     @Override
     public Publisher<Void> emit(CloudEvent event) {
-        return emit(DEFAULT_DOMAIN, event);
+        return emit(defaultDomain, event);
     }
 
     @Override
@@ -49,7 +47,7 @@ public class GenericDomainEventBus implements DomainEventBus {
 
     @Override
     public Publisher<Void> emit(RawMessage event) {
-        return emit(DEFAULT_DOMAIN, event);
+        return emit(defaultDomain, event);
     }
 
     @Override

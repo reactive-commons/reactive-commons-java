@@ -54,7 +54,7 @@ dependencies {
 If you will use Cloud Events, you should include the Cloud Events dependency:
 ```groovy
 dependencies {
-    implementation 'io.cloudevents:cloudevents-core:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.2'
 }
 ```
 :::
@@ -228,7 +228,7 @@ dependencies {
 If you will use Cloud Events, you should include the Cloud Events dependency:
 ```groovy
 dependencies {
-    implementation 'io.cloudevents:cloudevents-core:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.2'
 ```
 :::
 

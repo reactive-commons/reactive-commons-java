@@ -11,8 +11,6 @@ import org.springframework.beans.factory.annotation.Value;
 
 import java.lang.reflect.Constructor;
 
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
-
 @Getter
 @Setter
 public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaProps, KafkaProperties> {
@@ -23,8 +21,7 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                                  AsyncKafkaPropsDomainProperties configured,
                                  KafkaSecretFiller kafkaSecretFiller,
                                  ObjectProvider<KafkaPropsCustomizer> customizer) {
-        super(defaultAppName, defaultKafkaProperties,
-                applyCustomizer(configured, customizer.getIfAvailable()),
+        super(defaultAppName, defaultKafkaProperties, applyCustomizer(configured, customizer.getIfAvailable()),
                 kafkaSecretFiller, AsyncKafkaProps.class, KafkaProperties.class);
     }
 
@@ -36,7 +33,6 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                 KafkaProperties.class);
     }
 
-    @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncKafkaProps, KafkaProperties, AsyncKafkaPropsDomainProperties,
             AsyncKafkaPropsDomain> builder() {
         try {
@@ -54,13 +50,13 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
             AsyncKafkaPropsDomainProperties configured, KafkaPropsCustomizer customizer) {
         if (customizer != null) {
             customizer.customize(configured);
-            if (!configured.containsKey(DEFAULT_DOMAIN)) {
-                throw new InvalidConfigurationException(
-                        "KafkaPropsCustomizer was applied but the '" + DEFAULT_DOMAIN + "' domain is not defined. " +
-                                "When using KafkaPropsCustomizer, you must declare at least the '" + DEFAULT_DOMAIN + "' " +
-                                "domain in your application.yaml (reactive.commons.kafka.app.*). " +
-                                "If you want full programmatic control without YAML, define a @Primary @Bean " +
-                                "AsyncKafkaPropsDomainProperties using AsyncKafkaPropsDomainProperties.builder().build().");
+            if (configured.isEmpty()) {
+                throw new InvalidConfigurationException("""
+                        KafkaPropsCustomizer was applied but no domain is defined. \
+                        When using KafkaPropsCustomizer, you must declare at least one \
+                        domain in your application.yaml (reactive.commons.kafka.<domain>.*). \
+                        If you want full programmatic control without YAML, define a @Primary @Bean \
+                        AsyncKafkaPropsDomainProperties using AsyncKafkaPropsDomainProperties.builder().build().""");
             }
         }
         return configured;
