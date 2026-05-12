@@ -1,5 +1,21 @@
 # Changelog
 
+## [v7.2.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.2.0) (2026-05-12)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.7...v7.2.0)
+
+**Merged pull requests:**
+
+- feat: add RabbitPropsCustomizer and KafkaPropsCustomizer for flexible multi-domain configuration [\#169](https://github.com/reactive-commons/reactive-commons-java/pull/169) ([luisgomez29](https://github.com/luisgomez29))
+
+## [v4.1.7](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.7) (2026-03-30)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v4.1.6...v4.1.7)
+
+## [v4.1.6](https://github.com/reactive-commons/reactive-commons-java/tree/v4.1.6) (2026-03-30)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.1.0...v4.1.6)
+
 ## [v7.1.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.1.0) (2026-03-26)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.0.6...v7.1.0)
