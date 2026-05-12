@@ -147,6 +147,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
 
     }
 
+    @Deprecated(forRemoval = true, since = "7.2.0")
     public interface SecretFiller<P> {
         void fillWithSecret(String domain, GenericAsyncProps<P> props);
     }
