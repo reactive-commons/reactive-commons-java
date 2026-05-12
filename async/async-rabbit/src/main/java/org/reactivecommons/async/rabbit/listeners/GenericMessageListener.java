@@ -9,15 +9,15 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
-import reactor.rabbitmq.AcknowledgableDelivery;
-import reactor.rabbitmq.ConsumeOptions;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import reactor.rabbitmq.Receiver;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
+import reactor.rabbitmq.AcknowledgableDelivery;
+import reactor.rabbitmq.ConsumeOptions;
+import reactor.rabbitmq.Receiver;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -93,9 +93,18 @@ public abstract class GenericMessageListener {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
 
-        ConsumeOptions consumeOptions = new ConsumeOptions();
-        consumeOptions.qos(messageListener.prefetchCount());
-        consumeOptions.consumerTag(InstanceIdentifier.getInstanceId(getKind()));
+        ConsumeOptions consumeOptions = new ConsumeOptions()
+                .qos(messageListener.prefetchCount())
+                .consumerTag(InstanceIdentifier.getInstanceId(getKind()))
+                .channelCallback(channel -> channel.addShutdownListener(cause -> {
+                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                            + " channel open: " + channel.isOpen() +
+                            " connection open: " + channel.getConnection().isOpen());
+                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                        log.warning("Recovering listener for queue: " + queueName);
+                        onTerminate();
+                    }
+                }));
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())

@@ -36,7 +36,6 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                 KafkaProperties.class);
     }
 
-    @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncKafkaProps, KafkaProperties, AsyncKafkaPropsDomainProperties,
             AsyncKafkaPropsDomain> builder() {
         try {
@@ -55,17 +54,18 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
         if (customizer != null) {
             customizer.customize(configured);
             if (!configured.containsKey(DEFAULT_DOMAIN)) {
-                throw new InvalidConfigurationException(
-                        "KafkaPropsCustomizer was applied but the '" + DEFAULT_DOMAIN + "' domain is not defined. " +
-                                "When using KafkaPropsCustomizer, you must declare at least the '" + DEFAULT_DOMAIN + "' " +
-                                "domain in your application.yaml (reactive.commons.kafka.app.*). " +
-                                "If you want full programmatic control without YAML, define a @Primary @Bean " +
-                                "AsyncKafkaPropsDomainProperties using AsyncKafkaPropsDomainProperties.builder().build().");
+                throw new InvalidConfigurationException("""
+                        KafkaPropsCustomizer was applied but the default domain 'app' is not defined. \
+                        When using KafkaPropsCustomizer, you must declare the 'app' domain in your \
+                        application.yaml (reactive.commons.kafka.app.*), or add the 'app' domain (or any other new domain) \
+                        directly inside the customizer using \
+                        domainProperties.put("app", AsyncKafkaProps.builder()...build()).""");
             }
         }
         return configured;
     }
 
+    @Deprecated(forRemoval = true, since = "7.2.0")
     public interface KafkaSecretFiller extends GenericAsyncPropsDomain.SecretFiller<KafkaProperties> {
     }
 

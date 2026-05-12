@@ -36,7 +36,6 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
                 RabbitProperties.class);
     }
 
-    @SuppressWarnings("unchecked")
     public static AsyncPropsDomainBuilder<AsyncProps, RabbitProperties, AsyncRabbitPropsDomainProperties,
             AsyncPropsDomain> builder() {
         try {
@@ -62,17 +61,18 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
         if (customizer != null) {
             customizer.customize(configured);
             if (!configured.containsKey(DEFAULT_DOMAIN)) {
-                throw new InvalidConfigurationException(
-                        "RabbitPropsCustomizer was applied but the '" + DEFAULT_DOMAIN + "' domain is not defined. " +
-                                "When using RabbitPropsCustomizer, you must declare at least the '" + DEFAULT_DOMAIN + "' " +
-                                "domain in your application.yaml (app.async.app.*). " +
-                                "If you want full programmatic control without YAML, define a @Primary @Bean " +
-                                "AsyncRabbitPropsDomainProperties using AsyncRabbitPropsDomainProperties.builder().build().");
+                throw new InvalidConfigurationException("""
+                        RabbitPropsCustomizer was applied but the default domain 'app' is not defined. \
+                        When using RabbitPropsCustomizer, you must declare the 'app' domain in your \
+                        application.yaml (app.async.app.*), or add the 'app' domain (or any other new domain) \
+                        directly inside the customizer using \
+                        domainProperties.put("app", AsyncProps.builder()...build()).""");
             }
         }
         return configured;
     }
 
+    @Deprecated(forRemoval = true, since = "7.2.0")
     public interface RabbitSecretFiller extends SecretFiller<RabbitProperties> {
     }
 

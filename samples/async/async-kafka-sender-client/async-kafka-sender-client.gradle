@@ -4,7 +4,7 @@ dependencies {
     implementation project(':shared')
     implementation project(':async-kafka-starter')
     implementation project(':cloudevents-json-jackson')
-    implementation 'io.cloudevents:cloudevents-core:4.0.1'
+    implementation 'io.cloudevents:cloudevents-core:4.0.2'
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'

@@ -4,13 +4,18 @@ sidebar_position: 1
 
 # RabbitMQ Configuration
 
-You can customize some predefined variables of Reactive Commons.
+This page describes how to configure RabbitMQ connection and messaging properties for each **domain** in
+Reactive Commons. A domain represents an independent connection to a RabbitMQ broker. Your application can work
+with a single domain (one broker) or multiple domains (several independent brokers), each with its own properties.
+See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for guidance on when
+to use multiple domains.
 
-This can be done by Spring Boot `application.yaml` or by overriding
-the [AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
-bean.
+All available properties are defined in the
+[AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
+class. There are two ways to provide these values via `application.yaml` or a combination of YAML and
+programmatic configuration, as described in the [Configuration approaches](#configuration-approaches) section below.
 
-```yaml
+```yaml title="application.yaml"
 app:
   async:
     app: # this is the name of the default domain
@@ -58,134 +63,266 @@ app:
         virtual-host: /accounts
 ```
 
-You can override this settings programmatically through an `AsyncRabbitPropsDomainProperties` bean:
-
 :::caution[Mandatory `app` Domain Configuration]
 To ensure a correct configuration, you should always override the properties of the `app` domain. If it is not
 configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
 :::
+
+## Configuration approaches
+
+There are two ways to supply domain properties. Choose the one that best fits your use case.
+
+### Approach 1: YAML only
+
+Define all domains directly in `application.yaml` as shown above. This is the simplest approach and works well when
+properties do not depend on runtime values such as secrets.
+
+### Approach 2: Hybrid YAML + `RabbitPropsCustomizer`
+
+Use this approach when you want to define the domain structure in YAML (topology, retry settings, etc.) but need to
+set some properties at runtime for example, loading connection credentials from a secrets manager.
+
+Declare your domains in `application.yaml` as usual, then define a `RabbitPropsCustomizer` bean to override specific
+properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
+any property on any domain.
+
+:::caution[YAML domains are optional]
+The `RabbitPropsCustomizer` can work with or without pre-existing YAML domains. If no domains are defined in your
+`application.yaml` under `app.async`, you can define all domains directly inside the customizer using
+`domainProperties.put("<domain>", AsyncProps.builder()...build())`. At least one domain must exist after the customizer
+executes, otherwise an `InvalidConfigurationException` is thrown.
+:::
+
+You have two options:
+
+**Option A: Define domains in YAML, then override with customizer**
+
+Declare your domains in `application.yaml` as usual, then use the customizer to override or extend them.
+
+```yaml title="application.yaml"
+app:
+  async:
+    app: # first domain
+      withDLQRetry: true
+      maxRetries: 3
+      listenReplies: true
+    accounts: # second domain
+      listenReplies: false
+```
 
 ```java
 package sample;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Primary;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration
-public class MyDomainConfig {
+public class RabbitMQConfig {
+
+    // Loads RabbitMQ connection properties from a secrets manager at runtime.
+    // See the "Loading properties from a secret" section below for a complete implementation example.
+    private RabbitProperties loadFromSecret(String secretName) {
+        // ...
+        return new RabbitProperties();
+    }
 
     @Bean
-    @Primary
-    public AsyncRabbitPropsDomainProperties customDomainProperties() {
-        RabbitProperties propertiesApp = new RabbitProperties();
-        propertiesApp.setHost("localhost");
-        propertiesApp.setPort(5672);
-        propertiesApp.setVirtualHost("/");
-        propertiesApp.setUsername("guest");
-        propertiesApp.setPassword("guest");
+    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+        return domainProperties -> {
+            // Customize the "app" domain — overrides take precedence over YAML values
+            AsyncProps app = domainProperties.get("app");
+            if (app != null) {
+                app.setConnectionProperties(loadFromSecret("secret-app-rabbit"));
+            }
 
-        RabbitProperties propertiesAccounts = new RabbitProperties();
-        propertiesAccounts.setHost("localhost");
-        propertiesAccounts.setPort(5672);
-        propertiesAccounts.setVirtualHost("/accounts");
-        propertiesAccounts.setUsername("guest");
-        propertiesAccounts.setPassword("guest");
-
-        return AsyncRabbitPropsDomainProperties.builder()
-                .withDomain("app", AsyncProps.builder()
-                        .connectionProperties(propertiesApp)
-                        .build())
-                .withDomain("accounts", AsyncProps.builder()
-                        .connectionProperties(propertiesAccounts)
-                        .build())
-                .build();
+            // Customize the "accounts" domain independently
+            AsyncProps accounts = domainProperties.get("accounts");
+            if (accounts != null) {
+                accounts.setConnectionProperties(loadFromSecret("secret-accounts-rabbit"));
+            }
+        };
     }
 }
 ```
 
-## Loading properties from a secret
+**Option B: Define all domains in the customizer (no YAML domains)**
 
-Additionally, if you want to set only connection properties you can use the `AsyncPropsDomain.RabbitSecretFiller` class.
+If you prefer full programmatic control, **omit the `app.async` section entirely from your `application.yaml`** and
+define all domains
+inside the customizer:
 
 ```java
+package sample;
 
-@Bean
-public AsyncPropsDomain.RabbitSecretFiller customFiller() {
-    return (domain, asyncProps) -> {
-        // customize asyncProps here by domain
-    };
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitMQConfig {
+
+    private RabbitProperties loadFromSecret(String secretName) {
+        // ...
+        return new RabbitProperties();
+    }
+
+    @Bean
+    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+        return domainProperties -> {
+            // Define all domains programmatically
+            domainProperties.put("app", AsyncProps.builder()
+                    .withDLQRetry(Boolean.TRUE)
+                    .maxRetries(3)
+                    .listenReplies(Boolean.TRUE)
+                    .connectionProperties(loadFromSecret("secret-app-rabbit"))
+                    .build());
+
+            domainProperties.put("accounts", AsyncProps.builder()
+                    .listenReplies(Boolean.FALSE)
+                    .connectionProperties(loadFromSecret("secret-accounts-rabbit"))
+                    .build());
+        };
+    }
 }
 ```
 
-For example if you use the [Secrets Manager](https://github.com/bancolombia/secrets-manager) project, you may use
-the next code to load the properties from a secret:
+**Key rules for the hybrid approach:**
 
-1. Create a class with the properties that you will load from the secret:
+- Properties set in the customizer **take precedence** over YAML values.
+- YAML values not touched by the customizer are **preserved**.
+- The customizer can also **add new domains** by calling `domainProperties.put("newDomain", asyncProps)`.
+
+## Loading properties from a secret
+
+:::danger[Deprecated]
+Using `AsyncPropsDomain.RabbitSecretFiller` to load secrets is **deprecated** and will be removed in a future version.
+Use **[Approach 2: Hybrid YAML + `RabbitPropsCustomizer`](#approach-2-hybrid-yaml--rabbitpropscustomizer)** instead,
+which provides full control over all domain properties at runtime and is the recommended way to integrate with a
+secrets manager.
+:::
+
+The recommended way to load connection properties from a secrets manager is to use the `RabbitPropsCustomizer` (see
+[Approach 2](#approach-2-hybrid-yaml--rabbitpropscustomizer)). This gives you full control over all domain properties
+at runtime. The example below uses the [Secrets Manager](https://github.com/bancolombia/secrets-manager) library.
+
+1. Create a `@ConfigurationProperties` record to map the secret fields:
 
 ```java
-import lombok.Builder;
-import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+
+@ConfigurationProperties(prefix = "helpers.secrets-manager")
+public record SecretsManagerProperties(
+        String endpoint,
+        Integer cacheSize,
+        Integer cacheTime,
+        String rabbit) {
+}
+```
+
+2. Create a `RabbitMQConnectionProperties` record to map the fields of your secret and provide a conversion method:
+
+```java
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 
-@Data
-@Builder
-public class RabbitConnectionProperties {
-    private String hostname;
-    private String password;
-    private String username;
-    private Integer port;
-    private String virtualhost;
-    private boolean ssl;
+public record RabbitMQConnectionProperties(
+        String virtualhost,
+        String host,
+        String password,
+        String username,
+        boolean ssl,
+        Integer port) {
 
     public RabbitProperties toRabbitProperties() {
         var rabbitProperties = new RabbitProperties();
-        rabbitProperties.setHost(this.hostname);
-        rabbitProperties.setUsername(this.username);
-        rabbitProperties.setPassword(this.password);
-        rabbitProperties.setPort(this.port);
-        rabbitProperties.setVirtualHost(this.virtualhost);
-        rabbitProperties.getSsl().setEnabled(this.ssl); // To enable SSL
+        rabbitProperties.setHost(this.host());
+        rabbitProperties.setUsername(this.username());
+        rabbitProperties.setPassword(this.password());
+        rabbitProperties.setPort(this.port());
+        rabbitProperties.setVirtualHost(this.virtualhost());
+        rabbitProperties.getSsl().setEnabled(this.ssl()); // To enable SSL
         return rabbitProperties;
     }
 }
 ```
 
-2. Use the `SecretsManager` to load the properties from the secret:
+3. Create a `SecretsConfig` class that registers the `GenericManager` bean and exposes the RabbitMQ secret as a bean:
 
 ```java
 import co.com.bancolombia.secretsmanager.api.GenericManager;
-import lombok.SneakyThrows;
+import co.com.bancolombia.secretsmanager.connector.AWSSecretManagerConnector;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
+import software.amazon.awssdk.regions.Region;
+
+@Log4j2
+@Configuration
+@RequiredArgsConstructor
+public class SecretsConfig {
+
+    private final SecretsManagerProperties properties;
+    private static final String REGION_SECRET = Region.US_EAST_1.toString();
+
+    @Bean
+    @Profile("!local")
+    public GenericManager connectionAws() {
+        return new AWSSecretManagerConnector(REGION_SECRET);
+    }
+
+    @Bean
+    @Profile("local")
+    public GenericManager connectionLocal() {
+        return new AWSSecretManagerConnector(REGION_SECRET, properties.endpoint());
+    }
+
+    public <T> T getSecret(String secretName, Class<T> cls, GenericManager connector) {
+        try {
+            log.info("Secret was obtained successfully");
+            return connector.getSecret(secretName, cls);
+        } catch (Exception e) {
+            log.error("Error getting secret: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    @Bean
+    public RabbitMQConnectionProperties getSecretRabbitmq(GenericManager connector) {
+        return this.getSecret(properties.rabbit(), RabbitMQConnectionProperties.class, connector);
+    }
+}
+```
+
+4. Create a separate `RabbitMQConfig` class that injects the `RabbitMQConnectionProperties` bean and defines the
+   `RabbitPropsCustomizer`:
+
+```java
+import lombok.RequiredArgsConstructor;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import java.lang.reflect.GenericArrayType;
-
-@Log4j2
 @Configuration
+@RequiredArgsConstructor
 public class RabbitMQConfig {
 
-    // TODO: You should create the GenericManager bean as indicated in Secrets Manager library
+    private final RabbitMQConnectionProperties rabbitMQConnectionProperties;
+
     @Bean
-    public AsyncPropsDomain.RabbitSecretFiller rabbitSecretFiller(GenericManager genericManager) {
-        return (domain, props) -> {
-            if (props.getSecret() != null) {
-                log.info("Loading RabbitMQ connection properties from secret: {}", props.getSecret());
-                props.setConnectionProperties(getFromSecret(genericManager, props.getSecret()));
-                log.info("RabbitMQ connection properties loaded successfully with host: '{}'",
-                        props.getConnectionProperties().getHost());
+    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+        return domainProperties -> {
+            AsyncProps app = domainProperties.get("app");
+            if (app != null) {
+                app.setConnectionProperties(rabbitMQConnectionProperties.toRabbitProperties());
             }
         };
-    }
-
-    @SneakyThrows
-    private RabbitProperties getFromSecret(GenericManager genericManager, String secretName) {
-        return genericManager.getSecret(secretName, RabbitConnectionProperties.class).toRabbitProperties();
     }
 }
 ```
