@@ -79,6 +79,11 @@ This is the simplest approach and works well when properties do not depend on ru
 
 ### Approach 2 — Fully programmatic (no YAML domains)
 
+:::danger[Deprecated]
+This approach is **deprecated** and will be removed in a future version. Use **Approach 3** instead, which provides
+better separation of concerns and runtime flexibility.
+:::
+
 Override the `AsyncRabbitPropsDomainProperties` bean to define all domains in code.
 **Do not declare any domain under `app.async` in your YAML when using this approach**, as both sources would conflict.
 
@@ -133,11 +138,18 @@ Declare your domains in `application.yaml` as usual, then define a `RabbitPropsC
 properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
 any property on any domain.
 
-:::caution[At least one domain must be declared in YAML]
-The `RabbitPropsCustomizer` works **on top of** YAML-loaded domains. You must declare at least one domain under
-`app.async` in your `application.yaml`. If no domain is found, an `InvalidConfigurationException` will be thrown.
-Do not combine this approach with an `AsyncRabbitPropsDomainProperties` `@Primary` bean.
+:::caution[YAML domains are optional]
+The `RabbitPropsCustomizer` can work with or without pre-existing YAML domains. If no domains are defined in your
+`application.yaml` under `app.async`, you can define all domains directly inside the customizer using
+`domainProperties.put("<domain>", AsyncProps.builder()...build())`. At least one domain must exist after the customizer
+executes, otherwise an `InvalidConfigurationException` is thrown.
 :::
+
+You have two options:
+
+**Option A: Define domains in YAML, then override with customizer**
+
+Declare your domains in `application.yaml` as usual, then use the customizer to override or extend them.
 
 ```yaml title="application.yaml"
 app:
@@ -183,6 +195,49 @@ public class RabbitMQConfig {
       if (accounts != null) {
         accounts.setConnectionProperties(loadFromSecret("secret-accounts-rabbit"));
       }
+    };
+  }
+}
+```
+
+**Option B: Define all domains in the customizer (no YAML domains)**
+
+If you prefer full programmatic control, **omit the `app.async` section entirely from your `application.yaml`** and
+define all domains
+inside the customizer:
+
+```java
+package sample;
+
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class RabbitMQConfig {
+
+  private RabbitProperties loadFromSecret(String secretName) {
+    // ...
+    return new RabbitProperties();
+  }
+
+  @Bean
+  public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+    return domainProperties -> {
+      // Define all domains programmatically
+      domainProperties.put("push", AsyncProps.builder()
+              .withDLQRetry(true)
+              .maxRetries(3)
+              .listenReplies(true)
+              .connectionProperties(loadFromSecret("secret-push-rabbit"))
+              .build());
+
+      domainProperties.put("app", AsyncProps.builder()
+              .listenReplies(false)
+              .connectionProperties(loadFromSecret("secret-app-rabbit"))
+              .build());
     };
   }
 }

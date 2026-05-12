@@ -25,9 +25,9 @@ public class ReactiveCommonsListenersConfig {
 
     /**
      * Builds the {@link DomainHandlers} by resolving all registered {@link HandlerRegistry} beans against each
-     * configured domain. The first configured domain always gets {@link HandlerRegistry#DEFAULT_DOMAIN "app"} as
+     * configured domain. The first configured domain always gets {@link HandlerRegistry#DEFAULT_DOMAIN} as
      * its alias, ensuring that all handlers registered via the standard API (which internally stores them under
-     * "app") are always resolved by the default domain, regardless of its actual name.
+     * the default key) are always resolved by the first domain, regardless of its actual name.
      */
     @Bean
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -41,9 +41,12 @@ public class ReactiveCommonsListenersConfig {
         final Map<String, GenericAsyncPropsDomain> props = context.getBeansOfType(GenericAsyncPropsDomain.class);
         props.forEach((beanName, properties) -> {
             String defaultDomain = properties.getDefaultDomainName();
+            log.info("DEFAULT_DOMAIN: " + defaultDomain);
             properties.forEach((domain, asyncProps) -> {
                 String domainName = (String) domain;
-                String aliasDomain = domainName.equals(defaultDomain) ? HandlerRegistry.DEFAULT_DOMAIN : null;
+                String aliasDomain = domainName.equals(defaultDomain) ? HandlerRegistry.getUnresolvedDomain() : null;
+                log.info("DOMAIN: " + domainName);
+                log.info("ALIAS_DOMAIN: " + aliasDomain);
                 HandlerResolver resolver = HandlerResolverBuilder.buildResolver(
                         domainName, aliasDomain, registries, commandHandler
                 );

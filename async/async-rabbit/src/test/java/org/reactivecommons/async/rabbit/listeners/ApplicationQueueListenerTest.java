@@ -100,7 +100,7 @@ class ApplicationQueueListenerTest extends ListenerReporterTestSuperClass {
 
         assertThat(registry.getQueueHandlers().get("domain1")).hasSize(1);
         assertThat(registry.getQueueHandlers().get("domain2")).hasSize(1);
-        assertThat(registry.getQueueHandlers().get(HandlerRegistry.DEFAULT_DOMAIN)).hasSize(1);
+        assertThat(registry.getQueueHandlers().get(HandlerRegistry.getUnresolvedDomain())).hasSize(1);
     }
 
     @Test

@@ -61,14 +61,15 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
                 throw new InvalidConfigurationException("""
                         RabbitPropsCustomizer was applied but no domain is defined. \
                         When using RabbitPropsCustomizer, you must declare at least one \
-                        domain in your application.yaml (app.async.<domain>.*). \
-                        If you want full programmatic control without YAML, define a @Primary @Bean \
-                        AsyncRabbitPropsDomainProperties using AsyncRabbitPropsDomainProperties.builder().build().""");
+                        domain in your application.yaml (app.async.<domain>.*), or add new \
+                        domains directly inside the customizer using \
+                        domainProperties.put("<domain>", AsyncProps.builder()...build()).""");
             }
         }
         return configured;
     }
 
+    @Deprecated(forRemoval = true, since = "7.0.0")
     public interface RabbitSecretFiller extends SecretFiller<RabbitProperties> {
     }
 

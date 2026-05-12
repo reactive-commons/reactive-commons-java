@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 public class RegisteredDomainHandlers<T> extends ConcurrentHashMap<String, List<T>> {
-    private static final String DEFAULT_DOMAIN = "app";
+    private static final String DEFAULT_DOMAIN = "__default__";
 
     public RegisteredDomainHandlers() {
         super();

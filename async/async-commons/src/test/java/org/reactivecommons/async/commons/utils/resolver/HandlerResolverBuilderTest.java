@@ -16,7 +16,8 @@ class HandlerResolverBuilderTest {
     @Test
     void buildResolverWithEmptyRegistries() {
         var registry = HandlerRegistry.register();
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.hasQueryHandlers()).isFalse();
         assertThat(resolver.hasCommandHandlers()).isFalse();
@@ -28,7 +29,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .serveQuery("my.query", msg -> Mono.just("result"), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.hasQueryHandlers()).isTrue();
         assertThat(resolver.getQueryHandler("my.query")).isNotNull();
@@ -40,7 +42,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .handleCommand("my.cmd", cmd -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.hasCommandHandlers()).isTrue();
         assertThat(resolver.getCommandHandler("my.cmd")).isNotNull();
@@ -52,7 +55,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .listenEvent("my.event", evt -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.getEventListener("my.event")).isNotNull();
     }
@@ -62,7 +66,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .listenNotificationEvent("notif.event", evt -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.hasNotificationListeners()).isTrue();
         assertThat(resolver.getNotificationListener("notif.event")).isNotNull();
@@ -73,7 +78,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .listenQueue("myQueue", msg -> Mono.empty());
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.getQueueListeners()).containsKey("myQueue");
     }
@@ -83,7 +89,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .handleDynamicEvents("event.*", evt -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.getEventListener("event.foo")).isNotNull();
     }
@@ -91,7 +98,8 @@ class HandlerResolverBuilderTest {
     @Test
     void defaultCommandHandlerReturnedForUnknownPath() {
         var registry = HandlerRegistry.register();
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         var handler = resolver.getCommandHandler("unknown.command");
         assertThat(handler).isNotNull();
@@ -105,7 +113,7 @@ class HandlerResolverBuilderTest {
         var registry2 = HandlerRegistry.register()
                 .handleCommand("c1", cmd -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app",
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
                 Map.of("r1", registry1, "r2", registry2), defaultHandler);
 
         assertThat(resolver.hasQueryHandlers()).isTrue();
@@ -128,7 +136,8 @@ class HandlerResolverBuilderTest {
         var registry = HandlerRegistry.register()
                 .handleCommand("other", "other.cmd", cmd -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.hasCommandHandlers()).isFalse();
     }
@@ -139,7 +148,8 @@ class HandlerResolverBuilderTest {
                 .listenEvent("static.event", evt -> Mono.empty(), String.class)
                 .handleDynamicEvents("dynamic.*", evt -> Mono.empty(), String.class);
 
-        var resolver = HandlerResolverBuilder.buildResolver("app", Map.of("r1", registry), defaultHandler);
+        var resolver = HandlerResolverBuilder.buildResolver("app", HandlerRegistry.getUnresolvedDomain(),
+                Map.of("r1", registry), defaultHandler);
 
         assertThat(resolver.getEventListener("static.event")).isNotNull();
         assertThat(resolver.getEventListener("dynamic.foo")).isNotNull();

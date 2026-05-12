@@ -50,7 +50,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static reactor.core.publisher.Mono.empty;
 import static reactor.core.publisher.Mono.just;
 
@@ -146,9 +145,10 @@ public abstract class ListenerReporterTestSuperClass {
     protected abstract GenericMessageListener createMessageListener(final HandlerResolver handlerResolver);
 
     private HandlerResolver createHandlerResolver(final HandlerRegistry registry) {
+        String unresolvedDomain = HandlerRegistry.getUnresolvedDomain();
         Stream<RegisteredEventListener<?, ?>> listenerStream = Stream.concat(
-                registry.getDynamicEventHandlers().get(DEFAULT_DOMAIN).stream(),
-                registry.getDomainEventListeners().get(DEFAULT_DOMAIN).stream());
+                registry.getDynamicEventHandlers().get(unresolvedDomain).stream(),
+                registry.getDomainEventListeners().get(unresolvedDomain).stream());
         if (registry.getDomainEventListeners().containsKey("domain")) {
             listenerStream = Stream.concat(
                     listenerStream,
@@ -157,18 +157,18 @@ public abstract class ListenerReporterTestSuperClass {
         final Map<String, RegisteredEventListener<?, ?>> eventHandlers = listenerStream
                 .collect(toMap(RegisteredEventListener::path, identity()));
         final Map<String, RegisteredEventListener<?, ?>> eventsToBind = registry.getDomainEventListeners()
-                .get(DEFAULT_DOMAIN).stream().collect(toMap(RegisteredEventListener::path, identity()));
+                .get(unresolvedDomain).stream().collect(toMap(RegisteredEventListener::path, identity()));
         final Map<String, RegisteredEventListener<?, ?>> notificationHandlers = registry.getEventNotificationListener()
-                .get(DEFAULT_DOMAIN)
+                .get(unresolvedDomain)
                 .stream().collect(toMap(RegisteredEventListener::path, identity()));
-        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().get(DEFAULT_DOMAIN)
+        final Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = registry.getHandlers().get(unresolvedDomain)
                 .stream()
                 .collect(toMap(RegisteredQueryHandler::path, identity()));
         final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers = registry.getCommandHandlers()
-                .get(DEFAULT_DOMAIN)
+                .get(unresolvedDomain)
                 .stream().collect(toMap(RegisteredCommandHandler::path, identity()));
         final Map<String, RegisteredQueueListener> queueHandlers = registry.getQueueHandlers()
-                .get(DEFAULT_DOMAIN)
+                .get(unresolvedDomain)
                 .stream().collect(toMap(RegisteredQueueListener::queueName, identity()));
         return new HandlerResolver(
                 new ConcurrentHashMap<>(queryHandlers),

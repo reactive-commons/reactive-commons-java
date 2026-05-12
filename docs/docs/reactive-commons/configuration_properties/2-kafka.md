@@ -49,6 +49,11 @@ This is the simplest approach and works well when properties do not depend on ru
 
 ### Approach 2 — Fully programmatic (no YAML domains)
 
+:::danger[Deprecated]
+This approach is **deprecated** and will be removed in a future version. Use **Approach 3** instead, which provides
+better separation of concerns and runtime flexibility.
+:::
+
 Override the `AsyncKafkaPropsDomainProperties` bean to define all domains in code.
 **Do not declare any domain under `reactive.commons.kafka` in your YAML when using this approach**, as both sources
 would conflict.
@@ -95,11 +100,19 @@ Declare your domains in `application.yaml` as usual, then define a `KafkaPropsCu
 properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
 any property on any domain.
 
-:::caution[At least one domain must be declared in YAML]
-The `KafkaPropsCustomizer` works **on top of** YAML-loaded domains. You must declare at least one domain under
-`reactive.commons.kafka` in your `application.yaml`. If no domain is found, an `InvalidConfigurationException` will
-be thrown. Do not combine this approach with an `AsyncKafkaPropsDomainProperties` `@Primary` bean.
+:::caution[YAML domains are optional]
+The `KafkaPropsCustomizer` can work with or without pre-existing YAML domains. If no domains are defined in your
+`application.yaml` under `reactive.commons.kafka`, you can define all domains directly inside the customizer using
+`domainProperties.put("<domain>", AsyncKafkaProps.builder()...build())`. At least one domain must exist after the
+customizer
+executes, otherwise an `InvalidConfigurationException` is thrown.
 :::
+
+You have two options:
+
+**Option A: Define domains in YAML, then override with customizer**
+
+Declare your domains in `application.yaml` as usual, then use the customizer to override or extend them.
 
 ```yaml title="application.yaml"
 reactive:
@@ -108,7 +121,7 @@ reactive:
       app:           # first domain (will be treated as the default)
         retryDelay: 60000
         maxRetries: 3
-      accounts:        # second domain with independent cluster
+      accounts:      # second domain with independent cluster
         retryDelay: 40000
 ```
 
@@ -145,6 +158,48 @@ public class KafkaConfig {
             if (accounts != null) {
                 accounts.setConnectionProperties(loadFromSecret("secret-accounts-kafka"));
             }
+        };
+    }
+}
+```
+
+**Option B: Define all domains in the customizer (no YAML domains)**
+
+If you prefer full programmatic control, **omit the `reactive.commons.kafka` section entirely from
+your `application.yaml`** and define all domains
+inside the customizer:
+
+```java
+package sample;
+
+import org.reactivecommons.async.kafka.config.KafkaProperties;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class KafkaConfig {
+
+    private KafkaProperties loadFromSecret(String secretName) {
+        // ...
+        return new KafkaProperties();
+    }
+
+    @Bean
+    public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer() {
+        return domainProperties -> {
+            // Define all domains programmatically
+            domainProperties.put("app", AsyncKafkaProps.builder()
+                    .retryDelay(60000)
+                    .maxRetries(3)
+                    .connectionProperties(loadFromSecret("secret-app-kafka"))
+                    .build());
+
+            domainProperties.put("accounts", AsyncKafkaProps.builder()
+                    .retryDelay(40000)
+                    .connectionProperties(loadFromSecret("secret-accounts-kafka"))
+                    .build());
         };
     }
 }

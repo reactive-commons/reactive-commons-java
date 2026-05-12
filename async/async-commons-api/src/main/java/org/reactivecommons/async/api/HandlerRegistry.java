@@ -29,6 +29,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 @SuppressWarnings({"unchecked", "unused"})
 public final class HandlerRegistry {
     public static final String DEFAULT_DOMAIN = "app";
+    private static final String UNRESOLVED_DOMAIN = "__default__";
     private final RegisteredDomainHandlers<RegisteredEventListener<?, ?>> domainEventListeners =
             new RegisteredDomainHandlers<>();
     private final RegisteredDomainHandlers<RegisteredEventListener<?, ?>> dynamicEventHandlers =
@@ -41,16 +42,19 @@ public final class HandlerRegistry {
     private final RegisteredDomainHandlers<RegisteredQueueListener> queueHandlers =
             new RegisteredDomainHandlers<>();
 
+    public static String getUnresolvedDomain() {
+        return UNRESOLVED_DOMAIN;
+    }
 
     public static HandlerRegistry register() {
         HandlerRegistry instance = new HandlerRegistry();
-        instance.domainEventListeners.put(DEFAULT_DOMAIN, new CopyOnWriteArrayList<>());
+        instance.domainEventListeners.put(UNRESOLVED_DOMAIN, new CopyOnWriteArrayList<>());
         return instance;
     }
 
     //events: DomainEvent
     public <T> HandlerRegistry listenEvent(String eventName, DomainEventHandler<T> handler, Class<T> eventClass) {
-        return listenDomainEvent(DEFAULT_DOMAIN, eventName, handler, eventClass);
+        return listenDomainEvent(UNRESOLVED_DOMAIN, eventName, handler, eventClass);
     }
 
     public <T> HandlerRegistry listenDomainEvent(String domain, String eventName, DomainEventHandler<T> handler,
@@ -61,7 +65,7 @@ public final class HandlerRegistry {
 
     // events: CloudEvent
     public HandlerRegistry listenCloudEvent(String eventName, CloudEventHandler handler) {
-        return listenDomainCloudEvent(DEFAULT_DOMAIN, eventName, handler);
+        return listenDomainCloudEvent(UNRESOLVED_DOMAIN, eventName, handler);
     }
 
     public HandlerRegistry listenDomainCloudEvent(String domain, String eventName, CloudEventHandler handler) {
@@ -71,7 +75,7 @@ public final class HandlerRegistry {
 
     // events: RawMessage
     public HandlerRegistry listenRawEvent(String eventName, RawEventHandler<?> handler) {
-        return listenDomainRawEvent(DEFAULT_DOMAIN, eventName, handler);
+        return listenDomainRawEvent(UNRESOLVED_DOMAIN, eventName, handler);
     }
 
     public HandlerRegistry listenDomainRawEvent(String domain, String eventName, RawEventHandler<?> handler) {
@@ -82,7 +86,7 @@ public final class HandlerRegistry {
     // notifications: DomainEvent
     public <T> HandlerRegistry listenNotificationEvent(String eventName, DomainEventHandler<T> handler,
                                                        Class<T> eventClass) {
-        return listenNotificationEvent(DEFAULT_DOMAIN, eventName, handler, eventClass);
+        return listenNotificationEvent(UNRESOLVED_DOMAIN, eventName, handler, eventClass);
     }
 
     public <T> HandlerRegistry listenNotificationEvent(String domain, String eventName, DomainEventHandler<T> handler,
@@ -93,7 +97,7 @@ public final class HandlerRegistry {
 
     // notifications: CloudEvent
     public HandlerRegistry listenNotificationCloudEvent(String eventName, CloudEventHandler handler) {
-        return listenNotificationCloudEvent(DEFAULT_DOMAIN, eventName, handler);
+        return listenNotificationCloudEvent(UNRESOLVED_DOMAIN, eventName, handler);
     }
 
     public HandlerRegistry listenNotificationCloudEvent(String domain, String eventName, CloudEventHandler handler) {
@@ -103,7 +107,7 @@ public final class HandlerRegistry {
 
     // notifications: RawMessage
     public HandlerRegistry listenNotificationRawEvent(String eventName, RawEventHandler<?> handler) {
-        return listenNotificationRawEvent(DEFAULT_DOMAIN, eventName, handler);
+        return listenNotificationRawEvent(UNRESOLVED_DOMAIN, eventName, handler);
     }
 
     public HandlerRegistry listenNotificationRawEvent(String domain, String eventName, RawEventHandler<?> handler) {
@@ -114,20 +118,20 @@ public final class HandlerRegistry {
     // dynamic: DomainEvent supported only for default domain
     public <T> HandlerRegistry handleDynamicEvents(String eventNamePattern, DomainEventHandler<T> handler,
                                                    Class<T> eventClass) {
-        dynamicEventHandlers.add(DEFAULT_DOMAIN, new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
+        dynamicEventHandlers.add(UNRESOLVED_DOMAIN, new RegisteredEventListener<>(eventNamePattern, handler, eventClass));
         return this;
     }
 
     // dynamic: CloudEvent supported only for default domain
     public HandlerRegistry handleDynamicCloudEvents(String eventNamePattern, CloudEventHandler handler) {
-        dynamicEventHandlers.add(DEFAULT_DOMAIN, new RegisteredEventListener<>(eventNamePattern, handler,
+        dynamicEventHandlers.add(UNRESOLVED_DOMAIN, new RegisteredEventListener<>(eventNamePattern, handler,
                 CloudEvent.class));
         return this;
     }
 
     // commands: Command
     public <T> HandlerRegistry handleCommand(String commandName, DomainCommandHandler<T> fn, Class<T> commandClass) {
-        return handleCommand(DEFAULT_DOMAIN, commandName, fn, commandClass);
+        return handleCommand(UNRESOLVED_DOMAIN, commandName, fn, commandClass);
     }
 
     public <T> HandlerRegistry handleCommand(String domain, String commandName, DomainCommandHandler<T> fn,
@@ -138,7 +142,7 @@ public final class HandlerRegistry {
 
     // commands: CloudEvent
     public HandlerRegistry handleCloudEventCommand(String commandName, CloudCommandHandler handler) {
-        return handleCloudEventCommand(DEFAULT_DOMAIN, commandName, handler);
+        return handleCloudEventCommand(UNRESOLVED_DOMAIN, commandName, handler);
     }
 
     public HandlerRegistry handleCloudEventCommand(String domain, String commandName, CloudCommandHandler handler) {
@@ -148,7 +152,7 @@ public final class HandlerRegistry {
 
     // commands: RawMessage
     public HandlerRegistry handleRawCommand(RawCommandHandler<?> handler) {
-        return handleRawCommand(DEFAULT_DOMAIN, handler);
+        return handleRawCommand(UNRESOLVED_DOMAIN, handler);
     }
 
     public HandlerRegistry handleRawCommand(String domain, RawCommandHandler<?> handler) {
@@ -158,26 +162,26 @@ public final class HandlerRegistry {
 
     // queries: Query
     public <T, R> HandlerRegistry serveQuery(String resource, QueryHandler<T, R> handler, Class<R> queryClass) {
-        handlers.add(DEFAULT_DOMAIN, new RegisteredQueryHandler<>(resource, (ignored, message) ->
+        handlers.add(UNRESOLVED_DOMAIN, new RegisteredQueryHandler<>(resource, (ignored, message) ->
                 handler.handle(message), queryClass
         ));
         return this;
     }
 
     public <R> HandlerRegistry serveQuery(String resource, QueryHandlerDelegate<Void, R> handler, Class<R> queryClass) {
-        handlers.add(DEFAULT_DOMAIN, new RegisteredQueryHandler<>(resource, handler, queryClass));
+        handlers.add(UNRESOLVED_DOMAIN, new RegisteredQueryHandler<>(resource, handler, queryClass));
         return this;
     }
 
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler) {
-        handlers.add(DEFAULT_DOMAIN, new RegisteredQueryHandler<>(resource, (ignored, message) ->
+        handlers.add(UNRESOLVED_DOMAIN, new RegisteredQueryHandler<>(resource, (ignored, message) ->
                 handler.handle(message), CloudEvent.class
         ));
         return this;
     }
 
     public HandlerRegistry serveCloudEventQuery(String resource, QueryHandlerDelegate<Void, CloudEvent> handler) {
-        handlers.add(DEFAULT_DOMAIN, new RegisteredQueryHandler<>(resource, handler, CloudEvent.class));
+        handlers.add(UNRESOLVED_DOMAIN, new RegisteredQueryHandler<>(resource, handler, CloudEvent.class));
         return this;
     }
 
@@ -192,7 +196,7 @@ public final class HandlerRegistry {
 
     public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler,
                                        TopologyHandlerSetup topologyCreator) {
-        queueHandlers.add(DEFAULT_DOMAIN, new RegisteredQueueListener(queueName, handler, topologyCreator));
+        queueHandlers.add(UNRESOLVED_DOMAIN, new RegisteredQueueListener(queueName, handler, topologyCreator));
         return this;
     }
 
@@ -214,7 +218,7 @@ public final class HandlerRegistry {
 
     @Deprecated(forRemoval = true)
     public <T> HandlerRegistry handleCommand(String commandName, DomainCommandHandler<T> handler) {
-        commandHandlers.add(DEFAULT_DOMAIN, new RegisteredCommandHandler<>(commandName, handler,
+        commandHandlers.add(UNRESOLVED_DOMAIN, new RegisteredCommandHandler<>(commandName, handler,
                 inferGenericParameterType(handler)));
         return this;
     }

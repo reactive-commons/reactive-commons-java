@@ -7,14 +7,14 @@ import org.reactivecommons.async.starter.exceptions.InvalidConfigurationExceptio
 import tools.jackson.databind.json.JsonMapper;
 
 import java.lang.reflect.Constructor;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
 
 @Getter
 @Setter
-public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends HashMap<String, T> {
+public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends LinkedHashMap<String, T> {
     private Class<T> asyncPropsClass;
     private Class<P> propsClass;
     private String defaultDomainName;
@@ -93,7 +93,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         private final Class<X> asyncPropsDomainClass;
         private final Constructor<R> returnType;
         private String defaultAppName;
-        private final HashMap<String, T> domains = new HashMap<>();
+        private final Map<String, T> domains = new LinkedHashMap<>();
         private P defaultProperties;
         private SecretFiller<P> secretFiller;
 
@@ -147,6 +147,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
 
     }
 
+    @Deprecated(forRemoval = true, since = "7.0.0")
     public interface SecretFiller<P> {
         void fillWithSecret(String domain, GenericAsyncProps<P> props);
     }

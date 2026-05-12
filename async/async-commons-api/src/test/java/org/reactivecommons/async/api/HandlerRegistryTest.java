@@ -21,9 +21,9 @@ import reactor.core.publisher.Mono;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 class HandlerRegistryTest {
+    private static final String UNRESOLVED_DOMAIN = HandlerRegistry.getUnresolvedDomain();
     private final HandlerRegistry registry = HandlerRegistry.register();
     private final String name = "some.event";
     private final String nameRawNotification = "some.raw.notification.event";
@@ -64,7 +64,7 @@ class HandlerRegistryTest {
 
         registry.listenRawEvent(name, eventHandler);
 
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDomainEventListeners().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -78,7 +78,7 @@ class HandlerRegistryTest {
 
         registry.listenEvent(name, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDomainEventListeners().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -92,7 +92,7 @@ class HandlerRegistryTest {
 
         registry.listenCloudEvent(name, eventHandler);
 
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDomainEventListeners().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -110,7 +110,7 @@ class HandlerRegistryTest {
         RegisteredEventListener<SomeDataClass, DomainEvent<SomeDataClass>> expectedRegisteredEventListener =
                 new RegisteredEventListener<>(eventNamePattern, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDomainEventListeners().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registeredEventListener -> assertThat(registeredEventListener)
                         .usingRecursiveComparison()
                         .isEqualTo(expectedRegisteredEventListener));
@@ -122,14 +122,14 @@ class HandlerRegistryTest {
     @Test
     void shouldRegisterNotificationEventListener() {
         registry.listenNotificationEvent(name, message -> Mono.empty(), SomeDataClass.class);
-        assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
+        assertThat(registry.getEventNotificationListener().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(listener -> assertThat(listener.path()).isEqualTo(name));
     }
 
     @Test
     void shouldRegisterNotificationCloudEventListener() {
         registry.listenNotificationCloudEvent(name, message -> Mono.empty());
-        assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
+        assertThat(registry.getEventNotificationListener().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(listener -> assertThat(listener.path()).isEqualTo(name));
     }
 
@@ -139,7 +139,7 @@ class HandlerRegistryTest {
 
         registry.listenNotificationRawEvent(nameRawNotification, eventHandler);
 
-        assertThat(registry.getEventNotificationListener().get(DEFAULT_DOMAIN))
+        assertThat(registry.getEventNotificationListener().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -153,7 +153,7 @@ class HandlerRegistryTest {
         SomeDomainEventHandler<SomeDataClass> handler = mock(SomeDomainEventHandler.class);
         registry.listenEvent(name, handler, SomeDataClass.class);
 
-        assertThat(registry.getDomainEventListeners().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDomainEventListeners().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -167,7 +167,7 @@ class HandlerRegistryTest {
 
         registry.handleDynamicEvents(name, eventHandler, SomeDataClass.class);
 
-        assertThat(registry.getDynamicEventHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDynamicEventHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -181,7 +181,7 @@ class HandlerRegistryTest {
 
         registry.handleDynamicCloudEvents(name, eventHandler);
 
-        assertThat(registry.getDynamicEventHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getDynamicEventHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredEventListener::path, RegisteredEventListener::inputClass,
                                 RegisteredEventListener::handler
@@ -195,7 +195,7 @@ class HandlerRegistryTest {
 
         registry.handleCommand(name, handler, SomeDataClass.class);
 
-        assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getCommandHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass,
                                 RegisteredCommandHandler::handler
@@ -209,7 +209,7 @@ class HandlerRegistryTest {
 
         registry.handleCloudEventCommand(name, cloudCommandHandler);
 
-        assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getCommandHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass,
                                 RegisteredCommandHandler::handler
@@ -223,7 +223,7 @@ class HandlerRegistryTest {
 
         registry.handleRawCommand(eventHandler);
 
-        assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getCommandHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass,
                                 RegisteredCommandHandler::handler
@@ -237,7 +237,7 @@ class HandlerRegistryTest {
 
         registry.serveCloudEventQuery(name, queryHandler);
 
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                         .containsExactly(name, CloudEvent.class)).hasSize(1);
@@ -247,7 +247,7 @@ class HandlerRegistryTest {
     void handleCommandWithLambda() {
         registry.handleCommand(name, (Command<SomeDataClass> message) -> Mono.empty(), SomeDataClass.class);
 
-        assertThat(registry.getCommandHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getCommandHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredCommandHandler::path, RegisteredCommandHandler::inputClass)
                         .containsExactly(name, SomeDataClass.class)).hasSize(1);
@@ -257,7 +257,7 @@ class HandlerRegistryTest {
     @Test
     void serveQueryWithLambda() {
         registry.serveQuery(name, message -> Mono.empty(), SomeDataClass.class);
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                         .containsExactly(name, SomeDataClass.class)).hasSize(1);
@@ -267,7 +267,7 @@ class HandlerRegistryTest {
     void serveQueryWithTypeInference() {
         QueryHandler<SomeDataClass, SomeDataClass> handler = new SomeQueryHandler();
         registry.serveQuery(name, handler, SomeDataClass.class);
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN)).anySatisfy(registered -> {
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN)).anySatisfy(registered -> {
             assertThat(registered).extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                     .containsExactly(name, SomeDataClass.class);
             assertThat(registered).extracting(RegisteredQueryHandler::handler)
@@ -279,7 +279,7 @@ class HandlerRegistryTest {
     void serveQueryDelegate() {
         QueryHandlerDelegate<Void, SomeDataClass> handler = new SomeQueryHandlerDelegate();
         registry.serveQuery(name, handler, SomeDataClass.class);
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN)).anySatisfy(registered ->
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN)).anySatisfy(registered ->
                         assertThat(registered)
                                 .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                                 .containsExactly(name, SomeDataClass.class))
@@ -289,7 +289,7 @@ class HandlerRegistryTest {
     @Test
     void serveQueryDelegateWithLambda() {
         registry.serveQuery(name, (from, message) -> Mono.empty(), SomeDataClass.class);
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN)).anySatisfy(registered ->
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN)).anySatisfy(registered ->
                         assertThat(registered)
                                 .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                                 .containsExactly(name, SomeDataClass.class))
@@ -366,7 +366,7 @@ class HandlerRegistryTest {
     void serveCloudEventQueryDelegate() {
         QueryHandlerDelegate<Void, CloudEvent> delegate = (from, ce) -> Mono.empty();
         registry.serveCloudEventQuery(name, delegate);
-        assertThat(registry.getHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(registered -> assertThat(registered)
                         .extracting(RegisteredQueryHandler::path, RegisteredQueryHandler::queryClass)
                         .containsExactly(name, CloudEvent.class)).hasSize(1);
@@ -375,7 +375,7 @@ class HandlerRegistryTest {
     @Test
     void listenQueueSimple() {
         registry.listenQueue("myQueue", msg -> Mono.empty());
-        assertThat(registry.getQueueHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getQueueHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
     }
 
@@ -389,7 +389,7 @@ class HandlerRegistryTest {
     @Test
     void listenQueueWithTopology() {
         registry.listenQueue("myQueue", msg -> Mono.empty(), creator -> Mono.empty());
-        assertThat(registry.getQueueHandlers().get(DEFAULT_DOMAIN))
+        assertThat(registry.getQueueHandlers().get(UNRESOLVED_DOMAIN))
                 .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
     }
 

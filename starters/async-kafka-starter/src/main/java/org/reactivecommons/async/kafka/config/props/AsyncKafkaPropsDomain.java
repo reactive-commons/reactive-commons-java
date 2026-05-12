@@ -54,14 +54,15 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                 throw new InvalidConfigurationException("""
                         KafkaPropsCustomizer was applied but no domain is defined. \
                         When using KafkaPropsCustomizer, you must declare at least one \
-                        domain in your application.yaml (reactive.commons.kafka.<domain>.*). \
-                        If you want full programmatic control without YAML, define a @Primary @Bean \
-                        AsyncKafkaPropsDomainProperties using AsyncKafkaPropsDomainProperties.builder().build().""");
+                        domain in your application.yaml (reactive.commons.kafka.<domain>.*), or add new \
+                        domains directly inside the customizer using \
+                        domainProperties.put("<domain>", AsyncKafkaProps.builder()...build()).""");
             }
         }
         return configured;
     }
 
+    @Deprecated(forRemoval = true, since = "7.0.0")
     public interface KafkaSecretFiller extends GenericAsyncPropsDomain.SecretFiller<KafkaProperties> {
     }
 
