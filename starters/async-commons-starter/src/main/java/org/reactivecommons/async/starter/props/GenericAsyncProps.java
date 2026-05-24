@@ -13,6 +13,7 @@ import lombok.experimental.SuperBuilder;
 @SuperBuilder
 public abstract class GenericAsyncProps<P> {
     private String appName;
+    private String groupId;
     private String secret;
 
     public abstract void setConnectionProperties(P properties);
