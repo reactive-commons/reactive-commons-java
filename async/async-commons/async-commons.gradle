@@ -11,7 +11,7 @@ dependencies {
     compileOnly 'io.projectreactor:reactor-core'
     api 'tools.jackson.core:jackson-databind'
     implementation 'commons-io:commons-io:2.22.0'
-    implementation 'io.cloudevents:cloudevents-core:4.0.2'
+    implementation 'io.cloudevents:cloudevents-core:4.1.0'
 
     testImplementation 'io.projectreactor:reactor-test'
 }
