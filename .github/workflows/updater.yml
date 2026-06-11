@@ -38,4 +38,3 @@ jobs:
           branch: 'feature/autoupdate-deps'
           base: 'master'
           labels: 'dependencies'
-          reviewers: 'juancgalvis'

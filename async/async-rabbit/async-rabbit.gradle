@@ -15,6 +15,6 @@ dependencies {
     api 'com.rabbitmq:amqp-client'
     api 'tools.jackson.core:jackson-databind'
 
-    implementation 'io.cloudevents:cloudevents-core:4.0.2'
+    implementation 'io.cloudevents:cloudevents-core:4.1.1'
     testImplementation 'io.projectreactor:reactor-test'
 }
