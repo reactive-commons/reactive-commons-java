@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.2.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.2.2) (2026-06-17)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.2.1...v7.2.2)
+
+**Merged pull requests:**
+
+- fix: prevent RabbitMQ consumer duplication [\#172](https://github.com/reactive-commons/reactive-commons-java/pull/172) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.2.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.2.1) (2026-06-11)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.2.0...v7.2.1)
