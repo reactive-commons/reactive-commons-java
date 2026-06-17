@@ -11,6 +11,7 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
 
@@ -52,6 +54,7 @@ public abstract class GenericMessageListener {
     private final String objectType;
     private final CustomReporter customReporter;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
+    private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
 
     protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                      boolean createTopology, long maxRetries, long retryDelay,
@@ -165,9 +168,13 @@ public abstract class GenericMessageListener {
     }
 
     private void onTerminate() {
-        messageFlux
+        final Disposable subscription = messageFlux
                 .doOnTerminate(this::onTerminate)
-                .subscribe(new LoggerSubscriber<>(getClass().getName()));
+                .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
+        final Disposable previous = activeSubscription.getAndSet(subscription);
+        if (previous != null && previous != subscription) {
+            previous.dispose();
+        }
     }
 
     private void logExecution(String executorPath, Instant initTime, boolean success) {
