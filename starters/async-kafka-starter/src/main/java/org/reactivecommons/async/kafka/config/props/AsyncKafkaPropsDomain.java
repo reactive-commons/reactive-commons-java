@@ -19,6 +19,7 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
 
     @Autowired
     public AsyncKafkaPropsDomain(@Value("${spring.application.name}") String defaultAppName,
+                                 @Value("${spring.kafka.consumer.group.id}") String groupId,
                                  KafkaProperties defaultKafkaProperties,
                                  AsyncKafkaPropsDomainProperties configured,
                                  KafkaSecretFiller kafkaSecretFiller,
@@ -32,7 +33,7 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                                  KafkaProperties defaultKafkaProperties,
                                  AsyncKafkaPropsDomainProperties configured,
                                  KafkaSecretFiller kafkaSecretFiller) {
-        super(defaultAppName, defaultKafkaProperties, configured, kafkaSecretFiller, AsyncKafkaProps.class,
+        super(defaultAppName, groupId, defaultKafkaProperties, configured, kafkaSecretFiller, AsyncKafkaProps.class,
                 KafkaProperties.class);
     }
 
