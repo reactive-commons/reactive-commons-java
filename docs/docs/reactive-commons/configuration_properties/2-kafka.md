@@ -30,8 +30,6 @@ reactive:
         brokerType: "kafka" # please don't change this value
         domain:
           ignoreThisListener: false # Allows you to disable event listener for this specific domain
-          events:
-            eventsSuffix: events # consumer group suffix used only when consumer.group-id is not set, group id will be like ${spring.application.name}-${eventsSuffix}
         connectionProperties: # you can override the connection properties of each domain
           bootstrap-servers: localhost:9092
           consumer:
@@ -87,7 +85,7 @@ propertiesApp.getProperties().put("sasl.mechanism","SCRAM-SHA-512");
 
 Everything under `connectionProperties` is translated into plain Kafka client properties when the consumer, producer and
 admin clients are created (`buildConsumerProperties()`, `buildProducerProperties()`, `buildAdminProperties()`). Within
-the consumer, precedence is: `connectionProperties.properties` (common),`connectionProperties.consumer.*`
+the consumer, precedence is: `connectionProperties.properties` (common), `connectionProperties.consumer.*`
 typed fields, `connectionProperties.consumer.properties` (raw consumer-specific).
 
 ## Consumer group for domain events
@@ -125,8 +123,7 @@ Resolution order for the events consumer group id:
 1. The `group.id` present in the consumer connection properties, no matter how it was provided:
    `connectionProperties.consumer.group-id`, `connectionProperties.consumer.properties."group.id"` or
    `connectionProperties.properties."group.id"`. It is used **exactly as configured**, without appending any suffix.
-2. Otherwise, the value defined by the `domain.events.eventsSuffix` properties is used, preserving the default
-   configuration.
+2. Otherwise `${spring.application.name}-events`, the default convention.
 
 Each domain resolves its own group id, so you can authorize a different consumer group per Kafka cluster.
 
@@ -211,7 +208,7 @@ public class KafkaConfig {
 `domainProperties` is a map of domains, so `domainProperties.put("app", AsyncKafkaProps.builder()...build())`
 **replaces the whole domain** and every value bound from `application.yaml` for that domain is lost, including
 `connectionProperties`, which goes back to its defaults (`localhost:9092`, no `group.id`, hence a consumer group
-resolved as `domain.events.eventsSuffix`).
+resolved as `${spring.application.name}-events`).
 
 The same happens with `app.setConnectionProperties(newKafkaProperties)`: it replaces the whole connection properties
 object, so anything configured in YAML under `connectionProperties` (for example `consumer.group-id`) is discarded.

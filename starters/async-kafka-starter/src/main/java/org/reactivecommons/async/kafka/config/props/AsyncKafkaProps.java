@@ -54,8 +54,13 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
     @Builder.Default
     private String brokerType = "kafka";
 
+    private static final String EVENTS_GROUP_ID_SUFFIX = "-events";
+
     /**
      * Resolves the consumer group id used by the domain events listener.
+     * <p>
+     * It takes the <code>group.id</code> configured in the consumer connection properties, and falls back to
+     * <code>appName + "-events"</code> when it is not present.
      *
      * @return the consumer group id for the domain events listener
      */
@@ -65,6 +70,6 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
         if (configured instanceof String groupId && !groupId.isBlank()) {
             return groupId;
         }
-        return getAppName() + "-" + getDomain().getEvents().getEventsSuffix();
+        return getAppName() + EVENTS_GROUP_ID_SUFFIX;
     }
 }

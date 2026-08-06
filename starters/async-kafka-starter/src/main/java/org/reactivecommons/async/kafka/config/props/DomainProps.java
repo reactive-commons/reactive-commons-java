@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
 @Getter
 @Setter
@@ -14,9 +13,9 @@ import org.springframework.boot.context.properties.NestedConfigurationProperty;
 @Builder
 public class DomainProps {
 
-    @NestedConfigurationProperty
-    @Builder.Default
-    private EventsProps events = new EventsProps();
+//    @NestedConfigurationProperty
+//    @Builder.Default
+//    private EventsProps events = new EventsProps();
 
     @Builder.Default
     private boolean ignoreThisListener = false;

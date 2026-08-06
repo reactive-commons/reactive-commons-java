@@ -18,18 +18,7 @@ class AsyncKafkaPropsGroupIdTest {
     void shouldResolveDefaultGroupIdFromAppNameWhenNoGroupIdConfigured() {
         AsyncKafkaProps props = propsWith(new KafkaProperties());
 
-        assertThat(props.getDomain().getEvents().getEventsSuffix()).isEqualTo("events");
         assertThat(props.resolveEventsGroupId()).isEqualTo("sample-app-events");
-    }
-
-    @Test
-    void shouldResolveDefaultGroupIdWithCustomEventsSuffix() {
-        AsyncKafkaProps props = propsWith(new KafkaProperties());
-        props.setDomain(DomainProps.builder()
-                .events(EventsProps.builder().eventsSuffix("subsEvents").build())
-                .build());
-
-        assertThat(props.resolveEventsGroupId()).isEqualTo("sample-app-subsEvents");
     }
 
     @Test

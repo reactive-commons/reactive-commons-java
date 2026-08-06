@@ -17,8 +17,6 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
-import org.reactivecommons.async.kafka.config.props.DomainProps;
-import org.reactivecommons.async.kafka.config.props.EventsProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
@@ -120,24 +118,6 @@ class KafkaBrokerProviderTest {
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
         verify(listener, times(1)).listen(eq("test-events"), any());
-    }
-
-    @Test
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    void shouldListenDomainEventsWithCustomEventsSuffix() {
-        props.setDomain(DomainProps.builder()
-                .events(EventsProps.builder().eventsSuffix("subsEvents").build())
-                .build());
-        List mockedListeners = spy(List.of());
-        when(mockedListeners.isEmpty()).thenReturn(false);
-        when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
-        when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
-        // Act
-        brokerProvider.listenDomainEvents(handlerResolver);
-        // Assert
-        verify(listener, times(1)).listen(eq("test-subsEvents"), any());
     }
 
     @Test
