@@ -79,24 +79,10 @@ Equivalent programmatic definition:
 
 ```java
 var propertiesApp = new KafkaProperties();
-propertiesApp.
-
-setBootstrapServers(List.of("broker1:9094", "broker2:9094"));
-        propertiesApp.
-
-getConsumer().
-
-setGroupId("dummy.consumer-group");
-propertiesApp.
-
-getSecurity().
-
-setProtocol("SASL_SSL");
-propertiesApp.
-
-getProperties().
-
-put("sasl.mechanism","SCRAM-SHA-512");
+propertiesApp.setBootstrapServers(List.of("broker1:9094", "broker2:9094"));
+propertiesApp.getConsumer().setGroupId("dummy.consumer-group");
+propertiesApp.getSecurity().setProtocol("SASL_SSL");
+propertiesApp.getProperties().put("sasl.mechanism","SCRAM-SHA-512");
 ```
 
 Everything under `connectionProperties` is translated into plain Kafka client properties when the consumer, producer and
