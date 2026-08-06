@@ -57,8 +57,8 @@ public class AsyncKafkaPropsDomain extends GenericAsyncPropsDomain<AsyncKafkaPro
                 throw new InvalidConfigurationException("""
                         KafkaPropsCustomizer was applied but the default domain 'app' is not defined. \
                         When using KafkaPropsCustomizer, you must declare the 'app' domain in your \
-                        application.yaml (reactive.commons.kafka.app.*), or add the 'app' domain (or any other new domain) \
-                        directly inside the customizer using \
+                        application.yaml (reactive.commons.kafka.app.*), or add the 'app' domain \
+                        (or any other new domain) directly inside the customizer using \
                         domainProperties.put("app", AsyncKafkaProps.builder()...build()).""");
             }
         }

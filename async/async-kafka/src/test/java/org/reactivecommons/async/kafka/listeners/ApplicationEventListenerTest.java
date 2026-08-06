@@ -15,10 +15,13 @@ import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
+import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -52,7 +55,7 @@ class ApplicationEventListenerTest {
                 1000,
                 null,
                 null,
-                "testApp"
+                "testApp-events"
         );
 
     }
@@ -95,5 +98,31 @@ class ApplicationEventListenerTest {
 
         verify(resolver, times(1)).getEventListener(anyString());
         verify(messageConverter, times(1)).readCloudEvent(any(Message.class));
+    }
+
+    @Test
+    void shouldUseTheGivenGroupId() {
+        ApplicationEventListener listener = buildListener("dummy.consumer-group");
+        when(receiver.getMaxConcurrency()).thenReturn(1);
+        when(receiver.listen(anyString(), any())).thenReturn(Flux.never());
+
+        listener.startListener(mock(TopologyCreator.class));
+
+        verify(receiver, times(1)).listen(eq("dummy.consumer-group"), any());
+    }
+
+    private ApplicationEventListener buildListener(String groupId) {
+        return new ApplicationEventListener(
+                receiver,
+                resolver,
+                messageConverter,
+                true,
+                false,
+                3,
+                1000,
+                null,
+                null,
+                groupId
+        );
     }
 }

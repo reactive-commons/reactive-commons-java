@@ -19,4 +19,9 @@ public class AsyncRabbitPropsDomainProperties extends GenericAsyncPropsDomainPro
             AsyncRabbitPropsDomainProperties> builder() {
         return GenericAsyncPropsDomainProperties.builder(AsyncRabbitPropsDomainProperties.class);
     }
+
+    @Override
+    protected AsyncProps createProps() {
+        return new AsyncProps();
+    }
 }

@@ -19,4 +19,9 @@ public class AsyncKafkaPropsDomainProperties extends GenericAsyncPropsDomainProp
             AsyncKafkaPropsDomainProperties> builder() {
         return GenericAsyncPropsDomainProperties.builder(AsyncKafkaPropsDomainProperties.class);
     }
+
+    @Override
+    protected AsyncKafkaProps createProps() {
+        return new AsyncKafkaProps();
+    }
 }

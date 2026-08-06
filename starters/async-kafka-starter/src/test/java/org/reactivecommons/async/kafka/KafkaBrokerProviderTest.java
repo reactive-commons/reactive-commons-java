@@ -32,6 +32,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -116,7 +117,23 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(any(String.class), any());
+        verify(listener, times(1)).listen(eq("test-events"), any());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldListenDomainEventsWithExplicitGroupIdFromConnectionProperties() {
+        props.getConnectionProperties().getConsumer().setGroupId("dummy.consumer-group");
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenDomainEvents(handlerResolver);
+        // Assert
+        verify(listener, times(1)).listen(eq("dummy.consumer-group"), any());
     }
 
     @Test

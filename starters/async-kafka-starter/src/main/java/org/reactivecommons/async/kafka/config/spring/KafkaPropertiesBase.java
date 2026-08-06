@@ -1,5 +1,5 @@
 /*
- * Copied from: https://github.com/spring-projects/spring-boot/blob/2639d1ead5223889738e85f5216a4b8989f2b9fb/module/spring-boot-kafka/src/main/java/org/springframework/boot/kafka/autoconfigure/KafkaProperties.java
+ * Copied from: https://github.com/spring-projects/spring-boot/blob/4.1.x/module/spring-boot-kafka/src/main/java/org/springframework/boot/kafka/autoconfigure/KafkaProperties.java
  *
  * Copyright 2012-present the original author or authors.
  *
@@ -18,16 +18,6 @@
 
 package org.reactivecommons.async.kafka.config.spring;
 
-import java.io.IOException;
-import java.time.Duration;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -35,8 +25,6 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.jspecify.annotations.Nullable;
-
-
 import org.springframework.boot.context.properties.PropertyMapper;
 import org.springframework.boot.context.properties.source.MutuallyExclusiveConfigurationPropertiesException;
 import org.springframework.boot.convert.DurationUnit;
@@ -46,6 +34,16 @@ import org.springframework.kafka.security.jaas.KafkaJaasLoginModuleInitializer;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import org.springframework.util.unit.DataSize;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Configuration properties for Spring for Apache Kafka.
@@ -183,6 +181,7 @@ public class KafkaPropertiesBase {
      * <p>
      * This allows you to add additional properties, if necessary, and override the
      * default {@code kafkaConsumerFactory} bean.
+     *
      * @return the consumer properties initialized with the customizations defined on this
      * instance
      */
@@ -197,6 +196,7 @@ public class KafkaPropertiesBase {
      * <p>
      * This allows you to add additional properties, if necessary, and override the
      * default {@code kafkaProducerFactory} bean.
+     *
      * @return the producer properties initialized with the customizations defined on this
      * instance
      */
@@ -211,6 +211,7 @@ public class KafkaPropertiesBase {
      * <p>
      * This allows you to add additional properties, if necessary, and override the
      * default {@code kafkaAdmin} bean.
+     *
      * @return the admin properties initialized with the customizations defined on this
      * instance
      */
@@ -224,6 +225,7 @@ public class KafkaPropertiesBase {
      * Create an initial map of streams properties from the state of this instance.
      * <p>
      * This allows you to add additional properties, if necessary.
+     *
      * @return the streams properties initialized with the customizations defined on this
      * instance
      */
@@ -920,6 +922,16 @@ public class KafkaPropertiesBase {
         private @Nullable String transactionIdPrefix;
 
         /**
+         * Maximum time to wait when closing a producer.
+         */
+        private Duration closeTimeout = Duration.ofSeconds(5);
+
+        /**
+         * Whether to allow sending non-transactional messages.
+         */
+        private boolean allowNonTransactional;
+
+        /**
          * Whether to enable observation.
          */
         private boolean observationEnabled;
@@ -938,6 +950,22 @@ public class KafkaPropertiesBase {
 
         public void setTransactionIdPrefix(@Nullable String transactionIdPrefix) {
             this.transactionIdPrefix = transactionIdPrefix;
+        }
+
+        public Duration getCloseTimeout() {
+            return this.closeTimeout;
+        }
+
+        public void setCloseTimeout(Duration closeTimeout) {
+            this.closeTimeout = closeTimeout;
+        }
+
+        public boolean isAllowNonTransactional() {
+            return this.allowNonTransactional;
+        }
+
+        public void setAllowNonTransactional(boolean allowNonTransactional) {
+            this.allowNonTransactional = allowNonTransactional;
         }
 
         public boolean isObservationEnabled() {
@@ -1457,8 +1485,7 @@ public class KafkaPropertiesBase {
         private String resourceToPath(Resource resource) {
             try {
                 return resource.getFile().getAbsolutePath();
-            }
-            catch (IOException ex) {
+            } catch (IOException ex) {
                 throw new IllegalStateException("Resource '" + resource + "' must be on a file system", ex);
             }
         }
@@ -1719,7 +1746,7 @@ public class KafkaPropertiesBase {
     private static final class Properties extends HashMap<String, Object> {
 
         <V> java.util.function.Consumer<V> in(String key) {
-            return (value) -> put(key, value);
+            return value -> put(key, value);
         }
 
         Properties with(Ssl ssl, Security security, Map<String, String> properties) {
