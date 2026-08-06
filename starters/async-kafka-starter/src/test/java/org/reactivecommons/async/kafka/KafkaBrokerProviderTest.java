@@ -17,6 +17,8 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.config.props.DomainProps;
+import org.reactivecommons.async.kafka.config.props.EventsProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
@@ -32,6 +34,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -116,7 +119,41 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(any(String.class), any());
+        verify(listener, times(1)).listen(eq("test-events"), any());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldListenDomainEventsWithCustomEventsSuffix() {
+        props.setDomain(DomainProps.builder()
+                .events(EventsProps.builder().eventsSuffix("subsEvents").build())
+                .build());
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenDomainEvents(handlerResolver);
+        // Assert
+        verify(listener, times(1)).listen(eq("test-subsEvents"), any());
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldListenDomainEventsWithExplicitGroupIdFromConnectionProperties() {
+        props.getConnectionProperties().getConsumer().setGroupId("dummy.consumer-group");
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenDomainEvents(handlerResolver);
+        // Assert
+        verify(listener, times(1)).listen(eq("dummy.consumer-group"), any());
     }
 
     @Test

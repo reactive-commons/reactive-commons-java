@@ -4,16 +4,16 @@ sidebar_position: 1
 
 # RabbitMQ Configuration
 
-This page describes how to configure RabbitMQ connection and messaging properties for each **domain** in
-Reactive Commons. A domain represents an independent connection to a RabbitMQ broker. Your application can work
-with a single domain (one broker) or multiple domains (several independent brokers), each with its own properties.
-See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for guidance on when
-to use multiple domains.
+This page describes how to configure RabbitMQ connection and messaging properties for each **domain** in Reactive
+Commons. A domain represents an independent connection to a RabbitMQ broker. Your application can work with a single
+domain (one broker) or multiple domains (several independent brokers), each with its own properties.
+See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for guidance on when to use
+multiple domains.
 
 All available properties are defined in the
 [AsyncProps](https://github.com/reactive-commons/reactive-commons-java/blob/master/starters/async-rabbit-starter/src/main/java/org/reactivecommons/async/rabbit/config/props/AsyncProps.java)
-class. There are two ways to provide these values via `application.yaml` or a combination of YAML and
-programmatic configuration, as described in the [Configuration approaches](#configuration-approaches) section below.
+class. There are two ways to provide these values via `application.yaml` or a combination of YAML and programmatic
+configuration, as described in the [Configuration approaches](#configuration-approaches) section below.
 
 ```yaml title="application.yaml"
 app:
@@ -79,12 +79,12 @@ properties do not depend on runtime values such as secrets.
 
 ### Approach 2: Hybrid YAML + `RabbitPropsCustomizer`
 
-Use this approach when you want to define the domain structure in YAML (topology, retry settings, etc.) but need to
-set some properties at runtime for example, loading connection credentials from a secrets manager.
+Use this approach when you want to define the domain structure in YAML (topology, retry settings, etc.) but need to set
+some properties at runtime for example, loading connection credentials from a secrets manager.
 
 Declare your domains in `application.yaml` as usual, then define a `RabbitPropsCustomizer` bean to override specific
-properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify
-any property on any domain.
+properties after the YAML is loaded. The customizer receives the full map of configured domains and can modify any
+property on any domain.
 
 :::caution[YAML domains are optional]
 The `RabbitPropsCustomizer` can work with or without pre-existing YAML domains. If no domains are defined in your
@@ -95,7 +95,7 @@ executes, otherwise an `InvalidConfigurationException` is thrown.
 
 You have two options:
 
-**Option A: Define domains in YAML, then override with customizer**
+**Option A: Define domains in YAML, then merge overrides with the customizer**
 
 Declare your domains in `application.yaml` as usual, then use the customizer to override or extend them.
 
@@ -114,7 +114,6 @@ app:
 package sample;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -132,27 +131,31 @@ public class RabbitMQConfig {
     @Bean
     public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
         return domainProperties -> {
-            // Customize the "app" domain — overrides take precedence over YAML values
-            AsyncProps app = domainProperties.get("app");
-            if (app != null) {
-                app.setConnectionProperties(loadFromSecret("secret-app-rabbit"));
-            }
+            // Customize the "app" domain — YAML values are kept, only these fields are overridden
+            domainProperties.customize("app", app -> app.setConnectionProperties(
+                    loadFromSecret("secret-app-rabbit")
+            ));
 
             // Customize the "accounts" domain independently
-            AsyncProps accounts = domainProperties.get("accounts");
-            if (accounts != null) {
-                accounts.setConnectionProperties(loadFromSecret("secret-accounts-rabbit"));
-            }
+            domainProperties.customize("accounts", accounts -> accounts.setConnectionProperties(
+                    loadFromSecret("secret-accounts-rabbit")
+            ));
         };
     }
 }
 ```
 
+:::danger[`put` replaces the domain, `customize` merges it]
+`domainProperties` is a map of domains, so `domainProperties.put("app", AsyncProps.builder()...build())`
+**replaces the whole domain** and every value bound from `application.yaml` for that domain is lost, going back to its
+defaults. Use `customize(domain, props -> ...)` to merge, and `put(domain, props)` only when you intend to define the
+whole domain programmatically.
+:::
+
 **Option B: Define all domains in the customizer (no YAML domains)**
 
 If you prefer full programmatic control, **omit the `app.async` section entirely from your `application.yaml`** and
-define all domains
-inside the customizer:
+define all domains inside the customizer:
 
 ```java
 package sample;
@@ -194,7 +197,11 @@ public class RabbitMQConfig {
 **Key rules for the hybrid approach:**
 
 - Properties set in the customizer **take precedence** over YAML values.
-- YAML values not touched by the customizer are **preserved**.
+- YAML values not touched by the customizer are **preserved**, as long as you use
+  `domainProperties.customize("domain", props -> ...)` or mutate the instance returned by
+  `domainProperties.get("domain")`.
+- `domainProperties.put("domain", props)` **replaces** the whole domain: use it to define domains programmatically, not
+  to override a few properties of a domain declared in YAML.
 - The customizer can also **add new domains** by calling `domainProperties.put("newDomain", asyncProps)`.
 
 ## Loading properties from a secret
@@ -202,13 +209,13 @@ public class RabbitMQConfig {
 :::danger[Deprecated]
 Using `AsyncPropsDomain.RabbitSecretFiller` to load secrets is **deprecated** and will be removed in a future version.
 Use **[Approach 2: Hybrid YAML + `RabbitPropsCustomizer`](#approach-2-hybrid-yaml--rabbitpropscustomizer)** instead,
-which provides full control over all domain properties at runtime and is the recommended way to integrate with a
-secrets manager.
+which provides full control over all domain properties at runtime and is the recommended way to integrate with a secrets
+manager.
 :::
 
 The recommended way to load connection properties from a secrets manager is to use the `RabbitPropsCustomizer` (see
-[Approach 2](#approach-2-hybrid-yaml--rabbitpropscustomizer)). This gives you full control over all domain properties
-at runtime. The example below uses the [Secrets Manager](https://github.com/bancolombia/secrets-manager) library.
+[Approach 2](#approach-2-hybrid-yaml--rabbitpropscustomizer)). This gives you full control over all domain properties at
+runtime. The example below uses the [Secrets Manager](https://github.com/bancolombia/secrets-manager) library.
 
 1. Create a `@ConfigurationProperties` record to map the secret fields:
 
@@ -330,8 +337,8 @@ public class RabbitMQConfig {
 ## Customizing the connection
 
 For advanced control over the RabbitMQ connection, you can define a `ConnectionFactoryCustomizer` bean. This allows you
-to configure options that are not exposed through standard properties, such as custom timeouts, SSL/TLS settings,
-or automatic recovery strategies:
+to configure options that are not exposed through standard properties, such as custom timeouts, SSL/TLS settings, or
+automatic recovery strategies:
 
 ```java
 
@@ -373,7 +380,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 ### 1. Sending messages (single domain)
 
 > In this scenario we only use annotations to enable message sending only, along with different configurations for the
-`listenReplies` property:
+> `listenReplies` property:
 
 | Enabled annotations        | listenReplies | Broker     | Connections | Channels |
 |----------------------------|---------------|------------|-------------|----------|
@@ -383,7 +390,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 ### 2. Sending messages (multiple domains)
 
 > In this scenario, we only send messages to two brokers, using one or all of the annotations and configurations for the
-`listenReplies` property:
+> `listenReplies` property:
 
 | Enabled annotations        | listenReplies | Broker            | Connections | Channels |
 |----------------------------|---------------|-------------------|-------------|----------|
@@ -527,9 +534,8 @@ app:
 ```
 
 Now we configure the return handler to manage messages that could not be delivered correctly. By default, these messages
-are displayed in a log.
-To customize this behavior, a class that implements the `UnroutableMessageHandler` interface is created and registered
-as a Spring bean:
+are displayed in a log. To customize this behavior, a class that implements the `UnroutableMessageHandler` interface is
+created and registered as a Spring bean:
 
 ```java
 package sample;
@@ -574,8 +580,8 @@ To send the unrouted message to a queue, we use the `@EnableDomainEventBus` anno
 for [commands](/reactive-commons-java/docs/reactive-commons/sending-a-command) and
 [asynchronous queries](/reactive-commons-java/docs/reactive-commons/making-an-async-query), as appropriate.
 
-It is important to ensure that the queue exists before sending the message, as it will otherwise be lost.
-Therefore, it is recommended to verify or create the queue beforehand to ensure successful delivery.
+It is important to ensure that the queue exists before sending the message, as it will otherwise be lost. Therefore, it
+is recommended to verify or create the queue beforehand to ensure successful delivery.
 
 ```java
 package sample;
@@ -730,8 +736,7 @@ public class RabbitMQConfig {
 ### PRECONDITION_FAILED - inequivalent arg 'x-dead-letter-exchange'
 
 This error occurs when there is a mismatch between the queue properties defined in your application and the properties
-of the queue that already exists in the RabbitMQ broker.
-It commonly happens when you try to:
+of the queue that already exists in the RabbitMQ broker. It commonly happens when you try to:
 
 - Change the name of a domain.
 - Enable or disable DLQ (Dead Letter Queue) functionality for a queue that has already been created.
@@ -748,13 +753,10 @@ of type 'longstr', class-id=50, method-id=10)
 **Cause:**
 
 RabbitMQ does not allow changing certain durable properties of a queue after it has been declared, such as the
-`x-dead-letter-exchange` argument.
-When your application starts, it tries to declare the queue with the new properties, but the broker rejects the
-declaration because it conflicts
-with the existing queue.
+`x-dead-letter-exchange` argument. When your application starts, it tries to declare the queue with the new properties,
+but the broker rejects the declaration because it conflicts with the existing queue.
 
 **Solution:**
 
 To resolve this issue, you must manually delete the conflicting queues from the RabbitMQ broker. Once the queues are
-deleted,
-you can restart the microservice to recreate them with the correct, updated properties.
+deleted, you can restart the microservice to recreate them with the correct, updated properties.

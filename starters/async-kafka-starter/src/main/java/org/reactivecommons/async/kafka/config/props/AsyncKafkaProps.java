@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -52,4 +53,18 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
 
     @Builder.Default
     private String brokerType = "kafka";
+
+    /**
+     * Resolves the consumer group id used by the domain events listener.
+     *
+     * @return the consumer group id for the domain events listener
+     */
+    public String resolveEventsGroupId() {
+        Object configured = getConnectionProperties() == null ? null
+                : getConnectionProperties().buildConsumerProperties().get(ConsumerConfig.GROUP_ID_CONFIG);
+        if (configured instanceof String groupId && !groupId.isBlank()) {
+            return groupId;
+        }
+        return getAppName() + "-" + getDomain().getEvents().getEventsSuffix();
+    }
 }

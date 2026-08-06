@@ -56,7 +56,7 @@ public record KafkaBrokerProvider(String domain,
                     props.getRetryDelay(),
                     discardNotifier,
                     errorReporter,
-                    props.getAppName());
+                    props.resolveEventsGroupId());
             eventListener.startListener(topologyCreator);
         }
     }
