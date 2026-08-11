@@ -3,12 +3,13 @@ package org.reactivecommons.async.starter.config;
 import lombok.extern.log4j.Log4j2;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.starter.config.disabled.DisabledDirectAsyncGateway;
+import org.reactivecommons.async.starter.config.disabled.DisabledDomainEventBus;
 import org.reactivecommons.async.starter.senders.GenericDirectAsyncGateway;
 import org.reactivecommons.async.starter.senders.GenericDomainEventBus;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
-import reactor.core.publisher.Mono;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -143,127 +144,4 @@ public class ReactiveCommonsDynamicConfig {
         return new GenericDirectAsyncGateway(gateways);
     }
 
-    // -------------------------------------------------------------------------
-    // Disabled no-op implementations used when a sender feature flag is false.
-    // These prevent startup failures caused by missing bean definitions while
-    // surfacing a clear error at the point where the disabled feature is used.
-    // -------------------------------------------------------------------------
-
-    private static final String SEND_EVENTS_DISABLED =
-            "sendEvents feature is disabled in ReactiveCommonsFeatures. " +
-                    "Set sendEvents=true to publish domain events.";
-
-    private static final String SEND_COMMANDS_DISABLED =
-            "sendCommands feature is disabled in ReactiveCommonsFeatures. " +
-                    "Set sendCommands=true to send commands or queries.";
-
-    private static class DisabledDomainEventBus implements DomainEventBus {
-        @Override
-        public <T> org.reactivestreams.Publisher<Void> emit(org.reactivecommons.api.domain.DomainEvent<T> event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-
-        @Override
-        public <T> org.reactivestreams.Publisher<Void> emit(String domain,
-                                                            org.reactivecommons.api.domain.DomainEvent<T> event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-
-        @Override
-        public org.reactivestreams.Publisher<Void> emit(io.cloudevents.CloudEvent event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-
-        @Override
-        public org.reactivestreams.Publisher<Void> emit(String domain, io.cloudevents.CloudEvent event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-
-        @Override
-        public org.reactivestreams.Publisher<Void> emit(org.reactivecommons.api.domain.RawMessage event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-
-        @Override
-        public org.reactivestreams.Publisher<Void> emit(String domain,
-                                                        org.reactivecommons.api.domain.RawMessage event) {
-            return Mono.error(new IllegalStateException(SEND_EVENTS_DISABLED));
-        }
-    }
-
-    private static class DisabledDirectAsyncGateway implements DirectAsyncGateway {
-        @Override
-        public <T> Mono<Void> sendCommand(org.reactivecommons.api.domain.Command<T> command, String targetName) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T> Mono<Void> sendCommand(org.reactivecommons.api.domain.Command<T> command, String targetName,
-                                          long delayMillis) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T> Mono<Void> sendCommand(org.reactivecommons.api.domain.Command<T> command, String targetName,
-                                          String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T> Mono<Void> sendCommand(org.reactivecommons.api.domain.Command<T> command, String targetName,
-                                          long delayMillis, String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public Mono<Void> sendCommand(io.cloudevents.CloudEvent command, String targetName) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public Mono<Void> sendCommand(io.cloudevents.CloudEvent command, String targetName, long delayMillis) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public Mono<Void> sendCommand(io.cloudevents.CloudEvent command, String targetName, String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public Mono<Void> sendCommand(io.cloudevents.CloudEvent command, String targetName, long delayMillis,
-                                      String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T, R> Mono<R> requestReply(org.reactivecommons.async.api.AsyncQuery<T> query, String targetName,
-                                           Class<R> type) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T, R> Mono<R> requestReply(org.reactivecommons.async.api.AsyncQuery<T> query, String targetName,
-                                           Class<R> type, String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <R extends io.cloudevents.CloudEvent> Mono<R> requestReply(io.cloudevents.CloudEvent query,
-                                                                          String targetName, Class<R> type) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <R extends io.cloudevents.CloudEvent> Mono<R> requestReply(io.cloudevents.CloudEvent query,
-                                                                          String targetName, Class<R> type,
-                                                                          String domain) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-
-        @Override
-        public <T> Mono<Void> reply(T response, org.reactivecommons.async.api.From from) {
-            return Mono.error(new IllegalStateException(SEND_COMMANDS_DISABLED));
-        }
-    }
 }
