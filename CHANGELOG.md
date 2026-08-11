@@ -1,5 +1,14 @@
 # Changelog
 
+## [v7.3.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.3.0) (2026-08-11)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.2.2...v7.3.0)
+
+**Merged pull requests:**
+
+- fix: allow programmatic features [\#179](https://github.com/reactive-commons/reactive-commons-java/pull/179) ([juancgalvis](https://github.com/juancgalvis))
+- feat: add configurable event suffix for Kafka consumers [\#178](https://github.com/reactive-commons/reactive-commons-java/pull/178) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.2.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.2.2) (2026-06-17)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.2.1...v7.2.2)
