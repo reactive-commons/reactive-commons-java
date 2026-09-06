@@ -63,37 +63,22 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
     private final HeadersHandler headersHandler;
     private final ArtifactReferenceProvider artifactReferenceProvider;
     private final ObjectMapper objectMapper;
-    private final boolean validateOutbound;
-    private final boolean validateInbound;
 
     @Builder
     public ApicurioSchemaValidator(SchemaResolver<JsonSchema, Object> schemaResolver,
                                    Boolean ownsResolver,
                                    HeadersHandler headersHandler,
                                    ArtifactReferenceProvider artifactReferenceProvider,
-                                   ObjectMapper objectMapper,
-                                   Boolean validateOutbound,
-                                   Boolean validateInbound) {
+                                   ObjectMapper objectMapper) {
         this.schemaResolver = schemaResolver;
         this.ownsResolver = ownsResolver == null || ownsResolver;
         this.headersHandler = headersHandler;
         this.artifactReferenceProvider = artifactReferenceProvider;
         this.objectMapper = objectMapper == null ? new ObjectMapper() : objectMapper;
-        this.validateOutbound = validateOutbound == null || validateOutbound;
-        this.validateInbound = validateInbound == null || validateInbound;
-        if (!this.validateOutbound && !this.validateInbound) {
-            throw new IllegalArgumentException("An ApicurioSchemaValidator must validate at least one direction: "
-                    + "with validateOutbound and validateInbound both disabled it would connect to the registry "
-                    + "and resolve schemas without ever validating a message. Use NoOpSchemaValidator when "
-                    + "validation is not wanted.");
-        }
     }
 
     @Override
     public void validateOutbound(String topic, byte[] payload, Headers headers) {
-        if (!validateOutbound) {
-            return;
-        }
         ArtifactReference reference = artifactReferenceProvider.referenceFor(topic);
         SchemaLookupResult<JsonSchema> lookup = resolve(topic, reference);
         validate(topic, payload, lookup.getParsedSchema(), null);
@@ -122,9 +107,6 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
 
     @Override
     public void validateInbound(String topic, byte[] payload, Headers headers) {
-        if (!validateInbound) {
-            return;
-        }
         ArtifactReference expected = artifactReferenceProvider.referenceFor(topic);
         InboundArtifact artifact = inboundArtifact(expected, headers);
         validate(topic, payload, resolve(topic, artifact.reference()).getParsedSchema(), artifact.hint());

@@ -6,33 +6,17 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
+import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Apicurio Registry schema validation of a single Reactive Commons domain.
  * <p>
- * Only the switches that have no Apicurio equivalent are typed here. Everything the registry itself understands is
- * written in {@code properties} with its original Apicurio key, so an existing serde configuration can be pasted
- * as is and there are no two names for the same thing. Schema validation itself is turned on and off with
- * {@code apicurio.registry.serde.validation-enabled}, exactly as it would be for the Apicurio serdes: when it is
- * {@code false} Reactive Commons keeps its default no-op validator instead of connecting to the registry.
- * <pre>
- * reactive:
- *   commons:
- *     kafka:
- *       app:
- *         apicurio:
- *           validate-inbound: true
- *           properties:
- *             apicurio.registry.url: http://localhost:8080/apis/registry/v3
- *             apicurio.registry.artifact.group-id: kafka
- *       accounts:
- *         apicurio:
- *           properties:
- *             apicurio.registry.serde.validation-enabled: false
- * </pre>
+ * The validation is declared per topic: every registry lists the topics validated against it, and each topic may
+ * override any property of its registry. A domain that declares no registry is not validated, so the starter can be
+ * on the classpath while only some domains use it.
  * <p>
  * These values are only read when the {@code async-commons-kafka-apicurio-starter} dependency is present.
  */
@@ -44,30 +28,17 @@ import java.util.Map;
 public class ApicurioValidationProperties {
 
     /**
-     * Validates the payload before publishing it.
-     */
-    @Builder.Default
-    private boolean validateOutbound = true;
-
-    /**
-     * Validates the payload of every consumed record before it reaches the handler.
-     */
-    @Builder.Default
-    private boolean validateInbound = true;
-
-    /**
-     * Every Apicurio setting, using its original key: {@code apicurio.registry.url},
-     * {@code apicurio.registry.artifact.group-id}, {@code apicurio.registry.artifact.artifact-id},
-     * {@code apicurio.registry.artifact.version}, {@code apicurio.registry.find-latest},
-     * {@code apicurio.registry.serde.validation-enabled}, {@code apicurio.registry.auth.*} and any other one the
-     * serdes accept.
+     * Registries of this domain, each one declaring the topics validated against it.
      * <p>
-     * Two of them are constrained: {@code apicurio.registry.headers.enabled} may only be {@code true}, because the
-     * schema coordinates always travel in the record headers, and the schema version has to be decided explicitly,
-     * either with {@code apicurio.registry.artifact.version} or with {@code apicurio.registry.find-latest=true}.
-     * Both are rejected at startup, and note that {@code find-latest} defaults to {@code false} as it does in
-     * Apicurio.
+     * Only the declared topics are validated: a topic that is produced or consumed but is not listed is left alone,
+     * which is how validation is skipped for a single topic. A declared topic is turned off with
+     * {@code apicurio.registry.serde.validation-enabled: false} in its own properties.
+     * <p>
+     * The same topic name may be declared by another domain, against another registry. Declaring it twice inside
+     * the same domain is rejected at startup, because a record only carries its topic name and neither registry
+     * could be chosen.
      */
+    @NestedConfigurationProperty
     @Builder.Default
-    private Map<String, String> properties = new HashMap<>();
+    private List<ApicurioRegistryDefinition> registries = new ArrayList<>();
 }

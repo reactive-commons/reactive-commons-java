@@ -15,14 +15,11 @@ import lombok.NoArgsConstructor;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Builds an {@link ApicurioSchemaValidator} from the very same configuration keys used by the
  * Apicurio Kafka serdes ({@link SerdeConfig}), so an existing configuration can be reused as is.
- * <p>
- * {@code apicurio.registry.find-latest} keeps its meaning: with no explicit version, the latest version of the
- * artifact is resolved. Disabling it without setting a version is rejected here, one step earlier than in Apicurio,
- * where the same combination ends up resolving the latest version anyway.
  */
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ApicurioSchemaValidatorFactory {
@@ -33,18 +30,37 @@ public final class ApicurioSchemaValidatorFactory {
      */
     static final long CHECK_PERIOD_MS_DEFAULT = Duration.ofMinutes(30).toMillis();
 
+    /**
+     * Keys that select which artifact of the registry is validated, as opposed to which registry is contacted.
+     * They are resolved per record, so two validators differing only in these still share one connection and one
+     * schema cache.
+     */
+    public static final Set<String> ARTIFACT_KEYS = Set.of(
+            SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID,
+            SchemaResolverConfig.EXPLICIT_ARTIFACT_ID,
+            SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION,
+            SchemaResolverConfig.FIND_LATEST_ARTIFACT);
+
+    /**
+     * Reduces a configuration to what the registry client and the schema cache depend on: endpoint, credentials,
+     * TLS and tuning. Two configurations with the same result may share a single resolver.
+     *
+     * @param configs the full configuration of a domain or a topic
+     * @return the registry level configuration, without the artifact coordinates
+     */
+    public static Map<String, Object> registryConfig(Map<String, Object> configs) {
+        Map<String, Object> registryConfig = new HashMap<>(configs);
+        registryConfig.keySet().removeAll(ARTIFACT_KEYS);
+        return registryConfig;
+    }
+
     public static ApicurioSchemaValidator create(Map<String, Object> configs) {
         return create(configs, null);
     }
 
     public static ApicurioSchemaValidator create(Map<String, Object> configs, ObjectMapper objectMapper) {
-        return create(configs, objectMapper, null, null);
-    }
-
-    public static ApicurioSchemaValidator create(Map<String, Object> configs, ObjectMapper objectMapper,
-                                                 Boolean validateOutbound, Boolean validateInbound) {
         Map<String, Object> resolved = prepare(configs);
-        return build(newResolver(resolved), true, resolved, objectMapper, validateOutbound, validateInbound);
+        return build(newResolver(resolved), true, resolved, objectMapper);
     }
 
     /**
@@ -60,9 +76,8 @@ public final class ApicurioSchemaValidatorFactory {
      * whoever created it.
      */
     public static ApicurioSchemaValidator create(SchemaResolver<JsonSchema, Object> schemaResolver,
-                                                 Map<String, Object> configs, ObjectMapper objectMapper,
-                                                 Boolean validateOutbound, Boolean validateInbound) {
-        return build(schemaResolver, false, prepare(configs), objectMapper, validateOutbound, validateInbound);
+                                                 Map<String, Object> configs, ObjectMapper objectMapper) {
+        return build(schemaResolver, false, prepare(configs), objectMapper);
     }
 
     /**
@@ -80,6 +95,7 @@ public final class ApicurioSchemaValidatorFactory {
     private static Map<String, Object> prepare(Map<String, Object> configs) {
         Map<String, Object> resolved = new HashMap<>(configs);
         assertHeadersAreEnabled(resolved);
+        assertResolverStrategyIsNotSet(resolved);
         applyResolverDefaults(resolved);
         return resolved;
     }
@@ -92,8 +108,7 @@ public final class ApicurioSchemaValidatorFactory {
 
     private static ApicurioSchemaValidator build(SchemaResolver<JsonSchema, Object> schemaResolver,
                                                  boolean ownsResolver, Map<String, Object> resolved,
-                                                 ObjectMapper objectMapper, Boolean validateOutbound,
-                                                 Boolean validateInbound) {
+                                                 ObjectMapper objectMapper) {
         // Checked here and not while preparing the resolver: the artifact coordinates belong to the validator, a
         // shared resolver is built without them
         assertVersionIsResolvable(resolved);
@@ -118,19 +133,9 @@ public final class ApicurioSchemaValidatorFactory {
                         stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_ID),
                         stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION)))
                 .objectMapper(objectMapper)
-                .validateOutbound(validateOutbound)
-                .validateInbound(validateInbound)
                 .build();
     }
 
-    /**
-     * Rejects a configuration that leaves the schema version to chance.
-     * <p>
-     * {@code apicurio.registry.find-latest} keeps its Apicurio default, {@code false}, so the version has to be
-     * decided explicitly. Apicurio would accept the combination but not honour it: with a JSON Schema its resolver
-     * cannot derive the schema from the record, so it falls through to resolving the artifact by coordinates and,
-     * with no version, obtains the latest one anyway.
-     */
     private static void assertVersionIsResolvable(Map<String, Object> resolved) {
         boolean findLatest = booleanValue(resolved, SchemaResolverConfig.FIND_LATEST_ARTIFACT,
                 SchemaResolverConfig.FIND_LATEST_ARTIFACT_DEFAULT);
@@ -147,32 +152,41 @@ public final class ApicurioSchemaValidatorFactory {
     }
 
     /**
-     * Adjusts the defaults of the schema cache, which are meant for a serde and not for a reactive pipeline.
-     * <p>
-     * Resolving a schema is a <b>blocking</b> HTTP call issued from the thread that publishes or consumes the
-     * record, and the Apicurio client does not apply any request timeout, so both how often the cache expires and
-     * what happens when the registry is unreachable are relevant here:
-     * <ul>
-     *     <li>{@code check-period-ms} defaults to 30 seconds, which brings that blocking call back into the hot
-     *     path twice a minute per artifact. A registered version is immutable, so a much longer period is used
-     *     and only noticing a new latest version is delayed by it.</li>
-     *     <li>{@code fault-tolerant-refresh} defaults to false, so a registry that blinks while an entry is being
-     *     refreshed fails the message, even though a perfectly usable schema was already cached.</li>
-     * </ul>
-     * Both remain overridable through {@code properties}.
+     * Applies schema resolver defaults better suited for reactive workloads:
+     * reduces refresh frequency and keeps cached schemas when refreshes fail.
+     * Both settings can still be overridden via {@code properties}.
      */
+    /**
+     * Rejects {@code apicurio.registry.artifact-resolver-strategy}.
+     * <p>
+     * That property names the strategy Apicurio uses to derive the artifact of a record, and it is read
+     * <b>only</b> by {@code SchemaResolver#resolveSchema(Record)}, the entry point the serdes call with a Kafka
+     * record. Reactive Commons never builds such a record: it resolves the schema by coordinates with
+     * {@code resolveSchemaByArtifactReference}, so the strategy would be instantiated and never invoked. Setting
+     * it looks like it changes which artifact is validated and changes nothing, hence it is rejected instead of
+     * ignored.
+     * <p>
+     * Use {@code apicurio.registry.artifact.artifact-id} and {@code apicurio.registry.artifact.group-id} to name
+     * the artifact, or an {@link ArtifactReferenceProvider} to derive it from the topic.
+     */
+    static void assertResolverStrategyIsNotSet(Map<String, Object> configs) {
+        Object strategy = configs.get(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
+        if (strategy != null) {
+            throw new IllegalArgumentException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
+                    + strategy + ", but Reactive Commons resolves the schema by coordinates and never through that "
+                    + "strategy, which Apicurio only reads when a Kafka record is handed to its serdes. It would be "
+                    + "instantiated and never invoked. Remove it, and name the artifact with "
+                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " and "
+                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID + ", or derive it from the topic with an "
+                    + ArtifactReferenceProvider.class.getSimpleName() + ".");
+        }
+    }
+
     static void applyResolverDefaults(Map<String, Object> configs) {
         configs.putIfAbsent(SchemaResolverConfig.CHECK_PERIOD_MS, CHECK_PERIOD_MS_DEFAULT);
         configs.putIfAbsent(SchemaResolverConfig.FAULT_TOLERANT_REFRESH, true);
     }
 
-    /**
-     * Rejects an explicit {@code apicurio.registry.headers.enabled=false}.
-     * <p>
-     * Reactive Commons always writes the schema coordinates in the record headers, so that value would describe
-     * a behavior this validator cannot honour. Apicurio 3.x defaults the property to {@code false}, so it is
-     * pinned to {@code true} to keep the 2.x behavior when it is not set.
-     */
     private static void assertHeadersAreEnabled(Map<String, Object> configs) {
         if (!booleanValue(configs, KafkaSerdeConfig.ENABLE_HEADERS, true)) {
             throw new IllegalArgumentException(KafkaSerdeConfig.ENABLE_HEADERS + " is false, but Reactive Commons "

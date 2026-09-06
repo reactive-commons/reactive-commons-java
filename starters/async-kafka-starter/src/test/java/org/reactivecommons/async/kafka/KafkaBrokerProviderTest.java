@@ -165,7 +165,7 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("test-my.custom.topic"), eq(List.of("my.custom.topic")));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("my.custom.topic")));
     }
 
     @Test
@@ -181,8 +181,8 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("test-topic.one"), eq(List.of("topic.one")));
-        verify(listener, times(1)).listen(eq("test-topic.two"), eq(List.of("topic.two")));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.one")));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.two")));
     }
 
     @Test
@@ -195,7 +195,7 @@ class KafkaBrokerProviderTest {
     }
 
     @Test
-    void shouldUseExplicitGroupIdFromConnectionPropertiesAsBaseForTopicListeners() {
+    void shouldUseExplicitGroupIdFromConnectionPropertiesForTopicListeners() {
         props.getConnectionProperties().getConsumer().setGroupId("dummy.consumer-group");
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
@@ -207,7 +207,7 @@ class KafkaBrokerProviderTest {
         brokerProvider.listenTopics(handlerResolver);
         // Assert
         verify(listener, times(1))
-                .listen(eq("dummy.consumer-group-my.custom.topic"), eq(List.of("my.custom.topic")));
+                .listen(eq("dummy.consumer-group"), eq(List.of("my.custom.topic")));
     }
 
     @Test

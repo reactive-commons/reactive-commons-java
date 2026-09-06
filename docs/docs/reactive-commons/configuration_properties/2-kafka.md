@@ -33,7 +33,7 @@ reactive:
         connectionProperties: # you can override the connection properties of each domain
           bootstrap-servers: localhost:9092
           consumer:
-            group-id: # optional. When set, it is used as the consumer group id of the domain events listener, exactly as provided
+            group-id: # optional. When set, it is used as the consumer group id of the domain events listener and of the topic listeners, exactly as provided
       # Another domain can be configured with same properties structure that app
       accounts: # this is a second domain name and can have another independent setup
         connectionProperties: # you can override the connection properties of each domain

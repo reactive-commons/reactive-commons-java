@@ -1,4 +1,4 @@
-package org.reactivecommons.async.starter.impl.common.kafka.apicurio;
+package org.reactivecommons.async.kafka.apicurio;
 
 import com.networknt.schema.JsonSchema;
 import io.apicurio.registry.resolver.SchemaResolver;
@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -110,7 +111,7 @@ class SharedSchemaResolversTest {
         verify(healthy).close();
     }
 
-    private java.util.function.Function<Map<String, Object>, SchemaResolver<JsonSchema, Object>> fixed(
+    private Function<Map<String, Object>, SchemaResolver<JsonSchema, Object>> fixed(
             SchemaResolver<JsonSchema, Object> first, SchemaResolver<JsonSchema, Object> second) {
         AtomicInteger calls = new AtomicInteger();
         return config -> calls.getAndIncrement() == 0 ? first : second;

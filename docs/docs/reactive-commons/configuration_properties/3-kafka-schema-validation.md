@@ -36,9 +36,343 @@ implementation 'org.reactivecommons:async-kafka-apicurio-starter:<version>'
 
 The starter transitively brings `async-commons-kafka-starter`, so it replaces it in your build file.
 
-## Configuration
+## Per topic configuration {#per-topic-config}
 
-The validation is configured **inside each domain**, next to its connection properties:
+The validation is configured **per topic**: `registries` is a list of registries inside the `apicurio` block of a
+domain,
+each registry lists the topics validated against it, and every topic may override any property of its registry.
+
+:::danger At least one domain must declare registries The starter exists to validate messages against an Apicurio
+Registry, so having it on the classpath while **no** domain declares `registries` fails at startup: nothing would be
+validated and the registry client would be created for nothing. A single domain may still be left unvalidated by
+declaring no registry for it.
+:::
+
+```yaml title="application.yaml"
+reactive:
+   commons:
+      kafka:
+         app:
+            connection-properties:
+               bootstrap-servers: "localhost:9092"
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.artifact.artifact-id:      # empty, so each topic resolves <topic>-value
+                       apicurio.registry.artifact.version:          # empty, so each record keeps its own version
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: events-topic                        # no properties, inherits every setting above
+                       - name: audit-topic
+                         properties:
+                            apicurio.registry.artifact.artifact-id: account   # only this topic uses that artifact
+```
+
+The properties are inherited along the declaration: the ones of a **registry** are the defaults of every **topic** it
+declares, and a topic overrides them key by key. The keys are the Apicurio ones, and the same startup checks apply to
+every topic: the registry URL is required, the version resolution has to be explicit, and
+`apicurio.registry.headers.enabled` may only be `true`.
+
+`name` identifies the registry in the error messages; it does not have to match anything in Apicurio. Two registries may
+even point at the same endpoint, which is the way to give a group of topics its own group id.
+
+| Property        | Level           | Meaning                                                                  |
+|-----------------|-----------------|--------------------------------------------------------------------------|
+| `name`          | registry        | Name reported when a declaration is invalid                              |
+| `properties`    | registry, topic | Apicurio settings. The ones of a topic win over the ones of its registry |
+| `topics[].name` | topic           | Kafka topic name, as it travels in the record                            |
+
+A declared topic is validated **in both directions**: on publish, which is also what writes the schema coordinates in
+the record headers, and on consume. A topic that is not declared, or that sets
+`apicurio.registry.serde.validation-enabled: false`, is not validated at all and its records carry no coordinates.
+
+### The four cases it covers
+
+**1. A topic that is not validated.** Only the declared topics are validated, so leaving `push` out of the list is
+enough. Nothing else changes for the other two topics, and no request is made to any registry for `push`:
+
+```yaml
+reactive:
+   commons:
+      kafka:
+         app:
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: events-topic
+                       - name: audit-topic
+                         properties:
+                            apicurio.registry.artifact.artifact-id: account
+```
+
+A declared topic can also be turned off without removing it, with
+`apicurio.registry.serde.validation-enabled: false` in its own `properties`.
+
+**2. Topics pointing at different registries.** Declare one registry per endpoint and list its topics:
+
+```yaml
+reactive:
+   commons:
+      kafka:
+         app:
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: events-topic
+                       - name: audit-topic
+                         properties:
+                            apicurio.registry.artifact.artifact-id: account
+                  - name: secondary-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:9090/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: push
+```
+
+Each endpoint gets its own registry client and its own schema cache.
+
+**3. Topics reading different groups of the same registry.** Same declaration as above, with the same
+`apicurio.registry.url` and a different group for the topic:
+
+```yaml
+reactive:
+   commons:
+      kafka:
+         app:
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: events-topic
+                       - name: audit-topic
+                         properties:
+                            apicurio.registry.artifact.artifact-id: account
+                  - name: secondary-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: push
+                         properties:
+                            apicurio.registry.artifact.group-id: events
+```
+
+Here **a single connection and a single schema cache serve all three topics**: the topics are grouped by what the
+registry client depends on, that is the endpoint, the credentials, the TLS material and the cache tuning. The group, the
+artifact and the version are resolved per record and the cache is indexed by the full coordinates, so they never split
+the connection and the entries of one group never collide with those of another. The same applies across domains: two
+domains resolving against the same endpoint share one client.
+
+**4. Every topic inheriting the properties it does not declare.** A topic with no `properties` uses those of its
+registry, which in turn inherit those of the domain, and its artifact defaults to `<topic>-value`:
+
+```yaml
+reactive:
+   commons:
+      kafka:
+         app:
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.artifact.group-id: kafka
+                       apicurio.registry.find-latest: true
+
+                    topics:
+                       - name: events-topic
+                       - name: audit-topic
+```
+
+### The same topic name in two domains
+
+Topics are declared inside a domain, so the routing key is the domain plus the topic name. Two domains connected to
+different clusters may declare the very same topic name against different registries, and each domain validates its own
+records:
+
+```yaml
+reactive:
+   commons:
+      kafka:
+         app:
+            connection-properties:
+               bootstrap-servers: "broker-a:9092"
+            apicurio:
+               registries:
+                  - name: main-registry
+                    properties:
+                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: audit-topic
+         accounts:
+            connection-properties:
+               bootstrap-servers: "broker-b:9092"
+            apicurio:
+               registries:
+                  - name: accounts-registry
+                    properties:
+                       apicurio.registry.url: "http://accounts-registry:8080/apis/registry/v3"
+                       apicurio.registry.find-latest: true
+                    topics:
+                       - name: audit-topic
+```
+
+:::danger Declaring the same topic twice inside one domain fails at startup A record only carries its topic name, so
+two registries of the same domain declaring the same topic leave no way to choose which one validates it. Reactive
+Commons rejects it and names both registries:
+
+```
+Topic 'audit-topic' of domain app is declared by registry 'main-registry'
+(reactive.commons.kafka.app.apicurio.registries[0]) and by registry 'secondary-registry'
+(reactive.commons.kafka.app.apicurio.registries[1]), so it has two schema configurations and neither of them can be
+chosen: a record only carries its topic name. Declare the topic once per domain, under the registry that validates it.
+The same topic name may be declared by another domain, against another registry.
+```
+
+:::
+
+### Other cases the declaration covers
+
+Beyond the four above, these come up often and need no extra machinery:
+
+| Case                                                                                                                                                    | How to declare it                                                                                                       |
+|---------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------|
+| **Several topics honour one contract.** All of them validate the same envelope.                                                                         | Set `apicurio.registry.artifact.artifact-id` on the **registry**, and let its topics inherit it                         |
+| **One topic pins a version, another follows the latest.**                                                                                               | `apicurio.registry.artifact.version` on the topic that pins it, `apicurio.registry.find-latest: true` on the registry   |
+| **Schemas registered in the `default` group.**                                                                                                          | Leave `apicurio.registry.artifact.group-id` out, see [About the group id](#about-apicurioregistryartifactgroup-id)      |
+| **One application validates a topic, another does not.** For instance the producer validates what it publishes while a reporting domain reads it as is. | Declare the topic where it must be validated, and leave it out where it must not                                        |
+| **Raw topic listeners and notifications.** `listenTopic(...)` and `listenNotification(...)` read plain topic names.                                     | Declare those topic names like any other: the routing key is the topic of the record, whatever registered the listener  |
+| **The DLQ of a topic.**                                                                                                                                 | The discarded message is republished as `<topic>.dlq`, which is a different topic. Declare it to validate it, see below |
+
+:::caution The DLQ topic is not the topic Reactive Commons republishes a discarded message under the name of its event
+plus `.dlq`, so `event.push` becomes `event.push.dlq`, and an unreadable message becomes `corruptData.dlq`. Those topics
+are **not** validated unless they are declared, which is usually what you want.
+
+Declaring them means the DLQ artifact has to exist in the registry: a schema that cannot be resolved makes the discard
+itself fail, and `DLQDiscardNotifier` only logs it (`FATAL!! unable to notify Discard of message!!`), so the message is
+lost. Declare the DLQ topic only when its artifact is registered.
+:::
+
+:::note A topic name misspelled in the configuration is silently not validated. Nothing else fails: Reactive Commons
+cannot know which topics the application will produce or consume, so an entry that matches no topic is never used, and
+the real topic keeps flowing unvalidated. Check the declared names against the event names and the
+`listenTopic`/`listenNotification` registrations.
+:::
+
+### Declaring the topics programmatically
+
+The registries live in the domain properties, so they are set from code with the very same
+[`KafkaPropsCustomizer`](./2-kafka.md) used for the rest of the Kafka settings. The properties bound from the
+configuration files are handed over to the customizer, which may complete them or build the whole declaration:
+
+```java
+import org.reactivecommons.async.kafka.config.props.ApicurioRegistryDefinition;
+import org.reactivecommons.async.kafka.config.props.ApicurioTopicDefinition;
+import org.reactivecommons.async.kafka.config.props.ApicurioValidationProperties;
+import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+import java.util.List;
+import java.util.Map;
+
+@Configuration
+public class ApicurioTopicsConfig {
+
+   @Bean
+   public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer(RegistryCredentials credentials) {
+      return domainProperties -> domainProperties.customize("app", props ->
+              props.setApicurio(ApicurioValidationProperties.builder()
+                      .registries(List.of(ApicurioRegistryDefinition.builder()
+                              .name("main-registry")
+                              .properties(Map.of(
+                                      "apicurio.registry.url", credentials.url(),
+                                      "apicurio.registry.auth.client.id", credentials.clientId(),
+                                      "apicurio.registry.artifact.group-id", "kafka",
+                                      "apicurio.registry.find-latest", "true"))
+                              .topics(List.of(
+                                      ApicurioTopicDefinition.builder().name("events-topic").build(),
+                                      ApicurioTopicDefinition.builder()
+                                              .name("audit-topic")
+                                              .properties(Map.of(
+                                                      "apicurio.registry.artifact.artifact-id", "account"))
+                                              .build()))
+                              .build()))
+                      .build()));
+   }
+}
+```
+
+Use `customize(domain, ...)` rather than `put(domain, props)`, so the values already bound from the YAML are preserved.
+To only complete what the configuration files declared, for instance adding credentials from a secrets manager or
+appending a topic, modify the bound objects in place:
+
+```java
+return domainProperties ->domainProperties.
+
+customize("app",props ->{
+ApicurioRegistryDefinition registry = props.getApicurio().getRegistries().get(0);
+    registry.
+
+getProperties().
+
+put("apicurio.registry.auth.client.secret",credentials.clientSecret());
+        registry.
+
+getTopics().
+
+add(ApicurioTopicDefinition.builder().
+
+name("push").
+
+build());
+        });
+```
+
+The customizer runs **before** any validator is built, so all the consistency checks apply to the final values.
+
+### What is rejected at startup
+
+| Declaration                                               | Reason                                                                                     |
+|-----------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| The same topic under two registries of one domain         | A record only carries its topic name, so neither registry can be chosen                    |
+| A registry without `topics`                               | It would open a connection to the registry without validating anything                     |
+| A topic without `name`                                    | There is nothing to route the records of                                                   |
+| No `apicurio.registry.url` for a topic                    | There is no registry to resolve the schema from                                            |
+| No version and `apicurio.registry.find-latest` not `true` | The version resolution has to be explicit, see below                                       |
+| `apicurio.registry.headers.enabled: false`                | The schema coordinates always travel in the headers                                        |
+| `apicurio.registry.artifact-resolver-strategy` set        | Apicurio reads it only when a record is handed to its serdes, so it would never be invoked |
+| No domain declaring `registries` at all                   | The starter would be a dependency that validates nothing                                   |
+
+Every message names the exact path to fix, for instance
+`reactive.commons.kafka.app.apicurio.registries[0].topics[1].properties`.
+
+## The Apicurio keys
+
+Everything the registry understands keeps its **original Apicurio key** inside `properties`, at registry level or at
+topic level, so an existing serde configuration can be pasted as is and there is never a second name for the same
+setting:
 
 ```yaml title="application.yaml"
 reactive:
@@ -48,50 +382,45 @@ reactive:
         connection-properties:
           bootstrap-servers: "localhost:9092"
         apicurio:
-          validate-outbound: true           # validate before publishing
-          validate-inbound: true            # validate every consumed record
-          properties: # every Apicurio setting, with its original key
-            apicurio.registry.serde.validation-enabled: true # default true, set to false to disable validation
-            apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
-            apicurio.registry.artifact.group-id: "kafka"    # optional, defaults to the "default" group
-            apicurio.registry.artifact.artifact-id: "person" # optional, defaults to "<topic>-value"
-            # One of these two is REQUIRED: either pin the version, or opt into the latest one
-            apicurio.registry.artifact.version: "1"
-            apicurio.registry.find-latest: false             # default false, as in Apicurio
-            apicurio.registry.auth.client.id: "${REGISTRY_CLIENT_ID}"
-            apicurio.registry.auth.client.secret: "${REGISTRY_CLIENT_SECRET}"
-            apicurio.registry.auth.service.token.endpoint: "${REGISTRY_TOKEN_ENDPOINT}"
+           registries:
+              - name: main-registry
+                properties: # every Apicurio setting, with its original key
+                   apicurio.registry.serde.validation-enabled: true  # default true, set to false to skip validation
+                   apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                   apicurio.registry.artifact.group-id: "kafka"      # optional, defaults to the "default" group
+                   apicurio.registry.artifact.artifact-id: "person"  # optional, defaults to "<topic>-value"
+                   # One of these two is REQUIRED: either pin the version, or opt into the latest one
+                   apicurio.registry.artifact.version: "1"
+                   apicurio.registry.find-latest: false              # default false, as in Apicurio
+                   apicurio.registry.auth.client.id: "${REGISTRY_CLIENT_ID}"
+                   apicurio.registry.auth.client.secret: "${REGISTRY_CLIENT_SECRET}"
+                   apicurio.registry.auth.service.token.endpoint: "${REGISTRY_TOKEN_ENDPOINT}"
+                topics:
+                   - name: event.push
 ```
 
-Only the switches that have no Apicurio equivalent are named by Reactive Commons: `validate-outbound` and
-`validate-inbound`. **Everything the registry understands keeps its original Apicurio key** inside `properties`,
-including whether validation itself is turned on (`apicurio.registry.serde.validation-enabled`), so an existing serde
-configuration can be pasted as is and there is never a second name for the same setting.
-
-| Apicurio key                                 | Meaning                                                       |
-|----------------------------------------------|---------------------------------------------------------------|
-| `apicurio.registry.serde.validation-enabled` | Turns schema validation on/off for the domain. Default `true` |
-| `apicurio.registry.url`                      | Registry endpoint, **required**                               |
-| `apicurio.registry.artifact.group-id`        | Artifact group. Empty means the `default` group               |
-| `apicurio.registry.artifact.artifact-id`     | Artifact. Empty means `<topic>-value`                         |
-| `apicurio.registry.artifact.version`         | Version. Empty means "the one of each record", see below      |
-| `apicurio.registry.find-latest`              | Resolve the latest version when none is set. Default `false`  |
-| `apicurio.registry.auth.*`                   | Credentials used to reach the registry                        |
-| `apicurio.registry.request.ssl.*`            | TLS material                                                  |
+| Apicurio key                                 | Meaning                                                                      |
+|----------------------------------------------|------------------------------------------------------------------------------|
+| `apicurio.registry.serde.validation-enabled` | Turns schema validation on/off for the registry or the topic. Default `true` |
+| `apicurio.registry.url`                      | Registry endpoint, **required**                                              |
+| `apicurio.registry.artifact.group-id`        | Artifact group. Empty means the `default` group                              |
+| `apicurio.registry.artifact.artifact-id`     | Artifact. Empty means `<topic>-value`                                        |
+| `apicurio.registry.artifact.version`         | Version. Empty means "the one of each record", see below                     |
+| `apicurio.registry.find-latest`              | Resolve the latest version when none is set. Default `false`                 |
+| `apicurio.registry.auth.*`                   | Credentials used to reach the registry                                       |
+| `apicurio.registry.request.ssl.*`            | TLS material                                                                 |
 
 :::info The version resolution is mandatory `apicurio.registry.find-latest` defaults to `false`, exactly as in Apicurio,
-so **every domain must state how the schema version is resolved**: either pin
-`apicurio.registry.artifact.version`, or set `apicurio.registry.find-latest: true`. Leaving both out fails at startup,
-see [`apicurio.registry.find-latest`](#apicurioregistryfind-latest).
+so **every topic must state how the schema version is resolved**: either pin
+`apicurio.registry.artifact.version`, or set `apicurio.registry.find-latest: true`, in the registry properties or in the
+topic ones. Leaving both out fails at startup, see
+[`apicurio.registry.find-latest`](#apicurioregistryfind-latest).
 :::
 
-A domain without an `apicurio` block is not validated, so the starter can be on the classpath while only some domains
-use it.
-
-:::caution These values apply to **every topic of the domain**. `validate-outbound` and `validate-inbound` select a
-*direction*, never a topic, and setting `apicurio.registry.artifact.artifact-id` forces that one artifact on all of
-them. See
-[Per topic granularity](#per-topic-granularity) when a single topic needs to be treated differently.
+:::caution `apicurio.registry.artifact-resolver-strategy` is rejected at startup Apicurio reads that property only when
+a Kafka record is handed to its serdes, and Reactive Commons resolves the schema by coordinates instead, so the strategy
+would be instantiated and never invoked. See
+[Why the resolver strategy is not honoured](#artifact-resolver-strategy).
 :::
 
 The `properties` map accepts every key of
@@ -109,50 +438,10 @@ and cache tuning (`apicurio.registry.check-period-ms`).
 `apicurio-registry-serde-common-jsonschema`); the Kafka serdes themselves are not used.
 :::
 
-### Defining the properties programmatically
-
-Because the configuration lives inside the domain properties, it is set from code with the very same
-[`KafkaPropsCustomizer`](./2-kafka.md) used for the rest of the Kafka settings. The properties bound from the
-configuration files are handed over to the customizer, which can complete or override them before the validators are
-built:
-
-```java
-import io.apicurio.registry.resolver.config.SchemaResolverConfig;
-import io.apicurio.registry.serde.config.SerdeConfig;
-import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
-
-@Configuration
-public class ApicurioConfig {
-
-    @Bean
-    public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer(RegistryCredentials credentials) {
-        return domainProperties -> domainProperties.customize("app", props -> {
-          props.getApicurio().getProperties().put(SchemaResolverConfig.REGISTRY_URL, credentials.url());
-            props.getApicurio().getProperties().put(SerdeConfig.AUTH_CLIENT_ID, credentials.clientId());
-            props.getApicurio().getProperties().put(SerdeConfig.AUTH_CLIENT_SECRET, credentials.clientSecret());
-        });
-    }
-}
-```
-
-This is the way to go when the registry endpoint or its credentials come from a secrets manager, a vault or any other
-source that is not available as a configuration file. Use `customize(domain, ...)` rather than
-`put(domain, props)`, so the values already bound from the YAML are preserved.
-
-`apicurio.registry.serde.validation-enabled` is honoured here as well, so
-`props.getApicurio().getProperties().put(SerdeConfig.VALIDATION_ENABLED, "false")` leaves that domain with the no-op
-validator. All the consistency checks described below run **after** the customizer, on the final values.
-
-:::note Declaring a bean of type `SchemaValidator` is a different, lower level extension point: it replaces the
-validator altogether and the properties are no longer read. See [Customizing the validator](#customizing-the-validator).
-:::
-
 ### Multiple domains
 
-Every domain declared under `reactive.commons.kafka` carries its own `apicurio` block, so each one validates against its
-own registry, group and artifacts:
+Every domain declared under `reactive.commons.kafka` carries its own `apicurio` block, so each one validates its topics
+against its own registries, groups and artifacts:
 
 ```yaml title="application.yaml"
 reactive:
@@ -163,20 +452,27 @@ reactive:
           consumer:
             group-id: my-service.consumer-group
         apicurio:
-          properties:
-            apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
-            apicurio.registry.artifact.group-id: kafka
-            apicurio.registry.find-latest: true
+           registries:
+              - name: main-registry
+                properties:
+                   apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                   apicurio.registry.artifact.group-id: kafka
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: events-topic
       accounts:
         connection-properties:
           consumer:
             group-id: my-service.consumer-group
         apicurio:
-          properties:
-            apicurio.registry.url: "http://accounts-registry:8080/apis/registry/v3"
-            apicurio.registry.artifact.group-id: accounts
-            apicurio.registry.find-latest: true
-          validate-outbound: false      # accounts publishes without validating
+           registries:
+              - name: accounts-registry
+                properties:
+                   apicurio.registry.url: "http://accounts-registry:8080/apis/registry/v3"
+                   apicurio.registry.artifact.group-id: accounts
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: audit-topic
 ```
 
 There is no inheritance between domains: each block is self contained, which keeps the effective configuration of a
@@ -188,42 +484,59 @@ reactive:
     kafka:
       app:
         apicurio:
-          properties: &registry
-            apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
-            apicurio.registry.find-latest: true
+           registries:
+              - name: main-registry
+                properties: &registry
+                   apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: events-topic
       accounts:
         apicurio:
-          properties:
-            <<: *registry
-            apicurio.registry.artifact.group-id: accounts
+           registries:
+              - name: accounts-registry
+                properties:
+                   <<: *registry
+                   apicurio.registry.artifact.group-id: accounts
+                topics:
+                   - name: audit-topic
 ```
 
-A domain is left unvalidated either by omitting its `apicurio` block or with
+A single domain is left unvalidated by declaring no registry for it, and a registry or a topic is turned off with
 `apicurio.registry.serde.validation-enabled: false`:
 
 ```yaml
       legacy:
-        apicurio:
-          properties:
-            apicurio.registry.serde.validation-enabled: false # legacy has no schemas registered yet
+         connection-properties:
+            bootstrap-servers: "localhost:9092"
+         # no apicurio block: legacy has no schemas registered yet
+```
+
+At least one domain of the application has to declare registries, otherwise the startup fails:
+
+```
+The async-commons-kafka-apicurio-starter dependency is present, but no domain declares
+reactive.commons.kafka.<domain>.apicurio.registries, so no topic would be validated and the registry client would be
+created for nothing. Declare the registries and the topics validated against them, or remove the dependency and keep
+async-commons-kafka-starter. Declared domains: [app].
 ```
 
 All the validators are built when the application starts, so a configuration error fails fast and the message points at
 the exact property, for instance
-`reactive.commons.kafka.accounts.apicurio.validate-outbound`.
+`reactive.commons.kafka.accounts.apicurio.registries[0].topics[1].properties`.
 
-:::note Domains resolving against the **same registry** share a single connection and a single schema cache, even when
-their group or artifact differ: the cache is indexed by the full coordinates, so the entries of one group never collide
-with those of another. Two domains only get separate clients when their registry configuration differs in something the
-client depends on, such as the endpoint, the credentials or the cache tuning.
+:::note Registries resolving against the **same endpoint** share a single connection and a single schema cache, whatever
+domain declares them and even when their group or artifact differ: the cache is indexed by the full coordinates, so the
+entries of one group never collide with those of another. Two registries only get separate clients when their
+configuration differs in something the client depends on, such as the endpoint, the credentials or the cache tuning.
 :::
 
 #### Two brokers, one registry
 
 Nothing ties a registry to a broker, so two domains connected to **different Kafka clusters** may validate against the
 same registry. It is a supported setup, and both domains will share one registry client. The thing to watch is that the
-artifact of a topic defaults to `<topic>-value` inside the domain's group, so two clusters that happen to have a topic
-with the same name resolve the **same artifact** when both domains also share a group.
+artifact of a topic defaults to `<topic>-value` inside the group of its registry, so two clusters that happen to have a
+topic with the same name resolve the **same artifact** when both registries also share a group.
 
 ```yaml
 reactive:
@@ -233,23 +546,30 @@ reactive:
         connection-properties:
           bootstrap-servers: "broker-a:9092"
         apicurio:
-          properties:
-            apicurio.registry.url: "http://registry:8080/apis/registry/v3"
-            apicurio.registry.artifact.group-id: app   # keeps app's event.push apart from accounts'
-            apicurio.registry.find-latest: true
+           registries:
+              - name: registry-app
+                properties:
+                   apicurio.registry.url: "http://registry:8080/apis/registry/v3"
+                   apicurio.registry.artifact.group-id: app   # keeps app's event.push apart from accounts'
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: event.push
       accounts:
         connection-properties:
           bootstrap-servers: "broker-b:9092"
         apicurio:
-          properties:
-            apicurio.registry.url: "http://registry:8080/apis/registry/v3"
-            apicurio.registry.artifact.group-id: accounts
-            apicurio.registry.find-latest: true
+           registries:
+              - name: accounts-registry
+                properties:
+                   apicurio.registry.url: "http://registry:8080/apis/registry/v3"
+                   apicurio.registry.artifact.group-id: accounts
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: event.push
 ```
 
-Give each domain its own `apicurio.registry.artifact.group-id` when the same topic name means different things in each
-cluster, and share one group
-when the intention is precisely that both clusters honour a single contract.
+Give each registry its own `apicurio.registry.artifact.group-id` when the same topic name means different things in each
+cluster, and share one group when the intention is precisely that both clusters honour a single contract.
 
 ### About `apicurio.registry.artifact.group-id`
 
@@ -258,62 +578,60 @@ Leaving it empty is the same as setting it to `default`: when no group is given,
 artifacts that were not created inside an explicit group. Set it only if you registered your schemas under a custom
 group.
 
-### `apicurio.registry.serde.validation-enabled` vs `validate-outbound` / `validate-inbound`
+### Turning the validation off with `apicurio.registry.serde.validation-enabled`
 
-They act on different axes and none of them replaces the other:
+A topic is validated in both directions or not at all, and there are two ways to leave it unvalidated:
 
-| Property                                            | Effect                                                                                                                                                                                    |
-|-----------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `apicurio.registry.serde.validation-enabled: false` | No Apicurio validator is built for the domain and Reactive Commons keeps its no-op validator. The registry is never contacted, so `apicurio.registry.url` and credentials are not needed. |
-| `validate-outbound` / `validate-inbound`            | The validator **is** created and connected to the registry, only the given direction is skipped.                                                                                          |
+| Declaration                                                         | Effect                                                                                                                                    |
+|---------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------|
+| The topic is not listed under any registry                          | No validator is built for it. The registry is never contacted for that topic, and its records are published without schema coordinates    |
+| `apicurio.registry.serde.validation-enabled: false` on the topic    | Same effect, keeping the declaration in place. Useful to turn one topic off without deleting its properties                               |
+| `apicurio.registry.serde.validation-enabled: false` on the registry | Every topic of that registry is left unvalidated, and no connection is opened. `apicurio.registry.url` and the credentials are not needed |
 
 Apicurio itself reads `apicurio.registry.serde.validation-enabled`
 ([
 `SerdeConfig.VALIDATION_ENABLED`](https://github.com/Apicurio/apicurio-registry/blob/3.3.2/serdes/generic/serde-common/src/main/java/io/apicurio/registry/serde/config/SerdeConfig.java),
-default `true`) with both `JsonSchemaSerializer` and `JsonSchemaDeserializer`. It applies to *both* directions,
-which in Kafka is never a problem: the serializer and the deserializer are different objects living in different
-applications, so a producer only ever configures the serializer.
+default `true`) with both `JsonSchemaSerializer` and `JsonSchemaDeserializer`, so the key keeps the meaning it has
+there,
+applied per topic.
 
-Reactive Commons is different: **a single `SchemaValidator` instance serves the producer and the consumer of the same
-domain**, so `apicurio.registry.serde.validation-enabled` alone could not express the common case of *"publish freely,
-validate what I receive"*. That is why the two directions are split into `validate-outbound` and `validate-inbound`, on
-top of the single switch that turns the whole feature on or off.
-
-:::danger Reactive Commons **fails at startup** with an `InvalidConfigurationException` when `validate-outbound` and
-`validate-inbound` are both `false`: that configuration would create the validator, connect to the registry and cache
-schemas without validating a single message.
-
-If the intention is to turn the feature off, set `apicurio.registry.serde.validation-enabled: false` in `properties`,
-which does not create anything.
+:::note Validating a single direction A declared topic is always validated in both directions: Reactive Commons has no
+`validate-outbound` / `validate-inbound` switch, and `ApicurioSchemaValidator` itself always resolves the schema and
+validates on publish and on consume. When a topic really has to be validated in one direction only, wrap it: declare a
+`SchemaValidator` bean whose `validateOutbound` or `validateInbound` delegates to an `ApicurioSchemaValidator` and whose
+other method is a no-op, as shown in [Per topic granularity](#per-topic-granularity).
 :::
 
-:::danger Reactive Commons also **fails at startup** when `properties` sets `apicurio.registry.headers.enabled: false`.
+:::danger Reactive Commons **fails at startup** when `properties` sets `apicurio.registry.headers.enabled: false`.
 The schema coordinates always travel in the record headers, so that property may only be set to `true`. See
 [Why the schema coordinates are always written](#why-the-schema-coordinates-are-always-written).
 :::
 
-:::danger Reactive Commons also **fails at startup** when a domain does not state how the schema version resolves, that
+:::danger Reactive Commons also **fails at startup** when a topic does not state how the schema version resolves, that
 is with an empty `apicurio.registry.artifact.version` and `apicurio.registry.find-latest` absent or `false`. See
 [`apicurio.registry.find-latest`](#apicurioregistryfind-latest).
 :::
 
-:::caution
-`validate-outbound: false` also means the schema is **not resolved** when publishing, so the record leaves **without the
-schema coordinates in its headers**. The consumer loses version fidelity and an Apicurio-serdes consumer will not be
-able to read the message. Disabling the outbound direction implies giving up the coordinates.
+:::danger Reactive Commons also **fails at startup** when `properties` sets
+`apicurio.registry.artifact-resolver-strategy`. See
+[Why the resolver strategy is not honoured](#artifact-resolver-strategy).
 :::
 
-### When to use each combination
+:::caution An unvalidated topic is published **without the schema coordinates in its headers**, because they are
+resolved by the very same validation step. The consumer of those records loses version fidelity, and an Apicurio-serdes
+consumer will not be able to read them. Leaving a topic out of the declaration means giving up the coordinates.
+:::
 
-| Scenario                                                                                                                                                                                     | Configuration                                         |
-|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------|
-| **Progressive adoption.** The topic already has legacy producers that do not comply. Guarantee what *this* service publishes without breaking the consumption of records still in the topic. | `validate-inbound: false`                             |
-| **Defensive consumer.** Reject malformed records coming from another team, while publishing to a topic whose schema is not registered yet.                                                   | `validate-outbound: false`                            |
-| **DLQ reprocessor.** Its input is invalid by definition; it validates only what it republishes after fixing it.                                                                              | `validate-inbound: false`                             |
-| **Producer with generated types.** The payload is built from classes generated out of the very same artifact, so validating on the way out is redundant on high volume topics.               | `validate-outbound: false`                            |
-| **Local development and tests.** There is no registry reachable from the laptop or the CI job.                                                                                               | `apicurio.registry.serde.validation-enabled: false`   |
-| **Production incident.** An incompatible version was registered or the registry is degraded, and the flow must be restored without a redeployment.                                           | `apicurio.registry.serde.validation-enabled: false`   |
-| **Service that only produces or only consumes.**                                                                                                                                             | nothing to set, the unused direction is never invoked |
+### When to leave a topic unvalidated
+
+| Scenario                                                                                                                                           | Configuration                                                       |
+|----------------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------|
+| **The topic has no artifact registered yet.** Progressive adoption, one topic at a time.                                                           | Do not declare the topic                                            |
+| **Legacy producers that do not comply.** The records already in the topic would be rejected on consume.                                            | Do not declare the topic until the producers are migrated           |
+| **DLQ reprocessor.** Its input is invalid by definition.                                                                                           | Do not declare the input topic, declare the one it republishes to   |
+| **Local development and tests.** There is no registry reachable from the laptop or the CI job.                                                     | `apicurio.registry.serde.validation-enabled: false` on the registry |
+| **Production incident.** An incompatible version was registered or the registry is degraded, and the flow must be restored without a redeployment. | `apicurio.registry.serde.validation-enabled: false`                 |
+| **A topic the application only consumes, or only produces.**                                                                                       | Declare it: the unused direction is never invoked                   |
 
 ### Why the schema coordinates are always written
 
@@ -337,6 +655,34 @@ Consumers that do not understand the headers simply ignore them, so writing them
 
 :::note Apicurio 3.x changed the default of `apicurio.registry.headers.enabled` from `true` to `false`. Reactive Commons
 keeps the 2.x behaviour and always writes them, so the value is forced to `true`.
+:::
+
+### Why the resolver strategy is not honoured {#artifact-resolver-strategy}
+
+`apicurio.registry.artifact-resolver-strategy` names the class Apicurio uses to derive the artifact of a record, for
+instance `TopicIdStrategy` (`<topic>-value`) or `SimpleTopicIdStrategy` (`<topic>`). **Reactive Commons rejects the
+property at startup** rather than accepting a value it cannot honour.
+
+The strategy is read by
+[
+`SchemaResolver#resolveSchema(Record)`](https://github.com/Apicurio/apicurio-registry/blob/3.3.2/schema-resolver/src/main/java/io/apicurio/registry/resolver/config/SchemaResolverConfig.java),
+the entry point the Apicurio serdes call with the Kafka record they are serializing. Reactive Commons never builds such
+a record: it resolves the schema by coordinates with `resolveSchemaByArtifactReference`, because the artifact of a topic
+is part of its configuration and must not depend on the payload. A configured strategy would therefore be instantiated
+by `DefaultSchemaResolver` and never invoked, and the failure would be silent: records keep being validated against
+`<topic>-value`, whatever the strategy says.
+
+Use the configuration instead, which covers the same cases:
+
+| Apicurio strategy       | Artifact it derives | Equivalent configuration                                                     |
+|-------------------------|---------------------|------------------------------------------------------------------------------|
+| `TopicIdStrategy`       | `<topic>-value`     | the default of Reactive Commons, nothing to set                              |
+| `SimpleTopicIdStrategy` | `<topic>`           | `apicurio.registry.artifact.artifact-id: <topic>` on that topic              |
+| a fixed artifact        | —                   | `apicurio.registry.artifact.artifact-id` on the registry or on the topic     |
+| anything else           | —                   | an `ArtifactReferenceProvider` passed to `ApicurioSchemaValidator.builder()` |
+
+:::note With one artifact name per topic, `registries` is what makes `SimpleTopicIdStrategy` unnecessary: each topic
+names its own artifact, and the topics that keep the `<topic>-value` convention declare nothing.
 :::
 
 ### Which artifact is used
@@ -380,32 +726,30 @@ obtains **the latest one anyway**. Rather than letting `find-latest: false` sile
 decision is required up front:
 
 ```
-No schema version could be resolved for domain app:
-reactive.commons.kafka.app.apicurio.properties.apicurio.registry.artifact.version is empty and
-reactive.commons.kafka.app.apicurio.properties.apicurio.registry.find-latest is false, which is its default in
-Apicurio. Set reactive.commons.kafka.app.apicurio.properties.apicurio.registry.artifact.version to pin the topic to
-a single version, or set reactive.commons.kafka.app.apicurio.properties.apicurio.registry.find-latest=true to
-validate against the latest one.
+No schema version could be resolved for topic 'events-topic': apicurio.registry.artifact.version is empty and
+apicurio.registry.find-latest is false, which is its default in Apicurio. Set apicurio.registry.artifact.version to
+pin the topic to a single version, or set apicurio.registry.find-latest=true to validate against the latest one,
+either in the registry properties or in reactive.commons.kafka.app.apicurio.registries[0].topics[0].properties.
 ```
 
-This applies to the whole domain, whichever direction is being validated.
+This applies to every declared topic, whichever direction is being validated.
 :::
 
 ### A producer that pins the version silently defeats `find-latest` downstream
 
-`apicurio.registry.artifact.version` and `apicurio.registry.find-latest` are evaluated **per domain**, so nothing stops
-the producer of a topic from pinning a version while a consumer of that same topic configures
-`find-latest: true`, expecting to always validate against the newest schema. That combination does not work the way it
-looks:
+`apicurio.registry.artifact.version` and `apicurio.registry.find-latest` are evaluated **per topic of each
+application**, so nothing stops the producer of a topic from pinning a version while a consumer of that same topic
+configures `find-latest: true`, expecting to always validate against the newest schema. That combination does not work
+the way it looks:
 
-1. The producer's domain has `apicurio.registry.artifact.version: 1` (or any other value) configured, so every outbound
+1. The producer's topic has `apicurio.registry.artifact.version: 1` (or any other value) configured, so every outbound
    record is validated against version 1 and, since a pinned version always wins, `find-latest` on the producer's own
-   domain is irrelevant here (see the table above).
+   topic is irrelevant here (see the table above).
 2. On every publish, Reactive Commons writes the coordinates it resolved into the record headers, including
    `apicurio.value.version=1` — this happens on **every** message, whether it was sent as a `DomainEvent`, a
    `CloudEvent`, or a raw message built by hand (`KafkaMessage`), because all three go through the same
    `validateOutbound` step.
-3. The consumer's domain has `apicurio.registry.artifact.version` empty and `find-latest: true`, which looks correct in
+3. The consumer's topic has `apicurio.registry.artifact.version` empty and `find-latest: true`, which looks correct in
    isolation. But the record already carries `apicurio.value.version=1` in its headers, and the artifact/group it names
    matches the one configured for that topic, so the consumer takes the version **from the headers** instead of asking
    the registry for the latest one (see [Which artifact is used](#which-artifact-is-used), second row).
@@ -417,7 +761,7 @@ own configuration looks correct, and `find-latest` genuinely does apply to messa
 all — for instance ones published by a client that is not Reactive Commons and does not write those headers.
 
 To have both sides really resolve the latest version, leave `apicurio.registry.artifact.version` empty **on the
-producer's domain too**:
+producer's topic too**:
 
 ```yaml title="Producer: resolves and stamps the latest version on every publish"
 reactive:
@@ -425,9 +769,14 @@ reactive:
     kafka:
       app:
         apicurio:
-          properties:
-            apicurio.registry.artifact.version:        # empty, not pinned
-            apicurio.registry.find-latest: true
+           registries:
+              - name: main-registry
+                properties:
+                   apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                   apicurio.registry.artifact.version:        # empty, not pinned
+                   apicurio.registry.find-latest: true
+                topics:
+                   - name: event.push
 ```
 
 With that change, the producer resolves the actual latest version at publish time and writes that into the headers, so a
@@ -663,9 +1012,11 @@ resolver, so closing it leaves the resolver usable for the other domains and rel
 
 ### Per topic granularity
 
-Since the configuration cannot distinguish topics, treating one of them differently requires a custom bean that
-delegates to a validator built with `ApicurioSchemaValidatorFactory.create(...)`. The factory takes the very same
-Apicurio keys used in `properties`, so nothing else changes:
+Declaring the topics under [`registries`](#per-topic-config) already gives each topic its own registry, group,
+artifact and directions, so a custom bean is not needed for that. What the properties cannot express is a rule that
+depends on something else than the topic name, for instance the payload or a feature flag. In that case delegate to a
+validator built with `ApicurioSchemaValidatorFactory.create(...)`, which takes the very same Apicurio keys used in
+`properties`:
 
 ```java
 import io.apicurio.registry.resolver.config.SchemaResolverConfig;
@@ -710,5 +1061,13 @@ Because the bean is declared with the plain `SchemaValidator` type, the one from
 (`@ConditionalOnMissingBean`) and the `apicurio` properties are no longer read: the delegate owns the whole
 configuration. Skipping `validateOutbound` for a topic also skips writing its schema coordinates in the headers.
 
-If what changes per topic is only the artifact, do not write a custom `SchemaValidator`: implement
+If what changes per topic is only the artifact, do not write a custom `SchemaValidator`: declare the topic under
+[`registries`](#per-topic-config) with its own `apicurio.registry.artifact.artifact-id`, or implement
 `ArtifactReferenceProvider` and pass it to `ApicurioSchemaValidator.builder()`.
+
+:::note With the per topic configuration, the validator of a domain is a `TopicSchemaValidatorRouter` that applies the
+validator of the topic of each record, and leaves the topics the domain does not declare unvalidated. Each domain gets
+its own router, so the same topic name may belong to another registry in another domain. A
+`DomainSchemaValidatorProvider` or a `SchemaValidator` bean still replaces it entirely.
+:::
+

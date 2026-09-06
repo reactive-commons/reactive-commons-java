@@ -12,10 +12,10 @@ travels on the broker.
 
 There are **two separate methods**, one per broker, and they are **not interchangeable**:
 
-| Method                             | Broker   | Enabled by              | What the name means                                        | What the handler receives                              |
-|------------------------------------|----------|-------------------------|------------------------------------------------------------|--------------------------------------------------------|
-| `HandlerRegistry.listenQueue(...)` | RabbitMQ | `@EnableQueueListeners` | The RabbitMQ queue itself                                  | A `RabbitMessage`, cast from the `RawMessage` argument |
-| `HandlerRegistry.listenTopic(...)` | Kafka    | `@EnableTopicListeners` | The Kafka **topic** consumed by a dedicated consumer group | A `KafkaMessage`, cast from the `RawMessage` argument  |
+| Method                             | Broker   | Enabled by              | What the name means                                      | What the handler receives                              |
+|------------------------------------|----------|-------------------------|----------------------------------------------------------|--------------------------------------------------------|
+| `HandlerRegistry.listenQueue(...)` | RabbitMQ | `@EnableQueueListeners` | The RabbitMQ queue itself                                | A `RabbitMessage`, cast from the `RawMessage` argument |
+| `HandlerRegistry.listenTopic(...)` | Kafka    | `@EnableTopicListeners` | The Kafka **topic**, consumed by the group of the domain | A `KafkaMessage`, cast from the `RawMessage` argument  |
 
 Registering `listenQueue` while running on Kafka (or `listenTopic` while running on RabbitMQ) has no effect: each
 `BrokerProvider` only starts the listeners meant for its own broker, so the "wrong" one for the active broker is
@@ -163,15 +163,13 @@ public class TopicHandler {
 
 ### How a topic is consumed
 
-Kafka has no native queue concept, so `listenTopic(...)` subscribes directly to that topic through a **dedicated
-consumer group**, derived from a base group id and the registered name: `<base>-<name>`. This keeps every raw topic
-listener isolated from the domain events and notification listeners, and lets several instances of the same application
-share the work of that topic exactly as several consumers competing for the same RabbitMQ queue would.
+Kafka has no native queue concept, so `listenTopic(...)` subscribes directly to that topic, using the **same consumer
+group as the rest of the listeners of that domain**. Registering a topic listener therefore does not create another
+consumer group: the group gains one subscription, and several instances of the application keep sharing the work of that
+topic exactly as several consumers competing for the same RabbitMQ queue would.
 
-The base is the `group.id` configured under `connection-properties.consumer.group-id` for the domain when present (the
-same one the domain events listener honours), and falls back to the application name otherwise. Since the topic name is
-already unique per listener, appending it to the base is enough to keep every topic listener isolated from the domain
-events listener and from each other, with no extra suffix needed.
+The group id is the `group.id` configured under `connection-properties.consumer.group-id` for the domain when present,
+the same one the domain events listener honours, and falls back to the application name otherwise.
 
 ```yaml title="application.yaml"
 reactive:
@@ -184,9 +182,23 @@ reactive:
 ```
 
 With the configuration above, a topic registered as `my.custom.topic` is consumed by the group
-`my-service.consumer-group-my.custom.topic`, and the domain events listener uses `my-service.consumer-group`
-directly (see [Kafka connection properties](./configuration_properties/2-kafka.md)). Without an explicit `group-id`,
-both fall back to `<appName>-<name>` and `<appName>-events` respectively.
+`my-service.consumer-group`, which is also the group of the domain events listener (see
+[Kafka connection properties](./configuration_properties/2-kafka.md)). Without an explicit `group-id`, the topic
+listeners fall back to `<appName>` and the domain events listener to `<appName>-events`.
+
+:::note One group, several subscriptions Each listener creates its own Kafka consumer, and all of them join the same
+group with their own subscription. Kafka assigns the partitions of a topic only among the members subscribed to it, so
+the listeners do not steal each other's records. What they do share is the rebalance: adding or removing any listener,
+or
+any instance, rebalances the whole group.
+:::
+
+:::caution Upgrading from a version that appended the topic name Earlier versions consumed each topic listener with
+`<base>-<topic>`. Moving to the shared group id means the new group starts with no committed offsets for that topic, so
+`auto.offset.reset` decides what happens with the records the old group had not processed: `latest`, the Kafka default,
+skips them, and `earliest` reprocesses the topic from its beginning. Check the lag of the old
+`<base>-<topic>` group before deploying.
+:::
 
 Because the registered name is used as the topic name, it must be a valid Kafka topic name.
 
@@ -230,22 +242,22 @@ public class HandlerRegistryConfiguration {
 }
 ```
 
-### One consumer group per topic, not shared
+### One consumer per topic, one group for all of them
 
-Each `listenTopic(...)` call starts its **own** consumer, with its own dedicated consumer group (see
+Each `listenTopic(...)` call starts its **own** consumer, and all of them join the consumer group of the domain (see
 [How a topic is consumed](#how-a-topic-is-consumed)). Registering several topics does **not** make a single consumer
 subscribe to all of them:
 
 ```java
-// This starts TWO independent consumers, each with its own consumer group,
-// not one consumer listening to both topics.
+// This starts TWO independent consumers inside the same consumer group,
+// each subscribed to its own topic, not one consumer listening to both.
 .listenTopic("topic.a", handlerA)
 .listenTopic("topic.b", handlerB)
 ```
 
-If what you need is a **single consumer group subscribed to several topic names**, `listenTopic` is not the right tool:
-use `listenEvent` / `listenDomainEvent` / `listenRawEvent` instead. All the names registered that way share one consumer
-group (the domain events one, see [Kafka connection properties](./configuration_properties/2-kafka.md))
+If what you need is a **single consumer subscribed to several topic names**, `listenTopic` is not the right tool:
+use `listenEvent` / `listenDomainEvent` / `listenRawEvent` instead. All the names registered that way are read by one
+consumer, in the domain events group (see [Kafka connection properties](./configuration_properties/2-kafka.md)),
 and Kafka's own partition assignment decides which pod gets which record; internally, each message is still routed to
 the handler that matches its topic name:
 

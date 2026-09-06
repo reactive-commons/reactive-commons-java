@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -280,31 +281,15 @@ class ApicurioSchemaValidatorTest {
     }
 
     @Test
-    void shouldSkipTheOutboundDirectionWhenOnlyInboundIsEnabled() {
-        ApicurioSchemaValidator inboundOnly = ApicurioSchemaValidator.builder()
-                .schemaResolver(schemaResolver)
-                .headersHandler(headersHandler)
-                .artifactReferenceProvider(new DefaultArtifactReferenceProvider(null, null, null))
-                .validateOutbound(false)
-                .build();
+    void shouldValidateOutboundAndInboundOfTheSameValidator() {
+        givenSchemaIsResolved();
+        Headers headers = new RecordHeaders();
 
-        assertThatCode(() -> inboundOnly.validateOutbound("person.topic", INVALID, new RecordHeaders()))
+        assertThatCode(() -> validator.validateOutbound("person.topic", VALID, headers))
                 .doesNotThrowAnyException();
-        verify(schemaResolver, never()).resolveSchemaByArtifactReference(any());
-    }
-
-    @Test
-    void shouldSkipTheInboundDirectionWhenOnlyOutboundIsEnabled() {
-        ApicurioSchemaValidator outboundOnly = ApicurioSchemaValidator.builder()
-                .schemaResolver(schemaResolver)
-                .headersHandler(headersHandler)
-                .artifactReferenceProvider(new DefaultArtifactReferenceProvider(null, null, null))
-                .validateInbound(false)
-                .build();
-
-        assertThatCode(() -> outboundOnly.validateInbound("person.topic", INVALID, new RecordHeaders()))
+        assertThatCode(() -> validator.validateInbound("person.topic", VALID, headers))
                 .doesNotThrowAnyException();
-        verify(schemaResolver, never()).resolveSchemaByArtifactReference(any());
+        verify(schemaResolver, times(2)).resolveSchemaByArtifactReference(any());
     }
 
     private static ArtifactReference argThatArtifactIs(String artifactId) {
@@ -320,20 +305,6 @@ class ApicurioSchemaValidatorTest {
             index = text.indexOf(fragment, index + fragment.length());
         }
         return count;
-    }
-
-    @Test
-    void shouldRejectAValidatorThatValidatesNeitherDirection() {
-        ApicurioSchemaValidator.ApicurioSchemaValidatorBuilder builder = ApicurioSchemaValidator.builder()
-                .schemaResolver(schemaResolver)
-                .headersHandler(headersHandler)
-                .artifactReferenceProvider(new DefaultArtifactReferenceProvider(null, null, null))
-                .validateOutbound(false)
-                .validateInbound(false);
-
-        assertThatThrownBy(builder::build)
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must validate at least one direction");
     }
 
     @Test

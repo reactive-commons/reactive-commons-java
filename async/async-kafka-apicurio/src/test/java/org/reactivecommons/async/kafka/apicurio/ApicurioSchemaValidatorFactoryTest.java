@@ -63,6 +63,30 @@ class ApicurioSchemaValidatorFactoryTest {
     }
 
     @Test
+    void shouldRejectAnArtifactResolverStrategy() {
+        Map<String, Object> configs = baseConfig();
+        configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
+                "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy");
+
+        assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.create(configs))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is set to")
+                .hasMessageContaining("instantiated and never invoked")
+                .hasMessageContaining("ArtifactReferenceProvider");
+    }
+
+    @Test
+    void shouldRejectAnArtifactResolverStrategyWhenOnlyTheResolverIsCreated() {
+        Map<String, Object> configs = baseConfig();
+        configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
+                "io.apicurio.registry.serde.strategy.TopicIdStrategy");
+
+        assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.createResolver(configs))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is set to");
+    }
+
+    @Test
     void shouldAcceptTheHeadersExplicitlyEnabled() {
         Map<String, Object> configs = baseConfig();
         configs.put(KafkaSerdeConfig.ENABLE_HEADERS, "true");
@@ -71,18 +95,10 @@ class ApicurioSchemaValidatorFactoryTest {
     }
 
     @Test
-    void shouldRejectAValidatorWithBothDirectionsDisabled() {
+    void shouldBuildAValidatorThatValidatesBothDirections() {
         Map<String, Object> configs = baseConfig();
 
-        assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.create(configs, null, false, false))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must validate at least one direction");
-    }
-
-    @Test
-    void shouldAllowDisablingEachDirectionIndependently() {
-        assertThat(ApicurioSchemaValidatorFactory.create(baseConfig(), null, false, true)).isNotNull();
-        assertThat(ApicurioSchemaValidatorFactory.create(baseConfig(), null, true, false)).isNotNull();
+        assertThat(ApicurioSchemaValidatorFactory.create(configs)).isNotNull();
     }
 
     @Test
@@ -163,8 +179,8 @@ class ApicurioSchemaValidatorFactoryTest {
         Map<String, Object> accounts = baseConfig();
         accounts.put(SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID, "accounts-group");
 
-        var first = ApicurioSchemaValidatorFactory.create(shared, app, null, true, true);
-        var second = ApicurioSchemaValidatorFactory.create(shared, accounts, null, true, true);
+        var first = ApicurioSchemaValidatorFactory.create(shared, app, null);
+        var second = ApicurioSchemaValidatorFactory.create(shared, accounts, null);
 
         // Nothing is resolved because the shared resolver is a stub, the point is which coordinates it is asked
         Headers headers = new RecordHeaders();
@@ -181,7 +197,7 @@ class ApicurioSchemaValidatorFactoryTest {
     @Test
     void shouldNotLetASharedResolverBeClosedByItsValidators() throws Exception {
         SchemaResolver<JsonSchema, Object> shared = mock(SchemaResolver.class);
-        var validator = ApicurioSchemaValidatorFactory.create(shared, baseConfig(), null, true, true);
+        var validator = ApicurioSchemaValidatorFactory.create(shared, baseConfig(), null);
 
         validator.close();
 

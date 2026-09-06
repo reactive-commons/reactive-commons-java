@@ -84,23 +84,10 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
     /**
      * Resolves the consumer group id used by a raw topic listener registered with
      * {@code HandlerRegistry.listenTopic(...)}.
-     * <p>
-     * Since Kafka has no native queue concept, the registered name is used directly as the topic name, consumed by
-     * a dedicated group derived from the configured base group id and that topic name, so every instance of the
-     * application shares the work of that topic exactly as several consumers competing for the same RabbitMQ queue
-     * would. The base is the <code>group.id</code> configured in the consumer connection properties when present
-     * (the same one {@link #resolveEventsGroupId()} honours), and falls back to <code>appName</code> otherwise.
-     * The topic name is already unique per listener, so appending it to the base is enough to keep every topic
-     * listener isolated from the domain events listener and from each other, with no extra infix needed.
      *
-     * @param topic the name registered for the listener, used as the topic name
-     * @return the consumer group id for that topic's listener
+     * @return the consumer group id for the topic listeners
      */
-    public String resolveTopicListenerGroupId(String topic) {
-        return resolveGroupIdBase() + "-" + topic;
-    }
-
-    private String resolveGroupIdBase() {
+    public String resolveTopicListenerGroupId() {
         Object configured = getConnectionProperties() == null ? null
                 : getConnectionProperties().buildConsumerProperties().get(ConsumerConfig.GROUP_ID_CONFIG);
         if (configured instanceof String groupId && !groupId.isBlank()) {

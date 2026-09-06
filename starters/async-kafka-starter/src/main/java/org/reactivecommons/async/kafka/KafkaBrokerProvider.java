@@ -105,7 +105,7 @@ public record KafkaBrokerProvider(String domain,
                     registeredListener,
                     discardNotifier,
                     errorReporter,
-                    props.resolveTopicListenerGroupId(registeredListener.queueName()));
+                    props.resolveTopicListenerGroupId());
             topicListener.startListener(topologyCreator);
         });
     }
