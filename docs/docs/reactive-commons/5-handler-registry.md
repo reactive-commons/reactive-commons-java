@@ -78,12 +78,11 @@ public class HandlerRegistry {
 }
 ```
 
-Methods that Has `CloudEvent` in the name are related to the CloudEvent specification.
+Methods that has `CloudEvent` in the name are related to the CloudEvent specification.
 
 Methods that has `domain` String argument are related to the multi-broker support, this support is limited to listen events
 from different domains (brokers) independent of the technology.
 
 `listenQueue` and `listenTopic` are broker-specific and intentionally **not** interchangeable: `listenQueue` only works
 when the underlying broker is RabbitMQ, and `listenTopic` only when it is Kafka. Registering the wrong one for the
-active broker has no effect, since each `BrokerProvider` only starts the listeners meant for its own broker. See
-[Handling Queues](./8-handling-queues.md) for details on each one.
+active broker has no effect, since each `BrokerProvider` only starts the listeners meant for its own broker.

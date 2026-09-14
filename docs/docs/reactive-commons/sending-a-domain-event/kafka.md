@@ -50,7 +50,7 @@ public class ReactiveEventsGateway {
     public static final String SOME_EVENT_NAME = "some.event.name";
     private final DomainEventBus domainEventBus; // Auto injected bean created by the @EnableDomainEventBus annotation
 
-    public Mono<Void> emit(Object event) {
+    public Mono<Void> emit(Object event/*change for proper model*/) {
          return Mono.from(domainEventBus.emit(new DomainEvent<>(SOME_EVENT_NAME, UUID.randomUUID().toString(), event)));
     }
 }
@@ -62,46 +62,29 @@ After that you can emit events from you application.
 
 `DomainEventBus.emit(RawMessage event)` bypasses the `DomainEvent` / `CloudEvent` conventions: instead of building a
 generic envelope, you hand over the broker-specific message yourself, with full control over its body, routing and
-headers. This is the emitting counterpart of
-[Listening Raw Events](../handling-domain-events/kafka.md#listening-raw-events): build a `KafkaMessage` and pass it to
-`emit(...)`.
+headers.
 
-`emit(String domain, RawMessage event)` is **not implemented**; it always throws `UnsupportedOperationException`,
-exactly like the `DomainEvent` and `CloudEvent` overloads with an explicit domain.
-
-For Kafka there is no separate routing key parameter: the **topic** (and the partitioning key) travel inside the
+For Kafka there is no separate routing key parameter: the **topic** and the partitioning key travel inside the
 `KafkaMessage` itself, through `KafkaMessageProperties`:
 
 ```java
 @RequiredArgsConstructor
 @EnableDomainEventBus
 public class ReactiveEventsGateway {
+    private final JsonMapper jsonMapper;
     private final DomainEventBus domainEventBus;
 
-    public Mono<Void> emitRaw(byte[] payload) {
+    public Mono<Void> emitRaw(Object payload/*change for proper model*/) {
         KafkaMessage.KafkaMessageProperties properties = new KafkaMessage.KafkaMessageProperties();
         properties.setTopic("some.event.name");         // required: this is where the record is published
         properties.setKey(UUID.randomUUID().toString()); // optional: Kafka partitioning key
         properties.getHeaders().put("content-type", "application/json");
 
-        RawMessage rawMessage = new KafkaMessage(payload, properties, null);
+        var rawMessage = new KafkaMessage(jsonMapper.writeValueAsBytes(payload), properties, null);
         return Mono.from(domainEventBus.emit(rawMessage));
     }
 }
 ```
-
-:::caution `KafkaMessageProperties.topic` is **required**. Reactive Commons resolves the topic to publish to directly
-from the `KafkaMessage` properties, unlike `DomainEvent` and `CloudEvent` whose name/type is used for that purpose. A
-missing or blank topic fails the send, either because it does not exist (when topic checking is enabled) or because
-Kafka itself rejects a record without a topic.
-:::
-
-Because the schema validator (when configured) validates the outbound payload against the topic in
-`KafkaMessageProperties.topic`, a raw message is validated exactly like any other message published to that topic. This
-is where a producer that pins its own schema version — instead of also resolving `find-latest` — silently propagates
-that pinned version to every consumer of the topic, see
-[A producer that pins the version silently defeats
-`find-latest` downstream](../configuration_properties/3-kafka-schema-validation.md#a-producer-that-pins-the-version-silently-defeats-find-latest-downstream).
 
 ## Example
 

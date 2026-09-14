@@ -10,12 +10,15 @@ sidebar_position: 1
 
 ![Example banner](./img/reactive-commons.png)
 
-The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and practices that make the foundation of a reactive microservices architecture.
+The purpose of reactive-commons is to provide a set of abstractions and implementations over different patterns and
+practices that make the foundation of a reactive microservices architecture.
 
-Even though the main purpose is to provide such abstractions in a mostly generic way such abstractions would be of little use without a concrete implementation so we provide some implementations in a best effors maner that aim to be easy to change, personalize and extend.
+Even though the main purpose is to provide such abstractions in a mostly generic way such abstractions would be of
+little use without a concrete implementation so we provide some implementations in a best effors maner that aim to be
+easy to change, personalize and extend.
 
-The first approach to this work was to release a very simple abstractions and a corresponding implementation over asyncronous message driven communication between microservices build on top of project-reactor and spring boot.
-
+The first approach to this work was to release a very simple abstractions and a corresponding implementation over
+asyncronous message driven communication between microservices build on top of project-reactor and spring boot.
 
 ## Project Reactor
 
@@ -37,36 +40,49 @@ avoiding unnecessary intermediate buffering or blocking.
 ## Reactive API for Event Mechanism
 
 Reactive Commons is a reactive API for asynchronous message driven communication based on Reactor.
-Reactive Commons API enables messages to be published over a event bus like RabbitMQ or SNS/SQS and consumed using functional APIs with non-blocking back-pressure and low overheads.
-It enables applications using Reactor to use RabbitMQ or SNS/SQS as a message bus, integrating it with other systems to provide an end-to-end reactive system.
+Reactive Commons API enables messages to be published over a event bus like RabbitMQ or Kafka and consumed using
+functional APIs with non-blocking back-pressure and low overheads.
+It enables applications using Reactor to use RabbitMQ or Kafka as a message bus, integrating it with other systems to
+provide an end-to-end reactive system.
 
-When we talk about asynchronous message driven communication, we can use several sematic ways to use the term "message". So, we can talk about Events, Commands and Queries.
+When we talk about asynchronous message driven communication, we can use several sematic ways to use the term "message".
+So, we can talk about Events, Commands and Queries.
 
 ## Cloud Events
 
-[CloudEvents](https://cloudevents.io/) is a specification for describing event data in a common way. CloudEvents seeks to dramatically simplify event declaration and delivery across services, platforms, and beyond!
+[CloudEvents](https://cloudevents.io/) is a specification for describing event data in a common way. CloudEvents seeks
+to dramatically simplify event declaration and delivery across services, platforms, and beyond!
 
 ## Async API
 
-[Async API](https://www.asyncapi.com/) Open-Source tools to easily build and maintain your event-driven architecture. All powered by the AsyncAPI specification, the industry standard for defining asynchronous APIs.
+[Async API](https://www.asyncapi.com/) Open-Source tools to easily build and maintain your event-driven architecture.
+All powered by the AsyncAPI specification, the industry standard for defining asynchronous APIs.
 
 ## Reactive Commons Abstraction
 
 #### Events - Pub/Sub
 
-Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want to notify to its subscribers. Events represents facts that nobody can change, so events are not intentions or requests of anything, An example may be and UserRegistered or a NotificationSent.
+Events represent a fact inside the domain, it is the representation of a decision or a state change that a system want
+to notify to its subscribers. Events represents facts that nobody can change, so events are not intentions or requests
+of anything, An example may be and UserRegistered or a NotificationSent.
 
-Events are the most important topic in a Publish-Subscribe system, because this element let's notify a many stakeholders in a specific event. An other benefit is the system is decouple, because you can add more subscriber to the system without modify some component.
+Events are the most important topic in a Publish-Subscribe system, because this element let's notify a many stakeholders
+in a specific event. An other benefit is the system is decouple, because you can add more subscriber to the system
+without modify some component.
 
-We support a Notification Event pattern in which each instance of an app can receive an event, it can be used to refresh or invalidate some data in all replicas.
+We support a Notification Event pattern in which each instance of an app can receive an event, it can be used to refresh
+or invalidate some data in all replicas.
 
 #### Commands
 
-Commands represent a intention for doing something, that intention must to be done by the domain context with that responsibility. An example of a command may be:  "registerUser" or "sendNotification".
+Commands represent a intention for doing something, that intention must to be done by the domain context with that
+responsibility. An example of a command may be:  "registerUser" or "sendNotification".
 
 #### Request / Reply
 
-Queries represent a intention for getting information about something, that query must to be processed by the domain context with that responsibility and that context must respond with the information requested throught request/reply pattern. An example of a query may be:  "UserInfo".
+Queries represent a intention for getting information about something, that query must to be processed by the domain
+context with that responsibility and that context must respond with the information requested throught request/reply
+pattern. An example of a query may be:  "UserInfo".
 
 ## Versioning
 
@@ -78,5 +94,6 @@ MAJOR version when you make incompatible API changes,
 
 MINOR version when you add functionality in a backwards compatible manner, and
 
-PATCH version when you make backwards compatible bug fixes. Additional labels for pre-release and build metadata are available as extensions to the MAJOR.MINOR.PATCH format. == New & Noteworthy
+PATCH version when you make backwards compatible bug fixes. Additional labels for pre-release and build metadata are
+available as extensions to the MAJOR.MINOR.PATCH format. == New & Noteworthy
 

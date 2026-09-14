@@ -22,7 +22,7 @@ public class HandlerRegistryConfiguration {
 }
 ```
 
-To effectively start listening events you should add the annotation `@EnableEventListeners` to your MainApplication
+To effectively start listening events you should add the annotation `@EnableEventListeners` to your `MainApplication`
 class or any other spring Configuration class, for example the `EventsHandler` class can be like:
 
 ```java
@@ -68,10 +68,8 @@ public class EventsHandler {
 }
 ```
 
-A notification event is delivered to **every** instance of the application, not just one of them: each pod declares its
+A notification event is delivered to **every** instance of the application: each pod declares its
 own temporary, exclusive queue bound to the events exchange, so the message is broadcast rather than load balanced.
-See [Communication Scenarios](/reactive-commons-java/docs/category/communication-scenarios) for the event vs.
-notification delivery semantics.
 
 ### Listening Raw Events
 

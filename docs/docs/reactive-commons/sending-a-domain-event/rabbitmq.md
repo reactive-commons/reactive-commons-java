@@ -50,7 +50,7 @@ public class ReactiveEventsGateway {
     public static final String SOME_EVENT_NAME = "some.event.name";
     private final DomainEventBus domainEventBus; // Auto injected bean created by the @EnableDomainEventBus annotation
 
-    public Mono<Void> emit(Object event) {
+    public Mono<Void> emit(Object event/*change for proper model*/) {
          return Mono.from(domainEventBus.emit(new DomainEvent<>(SOME_EVENT_NAME, UUID.randomUUID().toString(), event)));
     }
 }
@@ -62,37 +62,29 @@ After that you can emit events from you application.
 
 `DomainEventBus.emit(RawMessage event)` bypasses the `DomainEvent` / `CloudEvent` conventions: instead of building a
 generic envelope, you hand over the broker-specific message yourself, with full control over its body, routing and
-headers. This is the emitting counterpart of
-[Listening Raw Events](../handling-domain-events/rabbitmq.md#listening-raw-events): build a `RabbitMessage` and pass it
-to `emit(...)`.
-
-`emit(String domain, RawMessage event)` is **not implemented**; it always throws `UnsupportedOperationException`,
-exactly like the `DomainEvent` and `CloudEvent` overloads with an explicit domain.
-
-`emit(RawMessage event)` always publishes to the domain's events exchange, using `RawMessage.getType()` as the **routing
-key**. Build a `RabbitMessage` with the body and properties you need:
+headers. Build a `RabbitMessage` with the body and properties you need:
 
 ```java
 @RequiredArgsConstructor
 @EnableDomainEventBus
 public class ReactiveEventsGateway {
+    private final JsonMapper jsonMapper;
     private final DomainEventBus domainEventBus;
 
-    public Mono<Void> emitRaw(byte[] payload) {
+    public Mono<Void> emitRaw(Object payload/*change for proper model*/) {
         RabbitMessage.RabbitMessageProperties properties = new RabbitMessage.RabbitMessageProperties();
         properties.setContentType("application/json");
         properties.getHeaders().put("x-custom-header", "value");
 
-        RawMessage rawMessage = new RabbitMessage(payload, properties, "some.event.name" /* routing key */);
+        var rawMessage = new RabbitMessage(
+                jsonMapper.writeValueAsBytes(payload)
+                properties,
+                "some.event.name" /* routing key */
+        );
         return Mono.from(domainEventBus.emit(rawMessage));
     }
 }
 ```
-
-`RabbitMessage.getType()` is used as the routing key on the domain's events exchange, exactly like
-`DomainEvent.getName()`
-or `CloudEvent.getType()` are for their respective overloads. The exchange itself is always the one configured for the
-domain, it cannot be overridden through the raw message.
 
 ## Example
 

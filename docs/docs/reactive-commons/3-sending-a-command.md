@@ -4,9 +4,7 @@ sidebar_position: 3
 
 # Sending a Command
 
-:::warning Not available on Kafka Commands are **not supported by the Kafka implementation** of Reactive Commons. Use
-the RabbitMQ implementation, or model the interaction as a
-[domain event](./sending-a-domain-event/kafka.md) when the transport must be Kafka.
+:::info only available in RabbitMQ
 :::
 
 ## API specification
@@ -48,7 +46,7 @@ public interface DirectAsyncGateway {
 }
 ```
 
-You can send a CloudEvent or a Command\<T> to a target application. You also can send a command to a specific domain
+You can send a `CloudEvent` or a `Command\<T>` to a target application. You also can send a command to a specific domain
 (remote broker out of you application context).
 
 ## Enabling autoconfiguration
@@ -75,31 +73,63 @@ After that you can send commands from you application to a remote application th
 ## Sending a Raw Command
 
 There is no separate API to *send* a raw command: `RawCommandHandler` (see
-[Listening Raw Commands](./7-handling-commands.md#listening-raw-commands)) is a **receiving-side** concept. You send the
-command exactly like any other one, with `sendCommand(Command<T>, targetName)` or
-`sendCommand(CloudEvent, targetName)`; what makes it "raw" is that the receiver processes it without converting it to a
-`Command<T>` or `CloudEvent` first, and without filtering by command name.
+[Listening Raw Commands](./7-handling-commands.md#listening-raw-commands)) is a **receiving-side** concept only. On the
+sending side you always call `sendCommand(Command<T>, targetName)` or `sendCommand(CloudEvent, targetName)`, exactly as
+in [Enabling autoconfiguration](#enabling-autoconfiguration) above. What makes a command "raw" is entirely decided by
+the **receiver**: it processes the command without converting it to a `Command<T>` or `CloudEvent` first, and without
+filtering by command name.
 
-```java
+The example below sends one command the normal way, and shows the two ways the target application could receive it,
+to make that distinction concrete.
+
+```java title="Sender: no different from any other command"
 @RequiredArgsConstructor
 @EnableDirectAsyncGateway
 public class ReactiveDirectAsyncGateway {
-    public static final String TARGET_NAME = "other-app";
+    public static final String TARGET_NAME = "other-app"; // remote spring.application.name
     public static final String SOME_COMMAND_NAME = "some.command.name";
     private final DirectAsyncGateway gateway;
 
-    public Mono<Void> runRemoteJob(Object command) {
-        // Sent the same way as any other command; the target application decides to handle it with a
-        // RawCommandHandler instead of a DomainCommandHandler
-        return gateway.sendCommand(new Command<>(SOME_COMMAND_NAME, UUID.randomUUID().toString(), command), TARGET_NAME);
+    public Mono<Void> runRemoteJob(Object payload) {
+        return gateway.sendCommand(new Command<>(SOME_COMMAND_NAME, UUID.randomUUID().toString(), payload), TARGET_NAME);
     }
 }
 ```
 
-This is only relevant for RabbitMQ, since commands are not supported on Kafka at all. A `RawCommandHandler` receives
-every command routed to its queue as a `RabbitMessage`, regardless of the name used to send it, which is why it is
-useful for consumers that do not want to declare a handler per command name, or that need the raw body/headers rather
-than a deserialized payload.
+```java title="Receiver option A: typed handler, filtered by command name"
+
+@Configuration
+public class HandlerRegistryConfiguration {
+
+    @Bean
+    public HandlerRegistry handlerRegistry(CommandsHandler commands) {
+        return HandlerRegistry.register()
+                .handleCommand("some.command.name", commands::handleCommandA, Payload.class);
+    }
+}
+```
+
+```java title="Receiver option B: raw handler, receives every command regardless of its name"
+
+@Configuration
+public class HandlerRegistryConfiguration {
+
+    @Bean
+    public HandlerRegistry handlerRegistry(CommandsHandler commands) {
+        return HandlerRegistry.register()
+                .handleRawCommand(commands::handleRawCommandA);
+    }
+}
+```
+
+Both options receive the very same message the sender published; the difference is entirely in how the **target
+application** chose to register its handler. A `RawCommandHandler` receives it as a `RawMessage`, cast to
+`RabbitMessage` to reach the body, headers and other broker-level properties, as shown in
+[Listening Raw Commands](./7-handling-commands.md#listening-raw-commands).
+
+This is only relevant for RabbitMQ, since commands are not supported on Kafka at all. A raw handler is useful for
+consumers that do not want to declare a handler per command name, or that need the raw body/headers rather than a
+deserialized payload — for instance a generic audit log, or a gateway that forwards commands elsewhere unopened.
 
 ## Example
 

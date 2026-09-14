@@ -4,8 +4,7 @@ sidebar_position: 4
 
 # Making an Async Query
 
-:::warning Not available on Kafka Async queries are **not supported by the Kafka implementation** of Reactive Commons,
-because they rely on a request-reply pattern. Use the RabbitMQ implementation for this feature.
+:::info Only available in RabbitMQ
 :::
 
 ## API specification
@@ -42,9 +41,10 @@ public interface DirectAsyncGateway {
 }
 ```
 
-In this method the Class\<R> called type is the return type of the query, represented by a JSON Serializable object
+In this method the `Class\<R>` called type is the return type of the query, represented by a JSON Serializable object
 
-You can send a CloudEvent or an AsyncQuery\<T> to a target application. You also can send a query to a specific domain
+You can send a `CloudEvent` or an `AsyncQuery\<T>` to a target application. You also can send a query to a specific
+domain
 (remote broker out of you application context).
 
 ## Enabling autoconfiguration
