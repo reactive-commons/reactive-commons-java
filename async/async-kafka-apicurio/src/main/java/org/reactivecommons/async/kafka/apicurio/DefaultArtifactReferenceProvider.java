@@ -7,23 +7,30 @@ import lombok.RequiredArgsConstructor;
  * Default {@link ArtifactReferenceProvider}.
  * <p>
  * When explicit coordinates are configured ({@code apicurio.registry.artifact.artifact-id}) they win
- * for every topic. Otherwise, it falls back to the same convention used by Apicurio's
- * {@code TopicIdStrategy}: {@code <topic>-value}.
+ * for every topic. Otherwise, the artifact id is derived from the topic name following {@code idStrategy}.
  */
 @RequiredArgsConstructor
 public class DefaultArtifactReferenceProvider implements ArtifactReferenceProvider {
 
-    private static final String VALUE_SUFFIX = "-value";
-
     private final String explicitGroupId;
     private final String explicitArtifactId;
     private final String explicitVersion;
+    private final ArtifactIdStrategy idStrategy;
+
+    /**
+     * Keeps the {@code TopicIdStrategy} convention when no strategy is configured, as it did before
+     * {@link ArtifactIdStrategy} existed.
+     */
+    public DefaultArtifactReferenceProvider(String explicitGroupId, String explicitArtifactId,
+                                            String explicitVersion) {
+        this(explicitGroupId, explicitArtifactId, explicitVersion, ArtifactIdStrategy.TOPIC_ID);
+    }
 
     @Override
     public ArtifactReference referenceFor(String topic) {
         String artifactId = (explicitArtifactId != null && !explicitArtifactId.isBlank())
                 ? explicitArtifactId
-                : topic + VALUE_SUFFIX;
+                : idStrategy.artifactIdFor(topic);
 
         return ArtifactReference.builder()
                 .groupId(emptyToNull(explicitGroupId))

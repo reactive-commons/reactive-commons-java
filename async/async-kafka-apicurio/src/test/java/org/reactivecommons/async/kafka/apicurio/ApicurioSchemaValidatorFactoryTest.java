@@ -63,10 +63,40 @@ class ApicurioSchemaValidatorFactoryTest {
     }
 
     @Test
-    void shouldRejectAnArtifactResolverStrategy() {
+    void shouldResolveTheArtifactIdFromTheTopicWithSimpleTopicIdStrategy() {
+        SchemaResolver<JsonSchema, Object> shared = mock(SchemaResolver.class);
         Map<String, Object> configs = baseConfig();
         configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
                 "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy");
+
+        var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
+
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+                .isInstanceOf(SchemaValidationException.class);
+        // SimpleTopicIdStrategy: the topic name itself, with no suffix
+        verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "event.push".equals(ref.getArtifactId())));
+    }
+
+    @Test
+    void shouldResolveTheArtifactIdFromTheTopicWithTopicIdStrategy() {
+        SchemaResolver<JsonSchema, Object> shared = mock(SchemaResolver.class);
+        Map<String, Object> configs = baseConfig();
+        configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
+                "io.apicurio.registry.serde.strategy.TopicIdStrategy");
+
+        var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
+
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+                .isInstanceOf(SchemaValidationException.class);
+        // TopicIdStrategy: <topic>-value, same as the default with no strategy configured
+        verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "event.push-value".equals(ref.getArtifactId())));
+    }
+
+    @Test
+    void shouldRejectAnUnrecognisedArtifactResolverStrategy() {
+        Map<String, Object> configs = baseConfig();
+        configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
+                "io.apicurio.registry.serde.strategy.RecordIdStrategy");
 
         assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.create(configs))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -76,14 +106,29 @@ class ApicurioSchemaValidatorFactoryTest {
     }
 
     @Test
-    void shouldRejectAnArtifactResolverStrategyWhenOnlyTheResolverIsCreated() {
+    void shouldLetAnExplicitArtifactIdWinOverTheStrategy() {
+        SchemaResolver<JsonSchema, Object> shared = mock(SchemaResolver.class);
+        Map<String, Object> configs = baseConfig();
+        configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
+                "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy");
+        configs.put(SchemaResolverConfig.EXPLICIT_ARTIFACT_ID, "fixed-artifact");
+
+        var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
+
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+                .isInstanceOf(SchemaValidationException.class);
+        verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "fixed-artifact".equals(ref.getArtifactId())));
+    }
+
+    @Test
+    void shouldNotRejectTheStrategyWhenOnlyTheResolverIsCreated() {
         Map<String, Object> configs = baseConfig();
         configs.put(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY,
                 "io.apicurio.registry.serde.strategy.TopicIdStrategy");
 
-        assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.createResolver(configs))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is set to");
+        // The strategy only affects which artifact id is used, resolved later per record; the resolver itself,
+        // which only depends on the registry endpoint and credentials, is unaffected by it
+        assertThat(ApicurioSchemaValidatorFactory.createResolver(configs)).isNotNull();
     }
 
     @Test

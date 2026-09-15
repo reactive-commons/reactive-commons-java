@@ -14,6 +14,7 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.kafka.receiver.ReceiverOffset;
 import reactor.kafka.receiver.ReceiverRecord;
 import reactor.test.StepVerifier;
 
@@ -152,7 +153,7 @@ class ApplicationTopicListenerTest {
         when(receiverRecord.value()).thenReturn("payload".getBytes(StandardCharsets.UTF_8));
         when(receiverRecord.headers()).thenReturn(new RecordHeaders());
         when(receiverRecord.key()).thenReturn("key");
-        when(receiverRecord.receiverOffset()).thenReturn(mock(reactor.kafka.receiver.ReceiverOffset.class));
+        when(receiverRecord.receiverOffset()).thenReturn(mock(ReceiverOffset.class));
 
         final RawMessage[] received = new RawMessage[1];
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
@@ -166,7 +167,8 @@ class ApplicationTopicListenerTest {
 
         listener.startListener(topologyCreator);
 
-        StepVerifier.create(Mono.just(receiverRecord).flatMap(rec -> listener.handle(rec, java.time.Instant.now())))
+        StepVerifier.create(Mono.just(receiverRecord)
+                        .flatMap(rec -> listener.handle(rec, java.time.Instant.now())))
                 .expectNextCount(1)
                 .verifyComplete();
         assertThat(received[0]).isNotNull();

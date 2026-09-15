@@ -40,5 +40,5 @@ public class ApicurioValidationProperties {
      */
     @NestedConfigurationProperty
     @Builder.Default
-    private List<ApicurioRegistryDefinition> registries = new ArrayList<>();
+    private List<ApicurioRegistry> registries = new ArrayList<>();
 }

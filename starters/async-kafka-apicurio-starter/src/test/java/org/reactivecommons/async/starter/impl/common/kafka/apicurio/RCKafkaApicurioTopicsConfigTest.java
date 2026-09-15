@@ -3,8 +3,8 @@ package org.reactivecommons.async.starter.impl.common.kafka.apicurio;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.kafka.apicurio.ApicurioSchemaValidator;
 import org.reactivecommons.async.kafka.apicurio.TopicSchemaValidatorRouter;
-import org.reactivecommons.async.kafka.config.props.ApicurioRegistryDefinition;
-import org.reactivecommons.async.kafka.config.props.ApicurioTopicDefinition;
+import org.reactivecommons.async.kafka.config.props.ApicurioRegistry;
+import org.reactivecommons.async.kafka.config.props.ApicurioTopic;
 import org.reactivecommons.async.kafka.config.props.ApicurioValidationProperties;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
 import org.reactivecommons.async.kafka.validation.DomainSchemaValidatorProvider;
@@ -56,13 +56,13 @@ class RCKafkaApicurioTopicsConfigTest {
                     context.getBean(AsyncKafkaPropsDomain.class).getProps("app").getApicurio();
 
             assertThat(properties.getRegistries()).hasSize(1);
-            ApicurioRegistryDefinition registry = properties.getRegistries().get(0);
+            ApicurioRegistry registry = properties.getRegistries().get(0);
             assertThat(registry.getName()).isEqualTo("main-registry");
             assertThat(registry.getProperties())
                     .containsEntry("apicurio.registry.url", MAIN_URL)
                     .containsEntry("apicurio.registry.artifact.group-id", "kafka")
                     .containsEntry("apicurio.registry.find-latest", "true");
-            assertThat(registry.getTopics()).extracting(ApicurioTopicDefinition::getName)
+            assertThat(registry.getTopics()).extracting(ApicurioTopic::getName)
                     .containsExactly("events-topic", "audit-topic");
             assertThat(registry.getTopics().get(0).getProperties()).isEmpty();
             assertThat(registry.getTopics().get(1).getProperties())
@@ -221,8 +221,7 @@ class RCKafkaApicurioTopicsConfigTest {
                 .rootCause()
                 .isInstanceOf(InvalidConfigurationException.class)
                 .hasMessageContaining("async-commons-kafka-apicurio-starter dependency is present")
-                .hasMessageContaining("reactive.commons.kafka.<domain>.apicurio.registries")
-                .hasMessageContaining("Declared domains: [app]"));
+                .hasMessageContaining("reactive.commons.kafka.<domain>.apicurio.registries"));
     }
 
     @Test

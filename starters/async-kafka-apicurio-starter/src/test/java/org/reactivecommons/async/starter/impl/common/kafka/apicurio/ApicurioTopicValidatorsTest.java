@@ -13,8 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.reactivecommons.async.kafka.apicurio.SharedSchemaResolvers;
 import org.reactivecommons.async.kafka.apicurio.TopicSchemaValidatorRouter;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
-import org.reactivecommons.async.kafka.config.props.ApicurioRegistryDefinition;
-import org.reactivecommons.async.kafka.config.props.ApicurioTopicDefinition;
+import org.reactivecommons.async.kafka.config.props.ApicurioRegistry;
+import org.reactivecommons.async.kafka.config.props.ApicurioTopic;
 import org.reactivecommons.async.kafka.config.props.ApicurioValidationProperties;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaPropsDomain;
@@ -99,30 +99,30 @@ class ApicurioTopicValidatorsTest {
         return properties;
     }
 
-    private static ApicurioRegistryDefinition registry(String name, String url,
-                                                       ApicurioTopicDefinition... topics) {
-        return ApicurioRegistryDefinition.builder()
+    private static ApicurioRegistry registry(String name, String url,
+                                             ApicurioTopic... topics) {
+        return ApicurioRegistry.builder()
                 .name(name)
                 .properties(registryProperties(url))
                 .topics(new ArrayList<>(Arrays.asList(topics)))
                 .build();
     }
 
-    private static ApicurioTopicDefinition topic(String name) {
-        return ApicurioTopicDefinition.builder().name(name).build();
+    private static ApicurioTopic topic(String name) {
+        return ApicurioTopic.builder().name(name).build();
     }
 
-    private static ApicurioTopicDefinition topic(String name, String key, String value) {
+    private static ApicurioTopic topic(String name, String key, String value) {
         Map<String, String> properties = new HashMap<>();
         properties.put(key, value);
-        return ApicurioTopicDefinition.builder().name(name).properties(properties).build();
+        return ApicurioTopic.builder().name(name).properties(properties).build();
     }
 
-    private static List<ApicurioRegistryDefinition> declared(ApicurioRegistryDefinition... registries) {
+    private static List<ApicurioRegistry> declared(ApicurioRegistry... registries) {
         return new ArrayList<>(Arrays.asList(registries));
     }
 
-    private TopicSchemaValidatorRouter router(List<ApicurioRegistryDefinition> registries) {
+    private TopicSchemaValidatorRouter router(List<ApicurioRegistry> registries) {
         return ApicurioTopicValidators.create(registries, "app", resolvers);
     }
 
@@ -242,7 +242,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldKeepEveryTopicUnvalidatedWhenTheRegistryDisablesTheValidation() {
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL,
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL,
                 topic("events-topic"), topic("audit-topic"));
         registry.getProperties().put("apicurio.registry.serde.validation-enabled", "false");
 
@@ -274,7 +274,7 @@ class ApicurioTopicValidatorsTest {
     @Test
     void shouldLetSeveralTopicsShareOneArtifact() {
         // A single contract for several topics: the registry names the artifact and no topic overrides it
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL,
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL,
                 topic("events-topic"), topic("audit-topic"));
         registry.getProperties().put("apicurio.registry.artifact.artifact-id", "envelope");
 
@@ -308,7 +308,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldResolveTheDefaultGroupWhenTheRegistryDeclaresNone() {
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL, topic("events-topic"));
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL, topic("events-topic"));
         registry.getProperties().remove("apicurio.registry.artifact.group-id");
 
         ArtifactReference reference = referenceUsedBy(router(declared(registry)), "events-topic",
@@ -357,7 +357,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectATopicDeclaredTwiceInTheSameDomain() {
-        List<ApicurioRegistryDefinition> registries = declared(
+        List<ApicurioRegistry> registries = declared(
                 registry("main-registry", MAIN_URL, topic("audit-topic")),
                 registry("secondary-registry", SECONDARY_URL, topic("audit-topic")));
 
@@ -398,7 +398,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectARegistryWithoutTopics() {
-        List<ApicurioRegistryDefinition> registries = declared(registry("main-registry", MAIN_URL));
+        List<ApicurioRegistry> registries = declared(registry("main-registry", MAIN_URL));
 
         assertThatThrownBy(() -> router(registries))
                 .isInstanceOf(InvalidConfigurationException.class)
@@ -408,8 +408,8 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectATopicWithoutName() {
-        List<ApicurioRegistryDefinition> registries = declared(
-                registry("main-registry", MAIN_URL, ApicurioTopicDefinition.builder().build()));
+        List<ApicurioRegistry> registries = declared(
+                registry("main-registry", MAIN_URL, ApicurioTopic.builder().build()));
 
         assertThatThrownBy(() -> router(registries))
                 .isInstanceOf(InvalidConfigurationException.class)
@@ -418,7 +418,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectATopicWithoutRegistryUrl() {
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL, topic("events-topic"));
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL, topic("events-topic"));
         registry.getProperties().remove("apicurio.registry.url");
 
         assertThatThrownBy(() -> router(declared(registry)))
@@ -428,7 +428,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectATopicWithNoResolvableVersion() {
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL, topic("events-topic"));
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL, topic("events-topic"));
         registry.getProperties().put("apicurio.registry.find-latest", "false");
 
         assertThatThrownBy(() -> router(declared(registry)))
@@ -439,7 +439,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldAcceptAPinnedVersionInsteadOfTheLatestOne() {
-        ApicurioRegistryDefinition registry = registry("main-registry", MAIN_URL,
+        ApicurioRegistry registry = registry("main-registry", MAIN_URL,
                 topic("events-topic", "apicurio.registry.artifact.version", "1"));
         registry.getProperties().put("apicurio.registry.find-latest", "false");
 
@@ -450,7 +450,7 @@ class ApicurioTopicValidatorsTest {
 
     @Test
     void shouldRejectATopicThatDisablesTheApicurioHeaders() {
-        List<ApicurioRegistryDefinition> registries = declared(
+        List<ApicurioRegistry> registries = declared(
                 registry("main-registry", MAIN_URL,
                         topic("events-topic", "apicurio.registry.headers.enabled", "false")));
 
@@ -460,23 +460,48 @@ class ApicurioTopicValidatorsTest {
     }
 
     @Test
-    void shouldRejectATopicThatSetsAnArtifactResolverStrategy() {
-        List<ApicurioRegistryDefinition> registries = declared(
+    void shouldResolveTheArtifactIdFromTheTopicNameWithSimpleTopicIdStrategy() {
+        List<ApicurioRegistry> registries = declared(
                 registry("main-registry", MAIN_URL,
                         topic("events-topic", "apicurio.registry.artifact-resolver-strategy",
                                 "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy")));
 
+        TopicSchemaValidatorRouter router = router(registries);
+
+        assertThat(referenceUsedBy(router, "events-topic", createdResolvers.get(0)).getArtifactId())
+                .isEqualTo("events-topic");
+    }
+
+    @Test
+    void shouldResolveTheArtifactIdFromTheTopicNameWithTopicIdStrategy() {
+        List<ApicurioRegistry> registries = declared(
+                registry("main-registry", MAIN_URL,
+                        topic("events-topic", "apicurio.registry.artifact-resolver-strategy",
+                                "io.apicurio.registry.serde.strategy.TopicIdStrategy")));
+
+        TopicSchemaValidatorRouter router = router(registries);
+
+        assertThat(referenceUsedBy(router, "events-topic", createdResolvers.get(0)).getArtifactId())
+                .isEqualTo("events-topic-value");
+    }
+
+    @Test
+    void shouldRejectATopicWithAnUnrecognisedArtifactResolverStrategy() {
+        List<ApicurioRegistry> registries = declared(
+                registry("main-registry", MAIN_URL,
+                        topic("events-topic", "apicurio.registry.artifact-resolver-strategy",
+                                "io.apicurio.registry.serde.strategy.RecordIdStrategy")));
+
         assertThatThrownBy(() -> router(registries))
                 .isInstanceOf(InvalidConfigurationException.class)
-                .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is "
-                        + "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy for topic 'events-topic'")
+                .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is set to")
                 .hasMessageContaining("instantiated and never invoked")
                 .hasMessageContaining("ArtifactReferenceProvider");
     }
 
     @Test
     void shouldRejectAnEmptyRegistryDeclaration() {
-        List<ApicurioRegistryDefinition> registries = new ArrayList<>();
+        List<ApicurioRegistry> registries = new ArrayList<>();
         registries.add(null);
 
         assertThatThrownBy(() -> router(registries))
@@ -508,7 +533,7 @@ class ApicurioTopicValidatorsTest {
 
         AsyncKafkaPropsDomain.KafkaPropsCustomizer customizer = domainProperties ->
                 domainProperties.get("app").setApicurio(ApicurioValidationProperties.builder()
-                        .registries(List.of(ApicurioRegistryDefinition.builder()
+                        .registries(List.of(ApicurioRegistry.builder()
                                 .name("main-registry")
                                 .properties(new HashMap<>(Map.of(
                                         "apicurio.registry.url", MAIN_URL,

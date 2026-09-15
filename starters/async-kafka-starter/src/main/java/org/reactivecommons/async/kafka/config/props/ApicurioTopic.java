@@ -26,7 +26,7 @@ import java.util.Map;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ApicurioTopicDefinition {
+public class ApicurioTopic {
 
     /**
      * Name of the Kafka topic, exactly as it travels in the record.

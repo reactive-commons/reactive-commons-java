@@ -18,7 +18,7 @@ import java.util.Map;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-public class ApicurioRegistryDefinition {
+public class ApicurioRegistry {
 
     /**
      * Name of the registry, used only to report which declaration a failure belongs to.
@@ -36,6 +36,6 @@ public class ApicurioRegistryDefinition {
      */
     @NestedConfigurationProperty
     @Builder.Default
-    private List<ApicurioTopicDefinition> topics = new ArrayList<>();
+    private List<ApicurioTopic> topics = new ArrayList<>();
 }
 

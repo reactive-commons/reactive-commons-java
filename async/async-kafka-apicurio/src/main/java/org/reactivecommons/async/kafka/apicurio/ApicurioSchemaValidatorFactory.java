@@ -39,7 +39,23 @@ public final class ApicurioSchemaValidatorFactory {
             SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID,
             SchemaResolverConfig.EXPLICIT_ARTIFACT_ID,
             SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION,
-            SchemaResolverConfig.FIND_LATEST_ARTIFACT);
+            SchemaResolverConfig.FIND_LATEST_ARTIFACT,
+            SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
+
+    /**
+     * Fully qualified name of Apicurio's {@code TopicIdStrategy}. It resolves the
+     * artifact as {@code <topic>-value}, which is already {@link DefaultArtifactReferenceProvider}'s default when
+     * no artifact id is configured, so setting it explicitly changes nothing.
+     */
+    public static final String TOPIC_ID_STRATEGY =
+            "io.apicurio.registry.serde.strategy.TopicIdStrategy";
+
+    /**
+     * Fully qualified name of Apicurio's {@code SimpleTopicIdStrategy}. It resolves the artifact as the topic name
+     * itself, with no suffix.
+     */
+    public static final String SIMPLE_TOPIC_ID_STRATEGY =
+            "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy";
 
     /**
      * Reduces a configuration to what the registry client and the schema cache depend on: endpoint, credentials,
@@ -59,8 +75,8 @@ public final class ApicurioSchemaValidatorFactory {
     }
 
     public static ApicurioSchemaValidator create(Map<String, Object> configs, ObjectMapper objectMapper) {
-        Map<String, Object> resolved = prepare(configs);
-        return build(newResolver(resolved), true, resolved, objectMapper);
+        Prepared prepared = prepare(configs);
+        return build(newResolver(prepared.resolved()), true, prepared, objectMapper);
     }
 
     /**
@@ -89,15 +105,28 @@ public final class ApicurioSchemaValidatorFactory {
      * @return a resolver the caller owns, and must close when it is no longer used
      */
     public static SchemaResolver<JsonSchema, Object> createResolver(Map<String, Object> configs) {
-        return newResolver(prepare(configs));
+        return newResolver(prepare(configs).resolved());
     }
 
-    private static Map<String, Object> prepare(Map<String, Object> configs) {
+    /**
+     * The configuration actually handed to Apicurio, plus the artifact id convention read out of it.
+     * <p>
+     * {@code apicurio.registry.artifact-resolver-strategy} is removed from {@code resolved} before it ever reaches
+     * {@code DefaultSchemaResolver#configure}: that call instantiates whatever class the key names, even though
+     * {@link ApicurioSchemaValidator} never invokes it, so a class Reactive Commons does not itself recognise would
+     * otherwise fail with a raw {@code ClassNotFoundException} instead of the clear message
+     * {@link #resolveIdStrategy} produces.
+     */
+    private record Prepared(Map<String, Object> resolved, ArtifactIdStrategy idStrategy) {
+    }
+
+    private static Prepared prepare(Map<String, Object> configs) {
         Map<String, Object> resolved = new HashMap<>(configs);
         assertHeadersAreEnabled(resolved);
-        assertResolverStrategyIsNotSet(resolved);
+        ArtifactIdStrategy idStrategy = resolveIdStrategy(resolved);
+        resolved.remove(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
         applyResolverDefaults(resolved);
-        return resolved;
+        return new Prepared(resolved, idStrategy);
     }
 
     private static SchemaResolver<JsonSchema, Object> newResolver(Map<String, Object> resolved) {
@@ -107,8 +136,9 @@ public final class ApicurioSchemaValidatorFactory {
     }
 
     private static ApicurioSchemaValidator build(SchemaResolver<JsonSchema, Object> schemaResolver,
-                                                 boolean ownsResolver, Map<String, Object> resolved,
+                                                 boolean ownsResolver, Prepared prepared,
                                                  ObjectMapper objectMapper) {
+        Map<String, Object> resolved = prepared.resolved();
         // Checked here and not while preparing the resolver: the artifact coordinates belong to the validator, a
         // shared resolver is built without them
         assertVersionIsResolvable(resolved);
@@ -131,9 +161,35 @@ public final class ApicurioSchemaValidatorFactory {
                 .artifactReferenceProvider(new DefaultArtifactReferenceProvider(
                         stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID),
                         stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_ID),
-                        stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION)))
+                        stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION),
+                        prepared.idStrategy()))
                 .objectMapper(objectMapper)
                 .build();
+    }
+
+    /**
+     * Resolves which convention derives the artifact id from the topic name, read from
+     * {@code apicurio.registry.artifact-resolver-strategy}, the same key the Apicurio Kafka serdes accept.
+     * <p>
+     * {@code apicurio.registry.artifact.artifact-id} takes precedence when it is set, since it names one fixed
+     * artifact for every topic instead of a convention.
+     */
+    private static ArtifactIdStrategy resolveIdStrategy(Map<String, Object> resolved) {
+        if (isSet(stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_ID))) {
+            return ArtifactIdStrategy.TOPIC_ID;
+        }
+        String strategy = stringValue(resolved, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
+        if (!isSet(strategy) || TOPIC_ID_STRATEGY.equals(strategy)) {
+            return ArtifactIdStrategy.TOPIC_ID;
+        }
+        if (SIMPLE_TOPIC_ID_STRATEGY.equals(strategy)) {
+            return ArtifactIdStrategy.SIMPLE_TOPIC_ID;
+        }
+        throw new IllegalArgumentException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to " + strategy
+                + ", but Reactive Commons only recognises " + TOPIC_ID_STRATEGY + " and " + SIMPLE_TOPIC_ID_STRATEGY
+                + ": any other strategy is read by Apicurio only when a Kafka record is handed to its serdes, which "
+                + "never happens here, so it would be instantiated and never invoked. Set "
+                + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id instead.");
     }
 
     private static void assertVersionIsResolvable(Map<String, Object> resolved) {
@@ -156,31 +212,6 @@ public final class ApicurioSchemaValidatorFactory {
      * reduces refresh frequency and keeps cached schemas when refreshes fail.
      * Both settings can still be overridden via {@code properties}.
      */
-    /**
-     * Rejects {@code apicurio.registry.artifact-resolver-strategy}.
-     * <p>
-     * That property names the strategy Apicurio uses to derive the artifact of a record, and it is read
-     * <b>only</b> by {@code SchemaResolver#resolveSchema(Record)}, the entry point the serdes call with a Kafka
-     * record. Reactive Commons never builds such a record: it resolves the schema by coordinates with
-     * {@code resolveSchemaByArtifactReference}, so the strategy would be instantiated and never invoked. Setting
-     * it looks like it changes which artifact is validated and changes nothing, hence it is rejected instead of
-     * ignored.
-     * <p>
-     * Use {@code apicurio.registry.artifact.artifact-id} and {@code apicurio.registry.artifact.group-id} to name
-     * the artifact, or an {@link ArtifactReferenceProvider} to derive it from the topic.
-     */
-    static void assertResolverStrategyIsNotSet(Map<String, Object> configs) {
-        Object strategy = configs.get(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
-        if (strategy != null) {
-            throw new IllegalArgumentException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
-                    + strategy + ", but Reactive Commons resolves the schema by coordinates and never through that "
-                    + "strategy, which Apicurio only reads when a Kafka record is handed to its serdes. It would be "
-                    + "instantiated and never invoked. Remove it, and name the artifact with "
-                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " and "
-                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID + ", or derive it from the topic with an "
-                    + ArtifactReferenceProvider.class.getSimpleName() + ".");
-        }
-    }
 
     static void applyResolverDefaults(Map<String, Object> configs) {
         configs.putIfAbsent(SchemaResolverConfig.CHECK_PERIOD_MS, CHECK_PERIOD_MS_DEFAULT);

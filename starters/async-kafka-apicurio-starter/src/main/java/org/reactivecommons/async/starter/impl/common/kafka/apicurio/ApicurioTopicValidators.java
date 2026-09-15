@@ -8,8 +8,8 @@ import lombok.NoArgsConstructor;
 import org.reactivecommons.async.kafka.apicurio.ApicurioSchemaValidatorFactory;
 import org.reactivecommons.async.kafka.apicurio.SharedSchemaResolvers;
 import org.reactivecommons.async.kafka.apicurio.TopicSchemaValidatorRouter;
-import org.reactivecommons.async.kafka.config.props.ApicurioRegistryDefinition;
-import org.reactivecommons.async.kafka.config.props.ApicurioTopicDefinition;
+import org.reactivecommons.async.kafka.config.props.ApicurioRegistry;
+import org.reactivecommons.async.kafka.config.props.ApicurioTopic;
 import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
 import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
@@ -45,7 +45,7 @@ final class ApicurioTopicValidators {
      * @return the validator that routes each record to the validator of its topic, leaving undeclared topics
      * unvalidated
      */
-    static TopicSchemaValidatorRouter create(List<ApicurioRegistryDefinition> registries, String domain,
+    static TopicSchemaValidatorRouter create(List<ApicurioRegistry> registries, String domain,
                                              SharedSchemaResolvers resolvers) {
         return new TopicSchemaValidatorRouter(buildValidators(registries, domain, resolvers));
     }
@@ -53,7 +53,7 @@ final class ApicurioTopicValidators {
     /**
      * @return the validator of every topic declared by the domain, indexed by topic name
      */
-    static Map<String, SchemaValidator> buildValidators(List<ApicurioRegistryDefinition> registries, String domain,
+    static Map<String, SchemaValidator> buildValidators(List<ApicurioRegistry> registries, String domain,
                                                         SharedSchemaResolvers resolvers) {
         Map<String, SchemaValidator> validators = new HashMap<>();
         if (registries == null || registries.isEmpty()) {
@@ -70,7 +70,7 @@ final class ApicurioTopicValidators {
         return "reactive.commons.kafka." + domain + ".apicurio.registries[" + registryIndex + "]";
     }
 
-    private static void addTopicsOf(ApicurioRegistryDefinition registry, String registryPath, String domain,
+    private static void addTopicsOf(ApicurioRegistry registry, String registryPath, String domain,
                                     Map<String, SchemaValidator> validators, Map<String, String> declaredBy,
                                     SharedSchemaResolvers resolvers) {
         if (registry == null) {
@@ -78,14 +78,14 @@ final class ApicurioTopicValidators {
                     + "the topics validated against it, or remove it.");
         }
         String registryLabel = labelOf(registry.getName(), registryPath);
-        List<ApicurioTopicDefinition> topics = registry.getTopics();
+        List<ApicurioTopic> topics = registry.getTopics();
         if (topics == null || topics.isEmpty()) {
             throw new InvalidConfigurationException(registryLabel + " declares no topics, so Reactive Commons would "
                     + "open a connection to the Apicurio Registry without validating anything. List the topics to "
                     + "validate under " + registryPath + ".topics, or remove the registry.");
         }
         for (int j = 0; j < topics.size(); j++) {
-            ApicurioTopicDefinition topic = topics.get(j);
+            ApicurioTopic topic = topics.get(j);
             String topicPath = registryPath + ".topics[" + j + "]";
             if (topic == null || !isSet(topic.getName())) {
                 throw new InvalidConfigurationException(topicPath + " of " + registryLabel + " has no name. Set "
@@ -114,7 +114,7 @@ final class ApicurioTopicValidators {
      * {@code SchemaValidator} or a {@code DomainSchemaValidatorProvider} bean that delegates to a validator built
      * with {@code ApicurioSchemaValidator.builder()}.
      */
-    private static SchemaValidator createValidator(ApicurioRegistryDefinition registry, ApicurioTopicDefinition topic,
+    private static SchemaValidator createValidator(ApicurioRegistry registry, ApicurioTopic topic,
                                                    String name, String topicPath, String registryLabel,
                                                    SharedSchemaResolvers resolvers) {
         Map<String, Object> effective = merge(registry.getProperties(), topic.getProperties());
@@ -123,7 +123,7 @@ final class ApicurioTopicValidators {
         }
         assertRegistryUrlIsSet(effective, name, topicPath, registryLabel);
         assertHeadersAreEnabled(effective, name, topicPath);
-        assertResolverStrategyIsNotSet(effective, name, topicPath);
+        assertResolverStrategyIsRecognised(effective, name, topicPath);
         assertVersionIsResolvable(effective, name, topicPath);
 
         return ApicurioSchemaValidatorFactory.create(
@@ -173,22 +173,22 @@ final class ApicurioTopicValidators {
     }
 
     /**
-     * Rejects {@code apicurio.registry.artifact-resolver-strategy}, which Apicurio only reads when a Kafka record
-     * is handed to its serdes. Reactive Commons resolves the schema by coordinates, so the strategy would be
-     * instantiated and never invoked.
+     * Rejects an {@code apicurio.registry.artifact-resolver-strategy} Reactive Commons cannot honour.
      */
-    private static void assertResolverStrategyIsNotSet(Map<String, Object> effective, String name,
-                                                       String topicPath) {
+    private static void assertResolverStrategyIsRecognised(Map<String, Object> effective, String name,
+                                                           String topicPath) {
         String strategy = stringValue(effective, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
-        if (isSet(strategy)) {
-            throw new InvalidConfigurationException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is " + strategy
-                    + " for topic '" + name + "', but Reactive Commons resolves the schema by coordinates and never "
-                    + "through that strategy, which Apicurio only reads when a Kafka record is handed to its serdes. "
-                    + "It would be instantiated and never invoked. Remove it, and name the artifact of the topic with "
-                    + topicPath + ".properties." + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " and "
-                    + topicPath + ".properties." + SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID + ", or derive it "
-                    + "from the topic with an ArtifactReferenceProvider.");
+        if (!isSet(strategy) || ApicurioSchemaValidatorFactory.TOPIC_ID_STRATEGY.equals(strategy)
+                || ApicurioSchemaValidatorFactory.SIMPLE_TOPIC_ID_STRATEGY.equals(strategy)) {
+            return;
         }
+        throw new InvalidConfigurationException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
+                + strategy + " for topic '" + name + "', but Reactive Commons only recognises "
+                + ApicurioSchemaValidatorFactory.TOPIC_ID_STRATEGY + " and "
+                + ApicurioSchemaValidatorFactory.SIMPLE_TOPIC_ID_STRATEGY + ": any other strategy is read by "
+                + "Apicurio only when a Kafka record is handed to its serdes, which never happens here, so it "
+                + "would be instantiated and never invoked. Set " + topicPath + ".properties."
+                + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id instead.");
     }
 
     /**
