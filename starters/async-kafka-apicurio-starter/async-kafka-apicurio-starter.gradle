@@ -8,8 +8,11 @@ dependencies {
     api project(':async-kafka-starter')
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
 
+    compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
+    compileOnly 'io.micrometer:micrometer-core'
+
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
 
     testImplementation 'io.projectreactor:reactor-test'
-    testImplementation 'org.springframework.boot:spring-boot-starter-actuator'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
 }

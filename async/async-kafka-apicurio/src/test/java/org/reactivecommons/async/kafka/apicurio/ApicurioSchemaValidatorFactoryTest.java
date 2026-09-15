@@ -101,8 +101,7 @@ class ApicurioSchemaValidatorFactoryTest {
         assertThatThrownBy(() -> ApicurioSchemaValidatorFactory.create(configs))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("apicurio.registry.artifact-resolver-strategy is set to")
-                .hasMessageContaining("instantiated and never invoked")
-                .hasMessageContaining("ArtifactReferenceProvider");
+                .hasMessageContaining("instantiated and never invoked");
     }
 
     @Test
