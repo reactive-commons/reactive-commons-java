@@ -123,11 +123,7 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         }
 
         /**
-         * Explains, only when a record is rejected, that it was not checked against the schema it names. Such a
-         * setup looks healthy until the schema evolves or a producer moves to another version, so the hint is
-         * put where it is actually read. The coordinates carried by the record and the ones it was validated
-         * against are enough for whoever reads the rejection to tell why: either they name a different artifact,
-         * or the version differs because the topic pins its own.
+         * Explains, only when a record is rejected, that it was not checked against the schema it names.
          *
          * @return the explanation to append to the rejection, or {@code null} when nothing was discarded
          */
@@ -142,13 +138,6 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
 
     /**
      * Decides which artifact an incoming record is validated against.
-     * <p>
-     * The headers are written by whoever produced the record, so they cannot be allowed to select the artifact:
-     * a producer could point at a permissive schema registered anywhere in the registry and make its own payload
-     * pass, or make every record resolve a different artifact and turn the consumer into an amplifier against the
-     * registry. At most the <em>version</em> is taken from the headers, and only when they name the artifact this
-     * topic is already expected to use, which is what keeps old records validated against the version they were
-     * published with.
      * <p>
      * A version configured explicitly wins over the one of the record: pinning it is how a topic declares the
      * single contract it accepts, so a producer cannot move the consumer onto another version by publishing it in

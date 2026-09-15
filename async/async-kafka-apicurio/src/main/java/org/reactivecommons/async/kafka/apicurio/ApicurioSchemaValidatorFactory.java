@@ -212,7 +212,6 @@ public final class ApicurioSchemaValidatorFactory {
      * reduces refresh frequency and keeps cached schemas when refreshes fail.
      * Both settings can still be overridden via {@code properties}.
      */
-
     static void applyResolverDefaults(Map<String, Object> configs) {
         configs.putIfAbsent(SchemaResolverConfig.CHECK_PERIOD_MS, CHECK_PERIOD_MS_DEFAULT);
         configs.putIfAbsent(SchemaResolverConfig.FAULT_TOLERANT_REFRESH, true);

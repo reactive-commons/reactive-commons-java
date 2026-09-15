@@ -15,19 +15,6 @@ import java.util.Map;
 
 /**
  * {@link JsonSchemaParser} that only trusts the schemas coming from the Apicurio Registry.
- * <p>
- * It hardens two behaviours of the default parser:
- * <ul>
- *     <li><b>No remote {@code $ref}.</b> {@code DefaultSchemaLoader} always falls back to a static chain that
- *     contains {@code UriSchemaLoader}, so a schema declaring {@code "$ref": "http://..."} would make the
- *     application open that URL, following redirects and without any timeout. Only the references resolved by
- *     the registry, and the meta schemas bundled in the classpath, are accepted.</li>
- *     <li><b>Eager validator initialization.</b> Since 1.0.49 the json schema library loads the validators of
- *     each {@code $ref} lazily, on the first {@code validate()} call. That moves schema loading into the message
- *     hot path and lets the threads validating a freshly resolved schema race on the same lazy initialization.
- *     Preloading them here keeps validation free of surprises and fails fast, while the schema is being
- *     resolved, when a reference is unusable.</li>
- * </ul>
  */
 public class RestrictedJsonSchemaParser<T> extends JsonSchemaParser<T> {
 

@@ -16,15 +16,7 @@ import java.util.Map;
 
 /**
  * Registers the {@link DomainSchemaValidatorProvider} that supplies the Apicurio {@link SchemaValidator} of each
- * Reactive Commons domain.
- * <p>
- * It lives under {@code org.reactivecommons.async.starter.impl.common}, which is the package scanned
- * by {@code ReactiveCommonsConfig}, so adding this starter as a dependency is enough to enable it.
- * <p>
- * The configuration of every domain is read from {@code reactive.commons.kafka.<domain>.apicurio.registries},
- * either from the configuration files or from a {@code KafkaPropsCustomizer} bean. Every registry lists the topics
- * validated against it, each topic may override any property of its registry, and a domain that declares no
- * registry is not validated.
+ * domain.
  */
 @Configuration
 public class RCKafkaApicurioConfig {
@@ -57,12 +49,6 @@ public class RCKafkaApicurioConfig {
 
     /**
      * Rejects a configuration where no domain declares a registry.
-     * <p>
-     * The starter exists to validate messages against an Apicurio Registry, so having it on the classpath while no
-     * domain declares one describes an intention that is not carried out: nothing would be validated, and the
-     * dependency would only add the registry client to the application. A single domain may still be left
-     * unvalidated by declaring no registry for it, or by disabling the validation of its registries with
-     * {@code apicurio.registry.serde.validation-enabled=false}.
      */
     private static void assertSomeDomainIsValidated(Map<String, SchemaValidator> validators) {
         boolean anyValidated = validators.values().stream()
@@ -89,7 +75,7 @@ public class RCKafkaApicurioConfig {
 
     /**
      * Holds the validator of every domain and releases the registry clients they share when the context is
-     * disposed. Spring infers {@code close} as the destroy method of any {@link AutoCloseable} bean.
+     * disposed.
      */
     static class ApicurioValidatorProvider implements DomainSchemaValidatorProvider, AutoCloseable {
 
