@@ -130,7 +130,7 @@ to different domains.
 
 Includes the Cloud Events specification.
 
-If you want to use it, you should read the [Creating a CloudEvent guide](11-creating-a-cloud-event.md)
+If you want to use it, you should read the [Creating a CloudEvent guide](12-creating-a-cloud-event.md)
 
   </TabItem>
   <TabItem value="kafka" label="Kafka">
@@ -284,7 +284,7 @@ Enables to you the ability to listen events from different domains.
 
 Includes the Cloud Events specification.
 
-If you want to use it, you should read the [Creating a CloudEvent guide](11-creating-a-cloud-event.md)
+If you want to use it, you should read the [Creating a CloudEvent guide](12-creating-a-cloud-event.md)
 
   </TabItem>
 </Tabs>

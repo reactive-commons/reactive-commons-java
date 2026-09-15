@@ -1,5 +1,5 @@
----
-sidebar_position: 3
+﻿---
+sidebar_position: 4
 ---
 
 # Sending a Command
@@ -73,7 +73,7 @@ After that you can send commands from you application to a remote application th
 ## Sending a Raw Command
 
 There is no separate API to *send* a raw command: `RawCommandHandler` (see
-[Listening Raw Commands](./7-handling-commands.md#listening-raw-commands)) is a **receiving-side** concept only. On the
+[Listening Raw Commands](./8-handling-commands.md#listening-raw-commands)) is a **receiving-side** concept only. On the
 sending side you always call `sendCommand(Command<T>, targetName)` or `sendCommand(CloudEvent, targetName)`, exactly as
 in [Enabling autoconfiguration](#enabling-autoconfiguration) above. What makes a command "raw" is entirely decided by
 the **receiver**: it processes the command without converting it to a `Command<T>` or `CloudEvent` first, and without
@@ -125,11 +125,11 @@ public class HandlerRegistryConfiguration {
 Both options receive the very same message the sender published; the difference is entirely in how the **target
 application** chose to register its handler. A `RawCommandHandler` receives it as a `RawMessage`, cast to
 `RabbitMessage` to reach the body, headers and other broker-level properties, as shown in
-[Listening Raw Commands](./7-handling-commands.md#listening-raw-commands).
+[Listening Raw Commands](./8-handling-commands.md#listening-raw-commands).
 
 This is only relevant for RabbitMQ, since commands are not supported on Kafka at all. A raw handler is useful for
 consumers that do not want to declare a handler per command name, or that need the raw body/headers rather than a
-deserialized payload — for instance a generic audit log, or a gateway that forwards commands elsewhere unopened.
+deserialized payload for instance a generic audit log, or a gateway that forwards commands elsewhere unopened.
 
 ## Example
 

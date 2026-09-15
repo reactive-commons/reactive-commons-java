@@ -1,5 +1,5 @@
----
-sidebar_position: 7
+﻿---
+sidebar_position: 8
 ---
 
 # Handling Commands
@@ -85,7 +85,7 @@ public class CommandsHandler {
 }
 ```
 
-See [Sending a Raw Command](./3-sending-a-command.md#sending-a-raw-command) for the sending side.
+See [Sending a Raw Command](./4-sending-a-command.md#sending-a-raw-command) for the sending side.
 
 ### Wildcards
 
