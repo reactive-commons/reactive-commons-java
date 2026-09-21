@@ -5,16 +5,17 @@ import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.starter.props.GenericAsyncPropsDomainProperties;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-import java.util.Map;
-
 @NoArgsConstructor
 @ConfigurationProperties(prefix = "reactive.commons.kafka")
 public class AsyncKafkaPropsDomainProperties extends GenericAsyncPropsDomainProperties<AsyncKafkaProps, KafkaProperties> {
 
-    public AsyncKafkaPropsDomainProperties(Map<String, ? extends AsyncKafkaProps> m) {
-        super(m);
-    }
-
+    /**
+     * @deprecated in favor of {@link AsyncKafkaPropsDomain.KafkaPropsCustomizer}, which allows the same programmatic
+     * configuration while keeping the hybrid YAML + programmatic model (YAML values are preserved and only the
+     * customized properties are overridden). This builder replaces the whole domain properties, discarding any
+     * values already bound from your configuration files.
+     */
+    @Deprecated(forRemoval = true, since = "7.4.0")
     public static AsyncPropsDomainPropertiesBuilder<AsyncKafkaProps, KafkaProperties,
             AsyncKafkaPropsDomainProperties> builder() {
         return GenericAsyncPropsDomainProperties.builder(AsyncKafkaPropsDomainProperties.class);

@@ -47,6 +47,13 @@ public class GenericAsyncPropsDomainProperties<T extends GenericAsyncProps<P>, P
                 + "declare the domain in your configuration file or define it with put(domain, props)");
     }
 
+    /**
+     * @deprecated in favor of {@link #customize(String, Consumer)}, used through each broker's
+     * {@code *PropsCustomizer} bean (e.g. {@code RabbitPropsCustomizer}, {@code KafkaPropsCustomizer}), which keeps
+     * the hybrid YAML + programmatic model. This builder replaces the whole domain properties instance built here,
+     * discarding any values already bound from configuration files.
+     */
+    @Deprecated(forRemoval = true, since = "7.4.0")
     public static <T extends GenericAsyncProps<P>,
             P,
             X extends GenericAsyncPropsDomainProperties<T, P>> AsyncPropsDomainPropertiesBuilder<T, P, X>
@@ -54,6 +61,11 @@ public class GenericAsyncPropsDomainProperties<T extends GenericAsyncProps<P>, P
         return new AsyncPropsDomainPropertiesBuilder<>(returnType);
     }
 
+    /**
+     * @deprecated in favor of {@link #customize(String, Consumer)}, used through each broker's
+     * {@code *PropsCustomizer} bean, which keeps the hybrid YAML + programmatic model.
+     */
+    @Deprecated(forRemoval = true, since = "7.4.0")
     public static class AsyncPropsDomainPropertiesBuilder<T extends GenericAsyncProps<P>, P,
             X extends GenericAsyncPropsDomainProperties<T, P>> {
         private final Map<String, T> domains = new HashMap<>();
