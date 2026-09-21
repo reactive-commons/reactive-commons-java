@@ -17,6 +17,10 @@ Commons.
 
 You need Java JRE installed (Java 17 or later) and Spring Boot 4.
 
+:::tip
+Java 25 and Spring Boot 4.1.x or higher are recommended.
+:::
+
 You also need to install RabbitMQ. Follow the [instructions from the website](https://www.rabbitmq.com/download.html).
 
 ## Start RabbitMQ
@@ -140,6 +144,10 @@ Commons.
 ## Requirements
 
 You need Java JRE installed (Java 17 or later) and Spring Boot 4.
+
+:::tip
+Java 25 and Spring Boot 4.1.x or higher are recommended.
+:::
 
 ## Start Kafka
 

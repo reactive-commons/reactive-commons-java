@@ -4,7 +4,7 @@ sidebar_position: 4
 
 # Sending a Command
 
-:::info only available in RabbitMQ
+:::info Only available in RabbitMQ
 :::
 
 ## API specification
