@@ -4,8 +4,9 @@ ext {
 }
 
 dependencies {
-    api project(':async-kafka-apicurio')
     api project(':async-kafka-starter')
+    api 'io.apicurio:apicurio-registry-serde-kafka-common:3.3.3'
+    api 'io.apicurio:apicurio-registry-serde-common-jsonschema:3.3.3'
     implementation 'org.springframework.boot:spring-boot-autoconfigure'
 
     compileOnly 'org.springframework.boot:spring-boot-starter-actuator'

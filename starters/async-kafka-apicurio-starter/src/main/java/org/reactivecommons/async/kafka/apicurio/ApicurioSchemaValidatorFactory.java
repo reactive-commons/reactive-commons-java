@@ -113,7 +113,7 @@ public final class ApicurioSchemaValidatorFactory {
      * <p>
      * {@code apicurio.registry.artifact-resolver-strategy} is removed from {@code resolved} before it ever reaches
      * {@code DefaultSchemaResolver#configure}: that call instantiates whatever class the key names, even though
-     * {@link ApicurioSchemaValidator} never invokes it, so a class Reactive Commons does not itself recognise would
+     * {@link ApicurioSchemaValidator} never invokes it, so a class Reactive Commons does not itself recognize would
      * otherwise fail with a raw {@code ClassNotFoundException} instead of the clear message
      * {@link #resolveIdStrategy} produces.
      */
@@ -168,6 +168,34 @@ public final class ApicurioSchemaValidatorFactory {
     }
 
     /**
+     * Whether {@code apicurio.registry.artifact-resolver-strategy} is empty or names a strategy Reactive Commons
+     * recognizes. Shared by every caller that validates the property before it reaches Apicurio, be it eagerly at
+     * startup (e.g. the domain's per-topic configuration) or when a validator is built directly through this
+     * factory, so both stay in sync with the same rule.
+     */
+    public static boolean isResolverStrategyRecognised(String strategy) {
+        return !isSet(strategy) || TOPIC_ID_STRATEGY.equals(strategy) || SIMPLE_TOPIC_ID_STRATEGY.equals(strategy);
+    }
+
+    /**
+     * Whether {@code apicurio.registry.headers.enabled} lets Reactive Commons write the schema coordinates in the
+     * record headers, defaulting to {@code true} like the Apicurio serdes.
+     */
+    public static boolean areHeadersEnabled(Map<String, Object> configs) {
+        return booleanValue(configs, KafkaSerdeConfig.ENABLE_HEADERS, true);
+    }
+
+    /**
+     * Whether a schema version can be resolved for the configuration: either {@code apicurio.registry.find-latest}
+     * is {@code true}, or {@code apicurio.registry.artifact.version} pins one explicitly.
+     */
+    public static boolean isVersionResolvable(Map<String, Object> configs) {
+        boolean findLatest = booleanValue(configs, SchemaResolverConfig.FIND_LATEST_ARTIFACT,
+                SchemaResolverConfig.FIND_LATEST_ARTIFACT_DEFAULT);
+        return findLatest || isSet(stringValue(configs, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION));
+    }
+
+    /**
      * Resolves which convention derives the artifact id from the topic name, read from
      * {@code apicurio.registry.artifact-resolver-strategy}, the same key the Apicurio Kafka serdes accept.
      * <p>
@@ -179,23 +207,20 @@ public final class ApicurioSchemaValidatorFactory {
             return ArtifactIdStrategy.TOPIC_ID;
         }
         String strategy = stringValue(resolved, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
-        if (!isSet(strategy) || TOPIC_ID_STRATEGY.equals(strategy)) {
-            return ArtifactIdStrategy.TOPIC_ID;
+        if (!isResolverStrategyRecognised(strategy)) {
+            throw new IllegalArgumentException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
+                    + strategy + ", but Reactive Commons only recognises " + TOPIC_ID_STRATEGY + " and "
+                    + SIMPLE_TOPIC_ID_STRATEGY + ": any other strategy is read by Apicurio only when a Kafka record "
+                    + "is handed to its serdes, which never happens here, so it would be instantiated and never "
+                    + "invoked. Set " + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id "
+                    + "instead.");
         }
-        if (SIMPLE_TOPIC_ID_STRATEGY.equals(strategy)) {
-            return ArtifactIdStrategy.SIMPLE_TOPIC_ID;
-        }
-        throw new IllegalArgumentException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to " + strategy
-                + ", but Reactive Commons only recognises " + TOPIC_ID_STRATEGY + " and " + SIMPLE_TOPIC_ID_STRATEGY
-                + ": any other strategy is read by Apicurio only when a Kafka record is handed to its serdes, which "
-                + "never happens here, so it would be instantiated and never invoked. Set "
-                + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id instead.");
+        return SIMPLE_TOPIC_ID_STRATEGY.equals(strategy) ? ArtifactIdStrategy.SIMPLE_TOPIC_ID
+                : ArtifactIdStrategy.TOPIC_ID;
     }
 
     private static void assertVersionIsResolvable(Map<String, Object> resolved) {
-        boolean findLatest = booleanValue(resolved, SchemaResolverConfig.FIND_LATEST_ARTIFACT,
-                SchemaResolverConfig.FIND_LATEST_ARTIFACT_DEFAULT);
-        if (!findLatest && !isSet(stringValue(resolved, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION))) {
+        if (!isVersionResolvable(resolved)) {
             throw new IllegalArgumentException("No schema version could be resolved: "
                     + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " is not set and "
                     + SchemaResolverConfig.FIND_LATEST_ARTIFACT + " is false, which is its default. Set the version, "
@@ -218,7 +243,7 @@ public final class ApicurioSchemaValidatorFactory {
     }
 
     private static void assertHeadersAreEnabled(Map<String, Object> configs) {
-        if (!booleanValue(configs, KafkaSerdeConfig.ENABLE_HEADERS, true)) {
+        if (!areHeadersEnabled(configs)) {
             throw new IllegalArgumentException(KafkaSerdeConfig.ENABLE_HEADERS + " is false, but Reactive Commons "
                     + "always writes the schema coordinates in the record headers: they are the only channel it has "
                     + "to tell the consumer which schema version a record was published with. Remove that property "

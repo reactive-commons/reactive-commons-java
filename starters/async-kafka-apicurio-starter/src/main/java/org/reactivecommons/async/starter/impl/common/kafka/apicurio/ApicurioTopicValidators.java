@@ -163,10 +163,10 @@ final class ApicurioTopicValidators {
     }
 
     private static void assertHeadersAreEnabled(Map<String, Object> effective, String name, String topicPath) {
-        String value = stringValue(effective, KafkaSerdeConfig.ENABLE_HEADERS);
-        if (value != null && !Boolean.parseBoolean(value)) {
-            throw new InvalidConfigurationException(KafkaSerdeConfig.ENABLE_HEADERS + " is " + value + " for topic '"
-                    + name + "', but Reactive Commons always writes the schema coordinates in the record headers: "
+        if (!ApicurioSchemaValidatorFactory.areHeadersEnabled(effective)) {
+            throw new InvalidConfigurationException(KafkaSerdeConfig.ENABLE_HEADERS + " is "
+                    + stringValue(effective, KafkaSerdeConfig.ENABLE_HEADERS) + " for topic '" + name
+                    + "', but Reactive Commons always writes the schema coordinates in the record headers: "
                     + "they are the only channel it has to tell the consumer which schema version a record was "
                     + "published with. Remove that property from " + topicPath + ".properties, or set it to true.");
         }
@@ -178,8 +178,7 @@ final class ApicurioTopicValidators {
     private static void assertResolverStrategyIsRecognised(Map<String, Object> effective, String name,
                                                            String topicPath) {
         String strategy = stringValue(effective, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
-        if (!isSet(strategy) || ApicurioSchemaValidatorFactory.TOPIC_ID_STRATEGY.equals(strategy)
-                || ApicurioSchemaValidatorFactory.SIMPLE_TOPIC_ID_STRATEGY.equals(strategy)) {
+        if (ApicurioSchemaValidatorFactory.isResolverStrategyRecognised(strategy)) {
             return;
         }
         throw new InvalidConfigurationException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
@@ -196,8 +195,7 @@ final class ApicurioTopicValidators {
      * Apicurio default of {@code false}, so either the version is pinned or the latest one is opted into.
      */
     private static void assertVersionIsResolvable(Map<String, Object> effective, String name, String topicPath) {
-        boolean findLatest = Boolean.parseBoolean(stringValue(effective, SchemaResolverConfig.FIND_LATEST_ARTIFACT));
-        if (!findLatest && !isSet(stringValue(effective, SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION))) {
+        if (!ApicurioSchemaValidatorFactory.isVersionResolvable(effective)) {
             throw new InvalidConfigurationException("No schema version could be resolved for topic '" + name + "': "
                     + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " is empty and "
                     + SchemaResolverConfig.FIND_LATEST_ARTIFACT + " is false, which is its default in Apicurio. Set "

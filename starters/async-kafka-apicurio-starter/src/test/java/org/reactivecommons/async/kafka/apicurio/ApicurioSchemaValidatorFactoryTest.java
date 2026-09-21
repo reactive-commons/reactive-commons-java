@@ -70,8 +70,8 @@ class ApicurioSchemaValidatorFactoryTest {
                 "io.apicurio.registry.serde.strategy.SimpleTopicIdStrategy");
 
         var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
-
-        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+        var headers = new RecordHeaders();
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, headers))
                 .isInstanceOf(SchemaValidationException.class);
         // SimpleTopicIdStrategy: the topic name itself, with no suffix
         verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "event.push".equals(ref.getArtifactId())));
@@ -85,8 +85,9 @@ class ApicurioSchemaValidatorFactoryTest {
                 "io.apicurio.registry.serde.strategy.TopicIdStrategy");
 
         var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
+        var headers = new RecordHeaders();
 
-        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, headers))
                 .isInstanceOf(SchemaValidationException.class);
         // TopicIdStrategy: <topic>-value, same as the default with no strategy configured
         verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "event.push-value".equals(ref.getArtifactId())));
@@ -113,8 +114,9 @@ class ApicurioSchemaValidatorFactoryTest {
         configs.put(SchemaResolverConfig.EXPLICIT_ARTIFACT_ID, "fixed-artifact");
 
         var validator = ApicurioSchemaValidatorFactory.create(shared, configs, null);
+        var headers = new RecordHeaders();
 
-        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, new RecordHeaders()))
+        assertThatThrownBy(() -> validator.validateInbound("event.push", PAYLOAD, headers))
                 .isInstanceOf(SchemaValidationException.class);
         verify(shared).resolveSchemaByArtifactReference(argThat(ref -> "fixed-artifact".equals(ref.getArtifactId())));
     }

@@ -25,8 +25,6 @@ import java.util.StringJoiner;
 import java.util.logging.Level;
 
 /**
- * {@link SchemaValidator} backed by an Apicurio Registry.
- * <p>
  * Reactive Commons keeps the Kafka wire format as raw bytes, so this validator does not replace the
  * Kafka serdes: it resolves the JSON Schema registered in Apicurio and validates the payload that
  * Reactive Commons is about to publish, or has just consumed.
