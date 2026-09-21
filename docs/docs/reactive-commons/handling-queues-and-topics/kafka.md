@@ -83,7 +83,7 @@ public class HandlerRegistryConfiguration {
     public HandlerRegistry handlerRegistry(TopicHandler topicHandler) {
         return HandlerRegistry.register()
                 .listenTopic("my.custom.topic", topicHandler::handleMessage, topologyCreator -> {
-                    var creator = (TopologyCreator) topologyCreator; // org.reactivecommons.async.kafka...
+                    var creator = (TopologyCreator) topologyCreator;
                     return creator.createTopics(List.of("my.custom.topic"));
                 });
     }
