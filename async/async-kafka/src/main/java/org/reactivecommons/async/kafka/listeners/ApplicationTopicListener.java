@@ -14,10 +14,7 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Listens to a Kafka topic directly, bypassing the domain event / notification conventions, so the handler
- * receives the {@link Message} exactly as it travels in the topic. This is the Kafka counterpart of RabbitMQ's
- * {@code ApplicationQueueListener}: since Kafka has no native queue concept, the "queue name" registered through
- * {@code HandlerRegistry.listenQueue(...)} is used as the topic name.
+ * Listens to a Kafka topic directly, so the handler receives the {@link Message} exactly as it travels in the topic.
  */
 @Log
 public class ApplicationTopicListener extends GenericMessageListener {
