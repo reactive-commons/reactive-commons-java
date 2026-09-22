@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.4.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.0) (2026-09-22)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.3.1...v7.4.0)
+
+**Merged pull requests:**
+
+- feat: add Kafka Apicurio integration and topic enhancements [\#182](https://github.com/reactive-commons/reactive-commons-java/pull/182) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.3.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.3.1) (2026-08-21)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.3.0...v7.3.1)
