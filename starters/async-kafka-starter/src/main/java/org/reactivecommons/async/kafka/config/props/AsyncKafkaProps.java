@@ -28,6 +28,14 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
     private DomainProps domain = new DomainProps();
 
     /**
+     * Apicurio Registry schema validation of this domain. Only read when the
+     * {@code async-commons-kafka-apicurio-starter} dependency is present.
+     */
+    @NestedConfigurationProperty
+    @Builder.Default
+    private ApicurioValidationProperties apicurio = new ApicurioValidationProperties();
+
+    /**
      * -1 will be considered default value.
      * When withDLQRetry is true, it will be retried 10 times.
      * When withDLQRetry is false, it will be retried indefinitely.
@@ -71,5 +79,20 @@ public class AsyncKafkaProps extends GenericAsyncProps<KafkaProperties> {
             return groupId;
         }
         return getAppName() + EVENTS_GROUP_ID_SUFFIX;
+    }
+
+    /**
+     * Resolves the consumer group id used by a raw topic listener registered with
+     * {@code HandlerRegistry.listenTopic(...)}.
+     *
+     * @return the consumer group id for the topic listeners
+     */
+    public String resolveTopicListenerGroupId() {
+        Object configured = getConnectionProperties() == null ? null
+                : getConnectionProperties().buildConsumerProperties().get(ConsumerConfig.GROUP_ID_CONFIG);
+        if (configured instanceof String groupId && !groupId.isBlank()) {
+            return groupId;
+        }
+        return getAppName();
     }
 }

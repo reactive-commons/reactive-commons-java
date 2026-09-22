@@ -1,8 +1,11 @@
----
-sidebar_position: 9
+﻿---
+sidebar_position: 10
 ---
 
 # Serving Async Queries
+
+:::info Only available in RabbitMQ
+:::
 
 ## HandlerRegistry configuration
 

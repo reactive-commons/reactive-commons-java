@@ -281,7 +281,7 @@ class ApplicationCommandListenerPerfTest {
                 .collect(ConcurrentHashMap::new, (map, handler) ->
                         map.put(handler.path(), handler), ConcurrentHashMap::putAll
                 );
-        return new HandlerResolver(null, null, null, null, commandHandlers, null) {
+        return new HandlerResolver(null, null, null, null, commandHandlers, null, null) {
             @Override
             @SuppressWarnings("unchecked")
             public RegisteredCommandHandler<Object, ? extends Object> getCommandHandler(String path) {

@@ -16,6 +16,7 @@ import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConver
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.kafka.listeners.ApplicationEventListener;
 import org.reactivecommons.async.kafka.listeners.ApplicationNotificationsListener;
+import org.reactivecommons.async.kafka.listeners.ApplicationTopicListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.boot.ssl.SslBundles;
@@ -90,7 +91,23 @@ public record KafkaBrokerProvider(String domain,
 
     @Override
     public void listenQueues(HandlerResolver resolver) {
-        // May be implemented in the future
+        // Not applicable to Kafka: there is no native queue concept. Use listenTopics(...) instead.
+    }
+
+    @Override
+    public void listenTopics(HandlerResolver resolver) {
+        resolver.getTopicListeners().values().forEach(registeredListener -> {
+            ApplicationTopicListener topicListener = new ApplicationTopicListener(receiver,
+                    props.getWithDLQRetry(),
+                    props.getCreateTopology(),
+                    props.getMaxRetries(),
+                    props.getRetryDelay(),
+                    registeredListener,
+                    discardNotifier,
+                    errorReporter,
+                    props.resolveTopicListenerGroupId());
+            topicListener.startListener(topologyCreator);
+        });
     }
 
     @Override

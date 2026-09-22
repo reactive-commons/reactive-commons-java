@@ -7,6 +7,8 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
+import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
+import org.reactivecommons.async.kafka.validation.SchemaValidator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
@@ -41,11 +43,13 @@ public class ReactiveMessageSender {
 
     private final MessageConverter messageConverter;
     private final TopologyCreator topologyCreator;
+    private final SchemaValidator schemaValidator;
 
     public ReactiveMessageSender(KafkaSender<String, byte[]> sender, MessageConverter messageConverter,
-                                 TopologyCreator topologyCreator) {
+                                 TopologyCreator topologyCreator, SchemaValidator schemaValidator) {
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
+        this.schemaValidator = schemaValidator == null ? NoOpSchemaValidator.INSTANCE : schemaValidator;
         for (int i = 0; i < SENDER_COUNT; ++i) {
             Flux<SenderRecord<String, byte[], String>> source = Flux.create(fluxSinks::add);
             sender.send(source)
@@ -91,7 +95,9 @@ public class ReactiveMessageSender {
                         .toString().getBytes(StandardCharsets.UTF_8)))
                 .collect(Collectors.toList());
 
-        return new ProducerRecord<>(message.getProperties().getTopic(), null,
+        ProducerRecord<String, byte[]> producerRecord = new ProducerRecord<>(message.getProperties().getTopic(), null,
                 message.getProperties().getKey(), message.getBody(), headers);
+        schemaValidator.validateOutbound(producerRecord.topic(), producerRecord.value(), producerRecord.headers());
+        return producerRecord;
     }
 }

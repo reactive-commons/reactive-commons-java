@@ -35,7 +35,6 @@ public class ReactiveCommonsDynamicConfig {
     // -------------------------------------------------------------------------
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public Object dynamicEventListenerActivator(ConnectionManager manager,
                                                 DomainHandlers handlers,
                                                 ReactiveCommonsDomainFeatures features) {
@@ -49,7 +48,6 @@ public class ReactiveCommonsDynamicConfig {
     }
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public Object dynamicNotificationListenerActivator(ConnectionManager manager,
                                                        DomainHandlers handlers,
                                                        ReactiveCommonsDomainFeatures features) {
@@ -63,7 +61,6 @@ public class ReactiveCommonsDynamicConfig {
     }
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public Object dynamicCommandListenerActivator(ConnectionManager manager,
                                                   DomainHandlers handlers,
                                                   ReactiveCommonsDomainFeatures features) {
@@ -77,7 +74,6 @@ public class ReactiveCommonsDynamicConfig {
     }
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public Object dynamicQueryListenerActivator(ConnectionManager manager,
                                                 DomainHandlers handlers,
                                                 ReactiveCommonsDomainFeatures features) {
@@ -91,7 +87,6 @@ public class ReactiveCommonsDynamicConfig {
     }
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public Object dynamicQueueListenerActivator(ConnectionManager manager,
                                                 DomainHandlers handlers,
                                                 ReactiveCommonsDomainFeatures features) {
@@ -104,6 +99,19 @@ public class ReactiveCommonsDynamicConfig {
         return new Object();
     }
 
+    @Bean
+    public Object dynamicTopicListenerActivator(ConnectionManager manager,
+                                                DomainHandlers handlers,
+                                                ReactiveCommonsDomainFeatures features) {
+        manager.forDomain((domain, provider) -> {
+            if (features.ofDomain(domain).isListenTopics()) {
+                log.info("ReactiveCommons: activating topic listeners for domain '{}'", domain);
+                provider.listenTopics(handlers.get(domain));
+            }
+        });
+        return new Object();
+    }
+
     // -------------------------------------------------------------------------
     // Sender beans — always created when ReactiveCommonsFeatures is present.
     // If the corresponding flag is false, calls return a Mono.error to signal
@@ -111,7 +119,6 @@ public class ReactiveCommonsDynamicConfig {
     // -------------------------------------------------------------------------
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public DomainEventBus dynamicDomainEventBus(ConnectionManager manager,
                                                 ReactiveCommonsDomainFeatures features) {
         ConcurrentMap<String, DomainEventBus> buses = new ConcurrentHashMap<>();
@@ -128,7 +135,6 @@ public class ReactiveCommonsDynamicConfig {
     }
 
     @Bean
-    @SuppressWarnings("rawtypes")
     public DirectAsyncGateway dynamicDirectAsyncGateway(ConnectionManager manager,
                                                         ReactiveCommonsDomainFeatures features) {
         ConcurrentMap<String, DirectAsyncGateway> gateways = new ConcurrentHashMap<>();

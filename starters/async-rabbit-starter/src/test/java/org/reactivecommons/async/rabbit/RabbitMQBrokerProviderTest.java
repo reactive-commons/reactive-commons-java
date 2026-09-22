@@ -255,6 +255,14 @@ class RabbitMQBrokerProviderTest {
     }
 
     @Test
+    void shouldNotListenTopicsBecauseRabbitMQHasNoTopicConcept() {
+        brokerProvider.listenTopics(handlerResolver);
+
+        verify(handlerResolver, times(0)).getTopicListeners();
+        verify(receiver, times(0)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
     void shouldProxyHealthCheck() {
         when(healthIndicator.health()).thenReturn(Mono.fromSupplier(() -> RCHealth.builder().up().build()));
         // Act

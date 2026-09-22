@@ -400,6 +400,35 @@ class HandlerRegistryTest {
                 .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myQueue")).hasSize(1);
     }
 
+    @Test
+    void listenTopicSimple() {
+        registry.listenTopic("myTopic", msg -> Mono.empty());
+        assertThat(registry.getTopicHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myTopic")).hasSize(1);
+        assertThat(registry.getQueueHandlers().get(DEFAULT_DOMAIN)).isEmpty();
+    }
+
+    @Test
+    void listenTopicWithDomain() {
+        registry.listenTopic(domain, "myTopic", msg -> Mono.empty());
+        assertThat(registry.getTopicHandlers().get(domain))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myTopic")).hasSize(1);
+    }
+
+    @Test
+    void listenTopicWithTopology() {
+        registry.listenTopic("myTopic", msg -> Mono.empty(), creator -> Mono.empty());
+        assertThat(registry.getTopicHandlers().get(DEFAULT_DOMAIN))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myTopic")).hasSize(1);
+    }
+
+    @Test
+    void listenTopicWithDomainAndTopology() {
+        registry.listenTopic(domain, "myTopic", msg -> Mono.empty(), creator -> Mono.empty());
+        assertThat(registry.getTopicHandlers().get(domain))
+                .anySatisfy(q -> assertThat(q.queueName()).isEqualTo("myTopic")).hasSize(1);
+    }
+
     private static class SomeQueryHandlerDelegate implements QueryHandlerDelegate<Void, SomeDataClass> {
         @Override
         public Mono<Void> handle(From from, SomeDataClass message) {

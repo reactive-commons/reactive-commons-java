@@ -36,7 +36,16 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
@@ -88,7 +97,7 @@ class ApplicationQueryListenerTest {
         QueryHandler<String, SampleClass> handler = message -> just("OK");
         handlers.put("queryDirect", new RegisteredQueryHandler<>("queryDirect",
                 (from, message) -> handler.handle(message), SampleClass.class));
-        return new HandlerResolver(handlers, null, null, null, null, null);
+        return new HandlerResolver(handlers, null, null, null, null, null, null);
     }
 
     @Test

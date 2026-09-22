@@ -38,6 +38,12 @@ public class ReactiveCommonsFeatures {
     private boolean listenQueues;
 
     /**
+     * Equivalent to {@code @EnableTopicListeners}.
+     * Start listening to topics from the broker.
+     */
+    private boolean listenTopics;
+
+    /**
      * Equivalent to {@code @EnableDomainEventBus}.
      * Exposes a {@link org.reactivecommons.api.domain.DomainEventBus} bean for publishing events.
      */

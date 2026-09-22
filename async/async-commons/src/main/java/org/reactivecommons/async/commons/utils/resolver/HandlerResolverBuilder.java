@@ -53,6 +53,16 @@ public final class HandlerResolverBuilder {
                         -> map.put(handler.queueName(), handler), ConcurrentHashMap::putAll
                 );
 
+        final ConcurrentMap<String, RegisteredQueueListener> topicListeners = registries
+                .values()
+                .stream()
+                .flatMap(r -> r.getTopicHandlers()
+                        .getOrDefault(domain, List.of())
+                        .stream())
+                .collect(ConcurrentHashMap::new, (map, handler)
+                        -> map.put(handler.queueName(), handler), ConcurrentHashMap::putAll
+                );
+
         final ConcurrentMap<String, RegisteredEventListener<?, ?>> eventNotificationListeners = registries
                 .values()
                 .stream()
@@ -70,7 +80,7 @@ public final class HandlerResolverBuilder {
                 getEventHandlersWithDynamics(domain, registries);
 
         return new HandlerResolver(queryHandlers, eventListeners, eventsToBind, eventNotificationListeners,
-                commandHandlers, queueListeners) {
+                commandHandlers, queueListeners, topicListeners) {
             @Override
             @SuppressWarnings("unchecked")
             public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {

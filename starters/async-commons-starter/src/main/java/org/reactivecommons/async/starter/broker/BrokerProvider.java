@@ -23,7 +23,17 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
 
     void listenQueries(HandlerResolver resolver);
 
+    /**
+     * Starts the raw queue listeners registered with {@code HandlerRegistry.listenQueue(...)}. Only meaningful
+     * for RabbitMQ.
+     */
     void listenQueues(HandlerResolver resolver);
+
+    /**
+     * Starts the raw topic listeners registered with {@code HandlerRegistry.listenTopic(...)}. Only meaningful
+     * for Kafka.
+     */
+    void listenTopics(HandlerResolver resolver);
 
     void listenReplies();
 

@@ -8,6 +8,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
+import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.ext.CustomReporter;
@@ -29,10 +30,12 @@ import reactor.test.StepVerifier;
 
 import javax.sound.midi.Receiver;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -149,6 +152,71 @@ class KafkaBrokerProviderTest {
         brokerProvider.listenNotificationEvents(handlerResolver);
         // Assert
         verify(listener, times(1)).listen(any(String.class), any());
+    }
+
+    @Test
+    void shouldListenTopics() {
+        RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
+                message -> Mono.empty(), topologyCreator -> Mono.empty());
+        when(handlerResolver.getTopicListeners())
+                .thenReturn(Map.of("my.custom.topic", registeredListener));
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenTopics(handlerResolver);
+        // Assert
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("my.custom.topic")));
+    }
+
+    @Test
+    void shouldListenEveryRegisteredTopic() {
+        RegisteredQueueListener first = new RegisteredQueueListener("topic.one",
+                message -> Mono.empty(), topologyCreator -> Mono.empty());
+        RegisteredQueueListener second = new RegisteredQueueListener("topic.two",
+                message -> Mono.empty(), topologyCreator -> Mono.empty());
+        when(handlerResolver.getTopicListeners())
+                .thenReturn(Map.of("topic.one", first, "topic.two", second));
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenTopics(handlerResolver);
+        // Assert
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.one")));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.two")));
+    }
+
+    @Test
+    void shouldNotListenAnyTopicWhenNoneIsRegistered() {
+        when(handlerResolver.getTopicListeners()).thenReturn(Map.of());
+        // Act
+        brokerProvider.listenTopics(handlerResolver);
+        // Assert
+        verify(listener, never()).listen(any(String.class), any());
+    }
+
+    @Test
+    void shouldUseExplicitGroupIdFromConnectionPropertiesForTopicListeners() {
+        props.getConnectionProperties().getConsumer().setGroupId("dummy.consumer-group");
+        RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
+                message -> Mono.empty(), topologyCreator -> Mono.empty());
+        when(handlerResolver.getTopicListeners())
+                .thenReturn(Map.of("my.custom.topic", registeredListener));
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenTopics(handlerResolver);
+        // Assert
+        verify(listener, times(1))
+                .listen(eq("dummy.consumer-group"), eq(List.of("my.custom.topic")));
+    }
+
+    @Test
+    void shouldNotListenQueuesBecauseKafkaHasNoQueueConcept() {
+        // Act
+        brokerProvider.listenQueues(handlerResolver);
+        // Assert
+        verify(handlerResolver, never()).getQueueListeners();
+        verify(listener, never()).listen(any(String.class), any());
     }
 
     @Test

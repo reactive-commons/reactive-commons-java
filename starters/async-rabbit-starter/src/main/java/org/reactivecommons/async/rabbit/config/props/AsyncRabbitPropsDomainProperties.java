@@ -15,6 +15,13 @@ public class AsyncRabbitPropsDomainProperties extends GenericAsyncPropsDomainPro
         super(m);
     }
 
+    /**
+     * @deprecated in favor of {@link AsyncPropsDomain.RabbitPropsCustomizer}, which allows the same programmatic
+     * configuration while keeping the hybrid YAML + programmatic model (YAML values are preserved and only the
+     * customized properties are overridden). This builder replaces the whole domain properties, discarding any
+     * values already bound from your configuration files.
+     */
+    @Deprecated(forRemoval = true, since = "7.4.0")
     public static AsyncPropsDomainPropertiesBuilder<AsyncProps, RabbitProperties,
             AsyncRabbitPropsDomainProperties> builder() {
         return GenericAsyncPropsDomainProperties.builder(AsyncRabbitPropsDomainProperties.class);

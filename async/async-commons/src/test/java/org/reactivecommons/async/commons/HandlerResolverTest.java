@@ -24,6 +24,7 @@ class HandlerResolverTest {
     Map<String, RegisteredEventListener<?, ?>> notificationListeners;
     Map<String, RegisteredCommandHandler<?, ?>> commandHandlers;
     Map<String, RegisteredQueueListener> queueListeners;
+    Map<String, RegisteredQueueListener> topicListeners;
     HandlerResolver resolver;
 
     @BeforeEach
@@ -34,8 +35,9 @@ class HandlerResolverTest {
         notificationListeners = new ConcurrentHashMap<>();
         commandHandlers = new ConcurrentHashMap<>();
         queueListeners = new ConcurrentHashMap<>();
+        topicListeners = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
     }
 
     @Test
@@ -47,7 +49,7 @@ class HandlerResolverTest {
     void hasNotificationListenersWhenPresent() {
         notificationListeners.put("event.test", new RegisteredEventListener<>("event.test", mock(), Object.class));
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.hasNotificationListeners()).isTrue();
     }
 
@@ -60,7 +62,7 @@ class HandlerResolverTest {
     void hasCommandHandlersWhenPresent() {
         commandHandlers.put("cmd.test", new RegisteredCommandHandler<>("cmd.test", mock(), Object.class));
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.hasCommandHandlers()).isTrue();
     }
 
@@ -73,7 +75,7 @@ class HandlerResolverTest {
     void hasQueryHandlersWhenPresent() {
         queryHandlers.put("query.test", new RegisteredQueryHandler<>("query.test", mock(), Object.class));
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.hasQueryHandlers()).isTrue();
     }
 
@@ -111,7 +113,7 @@ class HandlerResolverTest {
         var handler = new RegisteredEventListener<>("notif.test", mock(), Object.class);
         notificationListeners.put("notif.test", handler);
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         Collection<RegisteredEventListener<?, ?>> listeners = resolver.getNotificationListeners();
         assertThat(listeners).hasSize(1);
     }
@@ -121,7 +123,7 @@ class HandlerResolverTest {
         var handler = new RegisteredEventListener<>("notif.test", mock(), Object.class);
         notificationListeners.put("notif.test", handler);
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.getNotificationListener("notif.test")).isSameAs(handler);
     }
 
@@ -144,7 +146,7 @@ class HandlerResolverTest {
     void getNotificationNames() {
         notificationListeners.put("n.a", new RegisteredEventListener<>("n.a", mock(), Object.class));
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.getNotificationNames()).containsExactly("n.a");
     }
 
@@ -183,7 +185,16 @@ class HandlerResolverTest {
         var ql = new RegisteredQueueListener("queue", mock(), mock());
         queueListeners.put("queue", ql);
         resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
-                notificationListeners, commandHandlers, queueListeners);
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.getQueueListeners()).containsEntry("queue", ql);
+    }
+
+    @Test
+    void getTopicListeners() {
+        var tl = new RegisteredQueueListener("topic", mock(), mock());
+        topicListeners.put("topic", tl);
+        resolver = new HandlerResolver(queryHandlers, eventListeners, eventsToBind,
+                notificationListeners, commandHandlers, queueListeners, topicListeners);
+        assertThat(resolver.getTopicListeners()).containsEntry("topic", tl);
     }
 }

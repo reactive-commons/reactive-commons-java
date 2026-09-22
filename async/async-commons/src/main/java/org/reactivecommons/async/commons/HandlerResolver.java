@@ -27,6 +27,8 @@ public class HandlerResolver {
     private final Map<String, RegisteredCommandHandler<?, ?>> commandHandlers;
     @Getter
     private final Map<String, RegisteredQueueListener> queueListeners;
+    @Getter
+    private final Map<String, RegisteredQueueListener> topicListeners;
 
     private final Matcher matcher = new KeyMatcher();
 

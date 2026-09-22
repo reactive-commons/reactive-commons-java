@@ -40,6 +40,8 @@ public final class HandlerRegistry {
             new RegisteredDomainHandlers<>();
     private final RegisteredDomainHandlers<RegisteredQueueListener> queueHandlers =
             new RegisteredDomainHandlers<>();
+    private final RegisteredDomainHandlers<RegisteredQueueListener> topicHandlers =
+            new RegisteredDomainHandlers<>();
 
 
     public static HandlerRegistry register() {
@@ -181,24 +183,73 @@ public final class HandlerRegistry {
         return this;
     }
 
-    // Queues
+    // Queues (RabbitMQ only)
+
+    /**
+     * Listens to a RabbitMQ queue directly, bypassing the domain event / notification conventions. Not available
+     * on Kafka: use {@link #listenTopic(String, RawEventHandler)} instead.
+     */
     public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler) {
         return listenQueue(queueName, handler, creator -> Mono.empty());
     }
 
+    /**
+     * @see #listenQueue(String, RawEventHandler)
+     */
     public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler) {
         return listenQueue(domain, queueName, handler, creator -> Mono.empty());
     }
 
+    /**
+     * @see #listenQueue(String, RawEventHandler)
+     */
     public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler,
                                        TopologyHandlerSetup topologyCreator) {
         queueHandlers.add(DEFAULT_DOMAIN, new RegisteredQueueListener(queueName, handler, topologyCreator));
         return this;
     }
 
+    /**
+     * @see #listenQueue(String, RawEventHandler)
+     */
     public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler,
                                        TopologyHandlerSetup topologyCreator) {
         queueHandlers.add(domain, new RegisteredQueueListener(queueName, handler, topologyCreator));
+        return this;
+    }
+
+    // Topics (Kafka only)
+
+    /**
+     * Listens to a Kafka topic directly, bypassing the domain event / notification conventions. Not available on
+     * RabbitMQ: use {@link #listenQueue(String, RawEventHandler)} instead.
+     */
+    public HandlerRegistry listenTopic(String topicName, RawEventHandler<RawMessage> handler) {
+        return listenTopic(topicName, handler, creator -> Mono.empty());
+    }
+
+    /**
+     * @see #listenTopic(String, RawEventHandler)
+     */
+    public HandlerRegistry listenTopic(String domain, String topicName, RawEventHandler<RawMessage> handler) {
+        return listenTopic(domain, topicName, handler, creator -> Mono.empty());
+    }
+
+    /**
+     * @see #listenTopic(String, RawEventHandler)
+     */
+    public HandlerRegistry listenTopic(String topicName, RawEventHandler<RawMessage> handler,
+                                       TopologyHandlerSetup topologyCreator) {
+        topicHandlers.add(DEFAULT_DOMAIN, new RegisteredQueueListener(topicName, handler, topologyCreator));
+        return this;
+    }
+
+    /**
+     * @see #listenTopic(String, RawEventHandler)
+     */
+    public HandlerRegistry listenTopic(String domain, String topicName, RawEventHandler<RawMessage> handler,
+                                       TopologyHandlerSetup topologyCreator) {
+        topicHandlers.add(domain, new RegisteredQueueListener(topicName, handler, topologyCreator));
         return this;
     }
 

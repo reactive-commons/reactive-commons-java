@@ -16,6 +16,8 @@ import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizatio
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
+import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
+import org.reactivecommons.async.kafka.validation.SchemaValidator;
 import reactor.kafka.receiver.ReceiverOptions;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
@@ -36,23 +38,35 @@ public final class KafkaSetupUtils {
     public static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
                                                             MessageConverter converter,
                                                             TopologyCreator topologyCreator) {
+        return createMessageSender(config, converter, topologyCreator, NoOpSchemaValidator.INSTANCE);
+    }
+
+    public static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
+                                                            MessageConverter converter,
+                                                            TopologyCreator topologyCreator,
+                                                            SchemaValidator schemaValidator) {
         KafkaProperties props = config.getConnectionProperties();
         props.setClientId(config.getAppName());
         props.getProducer().setKeySerializer(StringSerializer.class);
         props.getProducer().setValueSerializer(ByteArraySerializer.class);
         SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties());
         KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
-        return new ReactiveMessageSender(kafkaSender, converter, topologyCreator);
+        return new ReactiveMessageSender(kafkaSender, converter, topologyCreator, schemaValidator);
     }
 
     // Receiver
 
     public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config) {
+        return createMessageListener(config, NoOpSchemaValidator.INSTANCE);
+    }
+
+    public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config,
+                                                                SchemaValidator schemaValidator) {
         KafkaProperties props = config.getConnectionProperties();
         props.getConsumer().setKeyDeserializer(StringDeserializer.class);
         props.getConsumer().setValueDeserializer(ByteArrayDeserializer.class);
         ReceiverOptions<String, byte[]> receiverOptions = ReceiverOptions.create(props.buildConsumerProperties());
-        return new ReactiveMessageListener(receiverOptions);
+        return new ReactiveMessageListener(receiverOptions, schemaValidator);
     }
 
     // Shared

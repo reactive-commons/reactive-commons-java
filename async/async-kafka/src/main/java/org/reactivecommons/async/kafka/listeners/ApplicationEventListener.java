@@ -3,6 +3,7 @@ package org.reactivecommons.async.kafka.listeners;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
+import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
@@ -67,6 +68,9 @@ public class ApplicationEventListener extends GenericMessageListener {
         }
         if (registeredEventListener.handler() instanceof CloudEventHandler) {
             return messageConverter::readCloudEvent;
+        }
+        if (registeredEventListener.handler() instanceof RawEventHandler) {
+            return message -> message;
         }
         throw new RuntimeException("Unknown handler type");
     }

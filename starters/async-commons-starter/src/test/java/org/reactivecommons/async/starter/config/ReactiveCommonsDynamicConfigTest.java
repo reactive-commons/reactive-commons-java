@@ -53,7 +53,7 @@ class ReactiveCommonsDynamicConfigTest {
                                                          boolean listenQueries,
                                                          boolean sendEvents,
                                                          boolean sendCommands) {
-        ReactiveCommonsDomainFeatures features = new ReactiveCommonsDomainFeatures();
+        var features = new ReactiveCommonsDomainFeatures();
         ReactiveCommonsFeatures f = features.withDomain(DEFAULT_DOMAIN);
         f.setListenEvents(listenEvents);
         f.setListenNotificationEvents(listenNotifications);
@@ -74,7 +74,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateEventListenersWhenFlagIsTrue() {
-        ReactiveCommonsDomainFeatures features = domainFeatures(true, false, false, false, false, false);
+        var features = domainFeatures(true, false, false, false, false, false);
         config.dynamicEventListenerActivator(manager, handlers, features);
         verify(provider).listenDomainEvents(resolver);
     }
@@ -87,7 +87,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateNotificationListenersWhenFlagIsTrue() {
-        ReactiveCommonsDomainFeatures features = domainFeatures(false, true, false, false, false, false);
+        var features = domainFeatures(false, true, false, false, false, false);
         config.dynamicNotificationListenerActivator(manager, handlers, features);
         verify(provider).listenNotificationEvents(resolver);
     }
@@ -100,7 +100,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateCommandListenersWhenFlagIsTrue() {
-        ReactiveCommonsDomainFeatures features = domainFeatures(false, false, true, false, false, false);
+        var features = domainFeatures(false, false, true, false, false, false);
         config.dynamicCommandListenerActivator(manager, handlers, features);
         verify(provider).listenCommands(resolver);
     }
@@ -113,7 +113,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateQueryListenersWhenFlagIsTrue() {
-        ReactiveCommonsDomainFeatures features = domainFeatures(false, false, false, true, false, false);
+        var features = domainFeatures(false, false, false, true, false, false);
         config.dynamicQueryListenerActivator(manager, handlers, features);
         verify(provider).listenQueries(resolver);
     }
@@ -125,8 +125,36 @@ class ReactiveCommonsDynamicConfigTest {
     }
 
     @Test
+    void shouldActivateQueueListenersWhenFlagIsTrue() {
+        var features = new ReactiveCommonsDomainFeatures();
+        features.withDomain(DEFAULT_DOMAIN).setListenQueues(true);
+        config.dynamicQueueListenerActivator(manager, handlers, features);
+        verify(provider).listenQueues(resolver);
+    }
+
+    @Test
+    void shouldNotActivateQueueListenersWhenFlagIsFalse() {
+        config.dynamicQueueListenerActivator(manager, handlers, allFalse());
+        verify(provider, never()).listenQueues(resolver);
+    }
+
+    @Test
+    void shouldActivateTopicListenersWhenFlagIsTrue() {
+        var features = new ReactiveCommonsDomainFeatures();
+        features.withDomain(DEFAULT_DOMAIN).setListenTopics(true);
+        config.dynamicTopicListenerActivator(manager, handlers, features);
+        verify(provider).listenTopics(resolver);
+    }
+
+    @Test
+    void shouldNotActivateTopicListenersWhenFlagIsFalse() {
+        config.dynamicTopicListenerActivator(manager, handlers, allFalse());
+        verify(provider, never()).listenTopics(resolver);
+    }
+
+    @Test
     void shouldActivateAllListenersWhenAllFlagsAreTrue() {
-        ReactiveCommonsDomainFeatures features = domainFeatures(true, true, true, true, false, false);
+        var features = domainFeatures(true, true, true, true, false, false);
 
         config.dynamicEventListenerActivator(manager, handlers, features);
         config.dynamicNotificationListenerActivator(manager, handlers, features);
@@ -141,7 +169,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateNoListenersWhenAllFlagsAreFalse() {
-        ReactiveCommonsDomainFeatures features = allFalse();
+        var features = allFalse();
 
         config.dynamicEventListenerActivator(manager, handlers, features);
         config.dynamicNotificationListenerActivator(manager, handlers, features);
@@ -159,7 +187,7 @@ class ReactiveCommonsDynamicConfigTest {
         manager.addDomain("other-domain", provider);
         handlers.add("other-domain", resolver);
 
-        ReactiveCommonsDomainFeatures features = new ReactiveCommonsDomainFeatures();
+        var features = new ReactiveCommonsDomainFeatures();
         features.withDomain(DEFAULT_DOMAIN).setListenEvents(true);
         features.withDomain("other-domain").setListenEvents(true);
 
@@ -173,7 +201,7 @@ class ReactiveCommonsDynamicConfigTest {
         manager.addDomain("other-domain", provider);
         handlers.add("other-domain", resolver);
 
-        ReactiveCommonsDomainFeatures features = new ReactiveCommonsDomainFeatures();
+        var features = new ReactiveCommonsDomainFeatures();
         features.withDomain(DEFAULT_DOMAIN).setListenEvents(true);
         features.withDomain("other-domain"); // listenEvents=false by default
 
@@ -189,7 +217,7 @@ class ReactiveCommonsDynamicConfigTest {
     @Test
     void shouldCreateRealDomainEventBusWhenSendEventsIsTrue() {
         when(provider.getDomainBus()).thenReturn(domainEventBus);
-        ReactiveCommonsDomainFeatures features = domainFeatures(false, false, false, false, true, false);
+        var features = domainFeatures(false, false, false, false, true, false);
 
         DomainEventBus bus = config.dynamicDomainEventBus(manager, features);
 
@@ -199,7 +227,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldReturnDisabledDomainEventBusWhenSendEventsIsFalse() {
-        ReactiveCommonsDomainFeatures features = allFalse();
+        var features = allFalse();
 
         DomainEventBus bus = config.dynamicDomainEventBus(manager, features);
 
@@ -209,7 +237,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void disabledDomainEventBusShouldEmitErrorOnUse() {
-        ReactiveCommonsDomainFeatures features = allFalse();
+        var features = allFalse();
         DomainEventBus bus = config.dynamicDomainEventBus(manager, features);
 
         create(bus.emit(new org.reactivecommons.api.domain.DomainEvent<>("test", "1", "data")))
@@ -222,7 +250,7 @@ class ReactiveCommonsDynamicConfigTest {
     @Test
     void shouldCreateRealDirectAsyncGatewayWhenSendCommandsIsTrue() {
         when(provider.getDirectAsyncGateway()).thenReturn(directAsyncGateway);
-        ReactiveCommonsDomainFeatures features = domainFeatures(false, false, false, false, false, true);
+        var features = domainFeatures(false, false, false, false, false, true);
 
         DirectAsyncGateway gateway = config.dynamicDirectAsyncGateway(manager, features);
 
@@ -234,7 +262,7 @@ class ReactiveCommonsDynamicConfigTest {
     void shouldCreateDirectAsyncGatewayEvenWhenSendCommandsIsFalse() {
         // The gateway is always registered in the map regardless of sendCommands flag.
         // Conditional logging only; the actual put is unconditional.
-        ReactiveCommonsDomainFeatures features = allFalse();
+        var features = allFalse();
 
         DirectAsyncGateway gateway = config.dynamicDirectAsyncGateway(manager, features);
 
@@ -252,13 +280,15 @@ class ReactiveCommonsDynamicConfigTest {
         assertThat(features.isListenNotificationEvents()).isFalse();
         assertThat(features.isListenCommands()).isFalse();
         assertThat(features.isListenQueries()).isFalse();
+        assertThat(features.isListenQueues()).isFalse();
+        assertThat(features.isListenTopics()).isFalse();
         assertThat(features.isSendEvents()).isFalse();
         assertThat(features.isSendCommands()).isFalse();
     }
 
     @Test
     void withDomainShouldReturnSameInstanceOnSubsequentCalls() {
-        ReactiveCommonsDomainFeatures features = new ReactiveCommonsDomainFeatures();
+        var features = new ReactiveCommonsDomainFeatures();
         ReactiveCommonsFeatures first = features.withDomain(DEFAULT_DOMAIN);
         ReactiveCommonsFeatures second = features.withDomain(DEFAULT_DOMAIN);
         assertThat(first).isSameAs(second);
@@ -266,7 +296,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void ofDomainShouldReturnConfiguredFeatures() {
-        ReactiveCommonsDomainFeatures features = new ReactiveCommonsDomainFeatures();
+        var features = new ReactiveCommonsDomainFeatures();
         features.withDomain(DEFAULT_DOMAIN).setListenEvents(true);
         assertThat(features.ofDomain(DEFAULT_DOMAIN).isListenEvents()).isTrue();
     }

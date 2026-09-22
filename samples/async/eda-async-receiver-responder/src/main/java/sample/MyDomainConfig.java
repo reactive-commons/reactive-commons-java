@@ -1,8 +1,7 @@
 package sample;
 
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
-import org.reactivecommons.async.rabbit.config.props.AsyncProps;
-import org.reactivecommons.async.rabbit.config.props.AsyncRabbitPropsDomainProperties;
+import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 
@@ -11,7 +10,7 @@ public class MyDomainConfig {
 
     @Bean
     @Primary
-    public AsyncRabbitPropsDomainProperties customDomainProperties() {
+    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
         RabbitProperties propertiesApp = new RabbitProperties();
         propertiesApp.setHost("localhost");
         propertiesApp.setPort(5672);
@@ -26,13 +25,16 @@ public class MyDomainConfig {
         propertiesAccounts.setUsername("guest");
         propertiesAccounts.setPassword("guest");
 
-        return AsyncRabbitPropsDomainProperties.builder()
-                .withDomain("app", AsyncProps.builder()
-                        .connectionProperties(propertiesApp)
-                        .build())
-                .withDomain("accounts", AsyncProps.builder()
-                        .connectionProperties(propertiesAccounts)
-                        .build())
-                .build();
+        return domainProperties -> {
+            // Customize the "app" domain — YAML values are kept, only these fields are overridden
+            domainProperties.customize(
+                    "app", app -> app.setConnectionProperties(propertiesApp)
+            );
+
+            // Customize the "accounts" domain independently
+            domainProperties.customize(
+                    "accounts", accounts -> accounts.setConnectionProperties(propertiesAccounts)
+            );
+        };
     }
 }

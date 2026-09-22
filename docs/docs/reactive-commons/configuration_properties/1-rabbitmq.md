@@ -1,4 +1,4 @@
----
+﻿---
 sidebar_position: 1
 ---
 
@@ -366,14 +366,15 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 **[1] Annotations for sending messages:**
 
-- `@EnableDomainEventBus` to send [domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event).
+- `@EnableDomainEventBus` to
+  send [domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event/rabbitmq).
 - `@EnableDirectAsyncGateway` to send [commands](/reactive-commons-java/docs/reactive-commons/sending-a-command)
   and [asynchronous queries](/reactive-commons-java/docs/reactive-commons/making-an-async-query).
 
 **[2] Annotations for listening to messages:**
 
 - `@EnableEventListeners` to
-  listen [domain events](/reactive-commons-java/docs/reactive-commons/handling-domain-events).
+  listen [domain events](/reactive-commons-java/docs/reactive-commons/handling-domain-events/rabbitmq).
 - `@EnableCommandListeners` to listen [commands](/reactive-commons-java/docs/reactive-commons/handling-commands).
 - `@EnableQueryListeners` to serve [async queries](/reactive-commons-java/docs/reactive-commons/serving-async-queries).
 
@@ -576,7 +577,8 @@ public class ResendUnroutableMessageHandler implements UnroutableMessageHandler 
 #### Send unrouted messages to a queue
 
 To send the unrouted message to a queue, we use the `@EnableDomainEventBus` annotations for
-[domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event), and `@EnableDirectAsyncGateway`
+[domain events](/reactive-commons-java/docs/reactive-commons/sending-a-domain-event/rabbitmq), and
+`@EnableDirectAsyncGateway`
 for [commands](/reactive-commons-java/docs/reactive-commons/sending-a-command) and
 [asynchronous queries](/reactive-commons-java/docs/reactive-commons/making-an-async-query), as appropriate.
 
@@ -760,3 +762,4 @@ but the broker rejects the declaration because it conflicts with the existing qu
 
 To resolve this issue, you must manually delete the conflicting queues from the RabbitMQ broker. Once the queues are
 deleted, you can restart the microservice to recreate them with the correct, updated properties.
+

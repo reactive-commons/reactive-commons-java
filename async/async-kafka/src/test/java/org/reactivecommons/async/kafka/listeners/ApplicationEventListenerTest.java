@@ -10,6 +10,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.EventHandler;
+import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
@@ -98,6 +99,23 @@ class ApplicationEventListenerTest {
 
         verify(resolver, times(1)).getEventListener(anyString());
         verify(messageConverter, times(1)).readCloudEvent(any(Message.class));
+    }
+
+    @Test
+    void shouldHandleRawMessageSuccessfullyWhenRawEventHandler() {
+        EventHandler rawEventHandler = mock(RawEventHandler.class);
+        when(rawEventHandler.handle(message)).thenReturn(Mono.empty());
+        RegisteredEventListener<Object, Object> registeredEventListenerMock = mock(RegisteredEventListener.class);
+        when(registeredEventListenerMock.handler()).thenReturn(rawEventHandler);
+        when(resolver.getEventListener(anyString())).thenReturn(registeredEventListenerMock);
+
+        Mono<Object> flow = applicationEventListener.rawMessageHandler("executorPath").apply(message);
+
+        StepVerifier.create(flow)
+                .verifyComplete();
+
+        verify(resolver, times(1)).getEventListener(anyString());
+        verify(rawEventHandler, times(1)).handle(message);
     }
 
     @Test

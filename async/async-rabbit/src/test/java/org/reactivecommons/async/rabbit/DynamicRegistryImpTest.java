@@ -22,10 +22,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static reactor.core.publisher.Mono.just;
 
 
 @ExtendWith(MockitoExtension.class)
@@ -50,8 +48,10 @@ class DynamicRegistryImpTest {
         Map<String, RegisteredEventListener<?,?>> notificationEventListeners = new ConcurrentHashMap<>();
         Map<String, RegisteredQueryHandler<?, ?>> queryHandlers = new ConcurrentHashMap<>();
         Map<String, RegisteredQueueListener> queueHandlers = new ConcurrentHashMap<>();
+        Map<String, RegisteredQueueListener> topicHandlers = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(
-                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers, queueHandlers
+                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers,
+                queueHandlers, topicHandlers
         );
         dynamicRegistry = new DynamicRegistryImp(resolver, topologyCreator, props);
     }

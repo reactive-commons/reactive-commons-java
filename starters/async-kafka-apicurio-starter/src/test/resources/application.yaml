@@ -1,0 +1,13 @@
+# Minimum context needed by the tests that boot Spring (ApicurioComponentScanTest): the application name, which
+# AsyncKafkaPropsDomain reads to name every domain, and the required 'app' domain. Without the name the domain is
+# built with an unresolved "${spring.application.name}" as its appName.
+# The Apicurio settings of each test are declared by the test itself, so they stay next to its assertions.
+spring:
+  application:
+    name: async-kafka-apicurio-starter
+reactive:
+  commons:
+    kafka:
+      app:
+        checkExistingTopics: false
+        createTopology: false

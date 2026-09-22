@@ -1,0 +1,19 @@
+ext {
+    artifactId = 'async-commons-kafka-apicurio-starter'
+    artifactDescription = 'Async Commons Kafka Apicurio Starter'
+}
+
+dependencies {
+    api project(':async-kafka-starter')
+    api 'io.apicurio:apicurio-registry-serde-kafka-common:3.3.3'
+    api 'io.apicurio:apicurio-registry-serde-common-jsonschema:3.3.3'
+    implementation 'org.springframework.boot:spring-boot-autoconfigure'
+
+    compileOnly 'org.springframework.boot:spring-boot-starter-actuator'
+    compileOnly 'io.micrometer:micrometer-core'
+
+    annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+
+    testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-actuator-test'
+}

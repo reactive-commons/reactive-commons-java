@@ -17,6 +17,10 @@ Commons.
 
 You need Java JRE installed (Java 17 or later) and Spring Boot 4.
 
+:::tip
+Java 25 and Spring Boot 4.1.x or higher are recommended.
+:::
+
 You also need to install RabbitMQ. Follow the [instructions from the website](https://www.rabbitmq.com/download.html).
 
 ## Start RabbitMQ
@@ -130,7 +134,7 @@ to different domains.
 
 Includes the Cloud Events specification.
 
-If you want to use it, you should read the [Creating a CloudEvent guide](11-creating-a-cloud-event.md)
+If you want to use it, you should read the [Creating a CloudEvent guide](12-creating-a-cloud-event.md)
 
   </TabItem>
   <TabItem value="kafka" label="Kafka">
@@ -140,6 +144,10 @@ Commons.
 ## Requirements
 
 You need Java JRE installed (Java 17 or later) and Spring Boot 4.
+
+:::tip
+Java 25 and Spring Boot 4.1.x or higher are recommended.
+:::
 
 ## Start Kafka
 
@@ -284,7 +292,7 @@ Enables to you the ability to listen events from different domains.
 
 Includes the Cloud Events specification.
 
-If you want to use it, you should read the [Creating a CloudEvent guide](11-creating-a-cloud-event.md)
+If you want to use it, you should read the [Creating a CloudEvent guide](12-creating-a-cloud-event.md)
 
   </TabItem>
 </Tabs>

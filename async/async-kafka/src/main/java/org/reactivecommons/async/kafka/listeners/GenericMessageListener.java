@@ -9,6 +9,8 @@ import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
+import org.reactivecommons.async.kafka.validation.SchemaValidationException;
+import org.reactivecommons.async.kafka.validation.SchemaValidator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -112,6 +114,7 @@ public abstract class GenericMessageListener {
         try {
             final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
+            validateInbound(msj);
             final Message message = KafkaMessage.fromDelivery(msj, executorPath);
 
             Mono<Object> flow = Mono.defer(() -> handler.apply(message))
@@ -129,10 +132,21 @@ public abstract class GenericMessageListener {
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(scheduler)
                     .thenReturn(msj);
+        } catch (SchemaValidationException e) {
+            // Kept apart from the generic case because a rejected record is not a failure of the listener
+            // itself.
+            return Mono.error(e);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
                     "Severe Warning! ", msj.key()));
             return Mono.error(e);
+        }
+    }
+
+    private void validateInbound(ReceiverRecord<String, byte[]> msj) {
+        SchemaValidator validator = messageListener.getSchemaValidator();
+        if (validator != null) {
+            validator.validateInbound(msj.topic(), msj.value(), msj.headers());
         }
     }
 
@@ -187,9 +201,7 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, ReceiverRecord<String, byte[]> msj, FallbackStrategy strategy) {
         String messageID = msj.key();
         try {
-            log.log(Level.SEVERE,
-                    format("Error encounter while processing message %s: %s", messageID, err.toString()), err
-            );
+            log.log(Level.SEVERE, format("Error encounter while processing message %s", messageID), err);
             log.warning(format("Message %s Headers: %s", messageID, msj.headers().toString()));
             log.warning(format("Message %s Body: %s", messageID, new String(msj.value())));
         } catch (Exception e) {

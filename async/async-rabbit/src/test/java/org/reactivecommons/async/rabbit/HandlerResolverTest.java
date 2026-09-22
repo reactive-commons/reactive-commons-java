@@ -43,8 +43,10 @@ class HandlerResolverTest {
         queueListeners.put("queue.name", new RegisteredQueueListener(
                 "queue.name", message ->  Mono.empty(), null
         ));
+        Map<String, RegisteredQueueListener> topicListeners = new ConcurrentHashMap<>();
         resolver = new HandlerResolver(
-                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers, queueListeners
+                queryHandlers, eventListeners, eventsToBind, notificationEventListeners, commandHandlers,
+                queueListeners, topicListeners
         );
     }
 

@@ -1,5 +1,5 @@
----
-sidebar_position: 5
+﻿---
+sidebar_position: 6
 ---
 
 # Handler Registry
@@ -64,15 +64,25 @@ public class HandlerRegistry {
     public <R> HandlerRegistry serveCloudEventQuery(String resource, QueryHandler<R, CloudEvent> handler)
     public HandlerRegistry serveCloudEventQuery(String resource, QueryHandlerDelegate<Void, CloudEvent> handler)
 
-    // Queues
+    // Queues (RabbitMQ only)
     public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler)
     public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler)
     public HandlerRegistry listenQueue(String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
     public HandlerRegistry listenQueue(String domain, String queueName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
+
+    // Topics (Kafka only)
+    public HandlerRegistry listenTopic(String topicName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenTopic(String domain, String topicName, RawEventHandler<RawMessage> handler)
+    public HandlerRegistry listenTopic(String topicName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
+    public HandlerRegistry listenTopic(String domain, String topicName, RawEventHandler<RawMessage> handler, TopologyHandlerSetup topologyCreator)
 }
 ```
 
-Methods that Has `CloudEvent` in the name are related to the CloudEvent specification.
+Methods that has `CloudEvent` in the name are related to the CloudEvent specification.
 
 Methods that has `domain` String argument are related to the multi-broker support, this support is limited to listen events
 from different domains (brokers) independent of the technology.
+
+`listenQueue` and `listenTopic` are broker-specific and intentionally **not** interchangeable: `listenQueue` only works
+when the underlying broker is RabbitMQ, and `listenTopic` only when it is Kafka. Registering the wrong one for the
+active broker has no effect, since each `BrokerProvider` only starts the listeners meant for its own broker.

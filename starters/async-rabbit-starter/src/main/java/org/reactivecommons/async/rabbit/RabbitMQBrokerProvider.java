@@ -92,6 +92,11 @@ public record RabbitMQBrokerProvider(String domain,
     }
 
     @Override
+    public void listenTopics(HandlerResolver resolver) {
+        // Not applicable to RabbitMQ: there is no native topic concept. Use listenQueues(...) instead.
+    }
+
+    @Override
     public void listenNotificationEvents(HandlerResolver resolver) {
         if (resolver.hasNotificationListeners()) {
             final ApplicationNotificationListener listener = new ApplicationNotificationListener(

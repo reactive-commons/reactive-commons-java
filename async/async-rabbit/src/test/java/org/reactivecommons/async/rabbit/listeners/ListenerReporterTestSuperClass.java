@@ -176,7 +176,8 @@ public abstract class ListenerReporterTestSuperClass {
                 new ConcurrentHashMap<>(eventsToBind),
                 new ConcurrentHashMap<>(notificationHandlers),
                 new ConcurrentHashMap<>(commandHandlers),
-                new ConcurrentHashMap<>(queueHandlers)
+                new ConcurrentHashMap<>(queueHandlers),
+                new ConcurrentHashMap<>()
         );
     }
 
