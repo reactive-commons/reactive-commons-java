@@ -186,6 +186,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.7.1'
+    gradleVersion = '9.8.0'
     validateDistributionUrl = true
 }
