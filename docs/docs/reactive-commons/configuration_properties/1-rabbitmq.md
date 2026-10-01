@@ -53,6 +53,8 @@ app:
         username: guest
         password: guest
         virtual-host: /
+        ssl:
+          enabled: false # set to true to enable SSL/TLS for this domain's connection
     # Another domain can be configured with same properties structure that app
     accounts: # this is a second domain name and can have another independent setup
       connectionProperties: # you can override the connection properties of each domain
@@ -121,27 +123,17 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-    // Loads RabbitMQ connection properties from a secrets manager at runtime.
-    // See the "Loading properties from a secret" section below for a complete implementation example.
-    private RabbitProperties loadFromSecret(String secretName) {
-        // ...
-        return new RabbitProperties();
+  @Bean
+  public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+    return domainProperties -> {
+      // Customize the "app" domain — YAML values are kept, only these fields are overridden
+      domainProperties.customize("app", app -> app.setQueueType("quorum"));
+
+      // Customize the "accounts" domain independently
+      domainProperties.customize("accounts", accounts -> accounts.setQueueType("quorum"));
+    };
     }
 
-    @Bean
-    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
-        return domainProperties -> {
-            // Customize the "app" domain — YAML values are kept, only these fields are overridden
-            domainProperties.customize("app", app -> app.setConnectionProperties(
-                    loadFromSecret("secret-app-rabbit")
-            ));
-
-            // Customize the "accounts" domain independently
-            domainProperties.customize("accounts", accounts -> accounts.setConnectionProperties(
-                    loadFromSecret("secret-accounts-rabbit")
-            ));
-        };
-    }
 }
 ```
 
@@ -243,17 +235,6 @@ public record RabbitMQConnectionProperties(
         String username,
         boolean ssl,
         Integer port) {
-
-    public RabbitProperties toRabbitProperties() {
-        var rabbitProperties = new RabbitProperties();
-        rabbitProperties.setHost(this.host());
-        rabbitProperties.setUsername(this.username());
-        rabbitProperties.setPassword(this.password());
-        rabbitProperties.setPort(this.port());
-        rabbitProperties.setVirtualHost(this.virtualhost());
-        rabbitProperties.getSsl().setEnabled(this.ssl()); // To enable SSL
-        return rabbitProperties;
-    }
 }
 ```
 
@@ -325,10 +306,15 @@ public class RabbitMQConfig {
     @Bean
     public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
         return domainProperties -> {
-            AsyncProps app = domainProperties.get("app");
-            if (app != null) {
-                app.setConnectionProperties(rabbitMQConnectionProperties.toRabbitProperties());
-            }
+          domainProperties.customize("app", properties -> {
+            RabbitProperties connectionProperties = properties.getConnectionProperties();
+            connectionProperties.setHost(rabbitMQConnectionProperties.host());
+            connectionProperties.setPort(rabbitMQConnectionProperties.port());
+            connectionProperties.setVirtualHost(rabbitMQConnectionProperties.virtualhost());
+            connectionProperties.setUsername(rabbitMQConnectionProperties.username());
+            connectionProperties.setPassword(rabbitMQConnectionProperties.password());
+            connectionProperties.getSsl().setEnabled(rabbitMQConnectionProperties.ssl());
+          });
         };
     }
 }
