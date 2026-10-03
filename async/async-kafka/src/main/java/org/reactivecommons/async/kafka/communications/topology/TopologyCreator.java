@@ -61,9 +61,7 @@ public class TopologyCreator {
     }
 
     /**
-     * Creates a dedicated DLQ topic for each of the given base topics, using the {@code .dlq} suffix convention
-     * (e.g. {@code my-topic} -&gt; {@code my-topic.dlq}). DLQ topics follow the same customization rules
-     * (via {@link KafkaCustomizations}) as regular topics, matched by their own (suffixed) name.
+     * Creates a dedicated DLQ topic for each of the given base topics, using the {@code .dlq} suffix convention.
      *
      * @param baseTopics the topics for which a DLQ topic should be created
      * @return a {@link Mono} that completes once every DLQ topic has been created
