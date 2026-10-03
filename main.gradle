@@ -67,7 +67,7 @@ subprojects {
     }
 
     // TODO: Remove once it has been updated in spring boot
-    ext["rabbit-amqp-client.version"] = '5.36.0'
+    ext["rabbit-amqp-client.version"] = '5.37.0'
 
     test.finalizedBy(project.tasks.jacocoTestReport)
 
