@@ -12,10 +12,12 @@ import reactor.core.publisher.Mono;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class TopologyCreator {
     public static final int TIMEOUT_MS = 60_000;
+    public static final String DLQ_SUFFIX = ".dlq";
     private final AdminClient adminClient;
     private final KafkaCustomizations customizations;
     private final Map<String, Boolean> existingTopics;
@@ -28,10 +30,14 @@ public class TopologyCreator {
         this.existingTopics = getTopics();
     }
 
+    /**
+     * Lists the topics that exist in the cluster. The returned map is always mutable, because created topics are
+     * registered on it (see {@link #createTopics(List)}), even when {@code checkTopics} is disabled.
+     */
     @SneakyThrows
     public Map<String, Boolean> getTopics() {
         if (!checkTopics) {
-            return Map.of();
+            return new ConcurrentHashMap<>();
         }
         ListTopicsResult topics = adminClient.listTopics(new ListTopicsOptions().timeoutMs(TIMEOUT_MS));
         return topics.names().get().stream().collect(Collectors.toConcurrentMap(name -> name, name -> true));
@@ -54,6 +60,25 @@ public class TopologyCreator {
                 .then();
     }
 
+    /**
+     * Creates a dedicated DLQ topic for each of the given base topics, using the {@code .dlq} suffix convention
+     * (e.g. {@code my-topic} -&gt; {@code my-topic.dlq}). DLQ topics follow the same customization rules
+     * (via {@link KafkaCustomizations}) as regular topics, matched by their own (suffixed) name.
+     *
+     * @param baseTopics the topics for which a DLQ topic should be created
+     * @return a {@link Mono} that completes once every DLQ topic has been created
+     */
+    public Mono<Void> createDlqTopics(List<String> baseTopics) {
+        List<String> dlqTopics = baseTopics.stream()
+                .map(TopologyCreator::toDlqTopic)
+                .toList();
+        return createTopics(dlqTopics);
+    }
+
+    public static String toDlqTopic(String topic) {
+        return topic + DLQ_SUFFIX;
+    }
+
     protected Mono<NewTopic> createTopic(NewTopic topic) {
         return Mono.fromFuture(adminClient.createTopics(List.of(topic))
                         .all()
@@ -73,8 +98,11 @@ public class TopologyCreator {
 
     public void checkTopic(String topicName) {
         if (checkTopics && !existingTopics.containsKey(topicName)) {
-            throw new TopicNotFoundException("Topic not found: " + topicName + ". Please create it before send a message.");
-            // TODO: should refresh topics?? getTopics();
+            existingTopics.putAll(getTopics());
+            if (!existingTopics.containsKey(topicName)) {
+                throw new TopicNotFoundException("Topic not found: " + topicName +
+                        ". Please create it before send a message.");
+            }
         }
     }
 }
