@@ -67,7 +67,7 @@ subprojects {
     }
 
     // TODO: Remove once it has been updated in spring boot
-    ext["rabbit-amqp-client.version"] = '5.36.0'
+    ext["rabbit-amqp-client.version"] = '5.37.0'
 
     test.finalizedBy(project.tasks.jacocoTestReport)
 
@@ -186,6 +186,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.7.1'
+    gradleVersion = '9.8.0'
     validateDistributionUrl = true
 }

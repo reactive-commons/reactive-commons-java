@@ -1,3 +1,9 @@
+buildCache {
+    local {
+        directory = new File(rootDir, 'build-cache')
+    }
+}
+
 rootProject.name = 'ReactiveArchitectureCommons'
 
 FileTree buildFiles = fileTree(rootDir) {
