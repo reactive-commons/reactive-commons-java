@@ -187,8 +187,6 @@ class TopologyCreatorTest {
 
     @Test
     void shouldCreateTopicsWhenCheckTopicsIsDisabled() {
-        // Arrange: with checkExistingTopics=false the cache used to be an immutable Map.of(), so registering the
-        // created topic on it failed with UnsupportedOperationException and the DLQ topics were never created
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();

@@ -174,9 +174,27 @@ class KafkaBrokerProviderTest {
 
     @Test
     @SuppressWarnings({"rawtypes", "unchecked"})
-    void shouldNotCreateDlqTopicsForNotificationsEvenWhenDlqIsEnabled() {
-        // Same behavior as RabbitMQ: notifications never use the DLQ strategy
+    void shouldCreateDlqTopicsForNotificationsWhenDlqIsEnabled() {
+        // The DiscardNotifier publishes exhausted notifications to <name>.dlq, so the topic must exist
         props.setWithDLQRetry(true);
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
+        when(handlerResolver.getNotificationNames()).thenReturn(List.of("notification.one"));
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenNotificationEvents(handlerResolver);
+        // Assert
+        verify(creator, times(1)).createTopics(List.of("notification.one"));
+        verify(creator, times(1)).createDlqTopics(List.of("notification.one"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldNotCreateDlqTopicsForNotificationsWhenDlqIsDisabled() {
         List mockedListeners = spy(List.of());
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
@@ -186,7 +204,6 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
         // Assert
-        verify(creator, times(1)).createTopics(any());
         verify(creator, never()).createDlqTopics(any());
     }
 

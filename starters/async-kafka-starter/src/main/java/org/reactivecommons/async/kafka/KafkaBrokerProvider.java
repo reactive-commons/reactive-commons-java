@@ -65,12 +65,10 @@ public record KafkaBrokerProvider(String domain,
     @Override
     public void listenNotificationEvents(HandlerResolver resolver) {
         if (!resolver.getNotificationListeners().isEmpty()) {
-            // Same as RabbitMQ: notifications are consumed by every instance (own consumer group per instance), so they
-            // never use the DLQ strategy and no <topic>.dlq topic is created for them, even with withDLQRetry=true
             ApplicationNotificationsListener notificationEventListener = new ApplicationNotificationsListener(receiver,
                     resolver,
                     converter,
-                    false,
+                    props.getWithDLQRetry(),
                     props.getCreateTopology(),
                     props.getMaxRetries(),
                     props.getRetryDelay(),
