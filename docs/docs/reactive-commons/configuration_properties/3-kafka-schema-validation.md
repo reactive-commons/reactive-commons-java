@@ -71,11 +71,32 @@ the record headers, and on consume. A topic that is not declared, or that sets
 
 ### Scenarios it covers
 
-**1. A topic that is not validated.** Say you have 3 topics: `events`, `audit` and `push`. Only the
-declared topics are validated, so leaving `push` out of the list is enough. Nothing else changes for the other two
-topics, and no request is made to any registry for `push`:
+**1. Every topic inheriting the properties it does not declare.** A topic with no `properties` uses those of its
+registry, which in turn inherit those of the domain, and its artifact defaults to `<topic>-value`:
 
-```yaml
+```yaml title="application.yaml"
+reactive:
+  commons:
+    kafka:
+      app:
+        apicurio:
+          registries:
+            - name: main-registry
+              properties:
+                apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
+                apicurio.registry.artifact.group-id: kafka
+                apicurio.registry.find-latest: true
+
+              topics:
+                - name: events
+                - name: audit
+```
+
+**2. A topic that is not validated.** Say you have 3 topics: `events`, `audit` and `push`, and you do not want `push`
+validated. Keep it in the list and set `apicurio.registry.serde.validation-enabled: false` on it. No request is made to
+any registry for `push`, its records carry no schema coordinates, and nothing changes for the other two topics:
+
+```yaml title="application.yaml"
 reactive:
    commons:
       kafka:
@@ -90,16 +111,16 @@ reactive:
                     topics:
                        - name: events
                        - name: audit
+                       - name: push
                          properties:
-                            apicurio.registry.artifact.artifact-id: accounts
+                           apicurio.registry.serde.validation-enabled: false
 ```
 
-A declared topic can also be turned off without removing it, with
-`apicurio.registry.serde.validation-enabled: false` in its own `properties`.
+As an alternative, simply leaving `push` out of the list has the same effect: only declared topics are validated.
 
-**2. Topics pointing at different registries.** Declare one registry per endpoint and list its topics:
+**3. Topics pointing at different registries.** Declare one registry per endpoint and list its topics:
 
-```yaml
+```yaml title="application.yaml"
 reactive:
    commons:
       kafka:
@@ -127,10 +148,10 @@ reactive:
 
 Each endpoint gets its own registry client and its own schema cache.
 
-**3. Topics reading different groups of the same registry, with every property inherited otherwise.** A topic
+**4. Topics reading different groups of the same registry, with every property inherited otherwise.** A topic
 overrides only `apicurio.registry.artifact.group-id`, inheriting the rest from its registry:
 
-```yaml
+```yaml title="application.yaml"
 reactive:
    commons:
       kafka:
@@ -158,32 +179,11 @@ version are resolved per record and the cache is indexed by the full coordinates
 collide with those of another. The same applies across domains: two domains resolving against the same endpoint share
 one client.
 
-**4. Every topic inheriting the properties it does not declare.** A topic with no `properties` uses those of its
-registry, which in turn inherit those of the domain, and its artifact defaults to `<topic>-value`:
-
-```yaml
-reactive:
-   commons:
-      kafka:
-         app:
-            apicurio:
-               registries:
-                  - name: main-registry
-                    properties:
-                       apicurio.registry.url: "http://localhost:8080/apis/registry/v3"
-                       apicurio.registry.artifact.group-id: kafka
-                       apicurio.registry.find-latest: true
-
-                    topics:
-                       - name: events
-                       - name: audit
-```
-
 **5. The same topic name in two domains:** Topics are declared inside a domain, so the routing key is the domain plus 
 the topic name. Two domains connected to different clusters may declare the very same topic name against different
 registries, and each domain validates its own records:
 
-```yaml
+```yaml title="application.yaml"
 reactive:
    commons:
       kafka:
@@ -221,6 +221,7 @@ The registries live in the domain properties, so they are set from code with the
 configuration files are handed over to the customizer, which may complete them or build the whole declaration:
 
 ```java
+import io.apicurio.registry.resolver.config.SchemaResolverConfig;
 import org.reactivecommons.async.kafka.config.props.ApicurioRegistry;
 import org.reactivecommons.async.kafka.config.props.ApicurioTopic;
 import org.reactivecommons.async.kafka.config.props.ApicurioValidationProperties;
@@ -234,27 +235,29 @@ import java.util.Map;
 @Configuration
 public class ApicurioTopicsConfig {
 
-   @Bean
-   public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer(RegistryCredentials credentials) {
-      return domainProperties -> domainProperties.customize("app", props ->
-              props.setApicurio(ApicurioValidationProperties.builder()
-                      .registries(List.of(ApicurioRegistry.builder()
-                              .name("main-registry")
-                              .properties(Map.of(
-                                      "apicurio.registry.url", credentials.url(),
-                                      "apicurio.registry.auth.client.id", credentials.clientId(),
-                                      "apicurio.registry.artifact.group-id", "kafka",
-                                      "apicurio.registry.find-latest", "true"))
-                              .topics(List.of(
-                                      ApicurioTopic.builder().name("events").build(),
-                                      ApicurioTopic.builder()
-                                              .name("audit-topic")
-                                              .properties(Map.of(
-                                                      "apicurio.registry.artifact.artifact-id", "accounts"))
-                                              .build()))
-                              .build()))
-                      .build()));
-   }
+    @Bean
+    public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer(RegistryCredentials credentials) {
+        return domainProperties -> domainProperties.customize("app", props ->
+                props.setApicurio(ApicurioValidationProperties.builder()
+                        .registries(List.of(ApicurioRegistry.builder()
+                                .name("main-registry")
+                                .properties(Map.of(
+                                        SchemaResolverConfig.REGISTRY_URL, credentials.url(),
+                                        SchemaResolverConfig.AUTH_CLIENT_ID, credentials.clientId(),
+                                        SchemaResolverConfig.EXPLICIT_ARTIFACT_GROUP_ID, "kafka",
+                                        SchemaResolverConfig.FIND_LATEST_ARTIFACT, "true"
+                                ))
+                                .topics(List.of(
+                                        ApicurioTopic.builder().name("events").build(),
+                                        ApicurioTopic.builder()
+                                                .name("audit-topic")
+                                                .properties(Map.of(
+                                                        SchemaResolverConfig.EXPLICIT_ARTIFACT_ID, "accounts"
+                                                ))
+                                                .build()))
+                                .build()))
+                        .build()));
+    }
 }
 ```
 
@@ -345,20 +348,15 @@ every topic using that configuration, instead of a convention derived from the t
 |---------------------------------------------------------------------------------------|-------------------------------------------------------------------|
 | `apicurio.registry.artifact.artifact-id` is configured                                | that artifact, for every topic                                    |
 | `apicurio.registry.artifact.artifact-id` is empty                                     | `<topic>-value` (same convention as Apicurio's `TopicIdStrategy`) |
-| `apicurio.registry.artifact.version` is configured                                    | that version, always: the headers of a record cannot move it      |
+| `apicurio.registry.artifact.version` is configured                                    | that version for every record, always; the headers cannot move it |
 | `apicurio.registry.artifact.version` is empty and the headers name the artifact above | the same artifact, at the **version** of the headers              |
 | `apicurio.registry.artifact.version` is empty and the record carries no version       | the **latest** version of the artifact                            |
 
 On the consumer side the artifact is always the one configured for the topic. The **version** is the only thing that may
 come from the record headers, and only when it is not pinned in the configuration, so a message keeps being validated
-against the very same schema version its producer used while it can never point the consumer somewhere else.
-
-:::caution Pinning `apicurio.registry.artifact.version` disables the version fidelity Setting
-`apicurio.registry.artifact.version` declares the single contract the topic accepts, so **every** record is validated
-against it no matter what its headers say. That is what you want to enforce one version; leave
-`apicurio.registry.artifact.version` empty for each record to be validated against the version it was published with,
-which is what keeps old records valid after the schema evolves.
-:::
+against the very same schema version its producer used while it can never point the consumer somewhere else. Pin
+`apicurio.registry.artifact.version` to enforce a single contract on the topic; leave it empty for each record to be
+validated against the version it was published with, so old records stay valid after the schema evolves.
 
 ### `apicurio.registry.find-latest`
 
@@ -407,12 +405,6 @@ not the domain payload alone. For a `DomainEvent` the value published to the top
   }
 }
 ```
-
-:::caution The artifact registered in Apicurio must therefore describe the **envelope**, not only the contents of`data`.
-Registering the domain schema alone is the most common mistake: with `"additionalProperties": false` it fails with
-`required property 'title' not found` plus `property 'name'/'eventId'/'data' is not defined in the schema`, because the
-validator is comparing the envelope against a schema written for `data`.
-:::
 
 Wrap your domain schema like this:
 

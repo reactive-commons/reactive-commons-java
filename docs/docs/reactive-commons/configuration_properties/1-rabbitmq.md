@@ -292,6 +292,7 @@ public class SecretsConfig {
 
 ```java
 import lombok.RequiredArgsConstructor;
+import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.Bean;
