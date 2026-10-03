@@ -75,7 +75,7 @@ public class TopologyCreator {
         return createTopics(dlqTopics);
     }
 
-    public static String toDlqTopic(String topic) {
+    protected static String toDlqTopic(String topic) {
         return topic + DLQ_SUFFIX;
     }
 

@@ -158,6 +158,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void shouldCreateDlqTopicsWithDlqSuffix() {
         // Arrange
         KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
@@ -243,13 +244,14 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     void shouldApplyCustomizationsToDlqTopicsByTheirOwnName() {
         // Arrange
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();
         when(adminClient.createTopics(any())).thenReturn(createTopicsResult);
-        TopicCustomization dlqCustomization = new TopicCustomization("topic2.dlq", 2, (short) 3, null);
+        var dlqCustomization = new TopicCustomization("topic2.dlq", 2, (short) 3, null);
         creator = new TopologyCreator(adminClient, KafkaCustomizations.withTopic("topic2.dlq", dlqCustomization),
                 false);
 

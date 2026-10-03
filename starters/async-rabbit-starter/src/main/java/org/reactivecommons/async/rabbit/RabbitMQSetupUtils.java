@@ -26,14 +26,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.spring.RabbitPropertiesBase;
 import org.springframework.boot.context.properties.PropertyMapper;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.ChannelPool;
-import reactor.rabbitmq.ChannelPoolFactory;
-import reactor.rabbitmq.ChannelPoolOptions;
-import reactor.rabbitmq.Receiver;
-import reactor.rabbitmq.ReceiverOptions;
-import reactor.rabbitmq.Sender;
-import reactor.rabbitmq.SenderOptions;
-import reactor.rabbitmq.Utils;
+import reactor.rabbitmq.*;
 import reactor.util.retry.Retry;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -149,7 +142,7 @@ public final class RabbitMQSetupUtils {
 
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName) {
         return CONNECTION_CACHE.computeIfAbsent(factory, f -> {
-            log.info("Creating connection mono to RabbitMQ Broker in host '" + f.getHost() + "'");
+            log.info("Creating connection mono to RabbitMQ Broker in host '{}'", f.getHost());
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(SHARED_TYPE, "")
                     ))
@@ -186,7 +179,7 @@ public final class RabbitMQSetupUtils {
 
             // Set SSL protocol if specified
             if (ssl.getAlgorithm() != null) {
-                log.info("Using SSL protocol: " + ssl.getAlgorithm());
+                log.info("Using SSL protocol: {}", ssl.getAlgorithm());
             }
 
             SslContext sslContext = sslContextBuilder.build();
