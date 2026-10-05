@@ -14,7 +14,6 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.kafka.receiver.ReceiverOffset;
 import reactor.kafka.receiver.ReceiverRecord;
 import reactor.test.StepVerifier;
 
@@ -83,6 +82,25 @@ class ApplicationTopicListenerTest {
 
         // The default topic creation is never invoked, the custom setup owns the whole topology
         verify(topologyCreator, never()).createTopics(any(List.class));
+        // Same as RabbitMQ listenQueue: the DLQ is not created automatically, the custom setup owns it too
+        verify(topologyCreator, never()).createDlqTopics(any(List.class));
+    }
+
+    @Test
+    void shouldCreateTheDlqTopicWhenTheRegisteredSetupRequestsIt() {
+        RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
+                message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic"))
+                .then(((TopologyCreator) creator).createDlqTopics(List.of("my.custom.topic"))));
+        ApplicationTopicListener listener = buildListener(registeredListener, true);
+        when(receiver.getMaxConcurrency()).thenReturn(1);
+        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
+        when(topologyCreator.createDlqTopics(any(List.class))).thenReturn(Mono.empty());
+
+        listener.startListener(topologyCreator);
+
+        verify(topologyCreator, times(1)).createTopics(List.of("my.custom.topic"));
+        verify(topologyCreator, times(1)).createDlqTopics(List.of("my.custom.topic"));
     }
 
     @Test
@@ -153,7 +171,6 @@ class ApplicationTopicListenerTest {
         when(receiverRecord.value()).thenReturn("payload".getBytes(StandardCharsets.UTF_8));
         when(receiverRecord.headers()).thenReturn(new RecordHeaders());
         when(receiverRecord.key()).thenReturn("key");
-        when(receiverRecord.receiverOffset()).thenReturn(mock(ReceiverOffset.class));
 
         final RawMessage[] received = new RawMessage[1];
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
@@ -163,7 +180,9 @@ class ApplicationTopicListenerTest {
                 }, creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true);
         when(receiver.getMaxConcurrency()).thenReturn(1);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.just(receiverRecord));
+        // Never-ending flux: the record is handled explicitly below. A completing flux would make onTerminate()
+        // resubscribe in a background loop, racing with this test (flaky stubs) and keeping the JVM busy
+        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 

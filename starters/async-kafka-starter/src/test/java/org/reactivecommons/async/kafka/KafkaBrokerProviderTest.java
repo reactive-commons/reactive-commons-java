@@ -155,6 +155,59 @@ class KafkaBrokerProviderTest {
     }
 
     @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldCreateDlqTopicsForDomainEventsWhenDlqIsEnabled() {
+        props.setWithDLQRetry(true);
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
+        when(handlerResolver.getEventNames()).thenReturn(List.of("event.one"));
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenDomainEvents(handlerResolver);
+        // Assert
+        verify(creator, times(1)).createDlqTopics(List.of("event.one"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldCreateDlqTopicsForNotificationsWhenDlqIsEnabled() {
+        // The DiscardNotifier publishes exhausted notifications to <name>.dlq, so the topic must exist
+        props.setWithDLQRetry(true);
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
+        when(handlerResolver.getNotificationNames()).thenReturn(List.of("notification.one"));
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenNotificationEvents(handlerResolver);
+        // Assert
+        verify(creator, times(1)).createTopics(List.of("notification.one"));
+        verify(creator, times(1)).createDlqTopics(List.of("notification.one"));
+    }
+
+    @Test
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    void shouldNotCreateDlqTopicsForNotificationsWhenDlqIsDisabled() {
+        List mockedListeners = spy(List.of());
+        when(mockedListeners.isEmpty()).thenReturn(false);
+        when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
+        when(creator.createTopics(any())).thenReturn(Mono.empty());
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        // Act
+        brokerProvider.listenNotificationEvents(handlerResolver);
+        // Assert
+        verify(creator, never()).createDlqTopics(any());
+    }
+
+    @Test
     void shouldListenTopics() {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
@@ -165,7 +218,7 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("test"), eq(List.of("my.custom.topic")));
+        verify(listener, times(1)).listen("test", List.of("my.custom.topic"));
     }
 
     @Test
@@ -181,8 +234,8 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.one")));
-        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.two")));
+        verify(listener, times(1)).listen("test", List.of("topic.one"));
+        verify(listener, times(1)).listen("test", (List.of("topic.two")));
     }
 
     @Test
@@ -207,7 +260,7 @@ class KafkaBrokerProviderTest {
         brokerProvider.listenTopics(handlerResolver);
         // Assert
         verify(listener, times(1))
-                .listen(eq("dummy.consumer-group"), eq(List.of("my.custom.topic")));
+                .listen("dummy.consumer-group", List.of("my.custom.topic"));
     }
 
     @Test

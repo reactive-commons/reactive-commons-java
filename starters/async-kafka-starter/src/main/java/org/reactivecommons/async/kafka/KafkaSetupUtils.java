@@ -34,7 +34,6 @@ public final class KafkaSetupUtils {
         return new DLQDiscardNotifier(new KafkaDomainEventBus(sender), converter);
     }
 
-
     public static ReactiveMessageSender createMessageSender(AsyncKafkaProps config,
                                                             MessageConverter converter,
                                                             TopologyCreator topologyCreator) {
@@ -49,17 +48,22 @@ public final class KafkaSetupUtils {
         props.setClientId(config.getAppName());
         props.getProducer().setKeySerializer(StringSerializer.class);
         props.getProducer().setValueSerializer(ByteArraySerializer.class);
-        SenderOptions<String, byte[]> senderOptions = SenderOptions.create(props.buildProducerProperties());
-        KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(senderOptions);
+        KafkaSender<String, byte[]> kafkaSender = KafkaSender.create(createSenderOptions(props));
         return new ReactiveMessageSender(kafkaSender, converter, topologyCreator, schemaValidator);
     }
 
-    // Receiver
-
-    public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config) {
-        return createMessageListener(config, NoOpSchemaValidator.INSTANCE);
+    /**
+     * {@code stopOnError(false)}: a failed record (e.g. the topic does not exist and the cluster does not auto-create
+     * topics, so the producer times out waiting for its metadata) is reported as a failed {@code SenderResult}, which
+     * fails only that send. With reactor-kafka's default ({@code true}) the whole send sequence is terminated, so the
+     * failed send and every later one routed to that sequence would never complete.
+     */
+    static SenderOptions<String, byte[]> createSenderOptions(KafkaProperties props) {
+        return SenderOptions.<String, byte[]>create(props.buildProducerProperties())
+                .stopOnError(false);
     }
 
+    // Receiver
     public static ReactiveMessageListener createMessageListener(AsyncKafkaProps config,
                                                                 SchemaValidator schemaValidator) {
         KafkaProperties props = config.getConnectionProperties();
@@ -76,7 +80,6 @@ public final class KafkaSetupUtils {
     }
 
     // Utilities
-
     public static KafkaProperties readPropsFromDotEnv(Path path) throws IOException {
         String env = Files.readString(path);
         String[] split = env.split("\n");
@@ -92,8 +95,4 @@ public final class KafkaSetupUtils {
         return props;
     }
 
-    public static String jassConfig(String username, String password) {
-        return String.format("org.apache.kafka.common.security.plain.PlainLoginModule required " +
-                "username=\"%s\" password=\"%s\";", username, password);
-    }
 }

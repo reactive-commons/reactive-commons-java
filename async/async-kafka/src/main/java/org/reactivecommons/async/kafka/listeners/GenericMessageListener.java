@@ -68,7 +68,18 @@ public abstract class GenericMessageListener {
     }
 
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
+        if (useDLQ) {
+            return creator.createTopics(topics).then(creator.createDlqTopics(getDlqBaseTopics()));
+        }
         return creator.createTopics(topics);
+    }
+
+    /**
+     * Topics for which a {@code <topic>.dlq} topic is created at startup, so the {@link DiscardNotifier} can
+     * publish there once a message exhausts its retries.
+     */
+    protected List<String> getDlqBaseTopics() {
+        return topics;
     }
 
     public void startListener(TopologyCreator creator) {

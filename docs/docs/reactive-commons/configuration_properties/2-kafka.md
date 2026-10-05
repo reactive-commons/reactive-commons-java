@@ -40,11 +40,6 @@ reactive:
           bootstrap-servers: localhost:9093
 ```
 
-## Schema validation
-
-Payloads can be validated against a JSON Schema registered in an Apicurio Registry, both when publishing and when
-consuming. See [Kafka Schema Validation (Apicurio)](./3-kafka-schema-validation.md).
-
 ## Connection properties
 
 `connectionProperties` of each domain is a
@@ -131,6 +126,11 @@ Resolution order for the events consumer group id:
 2. Otherwise `${spring.application.name}-events`, the default convention.
 
 Each domain resolves its own group id, so you can authorize a different consumer group per Kafka cluster.
+
+## Schema validation
+
+Payloads can be validated against a JSON Schema registered in an Apicurio Registry, both when publishing and when
+consuming. See [Kafka Schema Validation (Apicurio)](./3-kafka-schema-validation.md).
 
 ## Configuration approaches
 
