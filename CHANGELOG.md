@@ -1,5 +1,14 @@
 # Changelog
 
+## [v7.4.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.1) (2026-10-05)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.0...v7.4.1)
+
+**Merged pull requests:**
+
+- build\(gradle\): disable Gradle Configuration Cache [\#184](https://github.com/reactive-commons/reactive-commons-java/pull/184) ([luisgomez29](https://github.com/luisgomez29))
+- fix\(kafka\): add support for dead letter topics [\#183](https://github.com/reactive-commons/reactive-commons-java/pull/183) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.4.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.0) (2026-09-22)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.3.1...v7.4.0)
