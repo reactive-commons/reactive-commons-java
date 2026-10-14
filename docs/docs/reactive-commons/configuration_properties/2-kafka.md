@@ -88,6 +88,87 @@ admin clients are created (`buildConsumerProperties()`, `buildProducerProperties
 the consumer, precedence is: `connectionProperties.properties` (common), `connectionProperties.consumer.*`
 typed fields, `connectionProperties.consumer.properties` (raw consumer-specific).
 
+## Authentication (SASL / JAAS)
+
+To connect to a secured cluster, define the security protocol, the SASL mechanism and the JAAS login configuration
+through `connectionProperties`. They are applied to the consumer, producer and admin clients of the domain.
+
+| Property                                  | Kafka client property        | Description                                                           |
+|-------------------------------------------|------------------------------|-----------------------------------------------------------------------|
+| `security.protocol`                       | `security.protocol`          | `PLAINTEXT`, `SSL`, `SASL_PLAINTEXT` or `SASL_SSL`                    |
+| `properties."sasl.mechanism"`             | `sasl.mechanism`             | `PLAIN`, `SCRAM-SHA-256`, `SCRAM-SHA-512`, `GSSAPI`, `OAUTHBEARER`... |
+| `properties."sasl.jaas.config"`           | `sasl.jaas.config`           | JAAS login module and its options, written in a single line           |
+| `properties."sasl.kerberos.service.name"` | `sasl.kerberos.service.name` | Only for `GSSAPI` (Kerberos)                                          |
+
+```yaml title="application.yaml (SASL/SCRAM over TLS)"
+reactive:
+  commons:
+    kafka:
+      app:
+        connectionProperties:
+          bootstrap-servers: broker1:9094,broker2:9094
+          security:
+            protocol: SASL_SSL
+          properties:
+            sasl.mechanism: SCRAM-SHA-512
+```
+
+```yaml title="application.yaml (SASL/PLAIN)"
+reactive:
+  commons:
+    kafka:
+      app:
+        connectionProperties:
+          bootstrap-servers: broker1:9092
+          security:
+            protocol: SASL_PLAINTEXT
+          properties:
+            sasl.mechanism: PLAIN
+```
+
+Do not keep credentials in the YAML file in real environments. Set `sasl.jaas.config` at runtime from your secrets
+manager, mutating the existing connection properties so the rest of the YAML values are preserved:
+
+```java
+
+@Bean
+public AsyncKafkaPropsDomain.KafkaPropsCustomizer kafkaPropsCustomizer(KafkaConnectionProperties secret) {
+    return domainProperties -> domainProperties.customize("app", app -> {
+        KafkaProperties connectionProperties = app.getConnectionProperties();
+        connectionProperties.getProperties().put("sasl.jaas.config",
+                "org.apache.kafka.common.security.scram.ScramLoginModule required username=\"%s\" password=\"%s\";"
+                        .formatted(secret.username(), secret.password()));
+    });
+}
+```
+
+:::caution[`connectionProperties.jaas.*` is not applied]
+`KafkaProperties` also has a `jaas` section (`enabled`, `login-module`, `control-flag`, `options`), copied from
+`spring.kafka.jaas.*` of Spring Boot. In Spring Boot that section is consumed by an auto-configuration that registers a
+`KafkaJaasLoginModuleInitializer` bean. Reactive Commons does not register it, so those values are bound but **have no
+effect**. Use `sasl.jaas.config` as shown above, which is also the recommended way in the Kafka client, because it
+allows a different configuration per domain, while a JVM-wide JAAS login module is shared by all of them.
+:::
+
+## Topology creation and permissions
+
+The user of the connection must have the permissions required by the features that you enable. Kafka reports
+a missing permission as an authorization error or, in the case of listing, as an empty result.
+
+| Setting                     | What Reactive Commons does                                                                                                     | Permissions required (ACLs)                                                                 |
+|-----------------------------|--------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------|
+| `checkExistingTopics: true` | Lists the topics of the cluster on startup and checks that the topic exists before sending a record. It never creates a topic. | `DESCRIBE` on the topics, used by the admin client to list them                             |
+| `createTopology: true`      | Creates the topics (and their `.dlq` topics when `withDLQRetry` is true) that the listeners need, when they do not exist.      | `CREATE` on the cluster, or on the topics to be created (admin permission), plus `DESCRIBE` |
+| Send events                 | Produces records to the topics.                                                                                                | `WRITE` and `DESCRIBE` on the topics                                                        |
+| Listen events               | Consumes records with the configured consumer group (see [Consumer group](#consumer-group-for-domain-events)).                 | `READ` on the topics and `READ` on the consumer group                                       |
+
+:::tip[Restricted environments]
+When your organization does not allow the application user to create topics, set
+`createTopology: false` and create the topics, including the `.dlq` ones if you use `withDLQRetry`, with your
+infrastructure process before deploying. Keep `checkExistingTopics: true` if you want the application to fail fast when
+a topic is missing.
+:::
+
 ## Consumer group for domain events
 
 The consumer group of the domain events listener is taken from the Kafka connection properties, so you configure it

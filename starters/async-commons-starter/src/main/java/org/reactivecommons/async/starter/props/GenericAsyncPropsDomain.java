@@ -17,6 +17,7 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @Getter
 @Setter
 public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends HashMap<String, T> {
+    protected static final JsonMapper MAPPER = new JsonMapper();
     private Class<T> asyncPropsClass;
     private Class<P> propsClass;
 
@@ -29,7 +30,6 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         super(configured);
         this.propsClass = propsClass;
         this.asyncPropsClass = asyncPropsClass;
-        JsonMapper mapper = JsonMapper.builder().findAndAddModules().build();
 
         if (!this.containsKey(DEFAULT_DOMAIN)) {
             throw new InvalidConfigurationException("Required domain '" + DEFAULT_DOMAIN + "' is not configured.");
@@ -50,7 +50,7 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
                             " properties found, please use withDefaultProperties or define the" +
                             "default " + key + " domain with properties explicitly");
                 }
-                value.setConnectionProperties(mapper.convertValue(defaultProperties, propsClass));
+                value.setConnectionProperties(MAPPER.convertValue(defaultProperties, propsClass));
             }
             if (secretFiller != null) {
                 secretFiller.fillWithSecret(key, value);

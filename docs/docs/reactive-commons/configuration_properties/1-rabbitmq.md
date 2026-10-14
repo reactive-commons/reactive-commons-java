@@ -321,6 +321,29 @@ public class RabbitMQConfig {
 }
 ```
 
+## Topology creation and permissions
+
+The user of the connection must have the permissions required by the features that you enable. RabbitMQ permissions are
+granted per virtual host through three regular expressions, **configure**, **write** and **read**:
+
+| Operation                                                  | Permission required                                                                                                                                                       |
+|------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `createTopology: true` (declare exchanges and queues)      | **configure** on the exchanges and queues to declare                                                                                                                      |
+| `createTopology: true` (bind a queue to an exchange)       | **write** on the queue and **read** on the exchange                                                                                                                       |
+| Send events, commands and queries                          | **write** on the target exchange                                                                                                                                          |
+| Listen events, commands and queries                        | **read** on the queue                                                                                                                                                     |
+| `listenReplies: true` (exclusive, auto-delete reply queue) | **configure**, **write** and **read** on the reply queue, and **read** on the replies exchange. The queue is always declared and bound, even with `createTopology: false` |
+
+Without these permissions the broker closes the channel with an `ACCESS_REFUSED` error. Declaring a resource that
+already exists does not require changing it, but the user still needs **configure** permission on it.
+
+:::tip[Restricted environments]
+When your organization does not allow the application user to create resources, set `createTopology: false` and create
+the exchanges, queues and bindings with your infrastructure process, including the DLQ and retry ones if you use
+`withDLQRetry`. The user then only needs **write** on the exchanges it sends to and **read** on the queues it
+listens to, plus the permissions of the reply queue above if you use `listenReplies: true`.
+:::
+
 ## Customizing the connection
 
 For advanced control over the RabbitMQ connection, you can define a `ConnectionFactoryCustomizer` bean. This allows you
