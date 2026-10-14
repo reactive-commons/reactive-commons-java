@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.4.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.2) (2026-10-14)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.1...v7.4.2)
+
+**Merged pull requests:**
+
+- fix\(rabbit\): prevent NPE in `RabbitPropsCustomizer` when `connectionProperties` is not declared in YAML [\#185](https://github.com/reactive-commons/reactive-commons-java/pull/185) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.4.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.1) (2026-10-05)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.0...v7.4.1)
