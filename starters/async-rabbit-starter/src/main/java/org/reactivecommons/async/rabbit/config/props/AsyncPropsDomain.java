@@ -24,7 +24,7 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
                             RabbitSecretFiller secretFiller,
                             ObjectProvider<RabbitPropsCustomizer> customizer) {
         super(defaultAppName, defaultRabbitProperties,
-                applyCustomizer(configured, customizer.getIfAvailable()),
+                applyCustomizer(configured, defaultRabbitProperties, customizer.getIfAvailable()),
                 secretFiller, AsyncProps.class, RabbitProperties.class);
     }
 
@@ -57,8 +57,13 @@ public class AsyncPropsDomain extends GenericAsyncPropsDomain<AsyncProps, Rabbit
     }
 
     private static AsyncRabbitPropsDomainProperties applyCustomizer(
-            AsyncRabbitPropsDomainProperties configured, RabbitPropsCustomizer customizer) {
+            AsyncRabbitPropsDomainProperties configured, RabbitProperties defaultRabbitProperties,
+            RabbitPropsCustomizer customizer) {
         if (customizer != null) {
+            if (defaultRabbitProperties != null) {
+                configured.useDefaultConnectionProperties(
+                        () -> MAPPER.convertValue(defaultRabbitProperties, RabbitProperties.class));
+            }
             customizer.customize(configured);
             if (!configured.containsKey(DEFAULT_DOMAIN)) {
                 throw new InvalidConfigurationException("""

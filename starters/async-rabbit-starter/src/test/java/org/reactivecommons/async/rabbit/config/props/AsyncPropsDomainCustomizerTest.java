@@ -4,6 +4,8 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.springframework.beans.factory.ObjectProvider;
 
+import java.time.Duration;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -212,6 +214,63 @@ class AsyncPropsDomainCustomizerTest {
         // Assert - both domains have the app name set
         assertThat(appResult.getAppName()).isEqualTo("ms_sender");
         assertThat(accountsResult.getAppName()).isEqualTo("ms_sender");
+    }
+
+    @Test
+    void shouldAllowCustomizingConnectionPropertiesWhenYamlDoesNotDefineThem() {
+        // Arrange - YAML domain without connectionProperties
+        AsyncRabbitPropsDomainProperties yamlProps = new AsyncRabbitPropsDomainProperties();
+        AsyncProps appProps = AsyncProps.builder()
+                .maxRetries(3)
+                .listenReplies(false)
+                .build();
+        yamlProps.put(DEFAULT_DOMAIN, appProps);
+
+        RabbitProperties defaultRabbitProperties = new RabbitProperties();
+        defaultRabbitProperties.setHost("default-host");
+        defaultRabbitProperties.setPort(5673);
+        defaultRabbitProperties.setUsername("default-user");
+        defaultRabbitProperties.setConnectionTimeout(Duration.ofSeconds(7));
+        defaultRabbitProperties.setRequestedHeartbeat(Duration.ofSeconds(30));
+
+        AsyncPropsDomain.RabbitPropsCustomizer customizer = domainProperties -> {
+            domainProperties.customize(DEFAULT_DOMAIN, app -> {
+                RabbitProperties connectionProperties = app.getConnectionProperties();
+                connectionProperties.setHost("secret-host");
+                connectionProperties.getSsl().setEnabled(true);
+            });
+            // A domain that does not exist in the YAML is created and can be customized as well
+            domainProperties.customize("accounts", accounts -> {
+                accounts.setListenReplies(false);
+                accounts.getConnectionProperties().setVirtualHost("/accounts");
+            });
+        };
+
+        AsyncPropsDomain.RabbitSecretFiller secretFiller = (domain, props) -> {
+        };
+
+        // Act
+        AsyncPropsDomain propsDomain = new AsyncPropsDomain(
+                "test-app", defaultRabbitProperties, yamlProps, secretFiller, customizerProviderOf(customizer));
+
+        // Assert - customized values win and the remaining ones come from the default connection properties
+        AsyncProps appResult = propsDomain.getProps(DEFAULT_DOMAIN);
+        assertThat(appResult.getConnectionProperties().getHost()).isEqualTo("secret-host");
+        assertThat(appResult.getConnectionProperties().getSsl().isEnabled()).isTrue();
+        assertThat(appResult.getConnectionProperties().getPort()).isEqualTo(5673);
+        assertThat(appResult.getConnectionProperties().getUsername()).isEqualTo("default-user");
+        assertThat(appResult.getConnectionProperties().getConnectionTimeout()).isEqualTo(Duration.ofSeconds(7));
+        assertThat(appResult.getConnectionProperties().getRequestedHeartbeat()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(appResult.getMaxRetries()).isEqualTo(3);
+
+        AsyncProps accountsResult = propsDomain.getProps("accounts");
+        assertThat(accountsResult.getConnectionProperties().getVirtualHost()).isEqualTo("/accounts");
+        assertThat(accountsResult.getConnectionProperties().getHost()).isEqualTo("default-host");
+
+        // Assert - default connection properties are not mutated nor shared between domains
+        assertThat(defaultRabbitProperties.getHost()).isEqualTo("default-host");
+        assertThat(defaultRabbitProperties.getSsl().isEnabled()).isFalse();
+        assertThat(accountsResult.getConnectionProperties()).isNotSameAs(appResult.getConnectionProperties());
     }
 
     @Test
