@@ -6,10 +6,10 @@ import org.springframework.context.SmartLifecycle;
 
 /**
  * Manages the lifecycle of the shared Netty EventLoopGroup used by RabbitMQ connections.
- * This component ensures that the EventLoopGroup is properly shutdown when the Spring application context closes.
  * <p>
- * According to RabbitMQ documentation, it is important to dispose of the event loop group after closing all connections
- * to prevent resource leaks and ensure clean application shutdown.
+ * Each application context registers itself when it starts and unregisters when it closes. The EventLoopGroup is
+ * shut down when the last context using it closes (it is re-created if a new context needs it), so closing one
+ * context does not break the connections of another one living in the same JVM (e.g. cached test contexts).
  * <p>
  * Reference: <a href="https://www.rabbitmq.com/client-libraries/java-api-guide#netty">Use of Netty for Network I/O</a>
  */
@@ -19,20 +19,23 @@ public class EventLoopGroupLifecycleManager implements SmartLifecycle {
     private volatile boolean running = false;
 
     @Override
-    public void start() {
-        running = true;
+    public synchronized void start() {
+        if (!running) {
+            RabbitMQSetupUtils.retainEventLoopGroup();
+            running = true;
+        }
     }
 
     @Override
-    public void stop() {
+    public synchronized void stop() {
         if (!running) {
             log.warn("EventLoopGroup lifecycle manager stop() called but was not running");
             return;
         }
 
         try {
-            RabbitMQSetupUtils.shutdownEventLoopGroup();
             running = false;
+            RabbitMQSetupUtils.releaseEventLoopGroup();
         } catch (Exception e) {
             log.error("Error shutting down Netty EventLoopGroup", e);
         }
