@@ -59,7 +59,11 @@ public class OutboundMessage {
                 '}';
     }
 
-    void published() {
+    /**
+     * Called by the {@link Sender} once the message has been written to the channel. Subclasses may override it to
+     * be notified (they must call {@code super.published()}).
+     */
+    protected void published() {
         this.published = true;
     }
 }

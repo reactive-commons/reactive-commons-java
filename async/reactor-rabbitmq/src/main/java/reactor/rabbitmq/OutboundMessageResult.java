@@ -16,10 +16,24 @@
 
 package reactor.rabbitmq;
 
-public record OutboundMessageResult<OMSG extends OutboundMessage>(OMSG outboundMessage, boolean ack, boolean returned) {
+/**
+ * Result of publishing a message with publisher confirms.
+ *
+ * @param outboundMessage the published message
+ * @param ack             whether the broker confirmed (ack) the message
+ * @param returned        whether the broker returned the message as unroutable
+ * @param unknown         whether the outcome is unknown: the message may or may not have reached the broker because
+ *                        the channel or the connection failed before its confirmation arrived
+ */
+public record OutboundMessageResult<OMSG extends OutboundMessage>(OMSG outboundMessage, boolean ack, boolean returned,
+                                                                  boolean unknown) {
 
     public OutboundMessageResult(OMSG outboundMessage, boolean ack) {
         this(outboundMessage, ack, false);
+    }
+
+    public OutboundMessageResult(OMSG outboundMessage, boolean ack, boolean returned) {
+        this(outboundMessage, ack, returned, false);
     }
 
     @Override
@@ -28,6 +42,7 @@ public record OutboundMessageResult<OMSG extends OutboundMessage>(OMSG outboundM
                 "outboundMessage=" + outboundMessage +
                 ", ack=" + ack +
                 ", returned=" + returned +
+                ", unknown=" + unknown +
                 '}';
     }
 }
