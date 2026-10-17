@@ -3,6 +3,8 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
+import com.rabbitmq.client.impl.ValueReader;
+import com.rabbitmq.client.impl.ValueWriter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -29,6 +31,11 @@ import reactor.rabbitmq.Receiver;
 import reactor.test.StepVerifier;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Date;
 import java.util.HashMap;
@@ -36,6 +43,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyMap;
@@ -242,6 +250,81 @@ class ApplicationQueryListenerTest {
         StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, Instant.now()))
                 .expectNext(acknowledgableDelivery)
                 .verifyComplete();
+    }
+
+    /**
+     * The gateway publishes the reply timeout as a {@code long} ({@code Duration.toMillis()}); the RabbitMQ client
+     * encodes it as an AMQP long and decodes it back as a {@link Long}, never as an {@link Integer}.
+     */
+    @Test
+    void timeoutHeaderPublishedByTheGatewayArrivesAsALong() throws Exception {
+        Map<String, Object> published = Map.of(REPLY_TIMEOUT_MILLIS, Duration.ofSeconds(15).toMillis());
+
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        new ValueWriter(new DataOutputStream(bytes)).writeTable(published);
+        Map<String, Object> received = new ValueReader(new DataInputStream(
+                new ByteArrayInputStream(bytes.toByteArray()))).readTable();
+
+        assertThat(received.get(REPLY_TIMEOUT_MILLIS)).isInstanceOf(Long.class).isEqualTo(15_000L);
+    }
+
+    @Test
+    void shouldHandleQueryWhoseTimeoutHeaderIsALong() {
+        AcknowledgableDelivery delivery = queryDelivery(new Date(), 15_000L);
+        when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+                .expectNext(delivery)
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldDiscardExpiredQueryWhoseTimeoutHeaderIsALong() {
+        AcknowledgableDelivery delivery = queryDelivery(Date.from(Instant.now().minusSeconds(20)), 15_000L);
+
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+                .verifyComplete();
+
+        verifyNoInteractions(sender);
+    }
+
+    @Test
+    void shouldHandleQueryWithoutTimeoutWhenTheTimeoutHeaderIsNotANumber() {
+        AcknowledgableDelivery delivery = queryDelivery(Date.from(Instant.now().minusSeconds(20)), "not-a-number");
+        when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+                .expectNext(delivery)
+                .verifyComplete();
+    }
+
+    /**
+     * {@code handle} runs inside the listener {@code flatMap}: throwing there (instead of returning a failed Mono)
+     * terminates the whole consumer, requeues every unacknowledged query and re-subscribes, in a loop.
+     */
+    @Test
+    void handleNeverThrowsSynchronouslyWhenTheTimeoutMetadataIsPresent() {
+        AcknowledgableDelivery delivery = queryDelivery(new Date(), 15_000L);
+        when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
+                .thenReturn(Mono.empty());
+
+        Mono<AcknowledgableDelivery> result = applicationQueryListener.handle(delivery, Instant.now());
+
+        StepVerifier.create(result).expectNext(delivery).verifyComplete();
+    }
+
+    private AcknowledgableDelivery queryDelivery(Date timestamp, Object replyTimeoutMillis) {
+        String data = OBJECT_MAPPER.writeValueAsString(new AsyncQuery<>("queryDirect", new DummyMessage()));
+        Map<String, Object> headers = buildQueryHeaders("queryDirect", false);
+        headers.put(REPLY_TIMEOUT_MILLIS, replyTimeoutMillis);
+        AMQP.BasicProperties props = new AMQP.BasicProperties.Builder()
+                .timestamp(timestamp)
+                .headers(headers)
+                .build();
+        Envelope envelope = new Envelope(0L, true, "directMessages", "app.query");
+        return new AcknowledgableDelivery(new Delivery(envelope, props, data.getBytes()), null, null);
     }
 
     private Map<String, Object> buildQueryHeaders(String queryName, Boolean withTimeout) {
