@@ -10,7 +10,9 @@ import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
 import org.reactivecommons.async.rabbit.lifecycle.EventLoopGroupLifecycleManager;
+import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
@@ -35,7 +37,8 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
  * <ul>
  *     <li>a channel-level error on the sender's resource management channel ({@code declare}/{@code bind});</li>
  *     <li>several Spring contexts in the same JVM (tests with {@code @DirtiesContext}, cached test contexts,
- *     context restarts), which share the static Netty event loop group.</li>
+ *     context restarts), which share the static Netty event loop group;</li>
+ *     <li>a connection closed by the broker, as reported by the health indicator.</li>
  * </ul>
  * The tests are skipped automatically when Docker is not available.
  */
@@ -72,6 +75,42 @@ class RabbitMQSetupUtilsRabbitContainerTest {
         // 3. A valid declaration works again, on a new channel.
         topology.declare(exchange("tc.other." + suffix).type("direct").durable(true)).block(TIMEOUT);
         assertThat(exchangeExists("tc.other." + suffix)).as("the valid exchange was declared").isTrue();
+    }
+
+    /**
+     * The health indicator reports the connection the application uses (it does not open one per check), and follows
+     * its state: DOWN while the client recovers it after the broker closed it, UP again once recovered.
+     */
+    @Test
+    void healthReflectsTheApplicationConnectionWithoutOpeningNewOnes() throws Exception {
+        AsyncProps props = asyncProps(RABBIT.getHost(), RABBIT.getAmqpPort(), RABBIT.getAdminUsername(),
+                RABBIT.getAdminPassword());
+        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, (cf, p) -> cf);
+        RabbitMQSetupUtils.createMessageSender(provider, props, new RabbitJacksonMessageConverter(new JsonMapper()),
+                new UnroutableMessageNotifier()); // establishes the domain connection
+        RabbitReactiveHealthIndicator health = new RabbitReactiveHealthIndicator("app",
+                () -> RabbitMQSetupUtils.establishedConnection(provider.getConnectionFactory()));
+
+        // 1. UP once the application connection is established.
+        assertThat(awaitStatus(health, RCHealth.Status.UP, Duration.ofSeconds(15)).details())
+                .containsEntry("domain", "app")
+                .containsKey("version");
+
+        // 2. Checks do not open connections (the broker sees the same number of connections).
+        int connectionsBefore = brokerConnections();
+        for (int i = 0; i < 20; i++) {
+            assertThat(health.health().block(TIMEOUT).status()).isEqualTo(RCHealth.Status.UP);
+        }
+        assertThat(brokerConnections()).isEqualTo(connectionsBefore);
+
+        // 3. The broker closes the connection (e.g. node restart, admin action): DOWN while the client recovers it.
+        RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "health test");
+        RCHealth down = awaitStatus(health, RCHealth.Status.DOWN, Duration.ofSeconds(10));
+        System.out.println("[REAL BROKER] health while recovering: " + down.details());
+        assertThat(down.details().get("error").toString()).startsWith("Connection to RabbitMQ is closed");
+
+        // 4. UP again after the automatic recovery (default network recovery interval: 5 s).
+        awaitStatus(health, RCHealth.Status.UP, Duration.ofSeconds(30));
     }
 
     /**
@@ -190,6 +229,25 @@ class RabbitMQSetupUtilsRabbitContainerTest {
         props.setAppName("tc-app");
         props.setConnectionProperties(connection);
         return props;
+    }
+
+    private static RCHealth awaitStatus(RabbitReactiveHealthIndicator health, RCHealth.Status expected,
+                                        Duration timeout) throws InterruptedException {
+        long deadline = System.nanoTime() + timeout.toNanos();
+        RCHealth last = null;
+        while (System.nanoTime() < deadline) {
+            last = health.health().block(TIMEOUT);
+            if (last != null && last.status() == expected) {
+                return last;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Health did not become " + expected + " within " + timeout + ", last: " + last);
+    }
+
+    private static int brokerConnections() throws Exception {
+        return (int) RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections", "name").getStdout()
+                .lines().filter(line -> !line.isBlank()).count();
     }
 
     private static boolean exchangeExists(String name) throws Exception {

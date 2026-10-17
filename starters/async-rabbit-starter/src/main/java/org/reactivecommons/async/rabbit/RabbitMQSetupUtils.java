@@ -40,6 +40,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -52,6 +53,11 @@ public final class RabbitMQSetupUtils {
 
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
+    /**
+     * The connection of each factory once it has been established, to inspect it without waiting for it.
+     */
+    private static final ConcurrentMap<ConnectionFactory, Connection> ESTABLISHED_CONNECTIONS =
+            new ConcurrentHashMap<>();
 
     /**
      * The Netty event loop group shared by every RabbitMQ connection. It is shut down when the last application
@@ -89,6 +95,10 @@ public final class RabbitMQSetupUtils {
                 map.from(rabbitProperties::determineUsername).to(newFactory::setUsername);
                 map.from(rabbitProperties::determinePassword).to(newFactory::setPassword);
                 map.from(rabbitProperties::determineVirtualHost).to(newFactory::setVirtualHost);
+                map.from(rabbitProperties::getConnectionTimeout).asInt(Duration::toMillis)
+                        .to(newFactory::setConnectionTimeout);
+                map.from(rabbitProperties::getRequestedHeartbeat).asInt(Duration::getSeconds)
+                        .to(newFactory::setRequestedHeartbeat);
                 newFactory.netty().eventLoopGroup(sharedEventLoopGroup());
 
                 setUpSSL(newFactory, rabbitProperties);
@@ -168,8 +178,20 @@ public final class RabbitMQSetupUtils {
                     ))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
+                    .doOnNext(connection -> ESTABLISHED_CONNECTIONS.put(f, connection))
                     .cache();
         });
+    }
+
+    /**
+     * Returns the connection created for the given factory, if it has already been established. It never opens or
+     * waits for a connection, so it is safe to call from a health check.
+     *
+     * @param factory the connection factory of a domain
+     * @return the established connection, or empty if it has not been established yet
+     */
+    public static Optional<Connection> establishedConnection(ConnectionFactory factory) {
+        return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(factory));
     }
 
     // SSL based on RabbitConnectionFactoryBean
@@ -266,6 +288,7 @@ public final class RabbitMQSetupUtils {
             }
             FACTORY_CACHE.clear();
             CONNECTION_CACHE.clear();
+            ESTABLISHED_CONNECTIONS.clear();
             shutdownEventLoopGroup();
         }
     }
