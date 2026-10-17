@@ -98,7 +98,7 @@ public abstract class GenericMessageListener {
 
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
-                .consumerTag(InstanceIdentifier.getInstanceId(getKind()))
+                .consumerTag(consumerTag())
                 .channelCallback(channel -> channel.addShutdownListener(cause -> {
                     log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
                             + " channel open: " + channel.isOpen() +
@@ -274,6 +274,18 @@ public abstract class GenericMessageListener {
     protected abstract Object parseMessageForReporter(Message msj);
 
     protected abstract String getKind();
+
+    /**
+     * Consumer tag of this listener. With automatic connection recovery, consumer tags must be unique across all the
+     * channels of a connection: the client records the consumers to recover by tag, so listeners sharing a tag on
+     * the same connection overwrite each other and only the last one is recovered.
+     *
+     * @see <a href="https://www.rabbitmq.com/client-libraries/java-api-guide#automatic-recovery-limitations">Failure
+     * Detection and Recovery Limitations</a>
+     */
+    protected String consumerTag() {
+        return InstanceIdentifier.getInstanceId(getKind());
+    }
 }
 
 
