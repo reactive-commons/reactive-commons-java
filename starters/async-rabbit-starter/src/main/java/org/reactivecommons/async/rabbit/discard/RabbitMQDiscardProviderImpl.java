@@ -10,26 +10,61 @@ import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
+import reactor.core.publisher.Mono;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
 
+/**
+ * Discard provider shared by every domain of the application.
+ *
+ * <p>It does not own a sender: it publishes through the sender of the default domain (see
+ * {@link #useSender(ReactiveMessageSender)}), so notifying discards does not cost extra channels and threads. Only
+ * if no sender was registered (e.g. a custom wiring) it creates its own one, the first time it is needed.
+ */
 @RequiredArgsConstructor
 public class RabbitMQDiscardProviderImpl implements DiscardProvider {
     private final AsyncProps props;
     private final BrokerConfig config;
     private final MessageConverter converter;
     private final ConnectionFactoryCustomizer cfCustomizer;
-    private final Map<Boolean, DiscardNotifier> discardNotifier = new ConcurrentHashMap<>();
+    private final AtomicReference<ReactiveMessageSender> defaultSender = new AtomicReference<>();
+    private final AtomicReference<DiscardNotifier> delegate = new AtomicReference<>();
+    private final DiscardNotifier lazyNotifier = message -> Mono.defer(() -> resolve().notifyDiscard(message));
+
+    /**
+     * Sets the sender, over the connection of the default domain, used to publish the discarded messages.
+     *
+     * @param sender the sender of the default domain
+     */
+    public void useSender(ReactiveMessageSender sender) {
+        defaultSender.compareAndSet(null, sender);
+    }
 
     @Override
     public DiscardNotifier get() {
-        return discardNotifier.computeIfAbsent(true, this::buildDiscardNotifier);
+        return lazyNotifier;
     }
 
-    private DiscardNotifier buildDiscardNotifier(boolean ignored) {
-        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
-        ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter, null);
+    private DiscardNotifier resolve() {
+        DiscardNotifier current = delegate.get();
+        if (current == null) {
+            synchronized (this) {
+                current = delegate.get();
+                if (current == null) {
+                    current = buildDiscardNotifier();
+                    delegate.set(current);
+                }
+            }
+        }
+        return current;
+    }
+
+    private DiscardNotifier buildDiscardNotifier() {
+        ReactiveMessageSender sender = defaultSender.get();
+        if (sender == null) {
+            ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
+            sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter, null);
+        }
         return RabbitMQSetupUtils.createDiscardNotifier(sender, props, config, converter);
     }
 }
