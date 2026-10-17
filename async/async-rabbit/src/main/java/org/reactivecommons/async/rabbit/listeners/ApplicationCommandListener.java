@@ -19,7 +19,6 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
-import tools.jackson.databind.JsonNode;
 
 import java.util.Optional;
 import java.util.function.Function;
@@ -28,9 +27,6 @@ import java.util.function.Function;
 public class ApplicationCommandListener extends GenericMessageListener {
 
     private static final String DQL = ".DLQ";
-    private static final String NAME = "name";
-    private static final String COMMAND_ID = "commandId";
-    private static final String TYPE = "type";
     private final MessageConverter messageConverter;
     private final HandlerResolver resolver;
     private final String directExchange;
@@ -126,14 +122,8 @@ public class ApplicationCommandListener extends GenericMessageListener {
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         RabbitMessage rabbitMessage = RabbitMessage.fromDelivery(msj);
-        JsonNode jsonNode = messageConverter.readValue(rabbitMessage, JsonNode.class);
-        if (jsonNode.get(COMMAND_ID) != null) {
-            return jsonNode.get(NAME).asString();
-        }
-        if (jsonNode.get(TYPE) != null) {
-            return jsonNode.get(TYPE).asString();
-        }
-        return rabbitMessage.getType();
+        String name = messageConverter.readCommandName(rabbitMessage);
+        return name != null ? name : rabbitMessage.getType();
     }
 
     @Override
