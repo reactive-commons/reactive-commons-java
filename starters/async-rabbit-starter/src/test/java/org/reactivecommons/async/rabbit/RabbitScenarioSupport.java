@@ -85,6 +85,15 @@ final class RabbitScenarioSupport {
      */
     static AnnotationConfigApplicationContext start(RabbitMQContainer rabbit, String prefix, boolean twoDomains,
                                                     boolean listenReplies, Class<?>... features) {
+        return startWithHandlers(rabbit, prefix, twoDomains, listenReplies, Handlers.class, features);
+    }
+
+    /**
+     * Same as above, with the configuration class that registers the handlers of the application.
+     */
+    static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, String prefix,
+                                                                boolean twoDomains, boolean listenReplies,
+                                                                Class<?> handlers, Class<?>... features) {
         Map<String, Object> properties = new HashMap<>();
         properties.put("spring.application.name", prefix);
         properties.put("spring.rabbitmq.host", rabbit.getHost());
@@ -97,7 +106,7 @@ final class RabbitScenarioSupport {
         }
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
-        context.register(Handlers.class, RabbitMQConfig.class, AsyncPropsDomain.class,
+        context.register(handlers, RabbitMQConfig.class, AsyncPropsDomain.class,
                 RabbitMQBrokerProviderFactory.class, ReactiveCommonsConfig.class,
                 ReactiveCommonsListenersConfig.class);
         context.register(features);
@@ -130,6 +139,30 @@ final class RabbitScenarioSupport {
             Thread.sleep(200);
         }
         throw new IllegalStateException("The channels of '" + connectionNamePrefix + "' never settled, last=" + last);
+    }
+
+    /**
+     * Waits until every queue has a consumer: the listeners declare their topology and start consuming
+     * asynchronously, and what is published before that has nowhere to go.
+     */
+    static void awaitConsumers(RabbitMQContainer rabbit, String... queues) throws Exception {
+        long deadline = System.currentTimeMillis() + 30_000;
+        while (System.currentTimeMillis() < deadline) {
+            String listing = rabbit.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers")
+                    .getStdout();
+            boolean all = true;
+            for (String queue : queues) {
+                all &= listing.lines().anyMatch(line -> {
+                    String[] columns = line.trim().split("\\s+");
+                    return columns.length == 2 && columns[0].equals(queue) && !columns[1].equals("0");
+                });
+            }
+            if (all) {
+                return;
+            }
+            Thread.sleep(200);
+        }
+        throw new IllegalStateException("The queues never got a consumer: " + String.join(", ", queues));
     }
 
     static Optional<Integer> channelsOf(RabbitMQContainer rabbit, String connectionNamePrefix) throws Exception {
