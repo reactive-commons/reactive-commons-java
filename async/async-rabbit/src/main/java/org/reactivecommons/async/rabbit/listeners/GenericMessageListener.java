@@ -235,7 +235,8 @@ public abstract class GenericMessageListener {
         final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
-        if (hasLocalRetries() || retryNumber >= maxRetries) { // Discard
+        // maxRetries == -1 without DLQ means infinite fast retries, never discard
+        if (hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
             return discardNotifier
                     .notifyDiscard(rabbitMessage)

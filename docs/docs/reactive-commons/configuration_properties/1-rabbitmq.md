@@ -70,6 +70,14 @@ To ensure a correct configuration, you should always override the properties of 
 configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
 :::
 
+:::caution[Infinite retries and quorum queues]
+With `withDLQRetry: false` and `maxRetries: -1` a failed message is requeued every `retryDelay` indefinitely. On
+quorum queues, RabbitMQ 4.0 to 4.2 count those requeues against the queue
+[delivery limit](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling) (20 by default): once reached,
+the broker drops the message (or dead-letters it if the queue has a dead letter exchange). Use `withDLQRetry: true`
+or a finite `maxRetries` if messages must not be dropped.
+:::
+
 ## Configuration approaches
 
 There are two ways to supply domain properties. Choose the one that best fits your use case.
