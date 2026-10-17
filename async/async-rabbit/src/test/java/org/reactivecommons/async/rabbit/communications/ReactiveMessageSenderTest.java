@@ -23,6 +23,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,10 +55,10 @@ class ReactiveMessageSenderTest {
             return argument
                     .map(outboundMessage -> new OutboundMessageResult<>(outboundMessage, true));
         });
-        when(sender.send(any(Publisher.class))).then(invocation -> {
+        lenient().when(sender.send(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
             final Flux<OutboundMessage> argument = invocation.getArgument(0);
             argument.subscribe(); // Subscribe to initialize the sink
-            return Mono.empty();
+            return Mono.never();
         });
         String sourceApplication = "TestApp";
 
@@ -78,8 +79,11 @@ class ReactiveMessageSenderTest {
         );
         SomeClass messageContent = new SomeClass("id", "name", new Date());
 
+        // the mock reports the returned message as not confirmed: the send fails, only the notification matters here
         messageSender.sendWithConfirm(messageContent, "exchange", "rkey", new HashMap<>(), true)
-                .subscribe();
+                .subscribe(v -> {
+                }, e -> {
+                });
 
         verify(unroutableMessageNotifier, timeout(1000).times(1))
                 .notifyUnroutableMessage(any(OutboundMessageResult.class));
@@ -98,7 +102,7 @@ class ReactiveMessageSenderTest {
         OutboundMessageResult<OutboundMessage> result1 = new OutboundMessageResult<>(null, true);
         OutboundMessageResult<OutboundMessage> result2 = new OutboundMessageResult<>(null, true);
 
-        when(sender.sendWithPublishConfirms(any(Publisher.class)))
+        when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class)))
                 .thenReturn(Flux.just(result1, result2));
 
         Flux<OutboundMessageResult> resultFlux = messageSender.sendWithConfirmBatch(messages, exchange, routingKey,

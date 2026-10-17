@@ -13,11 +13,14 @@ import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderFactory;
+import org.reactivecommons.async.rabbit.discard.RabbitMQDiscardProviderImpl;
 import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
 import org.springframework.stereotype.Service;
+
+import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @Service("rabbitmq")
 @RequiredArgsConstructor
@@ -44,11 +47,14 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
     @Override
     public BrokerProvider<AsyncProps> getProvider(String domain, AsyncProps props, DiscardProvider discardProvider) {
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
-        RabbitReactiveHealthIndicator healthIndicator =
-                new RabbitReactiveHealthIndicator(domain, provider.getConnectionFactory());
+        RabbitReactiveHealthIndicator healthIndicator = new RabbitReactiveHealthIndicator(domain,
+                () -> RabbitMQSetupUtils.establishedConnection(provider.getConnectionFactory()));
         ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter,
                 unroutableMessageNotifier);
         ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props);
+        if (DEFAULT_DOMAIN.equals(domain) && discardProvider instanceof RabbitMQDiscardProviderImpl shared) {
+            shared.useSender(sender); // the shared discard notifier publishes through the default domain sender
+        }
         DiscardNotifier discardNotifier;
         if (props.isUseDiscardNotifierPerDomain()) {
             discardNotifier = RabbitMQSetupUtils.createDiscardNotifier(sender, props, config, converter);

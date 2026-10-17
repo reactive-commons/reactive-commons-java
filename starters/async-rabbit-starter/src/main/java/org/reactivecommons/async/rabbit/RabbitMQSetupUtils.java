@@ -26,7 +26,13 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.spring.RabbitPropertiesBase;
 import org.springframework.boot.context.properties.PropertyMapper;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.ChannelPool;
+import reactor.rabbitmq.ChannelPoolFactory;
+import reactor.rabbitmq.ChannelPoolOptions;
+import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.ReceiverOptions;
+import reactor.rabbitmq.Sender;
+import reactor.rabbitmq.SenderOptions;
 import reactor.util.retry.Retry;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -40,6 +46,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 
@@ -50,14 +57,36 @@ public final class RabbitMQSetupUtils {
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
 
-    private static final EventLoopGroup SHARED_EVENT_LOOP_GROUP = createEventLoopGroup();
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
+    /**
+     * The connection of each factory once it has been established, to inspect it without waiting for it.
+     */
+    private static final ConcurrentMap<ConnectionFactory, Connection> ESTABLISHED_CONNECTIONS =
+            new ConcurrentHashMap<>();
+
+    /**
+     * The Netty event loop group shared by every RabbitMQ connection. It is shut down when the last application
+     * context using it closes, and re-created when a new one needs it (e.g. tests creating several contexts in the
+     * same JVM).
+     */
+    private static final Object EVENT_LOOP_GROUP_LOCK = new Object();
+    private static EventLoopGroup sharedEventLoopGroup; // guarded by EVENT_LOOP_GROUP_LOCK
+    private static int eventLoopGroupUsers; // guarded by EVENT_LOOP_GROUP_LOCK
 
     private static EventLoopGroup createEventLoopGroup() {
         log.debug("Creating shared Netty EventLoopGroup with default thread configuration for RabbitMQ connections");
         IoHandlerFactory ioHandlerFactory = NioIoHandler.newFactory();
         return new MultiThreadIoEventLoopGroup(ioHandlerFactory);
+    }
+
+    private static EventLoopGroup sharedEventLoopGroup() {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            if (sharedEventLoopGroup == null || sharedEventLoopGroup.isShuttingDown()) {
+                sharedEventLoopGroup = createEventLoopGroup();
+            }
+            return sharedEventLoopGroup;
+        }
     }
 
     public static ConnectionFactoryProvider connectionFactoryProvider(AsyncProps asyncProps,
@@ -72,7 +101,11 @@ public final class RabbitMQSetupUtils {
                 map.from(rabbitProperties::determineUsername).to(newFactory::setUsername);
                 map.from(rabbitProperties::determinePassword).to(newFactory::setPassword);
                 map.from(rabbitProperties::determineVirtualHost).to(newFactory::setVirtualHost);
-                newFactory.netty().eventLoopGroup(SHARED_EVENT_LOOP_GROUP);
+                map.from(rabbitProperties::getConnectionTimeout).asInt(Duration::toMillis)
+                        .to(newFactory::setConnectionTimeout);
+                map.from(rabbitProperties::getRequestedHeartbeat).asInt(Duration::getSeconds)
+                        .to(newFactory::setRequestedHeartbeat);
+                newFactory.netty().eventLoopGroup(sharedEventLoopGroup());
 
                 setUpSSL(newFactory, rabbitProperties);
                 return cfCustomizer.customize(newFactory, props);
@@ -136,8 +169,7 @@ public final class RabbitMQSetupUtils {
 
         return new SenderOptions()
                 .channelPool(channelPool)
-                .resourceManagementChannelMono(channelPool.getChannelMono()
-                        .transform(Utils::cache));
+                .connectionMono(senderConnection);
     }
 
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName) {
@@ -152,8 +184,20 @@ public final class RabbitMQSetupUtils {
                     ))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
+                    .doOnNext(connection -> ESTABLISHED_CONNECTIONS.put(f, connection))
                     .cache();
         });
+    }
+
+    /**
+     * Returns the connection created for the given factory, if it has already been established. It never opens or
+     * waits for a connection, so it is safe to call from a health check.
+     *
+     * @param factory the connection factory of a domain
+     * @return the established connection, or empty if it has not been established yet
+     */
+    public static Optional<Connection> establishedConnection(ConnectionFactory factory) {
+        return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(factory));
     }
 
     // SSL based on RabbitConnectionFactoryBean
@@ -180,6 +224,7 @@ public final class RabbitMQSetupUtils {
             // Set SSL protocol if specified
             if (ssl.getAlgorithm() != null) {
                 log.info("Using SSL protocol: {}", ssl.getAlgorithm());
+                sslContextBuilder.protocols(ssl.getAlgorithm());
             }
 
             SslContext sslContext = sslContextBuilder.build();
@@ -226,12 +271,43 @@ public final class RabbitMQSetupUtils {
         return tmf;
     }
 
+    /**
+     * Registers an application context that uses the shared event loop group.
+     */
+    public static void retainEventLoopGroup() {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            eventLoopGroupUsers++;
+        }
+    }
+
+    /**
+     * Unregisters an application context. When the last one is gone, the cached factories and connections are
+     * forgotten and the shared event loop group is shut down; the next context creates new ones.
+     */
+    public static void releaseEventLoopGroup() {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            if (eventLoopGroupUsers > 0) {
+                eventLoopGroupUsers--;
+            }
+            if (eventLoopGroupUsers > 0) {
+                log.info("Shared Netty EventLoopGroup still used by {} application context(s)", eventLoopGroupUsers);
+                return;
+            }
+            FACTORY_CACHE.clear();
+            CONNECTION_CACHE.clear();
+            ESTABLISHED_CONNECTIONS.clear();
+            shutdownEventLoopGroup();
+        }
+    }
+
     public static void shutdownEventLoopGroup() {
-        if (!SHARED_EVENT_LOOP_GROUP.isShuttingDown() && !SHARED_EVENT_LOOP_GROUP.isShutdown()) {
-            log.info("Shutting down shared Netty EventLoopGroup for RabbitMQ connections");
-            SHARED_EVENT_LOOP_GROUP.shutdownGracefully();
-        } else {
-            log.info("Shared Netty EventLoopGroup is already shutting down or shutdown");
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            if (sharedEventLoopGroup != null && !sharedEventLoopGroup.isShuttingDown()) {
+                log.info("Shutting down shared Netty EventLoopGroup for RabbitMQ connections");
+                sharedEventLoopGroup.shutdownGracefully();
+            } else {
+                log.info("Shared Netty EventLoopGroup is already shutting down or shutdown");
+            }
         }
     }
 

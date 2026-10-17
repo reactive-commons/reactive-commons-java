@@ -3,9 +3,13 @@ package reactor.rabbitmq;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.RecoverableChannel;
+import com.rabbitmq.client.ShutdownSignalException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
+import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import reactor.test.scheduler.VirtualTimeScheduler;
 
@@ -13,14 +17,8 @@ import java.io.IOException;
 import java.time.Duration;
 
 import static java.time.Duration.ofSeconds;
-import static org.mockito.Mockito.any;
-import static org.mockito.Mockito.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.nullable;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.*;
 
 class LazyChannelPoolTest {
 
@@ -123,6 +121,52 @@ class LazyChannelPoolTest {
 
         lazyChannelPool.close();
         verify(channel2).close();
+    }
+
+    @Test
+    void closedPooledChannelIsNotHandedOutAgain() {
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection),
+                new ChannelPoolOptions().maxCacheSize(2).subscriptionScheduler(Schedulers.immediate()));
+        Channel first = lazyChannelPool.getChannelMono().block();
+        assertThat(first).isSameAs(channel1);
+        lazyChannelPool.getChannelCloseHandler().accept(SignalType.ON_COMPLETE, first); // back to the pool
+
+        // closed by a channel-level error while idle: it will never be usable again
+        when(channel1.isOpen()).thenReturn(false);
+        when(channel1.getCloseReason()).thenReturn(new ShutdownSignalException(false, false, null, channel1));
+
+        assertThat(lazyChannelPool.getChannelMono().block()).isSameAs(channel2);
+    }
+
+    @Test
+    void pooledChannelClosedByAConnectionFailureIsKeptBecauseItWillBeRecovered() throws IOException {
+        RecoverableChannel recoverable = mock(RecoverableChannel.class);
+        when(recoverable.isOpen()).thenReturn(true);
+        when(recoverable.getConnection()).thenReturn(connection);
+        when(connection.createChannel()).thenReturn(recoverable, channel2);
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection),
+                new ChannelPoolOptions().maxCacheSize(2).subscriptionScheduler(Schedulers.immediate()));
+        Channel first = lazyChannelPool.getChannelMono().block();
+        lazyChannelPool.getChannelCloseHandler().accept(SignalType.ON_COMPLETE, first);
+
+        when(recoverable.isOpen()).thenReturn(false);
+        when(recoverable.getCloseReason()).thenReturn(new ShutdownSignalException(true, false, null, connection));
+
+        assertThat(lazyChannelPool.getChannelMono().block()).isSameAs(recoverable);
+    }
+
+    @Test
+    void closedRecoverableChannelIsAbortedSoTheAutomaticRecoveryForgetsIt() throws Exception {
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection), new ChannelPoolOptions().maxCacheSize(2));
+        RecoverableChannel recoverable = mock(RecoverableChannel.class);
+        when(recoverable.isOpen()).thenReturn(false);
+
+        lazyChannelPool.getChannelCloseHandler().accept(SignalType.CANCEL, recoverable);
+        lazyChannelPool.getChannelCloseHandler().accept(SignalType.ON_ERROR, channel1);
+
+        verify(recoverable).abort();
+        verify(channel1, never()).abort();
+        verify(channel1).close(); // an open channel is still closed normally
     }
 
     private Mono<Void> useChannelFromStartUntil(Duration until) {

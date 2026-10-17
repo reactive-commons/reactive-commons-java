@@ -127,14 +127,33 @@ public class ApplicationQueryListener extends GenericMessageListener {
             return super.handle(msj, initTime);
         }
 
-        return handleWithTimeout(msj, initTime, messageProperties);
+        // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
+        return Mono.defer(() -> replyTimeoutMillis(messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
+                .map(timeout -> handleWithTimeout(msj, initTime, messageProperties, timeout))
+                .orElseGet(() -> super.handle(msj, initTime)));
+    }
+
+    /**
+     * The gateway publishes the timeout as a {@code long}, which the RabbitMQ client decodes as a {@link Long};
+     * other publishers may send an {@link Integer} or a string.
+     */
+    private Optional<Long> replyTimeoutMillis(Object header) {
+        if (header instanceof Number number) {
+            return Optional.of(number.longValue());
+        }
+        try {
+            return Optional.of(Long.parseLong(String.valueOf(header).trim()));
+        } catch (NumberFormatException e) {
+            log.log(Level.WARNING, () -> "Ignoring invalid " + REPLY_TIMEOUT_MILLIS + " header: " + header);
+            return Optional.empty();
+        }
     }
 
     private Mono<AcknowledgableDelivery> handleWithTimeout(AcknowledgableDelivery msj,
                                                            Instant initTime,
-                                                           AMQP.BasicProperties messageProperties) {
-        long messageTimestamp = msj.getProperties().getTimestamp().getTime();
-        long replyTimeoutMillis = (int) messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS);
+                                                           AMQP.BasicProperties messageProperties,
+                                                           long replyTimeoutMillis) {
+        long messageTimestamp = messageProperties.getTimestamp().getTime();
         long millisUntilTimeout = (messageTimestamp + replyTimeoutMillis) - currentTimestamp().toEpochMilli();
         String executorPath = getExecutorPath(msj);
 

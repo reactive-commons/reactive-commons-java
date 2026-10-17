@@ -1,11 +1,6 @@
 package reactor.rabbitmq;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ConfirmListener;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ReturnListener;
-import com.rabbitmq.client.ShutdownSignalException;
+import com.rabbitmq.client.*;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -13,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
 import java.io.IOException;
@@ -21,6 +17,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -31,12 +30,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 class SenderTest {
 
@@ -278,6 +272,31 @@ class SenderTest {
         verify(channel).basicPublish(eq("e2"), eq("r2"), isNull(), eq("b2".getBytes()));
     }
 
+    @Test
+    void sendMarksMessagesAsPublishedOnlyAfterASuccessfulPublish() throws Exception {
+        doNothing().doThrow(new IOException("publish failed")).when(channel)
+                .basicPublish(anyString(), anyString(), any(), any(byte[].class));
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+        var first = new OutboundMessage("exch", "rk", "1".getBytes());
+        var second = new OutboundMessage("exch", "rk", "2".getBytes());
+        var third = new OutboundMessage("exch", "rk", "3".getBytes());
+        var upstreamCancelled = new AtomicBoolean();
+        var sendOptions = new SendOptions().exceptionHandler((ctx, ex) -> {
+            throw new RabbitFluxException("publish failed", ex);
+        });
+
+        StepVerifier.create(sender.send(Flux.just(first, second, third)
+                        .doOnCancel(() -> upstreamCancelled.set(true)), sendOptions))
+                .expectError(RabbitFluxException.class)
+                .verify(Duration.ofSeconds(5));
+
+        assertThat(first.isPublished()).isTrue();
+        assertThat(second.isPublished()).isFalse();
+        assertThat(third.isPublished()).isFalse();
+        assertThat(upstreamCancelled).as("a failing flow stops consuming its source").isTrue();
+    }
+
     @Nested
     class PublishConfirmTests {
 
@@ -491,6 +510,198 @@ class SenderTest {
             if (confirmRef.get() != null) {
                 confirmRef.get().handleAck(42, false);
             }
+        }
+    }
+
+    /**
+     * Every message handed to a publisher-confirms flow gets exactly one result, even when the channel or the
+     * connection fails, and a confirm is never attributed to another message.
+     */
+    @Nested
+    class ChannelFailureTests {
+
+        private final AtomicLong nextSeqNo = new AtomicLong(1);
+        private final AtomicReference<ConfirmListener> confirmListener = new AtomicReference<>();
+        private final AtomicReference<ShutdownListener> shutdownListener = new AtomicReference<>();
+        private final AtomicReference<RecoveryListener> recoveryListener = new AtomicReference<>();
+        private final List<OutboundMessageResult<OutboundMessage>> results = new CopyOnWriteArrayList<>();
+        private final AtomicReference<Throwable> error = new AtomicReference<>();
+        private final AtomicBoolean completed = new AtomicBoolean();
+        private final AtomicBoolean upstreamCancelled = new AtomicBoolean();
+
+        private void brokerChannel(Channel ch) {
+            when(ch.getNextPublishSeqNo()).thenAnswer(inv -> nextSeqNo.getAndIncrement());
+            doAnswer(inv -> {
+                confirmListener.set(inv.getArgument(0));
+                return null;
+            }).when(ch).addConfirmListener(any(ConfirmListener.class));
+            doAnswer(inv -> {
+                shutdownListener.set(inv.getArgument(0));
+                return null;
+            }).when(ch).addShutdownListener(any(ShutdownListener.class));
+        }
+
+        private RecoverableChannel recoverableBrokerChannel() throws Exception {
+            RecoverableChannel ch = mock(RecoverableChannel.class);
+            brokerChannel(ch);
+            doAnswer(inv -> {
+                recoveryListener.set(inv.getArgument(0));
+                return null;
+            }).when(ch).addRecoveryListener(any(RecoveryListener.class));
+            when(ch.isOpen()).thenReturn(true);
+            when(ch.getConnection()).thenReturn(connection);
+            when(connection.createChannel()).thenReturn(ch);
+            return ch;
+        }
+
+        private Sinks.Many<OutboundMessage> subscribe() {
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+            Sinks.Many<OutboundMessage> source = Sinks.many().unicast().onBackpressureBuffer();
+            sender.sendWithTypedPublishConfirms(source.asFlux().doOnCancel(() -> upstreamCancelled.set(true)))
+                    .subscribe(results::add, error::set, () -> completed.set(true));
+            return source;
+        }
+
+        private List<OutboundMessage> publish(Sinks.Many<OutboundMessage> source, int count) {
+            List<OutboundMessage> messages = new ArrayList<>();
+            for (int i = 0; i < count; i++) {
+                OutboundMessage message = new OutboundMessage("exch", "rk", ("m" + i).getBytes());
+                messages.add(message);
+                source.tryEmitNext(message);
+            }
+            return messages;
+        }
+
+        @Test
+        void channelErrorReportsEveryPendingMessageAsUnknownAndTerminates() throws IOException {
+            brokerChannel(channel);
+            Sinks.Many<OutboundMessage> source = subscribe();
+            List<OutboundMessage> messages = publish(source, 50);
+
+            // e.g. 404 NOT_FOUND: the broker closes the channel, the connection stays up
+            shutdownListener.get().shutdownCompleted(new ShutdownSignalException(false, false, null, channel));
+
+            assertThat(results).hasSize(50)
+                    .allSatisfy(r -> assertThat(r.unknown()).isTrue())
+                    .allSatisfy(r -> assertThat(r.ack()).isFalse());
+            assertThat(results).extracting(OutboundMessageResult::outboundMessage)
+                    .containsExactlyInAnyOrderElementsOf(messages);
+            assertThat(error.get()).isInstanceOf(ShutdownSignalException.class);
+            assertThat(upstreamCancelled).as("the source learns it has no subscriber anymore").isTrue();
+            verify(channel).removeConfirmListener(any(ConfirmListener.class));
+            verify(channel).removeShutdownListener(any(ShutdownListener.class));
+
+            // late confirms of the closed channel are ignored
+            confirmListener.get().handleAck(50, true);
+            assertThat(results).hasSize(50);
+        }
+
+        @Test
+        void connectionLossOnRecoverableChannelKeepsTheFlowAndNeverCrossesConfirms() throws Exception {
+            RecoverableChannel ch = recoverableBrokerChannel();
+            Sinks.Many<OutboundMessage> source = subscribe();
+            publish(source, 50);
+
+            ShutdownSignalException connectionLost = new ShutdownSignalException(true, false, null, connection);
+            shutdownListener.get().shutdownCompleted(connectionLost);
+
+            assertThat(results).hasSize(50).allSatisfy(r -> assertThat(r.unknown()).isTrue());
+            assertThat(error.get()).as("the flow survives a connection failure").isNull();
+            assertThat(upstreamCancelled).isFalse();
+            verify(ch, never()).removeConfirmListener(any(ConfirmListener.class));
+
+            // automatic recovery re-opens the channel: the publish sequence restarts at 1
+            recoveryListener.get().handleRecoveryStarted(ch);
+            nextSeqNo.set(1);
+            recoveryListener.get().handleRecovery(ch);
+            List<OutboundMessage> afterRecovery = publish(source, 3);
+            confirmListener.get().handleAck(3, true);
+
+            assertThat(results).hasSize(53);
+            assertThat(results.subList(50, 53))
+                    .allSatisfy(r -> {
+                        assertThat(r.ack()).isTrue();
+                        assertThat(r.unknown()).isFalse();
+                    })
+                    .extracting(OutboundMessageResult::outboundMessage)
+                    .containsExactlyElementsOf(afterRecovery);
+        }
+
+        @Test
+        void recoveryStartDropsPendingMessagesPublishedBeforeTheFailureWasNoticed() throws Exception {
+            RecoverableChannel ch = recoverableBrokerChannel();
+            Sinks.Many<OutboundMessage> source = subscribe();
+            publish(source, 5);
+
+            recoveryListener.get().handleRecoveryStarted(ch);
+
+            assertThat(results).hasSize(5).allSatisfy(r -> assertThat(r.unknown()).isTrue());
+            assertThat(error.get()).isNull();
+        }
+
+        @Test
+        void finiteFluxCompletesWhenTheConnectionIsLostWithPendingMessages() throws Exception {
+            recoverableBrokerChannel();
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+            StepVerifier.create(sender.sendWithPublishConfirms(Flux.range(0, 3)
+                            .map(i -> new OutboundMessage("exch", "rk", ("m" + i).getBytes()))))
+                    .then(() -> shutdownListener.get().shutdownCompleted(
+                            new ShutdownSignalException(true, false, null, connection)))
+                    .expectNextCount(3)
+                    .expectComplete()
+                    .verify(Duration.ofSeconds(5));
+        }
+
+        @Test
+        void applicationInitiatedShutdownReportsPendingMessagesWithoutError() {
+            brokerChannel(channel);
+            Sinks.Many<OutboundMessage> source = subscribe();
+            publish(source, 2);
+
+            shutdownListener.get().shutdownCompleted(new ShutdownSignalException(true, true, null, connection));
+
+            assertThat(results).hasSize(2).allSatisfy(r -> assertThat(r.unknown()).isTrue());
+            assertThat(error.get()).isNull();
+        }
+
+        @Test
+        void alreadyClosedChannelTerminatesTheFlowCleanly() {
+            brokerChannel(channel);
+            ShutdownSignalException closed = new ShutdownSignalException(false, false, null, channel);
+            // a shutdown listener added to a closed channel is notified right away
+            doAnswer(inv -> {
+                ShutdownListener listener = inv.getArgument(0);
+                listener.shutdownCompleted(closed);
+                return null;
+            }).when(channel).addShutdownListener(any(ShutdownListener.class));
+
+            subscribe();
+
+            assertThat(error.get()).isSameAs(closed);
+            assertThat(upstreamCancelled).isTrue();
+            verify(channel).removeShutdownListener(any(ShutdownListener.class));
+            verify(channel).removeConfirmListener(any(ConfirmListener.class));
+        }
+
+        @Test
+        void unrecoverablePublishErrorFailsTheMessageAndTerminates() throws Exception {
+            brokerChannel(channel);
+            doThrow(new IOException("boom")).when(channel)
+                    .basicPublish(anyString(), anyString(), anyBoolean(), any(), any(byte[].class));
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+            var sendOptions = new SendOptions().exceptionHandler((ctx, ex) -> {
+                throw new RabbitFluxException("not retryable", ex);
+            });
+
+            StepVerifier.create(sender.sendWithPublishConfirms(
+                            Flux.just(new OutboundMessage("exch", "rk", "m".getBytes())), sendOptions))
+                    .assertNext(r -> {
+                        assertThat(r.ack()).isFalse();
+                        assertThat(r.unknown()).isFalse();
+                    })
+                    .expectError(RabbitFluxException.class)
+                    .verify(Duration.ofSeconds(5));
         }
     }
 }

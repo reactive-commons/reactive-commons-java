@@ -22,7 +22,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 
 import static java.lang.Boolean.TRUE;
@@ -129,21 +128,29 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     }
 
     private <T, R> Mono<R> requestReplyInternal(T query, String targetName, Class<R> type, String domain, Function<T, String> queryTypeExtractor) {
-        final String correlationID = UUID.randomUUID().toString().replaceAll("-", "");
+        // Deferred: the reply registration only exists while the query is subscribed, and it is always released
+        // (answered, timed out, publication failed or canceled by the caller)
+        return Mono.defer(() -> {
+                    final String correlationID = UUID.randomUUID().toString().replace("-", "");
 
-        final Mono<R> replyHolder = router.register(correlationID)
-                .timeout(replyTimeout)
-                .doOnError(TimeoutException.class, e -> router.deregister(correlationID))
-                .map(s -> converter.readValue(s, type));
+                    // registered before publishing so that a fast reply cannot be missed
+                    final Mono<R> replyHolder = router.register(correlationID)
+                            .timeout(replyTimeout)
+                            .map(s -> converter.readValue(s, type));
 
-        Map<String, Object> headers = new HashMap<>();
-        headers.put(REPLY_ID, config.getRoutingKey());
-        headers.put(SERVED_QUERY_ID, queryTypeExtractor.apply(query));
-        headers.put(CORRELATION_ID, correlationID);
-        headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
+                    Map<String, Object> headers = new HashMap<>();
+                    headers.put(REPLY_ID, config.getRoutingKey());
+                    headers.put(SERVED_QUERY_ID, queryTypeExtractor.apply(query));
+                    headers.put(CORRELATION_ID, correlationID);
+                    headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
 
-        return resolveSender(domain).sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
-                .then(replyHolder)
+                    return resolveSender(domain)
+                            .sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
+                            .then(replyHolder)
+                            // released before the result reaches the caller (doFinally would run after it)
+                            .doOnTerminate(() -> router.deregister(correlationID))
+                            .doOnCancel(() -> router.deregister(correlationID));
+                })
                 .name("async_query")
                 .tag("operation", queryTypeExtractor.apply(query))
                 .tag("target", targetName)

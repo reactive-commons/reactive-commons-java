@@ -16,15 +16,9 @@
 
 package reactor.rabbitmq;
 
-import com.rabbitmq.client.AMQP;
-import com.rabbitmq.client.Channel;
-import com.rabbitmq.client.ConfirmListener;
-import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ReturnListener;
-import com.rabbitmq.client.ShutdownListener;
+import com.rabbitmq.client.*;
 import com.rabbitmq.client.impl.AMQImpl;
 import org.reactivestreams.Publisher;
-import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,10 +30,12 @@ import reactor.core.publisher.Operators;
 import reactor.core.publisher.SignalType;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.context.Context;
 
 import java.io.IOException;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -183,6 +179,7 @@ public class Sender implements AutoCloseable {
                                         message.getProperties(),
                                         message.getBody()
                                 );
+                                message.published();
                             } catch (Exception e) {
                                 exceptionHandler.accept(new SendContext<>(channel, message), e);
                             }
@@ -446,6 +443,24 @@ public class Sender implements AutoCloseable {
         }
     }
 
+    /**
+     * Publishes the messages of the source on a channel with publisher confirms and emits one
+     * {@link OutboundMessageResult} per message.
+     *
+     * <p>Every message handed to {@link #onNext(OutboundMessage)} gets exactly one result: an ack, a nack, a return,
+     * or an {@code unknown} result when the channel or the connection fails before the confirmation arrives. Results
+     * are emitted through a serialized subscriber because they come from several threads (publishing thread,
+     * connection I/O thread for confirms and shutdown notifications).
+     *
+     * <p>Channel failures follow the RabbitMQ Java client semantics:
+     * <ul>
+     *     <li>Channel-level error (e.g. {@code 404 NOT_FOUND}): the channel is never recovered, so pending messages are
+     *     reported as unknown, the upstream is cancelled and the flux terminates with the error.</li>
+     *     <li>Connection failure on a recoverable channel: the channel instance survives and the client re-opens it
+     *     with a new publish sequence. Pending messages are reported as unknown and forgotten, so a confirm for the new
+     *     sequence can never be attributed to an old message, and the flux keeps running.</li>
+     * </ul>
+     */
     static class PublishConfirmSubscriber<OMSG extends OutboundMessage> implements
             CoreSubscriber<OMSG>, Subscription {
 
@@ -454,26 +469,32 @@ public class Sender implements AutoCloseable {
         final ConcurrentNavigableMap<Long, OMSG> unconfirmed = new ConcurrentSkipListMap<>();
 
         private final Channel channel;
-        private final Subscriber<? super OutboundMessageResult<OMSG>> subscriber;
+        private final CoreSubscriber<OutboundMessageResult<OMSG>> subscriber;
         private final BiConsumer<SendContext, Exception> exceptionHandler;
 
         private Subscription subscription;
         private ConfirmListener confirmListener;
         private ReturnListener returnListener;
         private ShutdownListener shutdownListener;
+        private RecoveryListener recoveryListener;
 
         final boolean trackReturned;
         final BiFunction<AMQP.BasicProperties, Long, AMQP.BasicProperties> propertiesProcessor;
 
-        PublishConfirmSubscriber(Channel channel, Subscriber<? super OutboundMessageResult<OMSG>> subscriber,
+        PublishConfirmSubscriber(Channel channel, CoreSubscriber<? super OutboundMessageResult<OMSG>> subscriber,
                                  SendOptions options) {
             this.channel = channel;
-            this.subscriber = subscriber;
+            this.subscriber = Operators.serialize(subscriber);
             this.exceptionHandler = options.getExceptionHandler();
             this.trackReturned = options.isTrackReturned();
             this.propertiesProcessor = this.trackReturned
                     ? PublishConfirmSubscriber::addReactorRabbitMQDeliveryTag
                     : (properties, deliveryTag) -> properties;
+        }
+
+        @Override
+        public Context currentContext() {
+            return subscriber.currentContext();
         }
 
         @Override
@@ -488,103 +509,72 @@ public class Sender implements AutoCloseable {
 
         @Override
         public void onSubscribe(Subscription subscription) {
-            if (Operators.validate(this.subscription, subscription)) {
+            if (!Operators.validate(this.subscription, subscription)) {
+                return;
+            }
+            this.subscription = subscription;
 
-                if (this.trackReturned) {
-                    this.returnListener = (replyCode, replyText, exchange, routingKey, properties, body) -> {
-                        try {
-                            Object deliveryTagObj = properties.getHeaders().get(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER);
-                            if (deliveryTagObj instanceof Long deliveryTag) {
-                                OMSG outboundMessage = unconfirmed.get(deliveryTag);
-                                subscriber.onNext(new OutboundMessageResult<>(outboundMessage, true, true));
-                                unconfirmed.remove(deliveryTag);
-                            } else {
-                                handleError(new IllegalArgumentException(
-                                        "Missing header " + REACTOR_RABBITMQ_DELIVERY_TAG_HEADER), null);
-                            }
-                        } catch (Exception e) {
-                            handleError(e, null);
-                        }
-                    };
-                    channel.addReturnListener(this.returnListener);
+            if (this.trackReturned) {
+                this.returnListener = this::handleReturn;
+                channel.addReturnListener(this.returnListener);
+            }
+
+            this.confirmListener = new ConfirmListener() {
+
+                @Override
+                public void handleAck(long deliveryTag, boolean multiple) {
+                    handleAckNack(deliveryTag, multiple, true);
                 }
 
-                this.confirmListener = new ConfirmListener() {
+                @Override
+                public void handleNack(long deliveryTag, boolean multiple) {
+                    handleAckNack(deliveryTag, multiple, false);
+                }
+            };
+            channel.addConfirmListener(confirmListener);
+
+            state.set(SubscriberState.ACTIVE);
+            subscriber.onSubscribe(this);
+
+            // Registered once the subscriber is active: a shutdown listener added to an already closed channel is
+            // notified immediately.
+            this.shutdownListener = this::handleShutdown;
+            channel.addShutdownListener(shutdownListener);
+            if (channel instanceof Recoverable recoverable) {
+                this.recoveryListener = new RecoveryListener() {
+                    @Override
+                    public void handleRecovery(Recoverable recoverable) {
+                        // nothing to do: the channel keeps being used with the new publish sequence
+                    }
 
                     @Override
-                    public void handleAck(long deliveryTag, boolean multiple) {
-                        handleAckNack(deliveryTag, multiple, true);
-                    }
-
-                    @Override
-                    public void handleNack(long deliveryTag, boolean multiple) {
-                        handleAckNack(deliveryTag, multiple, false);
-                    }
-
-                    private void handleAckNack(long deliveryTag, boolean multiple, boolean ack) {
-                        if (multiple) {
-                            try {
-                                var unconfirmedToSend = unconfirmed.headMap(deliveryTag, true);
-                                var iterator = unconfirmedToSend.entrySet().iterator();
-                                while (iterator.hasNext()) {
-                                    subscriber.onNext(new OutboundMessageResult<>(
-                                            iterator.next().getValue(), ack, false));
-                                    iterator.remove();
-                                }
-                            } catch (Exception e) {
-                                handleError(e, null);
-                            }
-                        } else {
-                            OMSG outboundMessage = unconfirmed.get(deliveryTag);
-                            if (outboundMessage != null) {
-                                try {
-                                    unconfirmed.remove(deliveryTag);
-                                    subscriber.onNext(new OutboundMessageResult<>(outboundMessage, ack, false));
-                                } catch (Exception e) {
-                                    handleError(e, new OutboundMessageResult<>(outboundMessage, ack, false));
-                                }
-                            }
-                        }
-                        if (unconfirmed.isEmpty()) {
-                            maybeComplete();
-                        }
+                    public void handleRecoveryStarted(Recoverable recoverable) {
+                        // The recovered channel restarts the publish sequence numbers: drop every pending entry.
+                        failAllUnconfirmed();
+                        maybeCompleteIfNothingPending();
                     }
                 };
-                channel.addConfirmListener(confirmListener);
-
-                this.shutdownListener = sse -> {
-                    var iterator = this.unconfirmed.entrySet().iterator();
-                    while (iterator.hasNext()) {
-                        OMSG message = iterator.next().getValue();
-                        if (!message.isPublished()) {
-                            try {
-                                subscriber.onNext(new OutboundMessageResult<>(message, false, false));
-                                iterator.remove();
-                            } catch (Exception e) {
-                                LOGGER.info("Error while nacking messages after channel failure");
-                            }
-                        }
-                    }
-                    if (!sse.isHardError() && !sse.isInitiatedByApplication()) {
-                        subscriber.onError(sse);
-                    }
-                };
-                channel.addShutdownListener(shutdownListener);
-
-                state.set(SubscriberState.ACTIVE);
-                this.subscription = subscription;
-                subscriber.onSubscribe(this);
+                recoverable.addRecoveryListener(recoveryListener);
+                if (state.get() == SubscriberState.COMPLETE) {
+                    // terminated while the listener was being registered
+                    recoverable.removeRecoveryListener(recoveryListener);
+                }
             }
         }
 
         @Override
         public void onNext(OMSG message) {
-            if (checkComplete(message)) {
+            if (state.get() == SubscriberState.COMPLETE) {
+                Operators.onDiscard(message, currentContext());
                 return;
             }
             long nextPublishSeqNo = channel.getNextPublishSeqNo();
             try {
-                unconfirmed.putIfAbsent(nextPublishSeqNo, message);
+                OMSG stale = unconfirmed.put(nextPublishSeqNo, message);
+                if (stale != null && stale != message) {
+                    // Should not happen once pending messages are cleared on failures, but never lose a result.
+                    emit(new OutboundMessageResult<>(stale, false, false, true));
+                }
                 channel.basicPublish(
                         message.getExchange(),
                         message.getRoutingKey(),
@@ -594,15 +584,95 @@ public class Sender implements AutoCloseable {
                 );
                 message.published();
             } catch (Exception e) {
-                unconfirmed.remove(nextPublishSeqNo);
+                unconfirmed.remove(nextPublishSeqNo, message);
                 try {
                     this.exceptionHandler.accept(new ConfirmSendContext<>(channel, message, this), e);
                 } catch (RabbitFluxRetryTimeoutException timeoutException) {
-                    subscriber.onNext(new OutboundMessageResult<>(message, false, false));
+                    emit(new OutboundMessageResult<>(message, false, false));
                 } catch (Exception innerException) {
                     handleError(innerException, new OutboundMessageResult<>(message, false, false));
                 }
             }
+        }
+
+        private void handleReturn(int replyCode, String replyText, String exchange, String routingKey,
+                                  AMQP.BasicProperties properties, byte[] body) {
+            try {
+                Object deliveryTagObj = properties.getHeaders() == null
+                        ? null : properties.getHeaders().get(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER);
+                if (deliveryTagObj instanceof Long deliveryTag) {
+                    OMSG outboundMessage = unconfirmed.remove(deliveryTag);
+                    if (outboundMessage != null) {
+                        emit(new OutboundMessageResult<>(outboundMessage, true, true));
+                    }
+                } else {
+                    handleError(new IllegalArgumentException(
+                            "Missing header " + REACTOR_RABBITMQ_DELIVERY_TAG_HEADER), null);
+                }
+            } catch (Exception e) {
+                handleError(e, null);
+            }
+        }
+
+        private void handleAckNack(long deliveryTag, boolean multiple, boolean ack) {
+            try {
+                if (multiple) {
+                    Map.Entry<Long, OMSG> entry;
+                    while ((entry = unconfirmed.firstEntry()) != null && entry.getKey() <= deliveryTag) {
+                        // remove(key, value) guarantees a single result even if a failure drains the map concurrently
+                        if (unconfirmed.remove(entry.getKey(), entry.getValue())) {
+                            emit(new OutboundMessageResult<>(entry.getValue(), ack, false));
+                        }
+                    }
+                } else {
+                    OMSG outboundMessage = unconfirmed.remove(deliveryTag);
+                    if (outboundMessage != null) {
+                        emit(new OutboundMessageResult<>(outboundMessage, ack, false));
+                    }
+                }
+            } catch (Exception e) {
+                handleError(e, null);
+            }
+            maybeCompleteIfNothingPending();
+        }
+
+        private void handleShutdown(ShutdownSignalException sse) {
+            try {
+                if (sse.isInitiatedByApplication()) {
+                    failAllUnconfirmed();
+                    maybeCompleteIfNothingPending();
+                } else if (sse.isHardError() && channel instanceof Recoverable) {
+                    LOGGER.warn("Connection lost on channel {} ({} unconfirmed messages reported as unknown), "
+                                    + "waiting for automatic recovery: {}",
+                            channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
+                    failAllUnconfirmed();
+                    maybeCompleteIfNothingPending();
+                } else {
+                    LOGGER.warn("Channel {} closed ({} unconfirmed messages reported as unknown): {}",
+                            channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
+                    terminate(sse);
+                }
+            } catch (Exception e) {
+                LOGGER.warn("Error while handling the shutdown of channel {}", channel.getChannelNumber(), e);
+            }
+        }
+
+        /**
+         * Reports every message waiting for a confirmation as {@code unknown} and forgets it.
+         */
+        void failAllUnconfirmed() {
+            Map.Entry<Long, OMSG> entry;
+            while ((entry = unconfirmed.pollFirstEntry()) != null) {
+                try {
+                    emit(new OutboundMessageResult<>(entry.getValue(), false, false, true));
+                } catch (Exception e) {
+                    LOGGER.warn("Error while notifying an unconfirmed message after a channel failure", e);
+                }
+            }
+        }
+
+        private void emit(OutboundMessageResult<OMSG> result) {
+            subscriber.onNext(result);
         }
 
         private static AMQP.BasicProperties addReactorRabbitMQDeliveryTag(
@@ -616,56 +686,83 @@ public class Sender implements AutoCloseable {
 
         @Override
         public void onError(Throwable throwable) {
-            if (state.compareAndSet(SubscriberState.ACTIVE, SubscriberState.COMPLETE)
-                    || state.compareAndSet(SubscriberState.OUTBOUND_DONE, SubscriberState.COMPLETE)) {
-                channel.removeConfirmListener(confirmListener);
-                channel.removeShutdownListener(shutdownListener);
-                if (returnListener != null) {
-                    channel.removeReturnListener(returnListener);
+            if (state.get() == SubscriberState.COMPLETE) {
+                if (firstException.compareAndSet(null, throwable)) {
+                    Operators.onErrorDropped(throwable, currentContext());
                 }
-                subscriber.onError(throwable);
-            } else if (firstException.compareAndSet(null, throwable) && state.get() == SubscriberState.COMPLETE) {
-                Operators.onErrorDropped(throwable, currentContext());
+                return;
             }
+            terminate(throwable);
         }
 
         @Override
         public void onComplete() {
-            if (state.compareAndSet(SubscriberState.ACTIVE, SubscriberState.OUTBOUND_DONE)
-                    && unconfirmed.isEmpty()) {
-                maybeComplete();
+            if (state.compareAndSet(SubscriberState.ACTIVE, SubscriberState.OUTBOUND_DONE)) {
+                maybeCompleteIfNothingPending();
             }
         }
 
         private void handleError(Exception e, OutboundMessageResult<OMSG> result) {
             LOGGER.error("error in publish confirm sending", e);
-            boolean complete = checkComplete(e);
-            firstException.compareAndSet(null, e);
-            if (!complete) {
-                if (result != null) {
-                    subscriber.onNext(result);
+            if (state.get() == SubscriberState.COMPLETE) {
+                return;
+            }
+            if (result != null) {
+                try {
+                    emit(result);
+                } catch (Exception emitException) {
+                    LOGGER.warn("Error while notifying a failed message", emitException);
                 }
-                onError(e);
+            }
+            terminate(e);
+        }
+
+        /**
+         * Terminates the flux exactly once: pending messages are reported as unknown, listeners are removed, the
+         * upstream is cancelled (so a {@code FluxSink} source can tell it has no subscriber anymore) and the error is
+         * propagated.
+         */
+        private void terminate(Throwable cause) {
+            if (state.getAndSet(SubscriberState.COMPLETE) == SubscriberState.COMPLETE) {
+                return;
+            }
+            firstException.compareAndSet(null, cause);
+            removeListeners();
+            failAllUnconfirmed();
+            if (subscription != null) {
+                subscription.cancel();
+            }
+            subscriber.onError(cause);
+        }
+
+        private void maybeCompleteIfNothingPending() {
+            if (unconfirmed.isEmpty()) {
+                maybeComplete();
             }
         }
 
         private void maybeComplete() {
             if (state.compareAndSet(SubscriberState.OUTBOUND_DONE, SubscriberState.COMPLETE)) {
-                channel.removeConfirmListener(confirmListener);
-                channel.removeShutdownListener(shutdownListener);
-                if (returnListener != null) {
-                    channel.removeReturnListener(returnListener);
-                }
+                removeListeners();
                 subscriber.onComplete();
             }
         }
 
-        <T> boolean checkComplete(T t) {
-            boolean complete = state.get() == SubscriberState.COMPLETE;
-            if (complete && firstException.get() == null) {
-                Operators.onNextDropped(t, currentContext());
-            }
-            return complete;
+        private void removeListeners() {
+            safelyExecute(LOGGER, () -> {
+                if (confirmListener != null) {
+                    channel.removeConfirmListener(confirmListener);
+                }
+                if (shutdownListener != null) {
+                    channel.removeShutdownListener(shutdownListener);
+                }
+                if (returnListener != null) {
+                    channel.removeReturnListener(returnListener);
+                }
+                if (recoveryListener != null && channel instanceof Recoverable recoverable) {
+                    recoverable.removeRecoveryListener(recoveryListener);
+                }
+            }, "Error while removing the listeners of channel " + channel.getChannelNumber());
         }
     }
 

@@ -82,6 +82,8 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        // The performance tests call mocks hundreds of thousands of times and Mockito keeps every invocation
+        maxHeapSize = "1g"
         if (System.getProperty("env.ci") == "true") {
             systemProperty "env.ci", System.getProperty("env.ci")
         }

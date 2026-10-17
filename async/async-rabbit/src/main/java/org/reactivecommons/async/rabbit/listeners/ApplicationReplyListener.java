@@ -49,7 +49,8 @@ public class ApplicationReplyListener {
         if (createTopology) {
             flow = creator.declare(exchange(exchangeName).type("topic").durable(true)).then();
         }
-        ConsumeOptions consumeOptions = new ConsumeOptions();
+        ConsumeOptions consumeOptions = new ConsumeOptions()
+                .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE);
         consumeOptions.consumerTag(InstanceIdentifier.getInstanceId("replies"));
         deliveryFlux = flow
                 .then(creator.declare(queue(queueName).durable(false).autoDelete(true).exclusive(true)))

@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.times;
 
 class EventLoopGroupLifecycleManagerTest {
 
@@ -21,23 +22,35 @@ class EventLoopGroupLifecycleManagerTest {
 
     @Test
     void shouldStartAndReflectRunningState() {
-        assertFalse(manager.isRunning());
-        manager.start();
-        assertTrue(manager.isRunning());
+        try (MockedStatic<RabbitMQSetupUtils> utils = mockStatic(RabbitMQSetupUtils.class)) {
+            assertFalse(manager.isRunning());
+            manager.start();
+            assertTrue(manager.isRunning());
+            utils.verify(RabbitMQSetupUtils::retainEventLoopGroup);
+        }
     }
 
     @Test
-    void shouldStopAndCallShutdownEventLoopGroup() {
-        manager.start();
+    void shouldRetainOnlyOnceWhenStartedTwice() {
         try (MockedStatic<RabbitMQSetupUtils> utils = mockStatic(RabbitMQSetupUtils.class)) {
+            manager.start();
+            manager.start();
+            utils.verify(RabbitMQSetupUtils::retainEventLoopGroup, times(1));
+        }
+    }
+
+    @Test
+    void shouldStopAndReleaseEventLoopGroup() {
+        try (MockedStatic<RabbitMQSetupUtils> utils = mockStatic(RabbitMQSetupUtils.class)) {
+            manager.start();
             manager.stop();
-            utils.verify(RabbitMQSetupUtils::shutdownEventLoopGroup);
+            utils.verify(RabbitMQSetupUtils::releaseEventLoopGroup);
             assertFalse(manager.isRunning());
         }
     }
 
     @Test
-    void shouldNotCallShutdownWhenStopIsCalledAndNotRunning() {
+    void shouldNotReleaseWhenStopIsCalledAndNotRunning() {
         try (MockedStatic<RabbitMQSetupUtils> utils = mockStatic(RabbitMQSetupUtils.class)) {
             manager.stop();
             utils.verifyNoInteractions();

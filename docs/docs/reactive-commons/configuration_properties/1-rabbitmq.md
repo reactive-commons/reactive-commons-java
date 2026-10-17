@@ -32,7 +32,7 @@ app:
       brokerType: "rabbitmq" # please don't change this value
       queueType: null # you can set to 'classic' or to 'quorum' if your RabbitMQ cluster supports it, by default it will take the virtual host default queue type
       flux:
-        maxConcurrency: 250 # max concurrency of listener flow
+        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows up to 250 threads only when the handlers block (blocking I/O) and releases the idle threads after a minute
       domain:
         ignoreThisListener: false # Allows you to disable event listener for this specific domain
         events:
@@ -68,6 +68,14 @@ app:
 :::caution[Mandatory `app` Domain Configuration]
 To ensure a correct configuration, you should always override the properties of the `app` domain. If it is not
 configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
+:::
+
+:::caution[Infinite retries and quorum queues]
+With `withDLQRetry: false` and `maxRetries: -1` a failed message is requeued every `retryDelay` indefinitely. On
+quorum queues, RabbitMQ 4.0 to 4.2 count those requeues against the queue
+[delivery limit](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling) (20 by default): once reached,
+the broker drops the message (or dead-letters it if the queue has a dead letter exchange). Use `withDLQRetry: true`
+or a finite `maxRetries` if messages must not be dropped.
 :::
 
 ## Configuration approaches
@@ -395,8 +403,8 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker     | Connections | Channels |
 |----------------------------|---------------|------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app | 1           | 13       |
-|                            | false         | Broker app | 1           | 11       |
+| One or all for sending [1] | true          | Broker app | 1           | 8        |
+|                            | false         | Broker app | 1           | 6        |
 
 ### 2. Sending messages (multiple domains)
 
@@ -405,9 +413,9 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker            | Connections | Channels |
 |----------------------------|---------------|-------------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app        | 1           | 18       |
+| One or all for sending [1] | true          | Broker app        | 1           | 8        |
 |                            |               | Additional broker | 1           | 8        |
-| One or all for sending [1] | false         | Broker app        | 1           | 16       |
+| One or all for sending [1] | false         | Broker app        | 1           | 6        |
 |                            |               | Additional broker | 1           | 6        |
 
 ### 3. Listening for messages (single domain)
@@ -416,7 +424,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations          | Broker     | Connections | Channels |
 |------------------------------|------------|-------------|----------|
-| One or all for listening [2] | Broker app | 1           | 14       |
+| One or all for listening [2] | Broker app | 1           | 9        |
 
 ### 4. Listening for messages (multiple domains)
 
@@ -424,20 +432,21 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations   | Broker            | Connections | Channels |
 |-----------------------|-------------------|-------------|----------|
-| All for listening [2] | Broker app        | 1           | 19       |
+| All for listening [2] | Broker app        | 1           | 9        |
 |                       | Additional broker | 1           | 8        |
-| Two for listening [2] | Broker app        | 1           | 18       |
+| Two for listening [2] | Broker app        | 1           | 8        |
 |                       | Additional broker | 1           | 8        |
-| One for listening [2] | Broker app        | 1           | 17       |
+| One for listening [2] | Broker app        | 1           | 7        |
 |                       | Additional broker | 1           | 7        |
 
 ### 5. Sending and listening for messages (single domain)
 
 > This scenario enables both sending and listening for messages on a single broker, with all annotations enabled:
 
-| Enabled annotations                           | Broker     | Connections | Channels |
-|-----------------------------------------------|------------|-------------|----------|
-| All for sending [1] and all for listening [2] | Broker app | 1           | 16       |
+| Enabled annotations                           | listenReplies | Broker     | Connections | Channels |
+|-----------------------------------------------|---------------|------------|-------------|----------|
+| All for sending [1] and all for listening [2] | true          | Broker app | 1           | 11       |
+|                                               | false         | Broker app | 1           | 10       |
 
 ### 6. Sending and listening for messages (multiple domains)
 
@@ -445,16 +454,26 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations                           | Broker            | Connections | Channels |
 |-----------------------------------------------|-------------------|-------------|----------|
-| All for sending [1] and all for listening [2] | Broker app        | 1           | 21       |
-|                                               | Additional broker | 1           | 10       |
-| One for sending [1] and all for listening [2] | Broker app        | 1           | 20       |
+| All for sending [1] and all for listening [2] | Broker app        | 1           | 10       |
 |                                               | Additional broker | 1           | 9        |
-| All for sending [1] and two for listening [2] | Broker app        | 1           | 20       |
-|                                               | Additional broker | 1           | 10       |
-| All for sending [1] and one for listening [2] | Broker app        | 1           | 19       |
+| One for sending [1] and all for listening [2] | Broker app        | 1           | 10       |
+|                                               | Additional broker | 1           | 9        |
+| All for sending [1] and two for listening [2] | Broker app        | 1           | 9        |
+|                                               | Additional broker | 1           | 9        |
+| All for sending [1] and one for listening [2] | Broker app        | 1           | 8        |
 |                                               | Additional broker | 1           | 8        |
-| All for sending [1]                           | Broker app        | 1           | 16       |
+| All for sending [1]                           | Broker app        | 1           | 6        |
 |                                               | Additional broker | 1           | 6        |
+
+### How the channels are used
+
+- **The number of channels does not grow with the traffic.** Each domain opens a fixed set of channels when it
+  starts: the sender uses 5 (4 with publisher confirms and 1 without them) and each listener uses its own. More
+  messages per second travel through the same channels.
+- **Discarded messages share the sender of the default domain.** The notification of a discarded message (the
+  `.dlq` events) is published through the sender of the `app` domain, so it does not open channels of its own, no
+  matter how many domains are configured. Only a domain that sets `useDiscardNotifierPerDomain` publishes the
+  notifications of its own discards through its own sender.
 
 ### Recommendations
 

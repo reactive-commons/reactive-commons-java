@@ -14,8 +14,6 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Scheduler;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
@@ -43,8 +41,6 @@ public abstract class GenericMessageListener {
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
     protected final String queueName;
-    private final Scheduler scheduler = Schedulers.newParallel(getClass().getSimpleName(), 12);
-    private final Scheduler errorReporterScheduler = Schedulers.newBoundedElastic(4, 256, "errorReporterScheduler");
 
     private final boolean useDLQRetries;
     private final boolean createTopology;
@@ -98,7 +94,8 @@ public abstract class GenericMessageListener {
 
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
-                .consumerTag(InstanceIdentifier.getInstanceId(getKind()))
+                .consumerTag(consumerTag())
+                .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
                 .channelCallback(channel -> channel.addShutdownListener(cause -> {
                     log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
                             + " channel open: " + channel.isOpen() +
@@ -159,7 +156,7 @@ public abstract class GenericMessageListener {
                         });
             }
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
-                    .subscribeOn(scheduler).thenReturn(msj);
+                    .subscribeOn(ListenerSchedulers.handlers()).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
                     "Severe Warning! ", msj.getProperties().getMessageId()));
@@ -235,7 +232,8 @@ public abstract class GenericMessageListener {
         final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
-        if (hasLocalRetries() || retryNumber >= maxRetries) { // Discard
+        // maxRetries == -1 without DLQ means infinite fast retries, never discard
+        if (hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
             return discardNotifier
                     .notifyDiscard(rabbitMessage)
@@ -253,7 +251,7 @@ public abstract class GenericMessageListener {
     private void sendErrorToCustomReporter(final Throwable err, final Message message, final boolean redelivered) {
         try {
             customReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
-                    .subscribeOn(errorReporterScheduler)
+                    .subscribeOn(ListenerSchedulers.errorReporter())
                     .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
                     .subscribe();
         } catch (Throwable t) {
@@ -274,6 +272,18 @@ public abstract class GenericMessageListener {
     protected abstract Object parseMessageForReporter(Message msj);
 
     protected abstract String getKind();
+
+    /**
+     * Consumer tag of this listener. With automatic connection recovery, consumer tags must be unique across all the
+     * channels of a connection: the client records the consumers to recover by tag, so listeners sharing a tag on
+     * the same connection overwrite each other and only the last one is recovered.
+     *
+     * @see <a href="https://www.rabbitmq.com/client-libraries/java-api-guide#automatic-recovery-limitations">Failure
+     * Detection and Recovery Limitations</a>
+     */
+    protected String consumerTag() {
+        return InstanceIdentifier.getInstanceId(getKind());
+    }
 }
 
 

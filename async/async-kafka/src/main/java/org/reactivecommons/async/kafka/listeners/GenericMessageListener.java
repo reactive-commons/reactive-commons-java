@@ -204,7 +204,7 @@ public abstract class GenericMessageListener {
     }
 
     private void doLogExecution(String executorPath, long timeElapsed) {
-        log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
+        log.fine(() -> String.format("%s with path %s handled, took %d ms",
                 objectType, executorPath, timeElapsed));
     }
 
@@ -212,9 +212,9 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, ReceiverRecord<String, byte[]> msj, FallbackStrategy strategy) {
         String messageID = msj.key();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s", messageID), err);
-            log.warning(format("Message %s Headers: %s", messageID, msj.headers().toString()));
-            log.warning(format("Message %s Body: %s", messageID, new String(msj.value())));
+            log.log(Level.SEVERE, err, () -> format("Error encounter while processing message %s", messageID));
+            log.warning(() -> format("Message %s Headers: %s", messageID, msj.headers().toString()));
+            log.warning(() -> format("Message %s Body: %s", messageID, new String(msj.value())));
         } catch (Exception e) {
             log.log(Level.SEVERE, "Error Login message Content!!", e);
         } finally {

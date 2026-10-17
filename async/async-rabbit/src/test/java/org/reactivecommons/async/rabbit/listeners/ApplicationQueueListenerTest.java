@@ -8,6 +8,8 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener
 import org.reactivecommons.async.commons.HandlerResolver;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.longThat;
@@ -114,6 +116,33 @@ class ApplicationQueueListenerTest extends ListenerReporterTestSuperClass {
                 .hasSize(3)
                 .extracting(RegisteredQueueListener::queueName)
                 .containsExactlyInAnyOrder("test.queue1", "test.queue2", "test.queue3");
+    }
+
+    @Test
+    void consumerTagsAreUniquePerQueueSoEveryConsumerIsRecovered() {
+        String first = queueListener("orders.queue").consumerTag();
+        String second = queueListener("payments.queue").consumerTag();
+
+        assertThat(first).endsWith("-queue-orders.queue");
+        assertThat(second).endsWith("-queue-payments.queue");
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
+    void consumerTagStaysWithinTheAmqpLimitForLongQueueNames() {
+        String longName = "q".repeat(300);
+
+        String tag = queueListener(longName).consumerTag();
+
+        assertThat(tag.getBytes(StandardCharsets.UTF_8)).hasSizeLessThanOrEqualTo(255);
+        assertThat(tag).isEqualTo(queueListener(longName).consumerTag()); // deterministic
+        assertThat(tag).isNotEqualTo(queueListener("p".repeat(300)).consumerTag());
+    }
+
+    private ApplicationQueueListener queueListener(String queueName) {
+        return new ApplicationQueueListener(reactiveMessageListener, false, -1, 1000,
+                new RegisteredQueueListener(queueName, m -> Mono.empty(), creator -> Mono.empty()),
+                discardNotifier, errorReporter);
     }
 
     @Override

@@ -1,102 +1,95 @@
 package org.reactivecommons.async.rabbit.health;
 
 import com.rabbitmq.client.Connection;
-import com.rabbitmq.client.ConnectionFactory;
-import org.junit.jupiter.api.BeforeEach;
+import com.rabbitmq.client.ShutdownSignalException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.starter.config.health.RCHealth;
-import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
-import java.io.IOException;
-import java.net.SocketException;
 import java.util.Map;
-import java.util.TreeMap;
-import java.util.concurrent.TimeoutException;
+import java.util.Optional;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.doThrow;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
 @ExtendWith(MockitoExtension.class)
 class RabbitReactiveHealthIndicatorTest {
     @Mock
-    private ConnectionFactory factory;
-    @Mock
     private Connection connection;
 
-    private RabbitReactiveHealthIndicator indicator;
-
-    @BeforeEach
-    void setup() {
-        when(factory.clone()).thenReturn(factory);
-        indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, factory);
-    }
-
     @Test
-    void shouldBeUp() throws IOException, TimeoutException {
-        // Arrange
-        Map<String, Object> properties = new TreeMap<>();
-        properties.put("version", "1.2.3");
-        when(factory.newConnection()).thenReturn(connection);
-        when(connection.getServerProperties()).thenReturn(properties);
-        // Act
-        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
-        // Assert
-        StepVerifier.create(result)
+    void shouldBeUpWhenTheApplicationConnectionIsOpen() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection));
+
+        StepVerifier.create(indicator.health())
                 .assertNext(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
-                    assertEquals("1.2.3", health.details().get("version"));
-                    assertEquals(RCHealth.Status.UP, health.status());
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.UP);
+                    assertThat(health.details())
+                            .containsEntry("domain", DEFAULT_DOMAIN)
+                            .containsEntry("version", "4.1.0");
                 })
                 .verifyComplete();
     }
 
     @Test
-    void shouldBeUpAndIgnoreCloseError() throws IOException, TimeoutException {
-        // Arrange
-        Map<String, Object> properties = new TreeMap<>();
-        properties.put("version", "1.2.3");
-        when(factory.newConnection()).thenReturn(connection);
-        when(connection.getServerProperties()).thenReturn(properties);
-        doThrow(new IOException("Error closing connection")).when(connection).close();
-        // Act
-        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
-        // Assert
-        StepVerifier.create(result)
+    void shouldReportUnknownVersionWhenTheServerDoesNotSendIt() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of());
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> assertThat(health.details()).containsEntry("version", "unknown"))
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldBeDownWhileTheConnectionIsNotEstablished() {
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, Optional::empty);
+
+        StepVerifier.create(indicator.health())
                 .assertNext(health -> {
-                    assertEquals(DEFAULT_DOMAIN, health.details().get("domain"));
-                    assertEquals("1.2.3", health.details().get("version"));
-                    assertEquals(RCHealth.Status.UP, health.status());
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details())
+                            .containsEntry("domain", DEFAULT_DOMAIN)
+                            .containsEntry("error", "Connection to RabbitMQ not established yet");
                 })
                 .verifyComplete();
     }
 
     @Test
-    void shouldBeDown() throws IOException, TimeoutException {
-        // Arrange
-        when(factory.newConnection()).thenThrow(new TimeoutException("Connection timeout"));
-        // Act
-        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
-        // Assert
-        StepVerifier.create(result)
-                .expectError(RabbitMQHealthException.class)
-                .verify();
+    void shouldBeDownWithTheReasonWhenTheConnectionIsClosed() {
+        when(connection.isOpen()).thenReturn(false);
+        when(connection.getCloseReason())
+                .thenReturn(new ShutdownSignalException(true, false, null, connection));
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details().get("error").toString())
+                            .startsWith("Connection to RabbitMQ is closed: connection error");
+                })
+                .verifyComplete();
     }
 
     @Test
-    void shouldBeDownWhenSocketException() throws IOException, TimeoutException {
-        // Arrange
-        when(factory.newConnection()).thenThrow(new SocketException("Connection timeout"));
-        // Act
-        Mono<RCHealth> result = indicator.doHealthCheck(RCHealth.builder());
-        // Assert
-        StepVerifier.create(result)
-                .expectError(RuntimeException.class)
-                .verify();
+    void shouldOnlyReadTheConnectionStateWithoutAnyNetworkCall() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection));
+
+        StepVerifier.create(indicator.health()).expectNextCount(1).verifyComplete();
+
+        verify(connection).isOpen();
+        verify(connection).getServerProperties();
+        verifyNoMoreInteractions(connection); // no channel, no new connection, no close
     }
 }
