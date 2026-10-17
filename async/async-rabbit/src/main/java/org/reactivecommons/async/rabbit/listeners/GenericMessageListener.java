@@ -99,6 +99,7 @@ public abstract class GenericMessageListener {
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
                 .consumerTag(consumerTag())
+                .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
                 .channelCallback(channel -> channel.addShutdownListener(cause -> {
                     log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
                             + " channel open: " + channel.isOpen() +
