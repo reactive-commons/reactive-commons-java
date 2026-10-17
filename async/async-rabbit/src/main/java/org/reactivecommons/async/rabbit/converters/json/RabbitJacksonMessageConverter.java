@@ -20,8 +20,7 @@ public class RabbitJacksonMessageConverter extends JacksonMessageConverter {
             return rabbitMessage;
         }
         byte[] bytes;
-        String jsonString = this.jsonMapper.writeValueAsString(object);
-        bytes = jsonString.getBytes(StandardCharsets.UTF_8);
+        bytes = this.jsonMapper.writeValueAsBytes(object);
         RabbitMessage.RabbitMessageProperties props = new RabbitMessage.RabbitMessageProperties();
         if (object instanceof CloudEvent) {
             props.setContentType(APPLICATION_CLOUD_EVENT_JSON);

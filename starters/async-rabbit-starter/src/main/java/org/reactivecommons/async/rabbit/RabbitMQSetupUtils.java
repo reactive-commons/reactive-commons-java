@@ -26,7 +26,13 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.spring.RabbitPropertiesBase;
 import org.springframework.boot.context.properties.PropertyMapper;
 import reactor.core.publisher.Mono;
-import reactor.rabbitmq.*;
+import reactor.rabbitmq.ChannelPool;
+import reactor.rabbitmq.ChannelPoolFactory;
+import reactor.rabbitmq.ChannelPoolOptions;
+import reactor.rabbitmq.Receiver;
+import reactor.rabbitmq.ReceiverOptions;
+import reactor.rabbitmq.Sender;
+import reactor.rabbitmq.SenderOptions;
 import reactor.util.retry.Retry;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -218,6 +224,7 @@ public final class RabbitMQSetupUtils {
             // Set SSL protocol if specified
             if (ssl.getAlgorithm() != null) {
                 log.info("Using SSL protocol: {}", ssl.getAlgorithm());
+                sslContextBuilder.protocols(ssl.getAlgorithm());
             }
 
             SslContext sslContext = sslContextBuilder.build();

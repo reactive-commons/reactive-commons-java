@@ -1,11 +1,16 @@
 package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.ConnectionFactory;
+import io.netty.buffer.ByteBufAllocator;
+import io.netty.handler.ssl.SslContext;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 
+import javax.net.ssl.SSLEngine;
+import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -43,10 +48,44 @@ class RabbitMQSetupUtilsTest {
         assertThat(connectionFactory(connection).getRequestedHeartbeat()).isZero();
     }
 
+    @Test
+    void sslAlgorithmRestrictsTheEnabledProtocolsOfTheConnection() throws Exception {
+        RabbitProperties connection = new RabbitProperties();
+        connection.getSsl().setEnabled(true);
+        connection.getSsl().setAlgorithm("TLSv1.2");
+
+        SSLEngine engine = sslEngine(connectionFactory(connection));
+
+        assertThat(engine.getEnabledProtocols()).containsExactly("TLSv1.2");
+    }
+
+    @Test
+    void sslEnabledWithoutAnAlgorithmKeepsTheClientLibraryDefaultProtocols() throws Exception {
+        RabbitProperties connection = new RabbitProperties();
+        connection.getSsl().setEnabled(true);
+
+        SSLEngine engine = sslEngine(connectionFactory(connection));
+
+        assertThat(engine.getEnabledProtocols()).contains("TLSv1.2", "TLSv1.3");
+    }
+
     private static ConnectionFactory connectionFactory(RabbitProperties connection) {
         AsyncProps props = new AsyncProps();
         props.setAppName("test-app");
         props.setConnectionProperties(connection);
         return RabbitMQSetupUtils.connectionFactoryProvider(props, (cf, p) -> cf).getConnectionFactory();
+    }
+
+    /**
+     * The {@code SslContext} configured on the Netty connection factory is only reachable through the private
+     * {@code sslContextFactory} field, there is no public getter for it.
+     */
+    @SuppressWarnings("unchecked")
+    private static SSLEngine sslEngine(ConnectionFactory factory) throws Exception {
+        ConnectionFactory.NettyConfiguration nettyConfiguration = factory.netty();
+        Field field = ConnectionFactory.NettyConfiguration.class.getDeclaredField("sslContextFactory");
+        field.setAccessible(true);
+        Function<String, SslContext> sslContextFactory = (Function<String, SslContext>) field.get(nettyConfiguration);
+        return sslContextFactory.apply("test-connection").newEngine(ByteBufAllocator.DEFAULT);
     }
 }
