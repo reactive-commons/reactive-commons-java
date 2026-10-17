@@ -73,7 +73,7 @@ class ReactiveMessageSenderRabbitContainerTest {
      * (and make the broker "go silent") without touching the broker itself. The admin connection goes direct.
      */
     @Container
-    private static final ToxiproxyContainer TOXIPROXY = new ToxiproxyContainer("ghcr.io/shopify/toxiproxy:2.12.0")
+    private static final ToxiproxyContainer TOXIPROXY = new ToxiproxyContainer("ghcr.io/shopify/toxiproxy")
             .withNetwork(NETWORK)
             .withExposedPorts(CONTROL_PORT, PROXY_PORT);
 
@@ -309,8 +309,6 @@ class ReactiveMessageSenderRabbitContainerTest {
         assertThat(brokerQueue).isEqualTo(20 + inFlight + afterTotal);
         assertThat(channelsAfter).as("no orphan channels after the recovery").isEqualTo(channelsBefore);
     }
-
-    // ---------------------------------------------------------------------------------------------------------
 
     private void awaitConnectionRecovered() throws InterruptedException {
         long deadline = System.currentTimeMillis() + 30_000;

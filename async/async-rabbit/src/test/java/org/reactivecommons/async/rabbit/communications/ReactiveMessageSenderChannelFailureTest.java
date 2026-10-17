@@ -32,7 +32,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.after;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Tests how {@link ReactiveMessageSender} behaves when one of the long-lived channels it publishes through fails.
@@ -229,8 +236,6 @@ class ReactiveMessageSenderChannelFailureTest {
                 .expectError(SendConfirmUnknownException.class)
                 .verify(Duration.ofSeconds(5));
     }
-
-    // ---------------------------------------------------------------------------------------------------------
 
     private record Counters(AtomicInteger completed, AtomicInteger failed) {
         int hanging(int total) {

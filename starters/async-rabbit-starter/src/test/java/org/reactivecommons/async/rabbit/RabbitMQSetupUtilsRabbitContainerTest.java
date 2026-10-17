@@ -217,8 +217,6 @@ class RabbitMQSetupUtilsRabbitContainerTest {
         }
     }
 
-    // ---------------------------------------------------------------------------------------------------------
-
     private static AsyncProps asyncProps(String host, int port, String username, String password) {
         RabbitProperties connection = new RabbitProperties();
         connection.setHost(host);
