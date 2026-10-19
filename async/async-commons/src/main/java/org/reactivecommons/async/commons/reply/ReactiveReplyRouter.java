@@ -32,4 +32,25 @@ public class ReactiveReplyRouter {
             processor.tryEmitEmpty();
         }
     }
+
+    /**
+     * Drains every pending correlation and fails each with the given cause. Used by {@code ApplicationReplyListener}
+     * when its channel or connection is being recovered: the exclusive + autoDelete reply queue vanishes with the
+     * old connection, so any reply the broker had buffered for it is lost on the new connection. Callers see the
+     * failure immediately instead of waiting for {@code sendTimeout}.
+     *
+     * @param cause the failure to emit on every pending sink
+     * @return the number of correlations that were pending
+     */
+    public int failAll(Throwable cause) {
+        int count = 0;
+        for (var iterator = processors.entrySet().iterator(); iterator.hasNext(); ) {
+            var entry = iterator.next();
+            iterator.remove();
+            if (entry.getValue().tryEmitError(cause).isSuccess()) {
+                count++;
+            }
+        }
+        return count;
+    }
 }

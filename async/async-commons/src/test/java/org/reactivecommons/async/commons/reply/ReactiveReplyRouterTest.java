@@ -9,6 +9,8 @@ import reactor.test.StepVerifier;
 import java.time.Duration;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 class ReactiveReplyRouterTest {
 
     private final ReactiveReplyRouter replyRouter = new ReactiveReplyRouter();
@@ -36,6 +38,24 @@ class ReactiveReplyRouterTest {
 
         StepVerifier.create(registered)
                 .verifyComplete();
+    }
+
+    @Test
+    void failAllFailsEveryPendingCorrelationAndReportsTheCount() {
+        final Mono<Message> first = replyRouter.register(UUID.randomUUID().toString());
+        final Mono<Message> second = replyRouter.register(UUID.randomUUID().toString());
+        RuntimeException cause = new RuntimeException("reconnect");
+
+        int lost = replyRouter.failAll(cause);
+
+        assertThat(lost).isEqualTo(2);
+        StepVerifier.create(first).expectErrorMessage("reconnect").verify();
+        StepVerifier.create(second).expectErrorMessage("reconnect").verify();
+    }
+
+    @Test
+    void failAllOnAnEmptyRouterReportsZero() {
+        assertThat(replyRouter.failAll(new RuntimeException("x"))).isZero();
     }
 
     @Test

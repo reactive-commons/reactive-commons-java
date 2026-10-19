@@ -3,15 +3,19 @@ package org.reactivecommons.async.rabbit.health;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ShutdownSignalException;
 import org.reactivecommons.async.rabbit.communications.PublisherStatus;
+import org.reactivecommons.async.rabbit.listeners.SubscriberStatus;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.config.health.RCHealthIndicator;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.DOMAIN;
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.UNKNOWN;
@@ -50,12 +54,16 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     static final Duration LAST_FAILURE_MAX_AGE = Duration.ofSeconds(60);
     static final Duration FLOWS_DOWN_GRACE = Duration.ofSeconds(10);
     static final Duration DEFAULT_BLOCKED_HEALTH_GRACE = Duration.ofSeconds(5);
+    static final Duration DEFAULT_SUBSCRIBER_INACTIVE_GRACE = Duration.ofSeconds(10);
+    static final String BROKEN_LISTENERS = "brokenListeners";
 
     private final String domain;
     private final Supplier<Optional<Connection>> connection;
     private final Supplier<Optional<Connection>> listenerConnection;
     private final Supplier<PublisherStatus> publisherStatus;
+    private final Supplier<Map<String, SubscriberStatus>> subscribers;
     private final Duration blockedHealthGrace;
+    private final Duration subscriberInactiveGrace;
 
     /**
      * @param domain     the domain whose connection is reported
@@ -63,7 +71,8 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      *                   must not block.
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection) {
-        this(domain, connection, Optional::empty, PublisherStatus::healthy, DEFAULT_BLOCKED_HEALTH_GRACE);
+        this(domain, connection, Optional::empty, PublisherStatus::healthy, Collections::emptyMap,
+                DEFAULT_BLOCKED_HEALTH_GRACE, DEFAULT_SUBSCRIBER_INACTIVE_GRACE);
     }
 
     /**
@@ -74,7 +83,8 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
                                          Supplier<PublisherStatus> publisherStatus) {
-        this(domain, connection, Optional::empty, publisherStatus, DEFAULT_BLOCKED_HEALTH_GRACE);
+        this(domain, connection, Optional::empty, publisherStatus, Collections::emptyMap,
+                DEFAULT_BLOCKED_HEALTH_GRACE, DEFAULT_SUBSCRIBER_INACTIVE_GRACE);
     }
 
     /**
@@ -91,11 +101,39 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
                                          Supplier<Optional<Connection>> listenerConnection,
                                          Supplier<PublisherStatus> publisherStatus, Duration blockedHealthGrace) {
+        this(domain, connection, listenerConnection, publisherStatus, Collections::emptyMap, blockedHealthGrace,
+                DEFAULT_SUBSCRIBER_INACTIVE_GRACE);
+    }
+
+    /**
+     * @param domain                  the domain whose connections are reported
+     * @param connection              supplies the established publishing connection of the domain, empty while it is
+     *                                not established. It must not block.
+     * @param listenerConnection      supplies the established consuming connection of the domain, empty while it is
+     *                                not established (an application that never listens never establishes it). It
+     *                                must not block.
+     * @param publisherStatus         supplies the in-memory liveness of the domain's publishing flows. It must not
+     *                                block.
+     * @param subscribers             supplies a snapshot of the in-memory liveness of the domain's listeners, keyed by
+     *                                queue. Empty when no listener is active. It must not block.
+     * @param blockedHealthGrace      how long a {@code connection.blocked} alarm must persist before the indicator
+     *                                reports DOWN. A short alarm (transient disk flush) should not flap the check.
+     * @param subscriberInactiveGrace how long a listener must stay inactive before it is reported broken. A short
+     *                                gap during normal re-subscription should not flap the check.
+     */
+    public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
+                                         Supplier<Optional<Connection>> listenerConnection,
+                                         Supplier<PublisherStatus> publisherStatus,
+                                         Supplier<Map<String, SubscriberStatus>> subscribers,
+                                         Duration blockedHealthGrace, Duration subscriberInactiveGrace) {
         this.domain = domain;
         this.connection = connection;
         this.listenerConnection = listenerConnection;
         this.publisherStatus = publisherStatus;
+        this.subscribers = subscribers;
         this.blockedHealthGrace = blockedHealthGrace != null ? blockedHealthGrace : DEFAULT_BLOCKED_HEALTH_GRACE;
+        this.subscriberInactiveGrace = subscriberInactiveGrace != null
+                ? subscriberInactiveGrace : DEFAULT_SUBSCRIBER_INACTIVE_GRACE;
     }
 
     @Override
@@ -135,7 +173,52 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
                     .withDetail(VERSION, serverVersion(conn))
                     .build();
         }
+        List<SubscriberStatus> broken = brokenSubscribers(subscribers.get(), now);
+        if (!broken.isEmpty()) {
+            return builder.down()
+                    .withDetail(ERROR, subscriberBrokenReason(broken))
+                    .withDetail(BROKEN_LISTENERS, broken.stream().map(SubscriberStatus::queueName).toList())
+                    .withDetail(VERSION, serverVersion(conn))
+                    .build();
+        }
         return builder.up().withDetail(VERSION, serverVersion(conn)).build();
+    }
+
+    /**
+     * The listener connection is open, so a broken subscriber is only reported when there is evidence: the
+     * listener has been inactive for longer than {@code subscriberInactiveGrace}, or its restarts keep failing
+     * without a single successful delivery in between.
+     */
+    private List<SubscriberStatus> brokenSubscribers(Map<String, SubscriberStatus> statuses, Instant now) {
+        if (statuses == null || statuses.isEmpty()) {
+            return List.of();
+        }
+        return statuses.values().stream()
+                .filter(s -> isBroken(s, now))
+                .collect(Collectors.toUnmodifiableList());
+    }
+
+    private boolean isBroken(SubscriberStatus status, Instant now) {
+        boolean restartsFailing = status.consecutiveRestartFailures() >= BROKEN_FLOW_FAILURE_THRESHOLD
+                && isRecent(status.lastRestartFailure(), now);
+        boolean inactive = !status.active()
+                && status.downSince() != null
+                && !status.downSince().isAfter(now.minus(subscriberInactiveGrace));
+        return restartsFailing || inactive;
+    }
+
+    private static String subscriberBrokenReason(List<SubscriberStatus> broken) {
+        return broken.stream()
+                .map(s -> {
+                    if (!s.active() && s.downSince() != null) {
+                        return s.queueName() + " inactive since " + s.downSince()
+                                + (s.lastRestartFailureMessage() != null
+                                ? " (" + s.lastRestartFailureMessage() + ")" : "");
+                    }
+                    return s.queueName() + " restarts keep failing (" + s.consecutiveRestartFailures()
+                            + " without a delivered message): " + s.lastRestartFailureMessage();
+                })
+                .collect(Collectors.joining("; ", "RabbitMQ listeners are broken: ", ""));
     }
 
     /**

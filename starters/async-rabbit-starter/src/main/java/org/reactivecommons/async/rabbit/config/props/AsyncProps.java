@@ -87,6 +87,20 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     @Builder.Default
     private Duration blockedHealthGrace = Duration.ofSeconds(5);
 
+    /**
+     * How long a listener must stay inactive (channel closed, consumer cancelled, upstream error) before the health
+     * indicator reports DOWN. A short gap during normal re-subscription should not flap the check.
+     */
+    @Builder.Default
+    private Duration subscriberInactiveGrace = Duration.ofSeconds(10);
+
+    /**
+     * Maximum time a handler may run before its message is nacked as a failed delivery. {@code null} (default) means
+     * no timeout - a hung handler holds a prefetch slot forever. Combine with {@code maxRetries} or
+     * {@code withDLQRetry} to avoid a hot-requeue loop on a chronically slow handler.
+     */
+    private Duration handlerTimeout;
+
     @Builder.Default
     private Boolean listenReplies = null;
 

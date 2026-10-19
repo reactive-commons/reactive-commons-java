@@ -170,6 +170,11 @@ public final class RabbitMQSetupUtils {
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
+        return createMessageListener(provider, props, null, null);
+    }
+
+    public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props,
+                                                                MeterRegistry meterRegistry, String domain) {
         final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName(),
                 ConnectionRole.LISTENER);
         final Receiver receiver = new Receiver(new ReceiverOptions().connectionMono(connection));
@@ -178,7 +183,11 @@ public final class RabbitMQSetupUtils {
         return new ReactiveMessageListener(receiver,
                 new TopologyCreator(sender, props.getQueueType()),
                 props.getFlux().getMaxConcurrency(),
-                props.getPrefetchCount());
+                props.getPrefetchCount(),
+                new org.reactivecommons.async.rabbit.listeners.SubscriberRegistry(),
+                meterRegistry,
+                domain,
+                props.getHandlerTimeout());
     }
 
     public static TopologyCreator createTopologyCreator(AsyncProps props, ConnectionFactoryCustomizer cfCustomizer) {

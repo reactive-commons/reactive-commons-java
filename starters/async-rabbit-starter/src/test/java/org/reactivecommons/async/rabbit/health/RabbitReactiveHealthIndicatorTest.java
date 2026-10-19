@@ -7,10 +7,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.rabbit.communications.PublisherStatus;
+import org.reactivecommons.async.rabbit.listeners.SubscriberStatus;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -176,6 +179,72 @@ class RabbitReactiveHealthIndicatorTest {
 
         assertThat(healthOf(listening)).isEqualTo(RCHealth.Status.UP);
         assertThat(healthOf(sendOnly)).isEqualTo(RCHealth.Status.UP);
+    }
+
+    @Test
+    void shouldBeDownWhenAListenerStaysInactiveBeyondTheGrace() {
+        var inactive = new SubscriberStatus("app.events", "tag-1", false, Instant.now().minusSeconds(30),
+                Instant.now().minusSeconds(30), null, 0, 0, null, null);
+        var indicator = withSubscribers(Map.of("app.events", inactive), Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details().get("error").toString()).contains("app.events inactive since");
+                    assertThat(health.details().get("brokenListeners")).isEqualTo(List.of("app.events"));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldBeUpWhileAListenerIsBrieflyInactive() {
+        var inactive = new SubscriberStatus("app.events", "tag-1", false, Instant.now().minusSeconds(30),
+                Instant.now().minusSeconds(2), null, 0, 0, null, null);
+        var indicator = withSubscribers(Map.of("app.events", inactive), Duration.ofSeconds(10));
+
+        assertThat(healthOf(indicator)).isEqualTo(RCHealth.Status.UP);
+    }
+
+    @Test
+    void shouldBeDownWhenAListenerRestartsKeepFailingWithoutADelivery() {
+        var failing = new SubscriberStatus("app.commands", "tag-1", true, Instant.now(), null, null,
+                5, 5, Instant.now(), "boom");
+        var indicator = withSubscribers(Map.of("app.commands", failing), Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details().get("error").toString())
+                            .contains("app.commands restarts keep failing")
+                            .contains("boom");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldBeUpWhileRestartsStayBelowTheThreshold() {
+        var failing = new SubscriberStatus("app.events", "tag-1", true, Instant.now(), null, null,
+                1, 1, Instant.now(), "oops");
+        var indicator = withSubscribers(Map.of("app.events", failing), Duration.ofSeconds(10));
+
+        assertThat(healthOf(indicator)).isEqualTo(RCHealth.Status.UP);
+    }
+
+    @Test
+    void shouldBeUpWhenEveryListenerIsActive() {
+        var active = SubscriberStatus.healthy("app.events");
+        var indicator = withSubscribers(Map.of("app.events", active), Duration.ofSeconds(10));
+
+        assertThat(healthOf(indicator)).isEqualTo(RCHealth.Status.UP);
+    }
+
+    private RabbitReactiveHealthIndicator withSubscribers(Map<String, SubscriberStatus> subscribers,
+                                                          Duration subscriberInactiveGrace) {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        return new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                Optional::empty, PublisherStatus::healthy, () -> subscribers,
+                null, subscriberInactiveGrace);
     }
 
     private RabbitReactiveHealthIndicator openConnectionIndicator(PublisherStatus status) {

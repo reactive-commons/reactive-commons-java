@@ -49,12 +49,15 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
         ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter,
                 unroutableMessageNotifier, meterRegistry, domain);
+        ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props,
+                meterRegistry, domain);
         RabbitReactiveHealthIndicator healthIndicator = new RabbitReactiveHealthIndicator(domain,
                 () -> RabbitMQSetupUtils.establishedConnection(provider.getConnectionFactory()),
                 () -> RabbitMQSetupUtils.establishedListenerConnection(provider.getConnectionFactory()),
                 sender::publisherStatus,
-                props.getBlockedHealthGrace());
-        ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props);
+                listener.subscriberRegistry()::snapshot,
+                props.getBlockedHealthGrace(),
+                props.getSubscriberInactiveGrace());
         if (DEFAULT_DOMAIN.equals(domain) && discardProvider instanceof RabbitMQDiscardProviderImpl shared) {
             shared.useSender(sender); // the shared discard notifier publishes through the default domain sender
         }

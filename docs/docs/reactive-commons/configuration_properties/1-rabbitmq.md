@@ -544,6 +544,56 @@ The sender exposes the following metrics on the application's `MeterRegistry`:
 | `reactive_commons.publish.connection.blocked.state` | Gauge | `domain` | `1` while the broker is blocking the connection, `0` otherwise. |
 | `reactive_commons.publish.hand_over.queue.size` | Gauge | `domain` | Current depth of the publish hand-over queue — a sustained non-zero value signals back-pressure. |
 
+## Subscriber resilience and observability
+
+Every listener (events, commands, queries, queue listeners, notifications, replies) is tracked individually: a
+listener that silently stops delivering (orphaned consumer tag, failing restart loop, lost reply queue, hung
+handler) surfaces as DOWN in the health check with the broken queue in the details, and as counters/gauges on the
+`MeterRegistry`.
+
+| Property | Default | Purpose |
+|---|---|---|
+| `subscriberInactiveGrace` | `10s` | How long a listener may stay inactive (channel closed, consumer cancelled, upstream error) before the health indicator reports DOWN. A short gap during normal re-subscription should not flap the check. |
+| `handlerTimeout` | *(off)* | Maximum time a handler may run before its message is nacked as a failed delivery. When set, a hung handler nacks instead of holding a prefetch slot forever. Combine with `maxRetries` or `withDLQRetry` to avoid a hot-requeue loop on a chronically slow handler. |
+
+```yaml title="application.yaml"
+app:
+  async:
+    app:
+      subscriberInactiveGrace: 10s
+      handlerTimeout: 30s
+```
+
+### Listener restart
+
+When the subscription terminates (channel closed, consumer cancelled, upstream error), the listener re-subscribes
+with the same **200 ms → 5 s exponential backoff** used by the sender's publisher-confirms flows. The first restart
+per listener is logged at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when
+the broker is continuously unavailable. The failure counter is cleared once a message is actually delivered on the
+new subscription, so an endlessly re-subscribing listener (e.g. a `PRECONDITION_FAILED` loop on a diverged queue)
+stays reported as broken.
+
+### Request/reply replies are at-least-once
+
+`requestReply` publishes the request with `sendNoConfirm` and expects the reply through an **exclusive + autoDelete**
+reply queue. When the reply listener restarts (its channel or connection dropped), the reply queue is recreated
+empty on the new connection — any reply the broker had buffered for the previous instance is lost. Callers of
+`requestReply` see a `ReplyLostOnReconnectException` immediately instead of waiting out `sendTimeout`. Design
+callers to be idempotent, or deduplicate replies with the correlation ID.
+
+### Subscriber metrics
+
+The listener side exposes the following metrics on the application's `MeterRegistry`:
+
+| Metric | Type | Tags | Meaning |
+|---|---|---|---|
+| `reactive_commons.consumer.messages` | Counter | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain` | One per message processed by a listener, tagged with its outcome. |
+| `reactive_commons.consumer.handler.latency` | Timer | `queue`, `domain` | Time taken by the handler, from the moment the message was delivered to the moment it completed (ack) or failed. |
+| `reactive_commons.consumer.restart` | Counter | `reason` ∈ {`channel_shutdown`, `error`, `cancel`}, `queue`, `domain` | A listener's subscription terminated and is being restarted. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology. |
+| `reactive_commons.consumer.active` | Gauge | `queue`, `domain` | `1` while the listener is holding a consumer on an open channel, `0` otherwise. |
+| `reactive_commons.consumer.last_message_age_seconds` | Gauge | `queue`, `domain` | Seconds since the last message was delivered to the listener. A large value on a queue that should be receiving traffic is a reliable "stuck consumer" signal. |
+| `reactive_commons.consumer.replies.lost` | Counter | `domain` | Number of pending `requestReply` correlations that were failed with `ReplyLostOnReconnectException` after a reply-listener restart. |
+
 ### Connections in microservices with multiple replicas
 
 In a typical cloud production environment, such as AWS, microservices are deployed in containers orchestrated by

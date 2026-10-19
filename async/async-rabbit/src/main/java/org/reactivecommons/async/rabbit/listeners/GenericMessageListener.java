@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import io.micrometer.core.instrument.Timer;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -40,10 +41,12 @@ import static reactor.core.publisher.Mono.defer;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
-    private static final Duration RESTART_DELAY = Duration.ofMillis(200);
+    static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
+    static final Duration RESTART_MAX_BACKOFF = Duration.ofSeconds(5);
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
+    private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
     protected final String queueName;
@@ -55,6 +58,9 @@ public abstract class GenericMessageListener {
     private final DiscardNotifier discardNotifier;
     private final String objectType;
     private final CustomReporter customReporter;
+    private final ListenerLiveness liveness;
+    private final ConsumerMetrics metrics;
+    private final Duration handlerTimeout;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
     private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
 
@@ -72,6 +78,11 @@ public abstract class GenericMessageListener {
         this.discardNotifier = discardNotifier;
         this.objectType = objectType;
         this.customReporter = customReporter;
+        this.liveness = listener.subscriberRegistry() != null
+                ? listener.subscriberRegistry().register(queueName)
+                : new ListenerLiveness(queueName);
+        this.metrics = new ConsumerMetrics(listener.meterRegistry(), listener.domain(), queueName, liveness);
+        this.handlerTimeout = listener.handlerTimeout();
     }
 
     private static long resolveRetries(boolean useDLQRetries, long maxRetries) {
@@ -98,19 +109,24 @@ public abstract class GenericMessageListener {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
 
+        final String tag = consumerTag();
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
-                .consumerTag(consumerTag())
+                .consumerTag(tag)
                 .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
-                .channelCallback(channel -> channel.addShutdownListener(cause -> {
-                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
-                            + " channel open: " + channel.isOpen() +
-                            " connection open: " + channel.getConnection().isOpen());
-                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                        log.warning("Recovering listener for queue: " + queueName);
-                        scheduleRestart();
-                    }
-                }));
+                .channelCallback(channel -> {
+                    liveness.onSubscribed(tag);
+                    channel.addShutdownListener(cause -> {
+                        log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                                + " channel open: " + channel.isOpen() +
+                                " connection open: " + channel.getConnection().isOpen());
+                        if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                            log.warning("Recovering listener for queue: " + queueName);
+                            metrics.recordRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+                            scheduleRestart();
+                        }
+                    });
+                });
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())
@@ -136,9 +152,13 @@ public abstract class GenericMessageListener {
 
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
         return messageFlux.flatMap(msj -> {
+            liveness.onDelivery();
             final Instant init = Instant.now();
             return handle(msj, init)
-                    .doOnSuccess(AcknowledgableDelivery::ack)
+                    .doOnSuccess(d -> {
+                        d.ack();
+                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
+                    })
                     .onErrorResume(err -> requeueOrAck(msj, err, init));
         }, messageListener.maxConcurrency());
     }
@@ -151,6 +171,9 @@ public abstract class GenericMessageListener {
 
             Mono<Object> flow = defer(() -> handler.apply(message))
                     .transform(enrichPostProcess(message));
+            if (handlerTimeout != null) {
+                flow = flow.timeout(handlerTimeout);
+            }
             if (hasLocalRetries()) {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay))
                         .onErrorMap(err -> {
@@ -160,6 +183,10 @@ public abstract class GenericMessageListener {
                             }
                             return err;
                         });
+            }
+            final Timer latency = metrics.handlerLatency();
+            if (latency != null) {
+                flow = flow.doFinally(signal -> latency.record(Duration.between(initTime, Instant.now())));
             }
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(ListenerSchedulers.handlers()).thenReturn(msj);
@@ -179,14 +206,22 @@ public abstract class GenericMessageListener {
         if (subscription != null) {
             subscription.dispose();
         }
+        if (messageListener.subscriberRegistry() != null) {
+            messageListener.subscriberRegistry().unregister(queueName);
+        }
     }
 
     private void subscribe() {
         if (stopped.get()) {
             return;
         }
+        final AtomicReference<Throwable> terminationCause = new AtomicReference<>();
         final Disposable subscription = messageFlux
-                .doOnTerminate(this::scheduleRestart)
+                .doOnError(terminationCause::set)
+                .doOnTerminate(() -> {
+                    liveness.onTerminated(terminationCause.get());
+                    scheduleRestart();
+                })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
         final Disposable previous = activeSubscription.getAndSet(subscription);
         if (previous != null && previous != subscription) {
@@ -199,18 +234,38 @@ public abstract class GenericMessageListener {
     }
 
     /**
-     * Schedules a new subscription after the current one terminated. The restart is never done from within the
-     * termination callback: subscribing there would recurse until the stack overflows when the new subscription fails
-     * synchronously (e.g. the connection is already closed).
+     * Schedules a new subscription after the current one terminated. Uses an exponential backoff with the same
+     * bounds as the sender's confirm-flow re-subscription (200 ms → 5 s). The first restart per listener is logged
+     * at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when the broker is
+     * continuously unavailable. The restart runs on a separate scheduler so it never recurses from the termination
+     * callback and overflows the stack if the new subscription fails synchronously.
      */
     private void scheduleRestart() {
         if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
             return;
         }
+        long consecutive = liveness.consecutiveRestartFailures();
+        long delayMs = backoffMillis(consecutive);
+        Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)
+                ? Level.WARNING : Level.FINE;
+        log.log(level, () -> "Re-subscribing listener for queue " + queueName + " in " + delayMs
+                + " ms (attempt " + Math.max(1, consecutive) + ")");
         Schedulers.boundedElastic().schedule(() -> {
             restartScheduled.set(false);
             subscribe();
-        }, RESTART_DELAY.toMillis(), TimeUnit.MILLISECONDS);
+        }, delayMs, TimeUnit.MILLISECONDS);
+    }
+
+    private static long backoffMillis(long consecutive) {
+        if (consecutive <= 0) {
+            return RESTART_MIN_BACKOFF.toMillis();
+        }
+        long shift = Math.min(consecutive - 1, 30);
+        long millis = RESTART_MIN_BACKOFF.toMillis() << shift;
+        if (millis < 0) {
+            return RESTART_MAX_BACKOFF.toMillis();
+        }
+        return Math.min(millis, RESTART_MAX_BACKOFF.toMillis());
     }
 
     private void logExecution(String executorPath, Instant initTime, boolean success) {
@@ -270,20 +325,29 @@ public abstract class GenericMessageListener {
         final Message rabbitMessage = RabbitMessage.fromDelivery(msj);
         final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
+        metrics.recordOutcome(ConsumerMetrics.OUTCOME_HANDLER_ERROR);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
         // maxRetries == -1 without DLQ means infinite fast retries, never discard
         if (hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
             return discardNotifier
                     .notifyDiscard(rabbitMessage)
-                    .doOnSuccess(_a -> msj.ack()).thenReturn(msj);
+                    .doOnSuccess(_a -> {
+                        msj.ack();
+                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_DISCARD);
+                    })
+                    .thenReturn(msj);
         } else if (useDLQRetries) { // DLQ retries
             logError(err, msj, FallbackStrategy.RETRY_DLQ);
             msj.nack(false);
+            metrics.recordOutcome(ConsumerMetrics.OUTCOME_DLQ);
             return Mono.just(msj);
         } else { // infinity fast retries
             logError(err, msj, FallbackStrategy.FAST_RETRY);
-            return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> m.nack(true));
+            return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> {
+                m.nack(true);
+                metrics.recordOutcome(ConsumerMetrics.OUTCOME_NACK);
+            });
         }
     }
 
