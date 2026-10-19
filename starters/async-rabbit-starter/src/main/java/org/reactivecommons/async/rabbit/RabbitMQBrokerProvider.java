@@ -127,7 +127,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
         }
         listenReplies();
-        return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry);
+        return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry, domain);
     }
 
     @Override

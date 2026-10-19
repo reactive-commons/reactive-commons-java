@@ -114,19 +114,17 @@ public abstract class GenericMessageListener {
                 .qos(messageListener.prefetchCount())
                 .consumerTag(tag)
                 .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
-                .channelCallback(channel -> {
-                    liveness.onSubscribed(tag);
-                    channel.addShutdownListener(cause -> {
-                        log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
-                                + " channel open: " + channel.isOpen() +
-                                " connection open: " + channel.getConnection().isOpen());
-                        if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                            log.warning("Recovering listener for queue: " + queueName);
-                            metrics.recordRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
-                            scheduleRestart();
-                        }
-                    });
-                });
+                // active only once the broker registered the consumer, not when its channel opens
+                .consumerRegisteredCallback(liveness::onSubscribed)
+                .channelCallback(channel -> channel.addShutdownListener(cause -> {
+                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                            + " channel open: " + channel.isOpen() +
+                            " connection open: " + channel.getConnection().isOpen());
+                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                        log.warning("Recovering listener for queue: " + queueName);
+                        scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+                    }
+                }));
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())
@@ -220,7 +218,9 @@ public abstract class GenericMessageListener {
                 .doOnError(terminationCause::set)
                 .doOnTerminate(() -> {
                     liveness.onTerminated(terminationCause.get());
-                    scheduleRestart();
+                    // completed without error: the broker cancelled the consumer (e.g. its queue was deleted)
+                    scheduleRestart(terminationCause.get() != null
+                            ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
         final Disposable previous = activeSubscription.getAndSet(subscription);
@@ -240,10 +240,11 @@ public abstract class GenericMessageListener {
      * continuously unavailable. The restart runs on a separate scheduler so it never recurses from the termination
      * callback and overflows the stack if the new subscription fails synchronously.
      */
-    private void scheduleRestart() {
+    private void scheduleRestart(String reason) {
         if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
-            return;
+            return; // the restart already scheduled covers this trigger too: counted once, with the first reason
         }
+        metrics.recordRestart(reason);
         long consecutive = liveness.consecutiveRestartFailures();
         long delayMs = backoffMillis(consecutive);
         Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)

@@ -16,8 +16,8 @@ import java.time.Instant;
  * @param lastDeliveryAt              timestamp of the last message successfully handed to the handler, or
  *                                    {@code null} when no message has arrived yet
  * @param restartCount                total subscription restarts since the listener started
- * @param consecutiveRestartFailures  restarts since the last successful delivery - a value that keeps growing
- *                                    marks a broken listener even when its channel momentarily subscribes
+ * @param consecutiveRestartFailures  failed restarts since the last delivery or stable registration - a value that
+ *                                    keeps growing marks a broken listener even when it momentarily registers
  * @param lastRestartFailure          when the subscription last terminated with an error, or {@code null}
  * @param lastRestartFailureMessage   stringified cause of the last restart, or {@code null}
  */
@@ -31,6 +31,15 @@ public record SubscriberStatus(String queueName,
                                long consecutiveRestartFailures,
                                Instant lastRestartFailure,
                                String lastRestartFailureMessage) {
+
+    /**
+     * Whether the consumer has been registered for at least {@link ListenerLiveness#STABLE_REGISTRATION}: a listener
+     * that works, even if its queue has no traffic.
+     */
+    public boolean registeredStably(Instant now) {
+        return active && activeSince != null
+                && !activeSince.isAfter(now.minus(ListenerLiveness.STABLE_REGISTRATION));
+    }
 
     public static SubscriberStatus healthy(String queueName) {
         return new SubscriberStatus(queueName, null, true, Instant.now(), null, null, 0, 0, null, null);

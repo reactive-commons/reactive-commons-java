@@ -187,7 +187,7 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     /**
      * The listener connection is open, so a broken subscriber is only reported when there is evidence: the
      * listener has been inactive for longer than {@code subscriberInactiveGrace}, or its restarts keep failing
-     * without a single successful delivery in between.
+     * without a delivered message or a stable registration in between.
      */
     private List<SubscriberStatus> brokenSubscribers(Map<String, SubscriberStatus> statuses, Instant now) {
         if (statuses == null || statuses.isEmpty()) {
@@ -195,12 +195,14 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
         }
         return statuses.values().stream()
                 .filter(s -> isBroken(s, now))
-                .collect(Collectors.toUnmodifiableList());
+                .toList();
     }
 
     private boolean isBroken(SubscriberStatus status, Instant now) {
+        // a consumer registered for a while is consuming again, even if its queue has had no traffic since
         boolean restartsFailing = status.consecutiveRestartFailures() >= BROKEN_FLOW_FAILURE_THRESHOLD
-                && isRecent(status.lastRestartFailure(), now);
+                && isRecent(status.lastRestartFailure(), now)
+                && !status.registeredStably(now);
         boolean inactive = !status.active()
                 && status.downSince() != null
                 && !status.downSince().isAfter(now.minus(subscriberInactiveGrace));

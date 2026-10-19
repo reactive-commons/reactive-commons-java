@@ -54,6 +54,21 @@ class ReactiveReplyRouterTest {
     }
 
     @Test
+    void failAllOfADomainOnlyFailsTheCorrelationsOfThatDomain() {
+        final String otherDomainId = UUID.randomUUID().toString();
+        final Mono<Message> lostDomain = replyRouter.register(UUID.randomUUID().toString(), "app");
+        final Mono<Message> otherDomain = replyRouter.register(otherDomainId, "extra");
+
+        int lost = replyRouter.failAll("app", new RuntimeException("reply queue lost"));
+
+        assertThat(lost).isEqualTo(1);
+        StepVerifier.create(lostDomain).expectErrorMessage("reply queue lost").verify();
+        Message message = Mockito.mock(Message.class);
+        replyRouter.routeReply(otherDomainId, message);
+        StepVerifier.create(otherDomain).expectNext(message).verifyComplete();
+    }
+
+    @Test
     void failAllOnAnEmptyRouterReportsZero() {
         assertThat(replyRouter.failAll(new RuntimeException("x"))).isZero();
     }

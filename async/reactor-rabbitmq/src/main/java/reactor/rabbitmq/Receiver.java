@@ -179,6 +179,8 @@ public class Receiver implements Closeable {
                         cancelCallback);
                 AtomicBoolean cancelled = new AtomicBoolean(false);
                 LOGGER.info("Consumer {} consuming from {} has been registered", consumerTag, queue);
+                // basicConsume returns once the broker answered consume-ok
+                options.getConsumerRegisteredCallback().accept(consumerTag);
                 emitter.onDispose(() -> {
                     LOGGER.info("Cancelling consumer {} consuming from {}", consumerTag, queue);
                     if (cancelled.compareAndSet(false, true)) {

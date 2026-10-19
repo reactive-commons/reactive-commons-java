@@ -43,10 +43,21 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     private final boolean persistentQueries;
     private final Duration replyTimeout;
     private final MeterRegistry meterRegistry;
+    /**
+     * The domain this gateway publishes to, whose reply listener receives its replies. {@code null} when unknown.
+     */
+    private final String domain;
 
 
     public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender,
                                     String exchange, MessageConverter converter, MeterRegistry meterRegistry) {
+        this(config, router, sender, exchange, converter, meterRegistry, null);
+    }
+
+    public RabbitDirectAsyncGateway(BrokerConfig config, ReactiveReplyRouter router, ReactiveMessageSender sender,
+                                    String exchange, MessageConverter converter, MeterRegistry meterRegistry,
+                                    String domain) {
+        this.domain = domain;
         this.config = config;
         this.router = router;
         this.sender = sender;
@@ -134,7 +145,9 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                     final String correlationID = UUID.randomUUID().toString().replace("-", "");
 
                     // registered before publishing so that a fast reply cannot be missed
-                    final Mono<R> replyHolder = router.register(correlationID)
+                    // the per-domain gateways are called without the domain: use the one of this gateway
+                    final Mono<R> replyHolder = router.register(correlationID,
+                            this.domain != null ? this.domain : domain)
                             .timeout(replyTimeout)
                             .map(s -> converter.readValue(s, type));
 

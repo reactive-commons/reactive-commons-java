@@ -49,6 +49,8 @@ public class ApplicationReplyListener {
     private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
     private final ListenerLiveness liveness;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
+    private final ConsumerMetrics metrics;
+    private final SubscriberRegistry subscriberRegistry;
     private final String domain;
 
     public ApplicationReplyListener(ReactiveReplyRouter router, ReactiveMessageListener listener, String queueName,
@@ -63,6 +65,8 @@ public class ApplicationReplyListener {
                 ? listener.subscriberRegistry().register(queueName)
                 : new ListenerLiveness(queueName);
         this.meterRegistry = listener.meterRegistry();
+        this.metrics = new ConsumerMetrics(meterRegistry, listener.domain(), queueName, liveness);
+        this.subscriberRegistry = listener.subscriberRegistry();
         this.domain = listener.domain();
     }
 
@@ -73,12 +77,13 @@ public class ApplicationReplyListener {
         }
         final String tag = InstanceIdentifier.getInstanceId("replies");
         ConsumeOptions consumeOptions = new ConsumeOptions()
-                .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE);
+                .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
+                .consumerRegisteredCallback(liveness::onSubscribed)
+                .channelCallback(this::watchConnectionLoss);
         consumeOptions.consumerTag(tag);
         deliveryFlux = flow
                 .then(creator.declare(queue(queueName).durable(false).autoDelete(true).exclusive(true)))
                 .then(creator.bind(binding(exchangeName, routeKey, queueName)))
-                .doOnSuccess(ok -> liveness.onSubscribed(tag))
                 .thenMany(receiver.consumeAutoAck(queueName, consumeOptions).doOnNext(delivery -> {
                     liveness.onDelivery();
                     try {
@@ -106,6 +111,24 @@ public class ApplicationReplyListener {
         if (subscription != null) {
             subscription.dispose();
         }
+        if (subscriberRegistry != null) {
+            subscriberRegistry.unregister(queueName);
+        }
+    }
+
+    /**
+     * The reply queue is exclusive, so the broker deletes it as soon as its connection is lost, and the replies
+     * routed to it until the connection is recovered are dropped. The client recovers the connection without
+     * terminating the consumer, so the termination of the subscription cannot detect it. The shutdown listeners of a
+     * recoverable channel are kept across recoveries (unlike those of {@code channel.getConnection()}, which is the
+     * connection of the moment), and a connection loss reaches them as a hard error.
+     */
+    private void watchConnectionLoss(com.rabbitmq.client.Channel channel) {
+        channel.addShutdownListener(cause -> {
+            if (cause.isHardError() && !cause.isInitiatedByApplication()) {
+                failPendingReplies("its connection was lost: " + cause.getMessage());
+            }
+        });
     }
 
     private void subscribe() {
@@ -117,8 +140,9 @@ public class ApplicationReplyListener {
                 .doOnError(terminationCause::set)
                 .doOnTerminate(() -> {
                     liveness.onTerminated(terminationCause.get());
-                    failPendingRepliesOnReconnect();
-                    scheduleRestart();
+                    failPendingReplies("its subscription terminated and the reply queue is being recreated");
+                    scheduleRestart(terminationCause.get() != null
+                            ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
         final Disposable previous = activeSubscription.getAndSet(subscription);
@@ -132,20 +156,18 @@ public class ApplicationReplyListener {
     }
 
     /**
-     * The reply queue is exclusive + autoDelete, so it vanishes with the old connection. Any reply the broker
-     * buffered for the previous instance is lost on the new connection: fail every pending correlation now so
-     * callers see the failure immediately instead of waiting for their send timeout.
+     * Fails the pending correlations of this domain: their replies cannot reach the lost reply queue, so callers see
+     * the failure immediately instead of waiting for the reply timeout. The other domains have their own reply queue.
      */
-    private void failPendingRepliesOnReconnect() {
+    private void failPendingReplies(String reason) {
         if (stopped.get()) {
             return;
         }
-        int lost = router.failAll(new ReplyLostOnReconnectException(
-                "Reply listener for " + queueName + " is being restarted; the reply queue is being recreated so "
-                        + "any reply the broker had buffered is lost"));
+        int lost = router.failAll(domain, new ReplyLostOnReconnectException("Reply lost: the reply listener of "
+                + queueName + " is not consuming, " + reason));
         if (lost > 0) {
-            log.log(Level.WARNING, () -> "Failed " + lost + " pending reply correlation(s) on reply listener "
-                    + "restart for queue " + queueName);
+            log.log(Level.WARNING, () -> "Failed " + lost + " pending reply correlation(s) of reply queue "
+                    + queueName + ": " + reason);
             ConsumerMetrics.recordRepliesLost(meterRegistry, domain, lost);
         }
     }
@@ -156,10 +178,11 @@ public class ApplicationReplyListener {
      * so an outage is visible; subsequent attempts log at FINE to avoid flooding when the broker is continuously
      * unavailable. The restart runs on a separate scheduler so it never recurses from the termination callback.
      */
-    private void scheduleRestart() {
+    private void scheduleRestart(String reason) {
         if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
             return;
         }
+        metrics.recordRestart(reason);
         long consecutive = liveness.consecutiveRestartFailures();
         long delayMs = backoffMillis(consecutive);
         Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)

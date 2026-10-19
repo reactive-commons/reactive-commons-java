@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -11,11 +13,19 @@ import java.util.concurrent.atomic.AtomicReference;
  * health indicator without blocking.
  *
  * <p>A listener is considered broken when it has been inactive longer than the configured grace, or when its
- * restarts keep failing without a successful delivery in between.
+ * restarts keep failing without a successful delivery or a stable registration in between.
  */
 public final class ListenerLiveness {
 
+    /**
+     * How long a consumer must stay registered for its registration to prove the listener works, without waiting for
+     * a message (a queue without traffic delivers none). A consumer that the broker drops sooner keeps counting as a
+     * failed restart, so a listener that registers and fails over and over is still reported broken.
+     */
+    public static final Duration STABLE_REGISTRATION = Duration.ofSeconds(5);
+
     private final String queueName;
+    private final Clock clock;
     private final AtomicReference<String> consumerTag = new AtomicReference<>();
     private final AtomicBoolean active = new AtomicBoolean();
     private final AtomicReference<Instant> activeSince = new AtomicReference<>();
@@ -27,7 +37,12 @@ public final class ListenerLiveness {
     private final AtomicReference<String> lastRestartFailureMessage = new AtomicReference<>();
 
     public ListenerLiveness(String queueName) {
+        this(queueName, Clock.systemUTC());
+    }
+
+    ListenerLiveness(String queueName, Clock clock) {
         this.queueName = queueName;
+        this.clock = clock;
     }
 
     public String queueName() {
@@ -35,15 +50,14 @@ public final class ListenerLiveness {
     }
 
     /**
-     * Called when the listener's channel is open and the consumer tag has been assigned. Marks the listener as
-     * active and clears any outstanding down marker. Does not reset the failure counter: that is cleared only when
-     * a message actually arrives, so a listener that endlessly re-subscribes without ever receiving is still
-     * reported as broken.
+     * Called once the broker has registered the consumer ({@code basic.consume-ok}). Marks the listener as active
+     * and clears any outstanding down marker. It does not reset the failure counter by itself: a registration only
+     * proves the listener works once it lasted {@link #STABLE_REGISTRATION}, or when a message arrives.
      */
     public void onSubscribed(String tag) {
         consumerTag.set(tag);
         if (active.compareAndSet(false, true)) {
-            activeSince.set(Instant.now());
+            activeSince.set(clock.instant());
             downSince.set(null);
         }
     }
@@ -54,12 +68,16 @@ public final class ListenerLiveness {
      * health indicator.
      */
     public void onTerminated(Throwable cause) {
+        final Instant now = clock.instant();
+        if (wasRegisteredStably(now)) {
+            clearFailures(); // it worked for a while: this termination starts a new failure history
+        }
         if (active.compareAndSet(true, false)) {
-            downSince.set(Instant.now());
+            downSince.set(now);
         }
         restartCount.incrementAndGet();
         if (cause != null) {
-            lastRestartFailure.set(Instant.now());
+            lastRestartFailure.set(now);
             lastRestartFailureMessage.set(String.valueOf(cause));
             consecutiveRestartFailures.incrementAndGet();
         }
@@ -70,7 +88,16 @@ public final class ListenerLiveness {
      * a working listener should never look broken.
      */
     public void onDelivery() {
-        lastDeliveryAt.set(Instant.now());
+        lastDeliveryAt.set(clock.instant());
+        clearFailures();
+    }
+
+    private boolean wasRegisteredStably(Instant now) {
+        final Instant since = activeSince.get();
+        return active.get() && since != null && !since.isAfter(now.minus(STABLE_REGISTRATION));
+    }
+
+    private void clearFailures() {
         consecutiveRestartFailures.set(0);
         lastRestartFailure.set(null);
         lastRestartFailureMessage.set(null);

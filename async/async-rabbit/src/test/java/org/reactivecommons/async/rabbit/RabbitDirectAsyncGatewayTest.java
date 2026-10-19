@@ -87,7 +87,7 @@ class RabbitDirectAsyncGatewayTest {
         asyncGateway = new RabbitDirectAsyncGateway(
                 brokerConfig, router, senderMock, "ex", converter, meterRegistry
         );
-        when(router.register(anyString())).thenReturn(Mono.never());
+        when(router.register(anyString(), any())).thenReturn(Mono.never());
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
                 .thenReturn(Mono.empty());
 
@@ -98,7 +98,7 @@ class RabbitDirectAsyncGatewayTest {
                 .verify();
 
         ArgumentCaptor<String> captor = ArgumentCaptor.forClass(String.class);
-        verify(router).register(captor.capture());
+        verify(router).register(captor.capture(), any());
         verify(router).deregister(captor.getValue());
     }
 
@@ -330,7 +330,7 @@ class RabbitDirectAsyncGatewayTest {
         when(message.getBody()).thenReturn(mapper.writeValueAsString(new DummyMessage()).getBytes());
         final Sinks.One<Message> processor = Sinks.one();
         processor.tryEmitValue(message);
-        when(router.register(anyString())).thenReturn(processor.asMono());
+        when(router.register(anyString(), any())).thenReturn(processor.asMono());
     }
 
     private ReactiveMessageSender getReactiveMessageSender() {
