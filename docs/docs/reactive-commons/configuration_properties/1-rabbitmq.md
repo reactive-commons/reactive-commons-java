@@ -372,10 +372,13 @@ public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
 
 ## Connections and channels
 
-Reactive Commons establishes **a single connection to the RabbitMQ broker**, which is reused for all messaging
-operations, both sending and listening. However, the number of open **channels** within that connection varies depending
-on the enabled annotations and the type of interaction (sending, listening, or both). Each scenario described below
-shows how the number of channels changes according to the applied configuration.
+Reactive Commons establishes **up to two connections to the RabbitMQ broker per domain**: one to publish
+(`<appName>-<host>-sender`) and, as soon as the application listens (listeners or `listenReplies`), one to consume
+(`<appName>-<host>-listener`). During a [resource alarm](https://www.rabbitmq.com/docs/alarms) the broker stops reading
+from the connections that publish; keeping the consumers on their own connection lets them keep acknowledging messages,
+which is what drains the queues and frees the broker. The number of open **channels** varies depending on the enabled
+annotations and the type of interaction (sending, listening, or both); the tables report the channels of both
+connections of a domain. Each scenario described below shows how they change according to the applied configuration.
 
 In the context of this documentation, a domain refers to a connection with a broker. The configuration supports up to
 two brokers, which means the described scenarios are limited to a maximum of two domains.
@@ -403,7 +406,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker     | Connections | Channels |
 |----------------------------|---------------|------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app | 1           | 8        |
+| One or all for sending [1] | true          | Broker app | 2           | 8        |
 |                            | false         | Broker app | 1           | 6        |
 
 ### 2. Sending messages (multiple domains)
@@ -413,8 +416,8 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker            | Connections | Channels |
 |----------------------------|---------------|-------------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app        | 1           | 8        |
-|                            |               | Additional broker | 1           | 8        |
+| One or all for sending [1] | true          | Broker app        | 2           | 8        |
+|                            |               | Additional broker | 2           | 8        |
 | One or all for sending [1] | false         | Broker app        | 1           | 6        |
 |                            |               | Additional broker | 1           | 6        |
 
@@ -424,7 +427,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations          | Broker     | Connections | Channels |
 |------------------------------|------------|-------------|----------|
-| One or all for listening [2] | Broker app | 1           | 9        |
+| One or all for listening [2] | Broker app | 2           | 9        |
 
 ### 4. Listening for messages (multiple domains)
 
@@ -432,12 +435,12 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations   | Broker            | Connections | Channels |
 |-----------------------|-------------------|-------------|----------|
-| All for listening [2] | Broker app        | 1           | 9        |
-|                       | Additional broker | 1           | 8        |
-| Two for listening [2] | Broker app        | 1           | 8        |
-|                       | Additional broker | 1           | 8        |
-| One for listening [2] | Broker app        | 1           | 7        |
-|                       | Additional broker | 1           | 7        |
+| All for listening [2] | Broker app        | 2           | 9        |
+|                       | Additional broker | 2           | 8        |
+| Two for listening [2] | Broker app        | 2           | 8        |
+|                       | Additional broker | 2           | 8        |
+| One for listening [2] | Broker app        | 2           | 7        |
+|                       | Additional broker | 2           | 7        |
 
 ### 5. Sending and listening for messages (single domain)
 
@@ -445,8 +448,8 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations                           | listenReplies | Broker     | Connections | Channels |
 |-----------------------------------------------|---------------|------------|-------------|----------|
-| All for sending [1] and all for listening [2] | true          | Broker app | 1           | 11       |
-|                                               | false         | Broker app | 1           | 10       |
+| All for sending [1] and all for listening [2] | true          | Broker app | 2           | 11       |
+|                                               | false         | Broker app | 2           | 10       |
 
 ### 6. Sending and listening for messages (multiple domains)
 
@@ -454,14 +457,14 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations                           | Broker            | Connections | Channels |
 |-----------------------------------------------|-------------------|-------------|----------|
-| All for sending [1] and all for listening [2] | Broker app        | 1           | 10       |
-|                                               | Additional broker | 1           | 9        |
-| One for sending [1] and all for listening [2] | Broker app        | 1           | 10       |
-|                                               | Additional broker | 1           | 9        |
-| All for sending [1] and two for listening [2] | Broker app        | 1           | 9        |
-|                                               | Additional broker | 1           | 9        |
-| All for sending [1] and one for listening [2] | Broker app        | 1           | 8        |
-|                                               | Additional broker | 1           | 8        |
+| All for sending [1] and all for listening [2] | Broker app        | 2           | 10       |
+|                                               | Additional broker | 2           | 9        |
+| One for sending [1] and all for listening [2] | Broker app        | 2           | 10       |
+|                                               | Additional broker | 2           | 9        |
+| All for sending [1] and two for listening [2] | Broker app        | 2           | 9        |
+|                                               | Additional broker | 2           | 9        |
+| All for sending [1] and one for listening [2] | Broker app        | 2           | 8        |
+|                                               | Additional broker | 2           | 8        |
 | All for sending [1]                           | Broker app        | 1           | 6        |
 |                                               | Additional broker | 1           | 6        |
 
@@ -487,14 +490,16 @@ two brokers, which means the described scenarios are limited to a maximum of two
 ## Sender resilience and back-pressure
 
 Every publish terminates within a bounded time with a typed outcome, so a hung broker (or socket) cannot silently
-stall the publisher. The relevant properties and their defaults:
+stall the publisher. While the broker signals `connection.blocked` (memory or disk alarm), new publishes fail
+immediately with `SendFailureBrokerBlockedException` instead of waiting for `sendTimeout`: the message is definitively
+not published, so the caller can retry it safely once the alarm clears. This is not configurable. The relevant
+properties and their defaults:
 
 | Property | Default | Purpose |
 |---|---|---|
 | `sendTimeout` | `10s` | Maximum time a sender waits for the outcome of a message before failing the caller. |
 | `handOverPoolSize` | `13` | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure). |
-| `handOverQueueCapacity` | `1024` | Capacity of the queue in front of the hand-over pool. When full, new publishes fail fast instead of growing in memory. |
-| `failFastOnBlocked` | `false` | When `true`, publishes issued while the broker signals `connection.blocked` fail fast with `SendFailureBrokerBlockedException` instead of waiting for `sendTimeout`. |
+| `handOverQueueCapacity` | `1024` | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. |
 | `blockedHealthGrace` | `5s` | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN. |
 
 ```yaml title="application.yaml"
@@ -504,7 +509,6 @@ app:
       sendTimeout: 10s
       handOverPoolSize: 13
       handOverQueueCapacity: 1024
-      failFastOnBlocked: false
       blockedHealthGrace: 5s
 ```
 
@@ -515,10 +519,10 @@ existing catch-blocks keep working.
 
 | Exception | When it fires | Caller contract |
 |---|---|---|
-| `SendFailureNoAckException` | No publishing flow became available within `sendTimeout`, or the broker returned a channel-level nack. | Message was NOT published. Safe to retry. |
+| `SendFailureNoAckException` | No publishing flow became available within `sendTimeout`, the message was still waiting to be written when `sendTimeout` elapsed (it is then dropped, never published late), or the broker returned a channel-level nack. | Message was NOT published. Safe to retry. |
 | `SendConfirmUnknownException` | Message was handed to a flow but the broker did not confirm it in time (channel/connection failed, or `sendTimeout` elapsed with the message already in flight). | **At-least-once:** the message may or may not have reached the broker; a retry can produce a duplicate. Make the consumer idempotent, or use a correlation ID to deduplicate. |
 | `SendFailureReturnedException` | Mandatory publish with no queue bound to the routing key. | Message was NOT delivered. Safe to retry after fixing the topology. |
-| `SendFailureBrokerBlockedException` | Only when `failFastOnBlocked=true` and the broker signalled `connection.blocked`. | Message was NOT published. Safe to retry after the alarm clears. |
+| `SendFailureBrokerBlockedException` | The broker signalled `connection.blocked` (memory or disk alarm) and has not unblocked the connection yet: the publish fails immediately instead of waiting for `sendTimeout`. | Message was NOT published. Safe to retry after the alarm clears. |
 | `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached). | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces. |
 
 :::caution[`requestReply` is at-least-once]
@@ -533,7 +537,7 @@ The sender exposes the following metrics on the application's `MeterRegistry`:
 
 | Metric | Type | Tags | Meaning |
 |---|---|---|---|
-| `reactive_commons.publish.outcome` | Counter | `outcome` ∈ {`ack`, `nack`, `unknown`, `returned`, `rejected`, `timeout`, `blocked`}, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with its final outcome. |
+| `reactive_commons.publish.outcome` | Counter | `outcome`, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with its final outcome. With `confirm=true` (events, commands): `ack`, `nack`, `unknown`, `returned`, `rejected`, `timeout`, `blocked`. With `confirm=false` (queries and replies): `published` (written to the channel, **not** confirmed by the broker), `failed`, `rejected`, `timeout`, `blocked`. |
 | `reactive_commons.publish.flow.resubscribe` | Counter | `kind` ∈ {`confirm`, `noConfirm`}, `domain` | A publishing flow terminated and is being re-subscribed. |
 | `reactive_commons.publish.flow.live` | Gauge | `kind`, `domain` | Number of publishing flows currently holding a channel. |
 | `reactive_commons.publish.connection.blocked` | FunctionCounter | `domain` | Number of `connection.blocked` alarms observed since the application started. |
@@ -547,15 +551,16 @@ Kubernetes, using managed services like Amazon EKS. For the messaging broker, Am
 in a 3-node cluster with a Multi-AZ deployment to ensure high availability and fault tolerance.
 
 When working with microservices that use multiple replicas (instances) and implement Reactive Commons, it is important
-to understand how connections to the message broker are managed. Each replica of a microservice establishes **a single
-connection** to the broker, which is used for both sending and listening to messages.
+to understand how connections to the message broker are managed. Each replica of a microservice establishes, per domain,
+**one connection to send** messages and, if it listens, **one connection to listen** to them.
 
-The number of open channels within that single connection will depend on the configuration of the annotations used, as
+The number of open channels within those connections will depend on the configuration of the annotations used, as
 described in the connection scenarios above. This allows each replica to manage its messaging operations independently,
 distributing the workload efficiently.
 
-For example, if a microservice is deployed with **4 replicas**, each of them will establish its own connection to the
-broker. As a result, the entire microservice deployment will have a total of **4 connections** to the broker.
+For example, if a microservice that sends and listens on one domain is deployed with **4 replicas**, each of them will
+establish its own two connections to the broker. As a result, the entire microservice deployment will have a total of
+**8 connections** to the broker (4 if it only sends with `listenReplies: false`).
 
 ## Mandatory property
 

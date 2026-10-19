@@ -38,7 +38,7 @@ class ChannelsPerScenarioRabbitContainerTest {
                             Class<?>[] features, int documentedApp, int documentedExtra) {
     }
 
-    private record Measured(Scenario scenario, int app, int extra) {
+    private record Measured(Scenario scenario, int app, int extra, int appConnections, int extraConnections) {
     }
 
     @Test
@@ -75,8 +75,10 @@ class ChannelsPerScenarioRabbitContainerTest {
         System.out.println("[REAL BROKER] channels per connection (documented -> measured)");
         for (Measured m : results) {
             Scenario s = m.scenario();
-            System.out.printf("[REAL BROKER] %-62s app %2d -> %2d%s%n", s.description(), s.documentedApp(), m.app(),
-                    s.twoDomains() ? String.format("   additional %2d -> %2d", s.documentedExtra(), m.extra()) : "");
+            System.out.printf("[REAL BROKER] %-62s app %2d -> %2d (%d connections)%s%n", s.description(),
+                    s.documentedApp(), m.app(), m.appConnections(), s.twoDomains()
+                            ? String.format("   additional %2d -> %2d (%d connections)", s.documentedExtra(),
+                            m.extra(), m.extraConnections()) : "");
         }
 
         // Never more channels than documented, and the default domain does not carry extra senders for the discard
@@ -96,7 +98,10 @@ class ChannelsPerScenarioRabbitContainerTest {
             int app = RabbitScenarioSupport.settledChannels(RABBIT, scenario.id() + "-app-");
             int extra = scenario.twoDomains()
                     ? RabbitScenarioSupport.settledChannels(RABBIT, scenario.id() + "-extra-") : 0;
-            return new Measured(scenario, app, extra);
+            int appConnections = RabbitScenarioSupport.connectionsOf(RABBIT, scenario.id() + "-app-");
+            int extraConnections = scenario.twoDomains()
+                    ? RabbitScenarioSupport.connectionsOf(RABBIT, scenario.id() + "-extra-") : 0;
+            return new Measured(scenario, app, extra, appConnections, extraConnections);
         }
     }
 

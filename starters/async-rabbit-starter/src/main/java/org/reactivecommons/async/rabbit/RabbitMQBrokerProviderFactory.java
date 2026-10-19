@@ -51,6 +51,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
                 unroutableMessageNotifier, meterRegistry, domain);
         RabbitReactiveHealthIndicator healthIndicator = new RabbitReactiveHealthIndicator(domain,
                 () -> RabbitMQSetupUtils.establishedConnection(provider.getConnectionFactory()),
+                () -> RabbitMQSetupUtils.establishedListenerConnection(provider.getConnectionFactory()),
                 sender::publisherStatus,
                 props.getBlockedHealthGrace());
         ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props);

@@ -7,6 +7,8 @@ import eu.rekawek.toxiproxy.Proxy;
 import eu.rekawek.toxiproxy.ToxiproxyClient;
 import eu.rekawek.toxiproxy.model.Toxic;
 import eu.rekawek.toxiproxy.model.ToxicDirection;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,12 +16,14 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import org.testcontainers.DockerClientFactory;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.containers.Network;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import org.testcontainers.toxiproxy.ToxiproxyContainer;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.ChannelPool;
 import reactor.rabbitmq.ChannelPoolFactory;
@@ -31,6 +35,9 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -136,6 +143,97 @@ class ReactiveMessageSenderRabbitContainerTest {
         proxy.delete();
         admin.queueDelete(queue);
         adminConnection.close();
+    }
+
+    /**
+     * The outcome counters tell confirmed messages ({@code ack}) apart from no-confirm messages that were only
+     * written to the channel ({@code published}), and are counted once per message.
+     */
+    @Test
+    void outcomeMetricsCountEachMessageWithItsOutcome() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
+                Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
+        try (ReactiveMessageSender metered = new ReactiveMessageSender(sender, "TestApp", converter, null, false,
+                new UnroutableMessageNotifier(), Duration.ofSeconds(10), 2, 16, new ConnectionBlockedState(),
+                registry, "app")) {
+            for (int i = 0; i < 20; i++) {
+                metered.sendWithConfirm("confirmed-" + i, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                        .block(Duration.ofSeconds(10));
+            }
+            for (int i = 0; i < 7; i++) {
+                metered.sendNoConfirm("unconfirmed-" + i, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                        .block(Duration.ofSeconds(10));
+            }
+
+            assertThat(outcome(registry, "ack", true)).isEqualTo(20);
+            assertThat(outcome(registry, "published", false)).isEqualTo(7);
+            assertThat(registry.find("reactive_commons.publish.outcome").tag("confirm", "false")
+                    .tag("outcome", "ack").counter()).as("a no-confirm message is never reported as acked").isNull();
+        }
+    }
+
+    /**
+     * The socket to the broker stalls WITHOUT a {@code connection.blocked} notification (congested network, a broker
+     * that stops reading): the proxy between the sender and the broker is frozen, so the socket buffers fill up and
+     * the publishing flows wait inside {@code basicPublish}. The messages waiting to be written are bounded, every
+     * caller gets a typed outcome within the send timeout, and a message reported as not published never reaches
+     * the broker afterwards.
+     */
+    @Test
+    void aStalledSocketBoundsTheMessagesWaitingToBeWritten() throws Exception {
+        Duration sendTimeout = Duration.ofSeconds(3);
+        int capacity = 32;
+        int messages = 1000;
+        Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
+                Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
+        try (ReactiveMessageSender stalled = new ReactiveMessageSender(sender, "TestApp", converter, null, false,
+                new UnroutableMessageNotifier(), sendTimeout, 4, capacity, new ConnectionBlockedState(),
+                null, null)) {
+            stalled.sendWithConfirm("warm-up", EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                    .block(Duration.ofSeconds(10));
+            int before = queueSize();
+            String blob = "x".repeat(64 * 1024);
+            var docker = DockerClientFactory.instance().client();
+            List<reactor.util.function.Tuple2<Long, String>> outcomes;
+            docker.pauseContainerCmd(TOXIPROXY.getContainerId()).exec();
+            try {
+                outcomes = Flux.range(0, messages)
+                        .flatMap(i -> stalled.sendWithConfirm(blob, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                                .thenReturn("ok")
+                                .onErrorResume(e -> Mono.just(e.getClass().getSimpleName()))
+                                .elapsed(), messages)
+                        .collectList()
+                        .block(Duration.ofSeconds(60));
+            } finally {
+                docker.unpauseContainerCmd(TOXIPROXY.getContainerId()).exec();
+            }
+            Thread.sleep(5_000); // whatever was written while stalled reaches the broker
+            int stored = queueSize() - before;
+
+            Map<String, Long> byOutcome = outcomes.stream()
+                    .collect(Collectors.groupingBy(reactor.util.function.Tuple2::getT2, TreeMap::new,
+                            Collectors.counting()));
+            long slowest = outcomes.stream().mapToLong(reactor.util.function.Tuple2::getT1).max().orElse(0);
+            long mayHaveBeenPublished = byOutcome.getOrDefault("ok", 0L)
+                    + byOutcome.getOrDefault("SendConfirmUnknownException", 0L);
+            System.out.printf("[REAL BROKER] stalled socket: %d sends, slowest %d ms, outcomes %s, stored by the "
+                    + "broker afterwards %d (callers told it may have been published: %d)%n",
+                    messages, slowest, byOutcome, stored, mayHaveBeenPublished);
+
+            assertThat(outcomes).hasSize(messages);
+            assertThat(slowest).as("every send terminates within the send timeout")
+                    .isLessThan(sendTimeout.plusSeconds(2).toMillis());
+            assertThat(byOutcome).as("a full buffer fails fast").containsKey("SendFailureHandOverRejectedException");
+            assertThat((long) stored).as("a caller told 'not published' never sees its message published later")
+                    .isLessThanOrEqualTo(mayHaveBeenPublished);
+        }
+    }
+
+    private static double outcome(SimpleMeterRegistry registry, String outcome, boolean confirm) {
+        Counter counter = registry.find("reactive_commons.publish.outcome").tag("domain", "app")
+                .tag("outcome", outcome).tag("confirm", Boolean.toString(confirm)).counter();
+        return counter == null ? 0 : counter.count();
     }
 
     @Test

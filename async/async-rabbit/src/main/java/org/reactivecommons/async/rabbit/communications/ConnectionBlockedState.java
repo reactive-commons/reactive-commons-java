@@ -36,6 +36,15 @@ public final class ConnectionBlockedState {
         }
     }
 
+    /**
+     * Forgets a block when the connection it applied to is gone. A recovered connection starts unblocked: the broker
+     * sends it a new {@code connection.blocked} if the alarm is still raised, but never a {@code connection.unblocked}
+     * for the block of the previous connection.
+     */
+    public void onConnectionShutdown() {
+        onUnblocked();
+    }
+
     public boolean isBlocked() {
         return blocked.get();
     }

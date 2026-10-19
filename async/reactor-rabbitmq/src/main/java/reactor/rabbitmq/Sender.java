@@ -18,6 +18,7 @@ package reactor.rabbitmq;
 
 import com.rabbitmq.client.*;
 import com.rabbitmq.client.impl.AMQImpl;
+import lombok.Getter;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
 import org.slf4j.Logger;
@@ -77,6 +78,7 @@ public class Sender implements AutoCloseable {
 
     private final Mono<? extends Channel> channelMono;
 
+    @Getter
     private final BiConsumer<SignalType, Channel> channelCloseHandler;
 
     private final AtomicReference<Connection> connection = new AtomicReference<>();

@@ -59,6 +59,18 @@ class ConnectionBlockedStateTest {
     }
 
     @Test
+    void clearsWhenTheConnectionShutsDown() {
+        var state = new ConnectionBlockedState();
+        state.onBlocked("low on memory");
+
+        state.onConnectionShutdown();
+
+        assertThat(state.isBlocked()).isFalse();
+        assertThat(state.blockedSince()).isNull();
+        assertThat(state.blockCount()).isEqualTo(1);
+    }
+
+    @Test
     void unblockWhileNotBlockedIsANoOp() {
         var state = new ConnectionBlockedState();
 

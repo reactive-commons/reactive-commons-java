@@ -67,7 +67,7 @@ class ConnectionBlockedRabbitContainerTest {
             // simulate the connection.blocked frame arriving from the broker (what BlockedListener does)
             state.onBlocked("low on memory");
 
-            // with failFastOnBlocked=true, a publish fails fast rather than waiting for sendTimeout
+            // while blocked, a publish fails fast rather than waiting for sendTimeout
             long t0 = System.nanoTime();
             assertThatThrownBy(() -> Mono.from(bus.emit(new DomainEvent<>("scenario.event",
                     UUID.randomUUID().toString(), Map.of("i", 1)))).block(Duration.ofSeconds(5)))
@@ -113,11 +113,9 @@ class ConnectionBlockedRabbitContainerTest {
     @Configuration
     static class PropsOverride {
         @Bean
-        AsyncPropsDomain.RabbitPropsCustomizer failFastOnBlockedCustomizer() {
-            return domainProperties -> domainProperties.customize(RabbitScenarioSupport.DEFAULT_DOMAIN, props -> {
-                props.setFailFastOnBlocked(true);
-                props.setBlockedHealthGrace(HEALTH_GRACE);
-            });
+        AsyncPropsDomain.RabbitPropsCustomizer blockedHealthGraceCustomizer() {
+            return domainProperties -> domainProperties.customize(RabbitScenarioSupport.DEFAULT_DOMAIN, props ->
+                    props.setBlockedHealthGrace(HEALTH_GRACE));
         }
     }
 }

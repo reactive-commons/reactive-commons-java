@@ -149,6 +149,35 @@ class RabbitReactiveHealthIndicatorTest {
         assertThat(healthOf(openConnectionIndicator(status))).isEqualTo(RCHealth.Status.UP);
     }
 
+    @Test
+    void shouldBeDownWhenTheListenerConnectionIsClosed(@Mock Connection listenerConnection) {
+        when(connection.isOpen()).thenReturn(true);
+        when(listenerConnection.isOpen()).thenReturn(false);
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                () -> Optional.of(listenerConnection), PublisherStatus::healthy, null);
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details().get("error").toString())
+                            .startsWith("Listener connection to RabbitMQ is closed");
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void shouldBeUpWhenTheListenerConnectionIsOpenOrNeverEstablished(@Mock Connection listenerConnection) {
+        when(connection.isOpen()).thenReturn(true);
+        when(listenerConnection.isOpen()).thenReturn(true);
+        var listening = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                () -> Optional.of(listenerConnection), PublisherStatus::healthy, null);
+        var sendOnly = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                Optional::empty, PublisherStatus::healthy, null);
+
+        assertThat(healthOf(listening)).isEqualTo(RCHealth.Status.UP);
+        assertThat(healthOf(sendOnly)).isEqualTo(RCHealth.Status.UP);
+    }
+
     private RabbitReactiveHealthIndicator openConnectionIndicator(PublisherStatus status) {
         when(connection.isOpen()).thenReturn(true);
         when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));

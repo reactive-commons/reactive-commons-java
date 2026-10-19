@@ -165,16 +165,28 @@ final class RabbitScenarioSupport {
         throw new IllegalStateException("The queues never got a consumer: " + String.join(", ", queues));
     }
 
+    /**
+     * Connections that the broker reports with the name {@code <connectionNamePrefix>...}: a domain has one to
+     * publish ({@code ...-sender}) and, once it listens, one to consume ({@code ...-listener}).
+     */
+    static int connectionsOf(RabbitMQContainer rabbit, String connectionNamePrefix) throws Exception {
+        ExecResult result = rabbit.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties");
+        return (int) result.getStdout().lines().filter(line -> line.contains("\"" + connectionNamePrefix)).count();
+    }
+
     static Optional<Integer> channelsOf(RabbitMQContainer rabbit, String connectionNamePrefix) throws Exception {
         // client_properties holds the client-provided connection name; columns are tab separated
         ExecResult result = rabbit.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties",
                 "channels");
+        // a domain has a sender and a listener connection: its channels are the sum of both
+        Optional<Integer> channels = Optional.empty();
         for (String line : result.getStdout().split("\n")) {
             String[] columns = line.trim().split("\t");
             if (columns.length >= 2 && line.contains("\"" + connectionNamePrefix)) {
-                return Optional.of(Integer.parseInt(columns[columns.length - 1].trim()));
+                int connectionChannels = Integer.parseInt(columns[columns.length - 1].trim());
+                channels = Optional.of(channels.orElse(0) + connectionChannels);
             }
         }
-        return Optional.empty();
+        return channels;
     }
 }

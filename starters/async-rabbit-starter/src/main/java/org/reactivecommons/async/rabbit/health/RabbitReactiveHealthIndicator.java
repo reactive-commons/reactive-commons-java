@@ -53,6 +53,7 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
 
     private final String domain;
     private final Supplier<Optional<Connection>> connection;
+    private final Supplier<Optional<Connection>> listenerConnection;
     private final Supplier<PublisherStatus> publisherStatus;
     private final Duration blockedHealthGrace;
 
@@ -62,7 +63,7 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      *                   must not block.
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection) {
-        this(domain, connection, PublisherStatus::healthy, DEFAULT_BLOCKED_HEALTH_GRACE);
+        this(domain, connection, Optional::empty, PublisherStatus::healthy, DEFAULT_BLOCKED_HEALTH_GRACE);
     }
 
     /**
@@ -73,21 +74,26 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
                                          Supplier<PublisherStatus> publisherStatus) {
-        this(domain, connection, publisherStatus, DEFAULT_BLOCKED_HEALTH_GRACE);
+        this(domain, connection, Optional::empty, publisherStatus, DEFAULT_BLOCKED_HEALTH_GRACE);
     }
 
     /**
-     * @param domain             the domain whose connection is reported
-     * @param connection         supplies the established connection of the domain, empty while it is not established.
-     *                           It must not block.
+     * @param domain             the domain whose connections are reported
+     * @param connection         supplies the established publishing connection of the domain, empty while it is not
+     *                           established. It must not block.
+     * @param listenerConnection supplies the established consuming connection of the domain, empty while it is not
+     *                           established (an application that never listens never establishes it). It must not
+     *                           block.
      * @param publisherStatus    supplies the in-memory liveness of the domain's publishing flows. It must not block.
      * @param blockedHealthGrace how long a {@code connection.blocked} alarm must persist before the indicator reports
      *                           DOWN. A short alarm (transient disk flush) should not flap the check.
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
+                                         Supplier<Optional<Connection>> listenerConnection,
                                          Supplier<PublisherStatus> publisherStatus, Duration blockedHealthGrace) {
         this.domain = domain;
         this.connection = connection;
+        this.listenerConnection = listenerConnection;
         this.publisherStatus = publisherStatus;
         this.blockedHealthGrace = blockedHealthGrace != null ? blockedHealthGrace : DEFAULT_BLOCKED_HEALTH_GRACE;
     }
@@ -105,6 +111,12 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
         Connection conn = current.get();
         if (!conn.isOpen()) {
             return builder.down().withDetail(ERROR, "Connection to RabbitMQ is closed: " + closeReason(conn)).build();
+        }
+        Optional<Connection> listening = listenerConnection.get();
+        if (listening.isPresent() && !listening.get().isOpen()) {
+            return builder.down()
+                    .withDetail(ERROR, "Listener connection to RabbitMQ is closed: " + closeReason(listening.get()))
+                    .build();
         }
         PublisherStatus status = publisherStatus.get();
         Instant now = Instant.now();

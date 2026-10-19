@@ -55,20 +55,18 @@ import java.util.concurrent.ConcurrentMap;
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class RabbitMQSetupUtils {
-    private static final String SHARED_TYPE = "shared";
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
 
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
-    private static final ConcurrentMap<ConnectionFactory, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
+    private static final ConcurrentMap<ConnectionKey, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
     /**
-     * The connection of each factory once it has been established, to inspect it without waiting for it.
+     * The connections of each factory once they have been established, to inspect them without waiting for them.
      */
-    private static final ConcurrentMap<ConnectionFactory, Connection> ESTABLISHED_CONNECTIONS =
-            new ConcurrentHashMap<>();
+    private static final ConcurrentMap<ConnectionKey, Connection> ESTABLISHED_CONNECTIONS = new ConcurrentHashMap<>();
     /**
-     * Tracks the {@code connection.blocked} / {@code connection.unblocked} state of each cached connection, so the
-     * health indicator and the sender can observe broker-side back-pressure.
+     * Tracks the {@code connection.blocked} / {@code connection.unblocked} state of the publishing connection of each
+     * factory, so the health indicator and the sender can observe broker-side back-pressure.
      */
     private static final ConcurrentMap<ConnectionFactory, ConnectionBlockedState> CONNECTION_BLOCKED_STATES =
             new ConcurrentHashMap<>();
@@ -81,6 +79,27 @@ public final class RabbitMQSetupUtils {
     private static final Object EVENT_LOOP_GROUP_LOCK = new Object();
     private static EventLoopGroup sharedEventLoopGroup; // guarded by EVENT_LOOP_GROUP_LOCK
     private static int eventLoopGroupUsers; // guarded by EVENT_LOOP_GROUP_LOCK
+
+    /**
+     * Each factory gets one connection per role. The broker blocks a connection that publishes during a resource
+     * alarm and stops reading from it: consuming on its own connection keeps acknowledgements, cancellations and
+     * topology declarations of the listeners working while the publishers are blocked.
+     *
+     * @see <a href="https://www.rabbitmq.com/docs/alarms">Memory and Disk Alarms</a>
+     */
+    enum ConnectionRole {
+        SENDER("sender"),
+        LISTENER("listener");
+
+        private final String kind;
+
+        ConnectionRole(String kind) {
+            this.kind = kind;
+        }
+    }
+
+    private record ConnectionKey(ConnectionFactory factory, ConnectionRole role) {
+    }
 
     private static EventLoopGroup createEventLoopGroup() {
         log.debug("Creating shared Netty EventLoopGroup with default thread configuration for RabbitMQ connections");
@@ -147,12 +166,12 @@ public final class RabbitMQSetupUtils {
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
                 props.getMandatory(), unroutableMessageNotifier, sendTimeout,
                 props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
-                blockedState, props.isFailFastOnBlocked(), meterRegistry, domain);
+                blockedState, meterRegistry, domain);
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
-        final Mono<Connection> connection =
-                createConnectionMono(provider.getConnectionFactory(), props.getAppName());
+        final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName(),
+                ConnectionRole.LISTENER);
         final Receiver receiver = new Receiver(new ReceiverOptions().connectionMono(connection));
         final Sender sender = new Sender(new SenderOptions().connectionMono(connection));
 
@@ -164,7 +183,9 @@ public final class RabbitMQSetupUtils {
 
     public static TopologyCreator createTopologyCreator(AsyncProps props, ConnectionFactoryCustomizer cfCustomizer) {
         ConnectionFactoryProvider provider = connectionFactoryProvider(props, cfCustomizer);
-        final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName());
+        // only declares the topology of the listeners: it must keep working while the publishers are blocked
+        final Mono<Connection> connection = createConnectionMono(provider.getConnectionFactory(), props.getAppName(),
+                ConnectionRole.LISTENER);
         final Sender sender = new Sender(new SenderOptions().connectionMono(connection));
         return new TopologyCreator(sender, props.getQueueType());
     }
@@ -178,7 +199,8 @@ public final class RabbitMQSetupUtils {
 
     private static SenderOptions reactiveCommonsSenderOptions(String appName, ConnectionFactoryProvider provider,
                                                               RabbitProperties rabbitProperties) {
-        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName);
+        final Mono<Connection> senderConnection = createConnectionMono(provider.getConnectionFactory(), appName,
+                ConnectionRole.SENDER);
         final ChannelPoolOptions channelPoolOptions = new ChannelPoolOptions();
         final PropertyMapper map = PropertyMapper.get();
 
@@ -194,12 +216,13 @@ public final class RabbitMQSetupUtils {
                 .connectionMono(senderConnection);
     }
 
-    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName) {
-        return CONNECTION_CACHE.computeIfAbsent(factory, f -> {
-            log.info("Creating connection mono to RabbitMQ Broker in host '{}'", f.getHost());
-            final ConnectionBlockedState blockedState = blockedState(f);
+    private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName,
+                                                         ConnectionRole role) {
+        return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role), key -> {
+            final ConnectionFactory f = key.factory();
+            log.info("Creating {} connection mono to RabbitMQ Broker in host '{}'", role.kind, f.getHost());
             return Mono.fromCallable(() -> f.newConnection(
-                            appName + "-" + InstanceIdentifier.getInstanceId(SHARED_TYPE, "")
+                            appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
                     ))
                     .doOnError(err -> log.error(
                             "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
@@ -208,22 +231,38 @@ public final class RabbitMQSetupUtils {
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
                     .doOnNext(connection -> {
-                        ESTABLISHED_CONNECTIONS.put(f, connection);
-                        connection.addBlockedListener(blockedState::onBlocked, blockedState::onUnblocked);
+                        ESTABLISHED_CONNECTIONS.put(key, connection);
+                        if (role == ConnectionRole.SENDER) {
+                            final ConnectionBlockedState blockedState = blockedState(f);
+                            connection.addBlockedListener(blockedState::onBlocked, blockedState::onUnblocked);
+                            // kept across recoveries, like the blocked listener: a closed connection is not blocked
+                            connection.addShutdownListener(cause -> blockedState.onConnectionShutdown());
+                        }
                     })
                     .cache();
         });
     }
 
     /**
-     * Returns the connection created for the given factory, if it has already been established. It never opens or
-     * waits for a connection, so it is safe to call from a health check.
+     * Returns the publishing connection created for the given factory, if it has already been established. It never
+     * opens or waits for a connection, so it is safe to call from a health check.
      *
      * @param factory the connection factory of a domain
-     * @return the established connection, or empty if it has not been established yet
+     * @return the established publishing connection, or empty if it has not been established yet
      */
     public static Optional<Connection> establishedConnection(ConnectionFactory factory) {
-        return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(factory));
+        return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(new ConnectionKey(factory, ConnectionRole.SENDER)));
+    }
+
+    /**
+     * Returns the consuming connection created for the given factory, if it has already been established. It stays
+     * empty for an application that never listens. Like {@link #establishedConnection}, it never opens or waits.
+     *
+     * @param factory the connection factory of a domain
+     * @return the established consuming connection, or empty if it has not been established (yet)
+     */
+    public static Optional<Connection> establishedListenerConnection(ConnectionFactory factory) {
+        return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(new ConnectionKey(factory, ConnectionRole.LISTENER)));
     }
 
     /**

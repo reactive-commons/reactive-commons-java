@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SignalType;
 import reactor.core.publisher.Sinks;
 import reactor.test.StepVerifier;
 
@@ -21,6 +22,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiConsumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -185,6 +187,34 @@ class SenderTest {
                 .channelMono(senderChannelMono));
         assertSame(senderChannelMono, sender.getChannelMono(new SendOptions()));
         assertSame(sendChannelMono, sender.getChannelMono(new SendOptions().channelMono(sendChannelMono)));
+    }
+
+    @Test
+    void channelCloseHandlerDefaultsToClosingTheChannel() {
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+        assertSame(ChannelCloseHandlers.SENDER_CHANNEL_CLOSE_HANDLER_INSTANCE, sender.getChannelCloseHandler());
+    }
+
+    @Test
+    void channelCloseHandlerIsTheOneOfTheChannelPool() {
+        BiConsumer<SignalType, Channel> poolHandler = (signal, ch) -> { };
+        ChannelPool pool = mock(ChannelPool.class);
+        doReturn(Mono.just(channel)).when(pool).getChannelMono();
+        when(pool.getChannelCloseHandler()).thenReturn(poolHandler);
+
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)).channelPool(pool));
+
+        assertSame(poolHandler, sender.getChannelCloseHandler());
+    }
+
+    @Test
+    void channelCloseHandlerIsTheConfiguredOne() {
+        BiConsumer<SignalType, Channel> custom = (signal, ch) -> { };
+
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)).channelCloseHandler(custom));
+
+        assertSame(custom, sender.getChannelCloseHandler());
     }
 
     @Test

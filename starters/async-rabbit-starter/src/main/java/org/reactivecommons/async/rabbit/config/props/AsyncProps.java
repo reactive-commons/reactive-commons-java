@@ -72,18 +72,13 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private int handOverPoolSize = 13;
 
     /**
-     * Capacity of the queue sitting in front of the publish hand-over pool. When full, new publishes fail fast with
-     * {@code SendFailureHandOverRejectedException} instead of queueing in memory while the broker is back-pressuring.
+     * Maximum number of messages waiting to be written to a channel: queued in front of the publish hand-over pool,
+     * and handed to a publishing flow but not written yet (e.g. while the broker blocks the connection). When reached,
+     * new publishes fail fast with {@code SendFailureHandOverRejectedException} instead of queueing in memory while
+     * the broker is back-pressuring.
      */
     @Builder.Default
     private int handOverQueueCapacity = 1024;
-
-    /**
-     * When {@code true}, publishes issued while the broker reports {@code connection.blocked} fail fast with
-     * {@code SendFailureBrokerBlockedException} instead of waiting until {@link #sendTimeout} elapses.
-     */
-    @Builder.Default
-    private boolean failFastOnBlocked = false;
 
     /**
      * How long a {@code connection.blocked} notification must persist before the health indicator reports DOWN. A
