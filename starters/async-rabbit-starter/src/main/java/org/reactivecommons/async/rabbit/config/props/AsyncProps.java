@@ -63,6 +63,35 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     @Builder.Default
     private Duration sendTimeout = Duration.ofSeconds(10);
 
+    /**
+     * Size of the publish hand-over thread pool: these threads hand each message to a publishing flow and can block
+     * inside {@code basicPublish} when the broker raises a resource alarm. Keep it small; back-pressure is
+     * surfaced through {@link #handOverQueueCapacity}.
+     */
+    @Builder.Default
+    private int handOverPoolSize = 13;
+
+    /**
+     * Capacity of the queue sitting in front of the publish hand-over pool. When full, new publishes fail fast with
+     * {@code SendFailureHandOverRejectedException} instead of queueing in memory while the broker is back-pressuring.
+     */
+    @Builder.Default
+    private int handOverQueueCapacity = 1024;
+
+    /**
+     * When {@code true}, publishes issued while the broker reports {@code connection.blocked} fail fast with
+     * {@code SendFailureBrokerBlockedException} instead of waiting until {@link #sendTimeout} elapses.
+     */
+    @Builder.Default
+    private boolean failFastOnBlocked = false;
+
+    /**
+     * How long a {@code connection.blocked} notification must persist before the health indicator reports DOWN. A
+     * short alarm (e.g. a transient disk flush) should not flap the health check.
+     */
+    @Builder.Default
+    private Duration blockedHealthGrace = Duration.ofSeconds(5);
+
     @Builder.Default
     private Boolean listenReplies = null;
 

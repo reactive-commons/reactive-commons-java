@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import io.micrometer.core.instrument.MeterRegistry;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.IoHandlerFactory;
 import io.netty.channel.MultiThreadIoEventLoopGroup;
@@ -16,6 +17,7 @@ import org.reactivecommons.async.commons.DLQDiscardNotifier;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
+import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -63,6 +65,12 @@ public final class RabbitMQSetupUtils {
      * The connection of each factory once it has been established, to inspect it without waiting for it.
      */
     private static final ConcurrentMap<ConnectionFactory, Connection> ESTABLISHED_CONNECTIONS =
+            new ConcurrentHashMap<>();
+    /**
+     * Tracks the {@code connection.blocked} / {@code connection.unblocked} state of each cached connection, so the
+     * health indicator and the sender can observe broker-side back-pressure.
+     */
+    private static final ConcurrentMap<ConnectionFactory, ConnectionBlockedState> CONNECTION_BLOCKED_STATES =
             new ConcurrentHashMap<>();
 
     /**
@@ -120,16 +128,26 @@ public final class RabbitMQSetupUtils {
                                                             AsyncProps props,
                                                             MessageConverter converter,
                                                             UnroutableMessageNotifier unroutableMessageNotifier) {
+        return createMessageSender(provider, props, converter, unroutableMessageNotifier, null, null);
+    }
+
+    public static ReactiveMessageSender createMessageSender(ConnectionFactoryProvider provider,
+                                                            AsyncProps props,
+                                                            MessageConverter converter,
+                                                            UnroutableMessageNotifier unroutableMessageNotifier,
+                                                            MeterRegistry meterRegistry,
+                                                            String domain) {
         final Sender sender = new Sender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
         final TopologyCreator topologyCreator = new TopologyCreator(sender, props.getQueueType());
-        final Duration sendTimeout = props.getSendTimeout();
-        if (sendTimeout == null) {
-            return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
-                    props.getMandatory(), unroutableMessageNotifier);
-        }
+        final Duration sendTimeout = props.getSendTimeout() != null
+                ? props.getSendTimeout()
+                : Duration.ofSeconds(10);
+        final ConnectionBlockedState blockedState = blockedState(provider.getConnectionFactory());
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
-                props.getMandatory(), unroutableMessageNotifier, sendTimeout);
+                props.getMandatory(), unroutableMessageNotifier, sendTimeout,
+                props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
+                blockedState, props.isFailFastOnBlocked(), meterRegistry, domain);
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
@@ -179,6 +197,7 @@ public final class RabbitMQSetupUtils {
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName) {
         return CONNECTION_CACHE.computeIfAbsent(factory, f -> {
             log.info("Creating connection mono to RabbitMQ Broker in host '{}'", f.getHost());
+            final ConnectionBlockedState blockedState = blockedState(f);
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(SHARED_TYPE, "")
                     ))
@@ -188,7 +207,10 @@ public final class RabbitMQSetupUtils {
                     ))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
-                    .doOnNext(connection -> ESTABLISHED_CONNECTIONS.put(f, connection))
+                    .doOnNext(connection -> {
+                        ESTABLISHED_CONNECTIONS.put(f, connection);
+                        connection.addBlockedListener(blockedState::onBlocked, blockedState::onUnblocked);
+                    })
                     .cache();
         });
     }
@@ -202,6 +224,18 @@ public final class RabbitMQSetupUtils {
      */
     public static Optional<Connection> establishedConnection(ConnectionFactory factory) {
         return Optional.ofNullable(ESTABLISHED_CONNECTIONS.get(factory));
+    }
+
+    /**
+     * Returns the shared {@link ConnectionBlockedState} tracking {@code connection.blocked} notifications for the
+     * connection associated to the given factory. The state is lazily created on first access, so the sender and
+     * the health indicator see the same instance that the connection setup registers the listener on.
+     *
+     * @param factory the connection factory of a domain
+     * @return the shared state, never {@code null}
+     */
+    public static ConnectionBlockedState blockedState(ConnectionFactory factory) {
+        return CONNECTION_BLOCKED_STATES.computeIfAbsent(factory, f -> new ConnectionBlockedState());
     }
 
     // SSL based on RabbitConnectionFactoryBean
@@ -300,6 +334,7 @@ public final class RabbitMQSetupUtils {
             FACTORY_CACHE.clear();
             CONNECTION_CACHE.clear();
             ESTABLISHED_CONNECTIONS.clear();
+            CONNECTION_BLOCKED_STATES.clear();
             shutdownEventLoopGroup();
         }
     }

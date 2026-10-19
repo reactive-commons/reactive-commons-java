@@ -39,6 +39,8 @@ import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHea
 public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     static final String ERROR = "error";
     static final String LAST_FAILURE = "lastFailure";
+    static final String BLOCKED_SINCE = "connectionBlockedSince";
+    static final String BLOCKED_REASON = "connectionBlockedReason";
 
     /**
      * A confirm-flow failure is a normal event (the flow re-subscribes within 200 ms - 5 s): only several failures
@@ -47,10 +49,12 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
     static final long BROKEN_FLOW_FAILURE_THRESHOLD = 3;
     static final Duration LAST_FAILURE_MAX_AGE = Duration.ofSeconds(60);
     static final Duration FLOWS_DOWN_GRACE = Duration.ofSeconds(10);
+    static final Duration DEFAULT_BLOCKED_HEALTH_GRACE = Duration.ofSeconds(5);
 
     private final String domain;
     private final Supplier<Optional<Connection>> connection;
     private final Supplier<PublisherStatus> publisherStatus;
+    private final Duration blockedHealthGrace;
 
     /**
      * @param domain     the domain whose connection is reported
@@ -58,7 +62,7 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      *                   must not block.
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection) {
-        this(domain, connection, PublisherStatus::healthy);
+        this(domain, connection, PublisherStatus::healthy, DEFAULT_BLOCKED_HEALTH_GRACE);
     }
 
     /**
@@ -69,9 +73,23 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
      */
     public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
                                          Supplier<PublisherStatus> publisherStatus) {
+        this(domain, connection, publisherStatus, DEFAULT_BLOCKED_HEALTH_GRACE);
+    }
+
+    /**
+     * @param domain             the domain whose connection is reported
+     * @param connection         supplies the established connection of the domain, empty while it is not established.
+     *                           It must not block.
+     * @param publisherStatus    supplies the in-memory liveness of the domain's publishing flows. It must not block.
+     * @param blockedHealthGrace how long a {@code connection.blocked} alarm must persist before the indicator reports
+     *                           DOWN. A short alarm (transient disk flush) should not flap the check.
+     */
+    public RabbitReactiveHealthIndicator(String domain, Supplier<Optional<Connection>> connection,
+                                         Supplier<PublisherStatus> publisherStatus, Duration blockedHealthGrace) {
         this.domain = domain;
         this.connection = connection;
         this.publisherStatus = publisherStatus;
+        this.blockedHealthGrace = blockedHealthGrace != null ? blockedHealthGrace : DEFAULT_BLOCKED_HEALTH_GRACE;
     }
 
     @Override
@@ -89,7 +107,16 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
             return builder.down().withDetail(ERROR, "Connection to RabbitMQ is closed: " + closeReason(conn)).build();
         }
         PublisherStatus status = publisherStatus.get();
-        if (publisherBroken(status, Instant.now())) {
+        Instant now = Instant.now();
+        if (connectionBlocked(status, now)) {
+            return builder.down()
+                    .withDetail(ERROR, connectionBlockedReason(status))
+                    .withDetail(BLOCKED_SINCE, status.connectionBlockedSince())
+                    .withDetail(BLOCKED_REASON, status.connectionBlockedReason())
+                    .withDetail(VERSION, serverVersion(conn))
+                    .build();
+        }
+        if (publisherBroken(status, now)) {
             return builder.down()
                     .withDetail(ERROR, publisherBrokenReason(status))
                     .withDetail(LAST_FAILURE, status.lastConfirmFailure())
@@ -114,6 +141,19 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
                 && status.confirmFlowsDownSince() != null
                 && !status.confirmFlowsDownSince().isAfter(now.minus(FLOWS_DOWN_GRACE));
         return flowsFailing || flowsDown;
+    }
+
+    private boolean connectionBlocked(PublisherStatus status, Instant now) {
+        if (status == null || !status.connectionBlocked()) {
+            return false;
+        }
+        Instant since = status.connectionBlockedSince();
+        return since != null && !since.isAfter(now.minus(blockedHealthGrace));
+    }
+
+    private static String connectionBlockedReason(PublisherStatus status) {
+        return "RabbitMQ broker is back-pressuring (connection.blocked since " + status.connectionBlockedSince()
+                + "): " + status.connectionBlockedReason();
     }
 
     private static String publisherBrokenReason(PublisherStatus status) {

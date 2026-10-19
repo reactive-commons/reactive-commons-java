@@ -484,6 +484,62 @@ two brokers, which means the described scenarios are limited to a maximum of two
 - **Proper Use of Configuration Properties:** Adjusting configuration properties according to the specific use case
   allows for resource optimization and avoids unnecessary configurations.
 
+## Sender resilience and back-pressure
+
+Every publish terminates within a bounded time with a typed outcome, so a hung broker (or socket) cannot silently
+stall the publisher. The relevant properties and their defaults:
+
+| Property | Default | Purpose |
+|---|---|---|
+| `sendTimeout` | `10s` | Maximum time a sender waits for the outcome of a message before failing the caller. |
+| `handOverPoolSize` | `13` | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure). |
+| `handOverQueueCapacity` | `1024` | Capacity of the queue in front of the hand-over pool. When full, new publishes fail fast instead of growing in memory. |
+| `failFastOnBlocked` | `false` | When `true`, publishes issued while the broker signals `connection.blocked` fail fast with `SendFailureBrokerBlockedException` instead of waiting for `sendTimeout`. |
+| `blockedHealthGrace` | `5s` | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN. |
+
+```yaml title="application.yaml"
+app:
+  async:
+    app:
+      sendTimeout: 10s
+      handOverPoolSize: 13
+      handOverQueueCapacity: 1024
+      failFastOnBlocked: false
+      blockedHealthGrace: 5s
+```
+
+### Publisher outcome exceptions
+
+Every send terminates with one of the following typed exceptions. They all extend `SendFailureNoAckException`, so
+existing catch-blocks keep working.
+
+| Exception | When it fires | Caller contract |
+|---|---|---|
+| `SendFailureNoAckException` | No publishing flow became available within `sendTimeout`, or the broker returned a channel-level nack. | Message was NOT published. Safe to retry. |
+| `SendConfirmUnknownException` | Message was handed to a flow but the broker did not confirm it in time (channel/connection failed, or `sendTimeout` elapsed with the message already in flight). | **At-least-once:** the message may or may not have reached the broker; a retry can produce a duplicate. Make the consumer idempotent, or use a correlation ID to deduplicate. |
+| `SendFailureReturnedException` | Mandatory publish with no queue bound to the routing key. | Message was NOT delivered. Safe to retry after fixing the topology. |
+| `SendFailureBrokerBlockedException` | Only when `failFastOnBlocked=true` and the broker signalled `connection.blocked`. | Message was NOT published. Safe to retry after the alarm clears. |
+| `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached). | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces. |
+
+:::caution[`requestReply` is at-least-once]
+The query request and its reply are both published with `sendNoConfirm`. On a `SendFailureNoAckException` after
+`sendTimeout`, the request **may still have reached the broker** — callers must either be idempotent or use a
+correlation ID to deduplicate replies. The same caveat applies to the `reply(...)` call in query handlers.
+:::
+
+### Observability
+
+The sender exposes the following metrics on the application's `MeterRegistry`:
+
+| Metric | Type | Tags | Meaning |
+|---|---|---|---|
+| `reactive_commons.publish.outcome` | Counter | `outcome` ∈ {`ack`, `nack`, `unknown`, `returned`, `rejected`, `timeout`, `blocked`}, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with its final outcome. |
+| `reactive_commons.publish.flow.resubscribe` | Counter | `kind` ∈ {`confirm`, `noConfirm`}, `domain` | A publishing flow terminated and is being re-subscribed. |
+| `reactive_commons.publish.flow.live` | Gauge | `kind`, `domain` | Number of publishing flows currently holding a channel. |
+| `reactive_commons.publish.connection.blocked` | FunctionCounter | `domain` | Number of `connection.blocked` alarms observed since the application started. |
+| `reactive_commons.publish.connection.blocked.state` | Gauge | `domain` | `1` while the broker is blocking the connection, `0` otherwise. |
+| `reactive_commons.publish.hand_over.queue.size` | Gauge | `domain` | Current depth of the publish hand-over queue — a sustained non-zero value signals back-pressure. |
+
 ### Connections in microservices with multiple replicas
 
 In a typical cloud production environment, such as AWS, microservices are deployed in containers orchestrated by

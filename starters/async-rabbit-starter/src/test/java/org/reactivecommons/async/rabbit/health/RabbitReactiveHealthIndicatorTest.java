@@ -97,7 +97,7 @@ class RabbitReactiveHealthIndicatorTest {
 
     @Test
     void shouldBeDownWhenThePublishingFlowsKeepFailingWithoutAConfirmedMessage() {
-        var status = new PublisherStatus(true, true, 3, Instant.now(), "boom", null);
+        var status = new PublisherStatus(true, true, 3, Instant.now(), "boom", null, false, null, null);
         var indicator = openConnectionIndicator(status);
 
         StepVerifier.create(indicator.health())
@@ -113,21 +113,23 @@ class RabbitReactiveHealthIndicatorTest {
 
     @Test
     void shouldBeUpWhileTheNumberOfFailuresIsBelowTheThreshold() {
-        var status = new PublisherStatus(true, true, 2, Instant.now(), "boom", null);
+        var status = new PublisherStatus(true, true, 2, Instant.now(), "boom", null, false, null, null);
 
         assertThat(healthOf(openConnectionIndicator(status))).isEqualTo(RCHealth.Status.UP);
     }
 
     @Test
     void shouldBeUpWhenTheLastFailureIsStale() {
-        var status = new PublisherStatus(true, true, 10, Instant.now().minusSeconds(120), "old failure", null);
+        var status = new PublisherStatus(true, true, 10, Instant.now().minusSeconds(120), "old failure", null,
+                false, null, null);
 
         assertThat(healthOf(openConnectionIndicator(status))).isEqualTo(RCHealth.Status.UP);
     }
 
     @Test
     void shouldBeDownWhenNoConfirmFlowHasBeenLiveForLongerThanTheGracePeriod() {
-        var status = new PublisherStatus(false, true, 0, null, null, Instant.now().minusSeconds(30));
+        var status = new PublisherStatus(false, true, 0, null, null, Instant.now().minusSeconds(30),
+                false, null, null);
         var indicator = openConnectionIndicator(status);
 
         StepVerifier.create(indicator.health())
@@ -141,7 +143,8 @@ class RabbitReactiveHealthIndicatorTest {
 
     @Test
     void shouldBeUpWhileTheFlowsAreBrieflyDown() {
-        var status = new PublisherStatus(false, true, 0, null, null, Instant.now().minusSeconds(2));
+        var status = new PublisherStatus(false, true, 0, null, null, Instant.now().minusSeconds(2),
+                false, null, null);
 
         assertThat(healthOf(openConnectionIndicator(status))).isEqualTo(RCHealth.Status.UP);
     }
