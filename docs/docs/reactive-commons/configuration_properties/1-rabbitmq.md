@@ -359,7 +359,6 @@ to configure options that are not exposed through standard properties, such as c
 automatic recovery strategies:
 
 ```java
-
 @Bean
 public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
     return (connectionFactory, asyncProps) -> {
@@ -495,12 +494,12 @@ immediately with `SendFailureBrokerBlockedException` instead of waiting for `sen
 not published, so the caller can retry it safely once the alarm clears. This is not configurable. The relevant
 properties and their defaults:
 
-| Property | Default | Purpose |
-|---|---|---|
-| `sendTimeout` | `10s` | Maximum time a sender waits for the outcome of a message before failing the caller. |
-| `handOverPoolSize` | `13` | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure). |
-| `handOverQueueCapacity` | `1024` | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. |
-| `blockedHealthGrace` | `5s` | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN. |
+| Property                | Default | Purpose                                                                                                                                                                                                                                                               |
+|-------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `sendTimeout`           | `10s`   | Maximum time a sender waits for the outcome of a message before failing the caller.                                                                                                                                                                                   |
+| `handOverPoolSize`      | `13`    | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure).                                                                                                                                                   |
+| `handOverQueueCapacity` | `1024`  | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. |
+| `blockedHealthGrace`    | `5s`    | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN.                                                                                                                                                                          |
 
 ```yaml title="application.yaml"
 app:
@@ -517,13 +516,13 @@ app:
 Every send terminates with one of the following typed exceptions. They all extend `SendFailureNoAckException`, so
 existing catch-blocks keep working.
 
-| Exception | When it fires | Caller contract |
-|---|---|---|
-| `SendFailureNoAckException` | No publishing flow became available within `sendTimeout`, the message was still waiting to be written when `sendTimeout` elapsed (it is then dropped, never published late), or the broker returned a channel-level nack. | Message was NOT published. Safe to retry. |
-| `SendConfirmUnknownException` | Message was handed to a flow but the broker did not confirm it in time (channel/connection failed, or `sendTimeout` elapsed with the message already in flight). | **At-least-once:** the message may or may not have reached the broker; a retry can produce a duplicate. Make the consumer idempotent, or use a correlation ID to deduplicate. |
-| `SendFailureReturnedException` | Mandatory publish with no queue bound to the routing key. | Message was NOT delivered. Safe to retry after fixing the topology. |
-| `SendFailureBrokerBlockedException` | The broker signalled `connection.blocked` (memory or disk alarm) and has not unblocked the connection yet: the publish fails immediately instead of waiting for `sendTimeout`. | Message was NOT published. Safe to retry after the alarm clears. |
-| `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached). | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces. |
+| Exception                              | When it fires                                                                                                                                                                                                             | Caller contract                                                                                                                                                               |
+|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SendFailureNoAckException`            | No publishing flow became available within `sendTimeout`, the message was still waiting to be written when `sendTimeout` elapsed (it is then dropped, never published late), or the broker returned a channel-level nack. | Message was NOT published. Safe to retry.                                                                                                                                     |
+| `SendConfirmUnknownException`          | Message was handed to a flow but the broker did not confirm it in time (channel/connection failed, or `sendTimeout` elapsed with the message already in flight).                                                          | **At-least-once:** the message may or may not have reached the broker; a retry can produce a duplicate. Make the consumer idempotent, or use a correlation ID to deduplicate. |
+| `SendFailureReturnedException`         | Mandatory publish with no queue bound to the routing key.                                                                                                                                                                 | Message was NOT delivered. Safe to retry after fixing the topology.                                                                                                           |
+| `SendFailureBrokerBlockedException`    | The broker signalled `connection.blocked` (memory or disk alarm) and has not unblocked the connection yet: the publish fails immediately instead of waiting for `sendTimeout`.                                            | Message was NOT published. Safe to retry after the alarm clears.                                                                                                              |
+| `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached).                                                                                                                                  | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces.                                             |
 
 :::caution[`requestReply` is at-least-once]
 The query request and its reply are both published with `sendNoConfirm`. On a `SendFailureNoAckException` after
@@ -535,14 +534,14 @@ correlation ID to deduplicate replies. The same caveat applies to the `reply(...
 
 The sender exposes the following metrics on the application's `MeterRegistry`:
 
-| Metric | Type | Tags | Meaning |
-|---|---|---|---|
-| `reactive_commons.publish.outcome` | Counter | `outcome`, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with its final outcome. With `confirm=true` (events, commands): `ack`, `nack`, `unknown`, `returned`, `rejected`, `timeout`, `blocked`. With `confirm=false` (queries and replies): `published` (written to the channel, **not** confirmed by the broker), `failed`, `rejected`, `timeout`, `blocked`. |
-| `reactive_commons.publish.flow.resubscribe` | Counter | `kind` ∈ {`confirm`, `noConfirm`}, `domain` | A publishing flow terminated and is being re-subscribed. |
-| `reactive_commons.publish.flow.live` | Gauge | `kind`, `domain` | Number of publishing flows currently holding a channel. |
-| `reactive_commons.publish.connection.blocked` | FunctionCounter | `domain` | Number of `connection.blocked` alarms observed since the application started. |
-| `reactive_commons.publish.connection.blocked.state` | Gauge | `domain` | `1` while the broker is blocking the connection, `0` otherwise. |
-| `reactive_commons.publish.hand_over.queue.size` | Gauge | `domain` | Current depth of the publish hand-over queue — a sustained non-zero value signals back-pressure. |
+| Metric                                              | Type            | Tags                                               | Meaning                                                                                                                                                                                                                                                                                                                                  |
+|-----------------------------------------------------|-----------------|----------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reactive_commons.publish.outcome`                  | Counter         | `outcome`, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with its final outcome. With `confirm=true` (events, commands): `ack`, `nack`, `unknown`, `returned`, `rejected`, `timeout`, `blocked`. With `confirm=false` (queries and replies): `published` (written to the channel, **not** confirmed by the broker), `failed`, `rejected`, `timeout`, `blocked`. |
+| `reactive_commons.publish.flow.resubscribe`         | Counter         | `kind` ∈ {`confirm`, `noConfirm`}, `domain`        | A publishing flow terminated and is being re-subscribed.                                                                                                                                                                                                                                                                                 |
+| `reactive_commons.publish.flow.live`                | Gauge           | `kind`, `domain`                                   | Number of publishing flows currently holding a channel.                                                                                                                                                                                                                                                                                  |
+| `reactive_commons.publish.connection.blocked`       | FunctionCounter | `domain`                                           | Number of `connection.blocked` alarms observed since the application started.                                                                                                                                                                                                                                                            |
+| `reactive_commons.publish.connection.blocked.state` | Gauge           | `domain`                                           | `1` while the broker is blocking the connection, `0` otherwise.                                                                                                                                                                                                                                                                          |
+| `reactive_commons.publish.hand_over.queue.size`     | Gauge           | `domain`                                           | Current depth of the publish hand-over queue — a sustained non-zero value signals back-pressure.                                                                                                                                                                                                                                         |
 
 ## Subscriber resilience and observability
 
@@ -551,10 +550,10 @@ listener that silently stops delivering (orphaned consumer tag, failing restart 
 handler) surfaces as DOWN in the health check with the broken queue in the details, and as counters/gauges on the
 `MeterRegistry`.
 
-| Property | Default | Purpose |
-|---|---|---|
-| `subscriberInactiveGrace` | `10s` | How long a listener may stay inactive (channel closed, consumer cancelled, upstream error) before the health indicator reports DOWN. A short gap during normal re-subscription should not flap the check. |
-| `handlerTimeout` | *(off)* | Maximum time a handler may run before its message is nacked as a failed delivery. When set, a hung handler nacks instead of holding a prefetch slot forever, and its thread is interrupted (code that ignores interrupts, such as a socket read without timeout, keeps it). The message is redelivered while the timed-out handler may still have produced side effects: handlers must be idempotent. Combine with `maxRetries` or `withDLQRetry` to avoid a hot-requeue loop on a chronically slow handler. |
+| Property                  | Default | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|---------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `subscriberInactiveGrace` | `10s`   | How long a listener may stay inactive (channel closed, consumer cancelled, upstream error) before the health indicator reports DOWN. A short gap during normal re-subscription should not flap the check.                                                                                                                                                                                                                                                                                                    |
+| `handlerTimeout`          | *(off)* | Maximum time a handler may run before its message is nacked as a failed delivery. When set, a hung handler nacks instead of holding a prefetch slot forever, and its thread is interrupted (code that ignores interrupts, such as a socket read without timeout, keeps it). The message is redelivered while the timed-out handler may still have produced side effects: handlers must be idempotent. Combine with `maxRetries` or `withDLQRetry` to avoid a hot-requeue loop on a chronically slow handler. |
 
 ```yaml title="application.yaml"
 app:
@@ -590,14 +589,14 @@ correlation ID.
 
 The listener side exposes the following metrics on the application's `MeterRegistry`:
 
-| Metric | Type | Tags | Meaning |
-|---|---|---|---|
-| `reactive_commons.consumer.messages` | Counter | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain` | One per message processed by a listener, tagged with its outcome. |
-| `reactive_commons.consumer.handler.latency` | Timer | `queue`, `domain` | Time taken by the handler, from the moment the message was delivered to the moment it completed (ack) or failed. |
-| `reactive_commons.consumer.restart` | Counter | `reason` ∈ {`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology. |
-| `reactive_commons.consumer.active` | Gauge | `queue`, `domain` | `1` while the broker has a consumer registered for the listener, `0` otherwise. |
-| `reactive_commons.consumer.last_message_age_seconds` | Gauge | `queue`, `domain` | Seconds since the last message was delivered to the listener. A large value on a queue that should be receiving traffic is a reliable "stuck consumer" signal. |
-| `reactive_commons.consumer.replies.lost` | Counter | `domain` | Number of pending `requestReply` correlations that were failed with `ReplyLostOnReconnectException` after a reply-listener restart. |
+| Metric                                               | Type    | Tags                                                                                                                                                                                                                                  | Meaning                                                                                                                                                        |
+|------------------------------------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reactive_commons.consumer.messages`                 | Counter | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain`                                                                                                                                                     | One per message processed by a listener, tagged with its outcome.                                                                                              |
+| `reactive_commons.consumer.handler.latency`          | Timer   | `queue`, `domain`                                                                                                                                                                                                                     | Time taken by the handler, from the moment the message was delivered to the moment it completed (ack) or failed.                                               |
+| `reactive_commons.consumer.restart`                  | Counter | `reason` ∈ {`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology.  |
+| `reactive_commons.consumer.active`                   | Gauge   | `queue`, `domain`                                                                                                                                                                                                                     | `1` while the broker has a consumer registered for the listener, `0` otherwise.                                                                                |
+| `reactive_commons.consumer.last_message_age_seconds` | Gauge   | `queue`, `domain`                                                                                                                                                                                                                     | Seconds since the last message was delivered to the listener. A large value on a queue that should be receiving traffic is a reliable "stuck consumer" signal. |
+| `reactive_commons.consumer.replies.lost`             | Counter | `domain`                                                                                                                                                                                                                              | Number of pending `requestReply` correlations that were failed with `ReplyLostOnReconnectException` after a reply-listener restart.                            |
 
 ### Connections in microservices with multiple replicas
 
