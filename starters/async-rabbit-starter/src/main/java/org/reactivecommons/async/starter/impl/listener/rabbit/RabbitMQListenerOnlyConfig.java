@@ -19,11 +19,22 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @Configuration
 public class RabbitMQListenerOnlyConfig {
 
+    /**
+     * Exposed as a bean so Spring closes it (inferred destroy method) when the context closes: it owns the sender
+     * used for the declarations.
+     */
+    @Bean(destroyMethod = "close")
+    @ConditionalOnMissingBean(DynamicRegistry.class)
+    public TopologyCreator topologyCreator(AsyncPropsDomain asyncPropsDomain,
+                                           ConnectionFactoryCustomizer cfCustomizer) {
+        AsyncProps props = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
+        return RabbitMQSetupUtils.createTopologyCreator(props, cfCustomizer);
+    }
+
     @Bean
     @ConditionalOnMissingBean(DynamicRegistry.class)
-    public DynamicRegistry dynamicRegistry(AsyncPropsDomain asyncPropsDomain, DomainHandlers handlers, ConnectionFactoryCustomizer cfCustomizer) {
-        AsyncProps props = asyncPropsDomain.getProps(DEFAULT_DOMAIN);
-        TopologyCreator topologyCreator = RabbitMQSetupUtils.createTopologyCreator(props, cfCustomizer);
+    public DynamicRegistry dynamicRegistry(AsyncPropsDomain asyncPropsDomain, DomainHandlers handlers,
+                                           TopologyCreator topologyCreator) {
         IBrokerConfigProps brokerConfigProps = new BrokerConfigProps(asyncPropsDomain.getProps(DEFAULT_DOMAIN));
         return new DynamicRegistryImp(handlers.get(DEFAULT_DOMAIN), topologyCreator, brokerConfigProps);
     }

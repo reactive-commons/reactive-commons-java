@@ -67,6 +67,12 @@ public class ReactiveCommonsConfig {
 
     @Bean
     @ConditionalOnMissingBean
+    public BrokerProviderLifecycleManager brokerProviderLifecycleManager(ConnectionManager connectionManager) {
+        return new BrokerProviderLifecycleManager(connectionManager);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
     public BrokerConfig brokerConfig() {
         return new BrokerConfig();
     }

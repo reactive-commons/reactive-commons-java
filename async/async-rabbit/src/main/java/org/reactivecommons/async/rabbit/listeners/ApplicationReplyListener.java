@@ -8,11 +8,17 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
+import java.time.Duration;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Level;
 
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
@@ -25,6 +31,8 @@ import static reactor.rabbitmq.QueueSpecification.queue;
 @Log
 public class ApplicationReplyListener {
 
+    private static final Duration RESTART_DELAY = Duration.ofMillis(200);
+
     private final ReactiveReplyRouter router;
     private final Receiver receiver;
     private final TopologyCreator creator;
@@ -33,6 +41,9 @@ public class ApplicationReplyListener {
 
     private final boolean createTopology;
     private volatile Flux<Delivery> deliveryFlux;
+    private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
+    private final AtomicBoolean stopped = new AtomicBoolean(false);
+    private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
 
     public ApplicationReplyListener(ReactiveReplyRouter router, ReactiveMessageListener listener, String queueName,
                                     String exchangeName, boolean createTopology) {
@@ -69,12 +80,49 @@ public class ApplicationReplyListener {
                     }
                 }));
 
-        onTerminate();
+        subscribe();
     }
 
-    private void onTerminate() {
-        deliveryFlux.doOnTerminate(this::onTerminate)
-                .subscribe(new LoggerSubscriber<>(getClass().getName()));
+    /**
+     * Stops listening for replies. The current subscription is cancelled and the listener is not restarted.
+     */
+    public void stop() {
+        stopped.set(true);
+        final Disposable subscription = activeSubscription.getAndSet(null);
+        if (subscription != null) {
+            subscription.dispose();
+        }
+    }
+
+    private void subscribe() {
+        if (stopped.get()) {
+            return;
+        }
+        final Disposable subscription = deliveryFlux.doOnTerminate(this::scheduleRestart)
+                .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
+        final Disposable previous = activeSubscription.getAndSet(subscription);
+        if (previous != null && previous != subscription) {
+            previous.dispose();
+        }
+        if (stopped.get() && activeSubscription.compareAndSet(subscription, null)) {
+            // stop() ran while this subscription was being created
+            subscription.dispose();
+        }
+    }
+
+    /**
+     * Schedules a new subscription after the current one terminated. The restart is never done from within the
+     * termination callback: subscribing there would recurse until the stack overflows when the new subscription fails
+     * synchronously (e.g. the connection is already closed).
+     */
+    private void scheduleRestart() {
+        if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Schedulers.boundedElastic().schedule(() -> {
+            restartScheduled.set(false);
+            subscribe();
+        }, RESTART_DELAY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
 }

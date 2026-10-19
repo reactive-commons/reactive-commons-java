@@ -17,7 +17,7 @@ import java.util.Optional;
  Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0
  .0.RC2
  */
-public class TopologyCreator {
+public class TopologyCreator implements AutoCloseable {
 
     private final Sender sender;
     private final String queueType;
@@ -25,6 +25,15 @@ public class TopologyCreator {
     public TopologyCreator(Sender sender, String queueType) {
         this.sender = sender;
         this.queueType = queueType;
+    }
+
+    /**
+     * Releases the resources of the sender that backs the declarations (its channels and schedulers), not the
+     * connection, which is shared and cached per connection factory.
+     */
+    @Override
+    public void close() {
+        sender.close();
     }
 
     public Mono<AMQP.Exchange.DeclareOk> declare(ExchangeSpecification exchange) {

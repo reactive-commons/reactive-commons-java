@@ -38,4 +38,11 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
     void listenReplies();
 
     Mono<RCHealth> healthCheck();
+
+    /**
+     * Stops the listeners and releases the resources (threads, connections) owned by this provider. Called when the
+     * application context closes. The default implementation does nothing.
+     */
+    default void close() {
+    }
 }

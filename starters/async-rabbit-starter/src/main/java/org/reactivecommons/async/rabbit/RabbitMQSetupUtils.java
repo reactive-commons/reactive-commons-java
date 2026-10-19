@@ -122,10 +122,14 @@ public final class RabbitMQSetupUtils {
                                                             UnroutableMessageNotifier unroutableMessageNotifier) {
         final Sender sender = new Sender(reactiveCommonsSenderOptions(props.getAppName(), provider,
                 props.getConnectionProperties()));
-        return new ReactiveMessageSender(sender, props.getAppName(), converter, new TopologyCreator(sender,
-                props.getQueueType()),
-                props.getMandatory(), unroutableMessageNotifier
-        );
+        final TopologyCreator topologyCreator = new TopologyCreator(sender, props.getQueueType());
+        final Duration sendTimeout = props.getSendTimeout();
+        if (sendTimeout == null) {
+            return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
+                    props.getMandatory(), unroutableMessageNotifier);
+        }
+        return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
+                props.getMandatory(), unroutableMessageNotifier, sendTimeout);
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {

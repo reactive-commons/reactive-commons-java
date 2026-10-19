@@ -84,7 +84,7 @@ subprojects {
         useJUnitPlatform()
         // The performance tests call mocks hundreds of thousands of times and Mockito keeps every invocation
         maxHeapSize = "1g"
-        if (System.getProperty("env.ci") == "true") {
+        if ("true".equals(System.getProperty("env.ci"))) {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
 
@@ -121,6 +121,12 @@ subprojects {
 
         tasks.withType(GenerateModuleMetadata).configureEach {
             enabled = false
+        }
+
+        tasks.withType(Test) {
+            testLogging {
+                events "skipped"
+            }
         }
 
         publishing {

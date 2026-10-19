@@ -29,11 +29,11 @@ class RabbitMQSetupUtilsTest {
     }
 
     @Test
-    void clientDefaultsAreKeptWhenTheyAreNotConfigured() {
+    void heartbeatDefaultsToTenSecondsWhileTheClientConnectionTimeoutIsKept() {
         ConnectionFactory factory = connectionFactory(new RabbitProperties());
 
         assertThat(factory.getConnectionTimeout()).isEqualTo(ConnectionFactory.DEFAULT_CONNECTION_TIMEOUT);
-        assertThat(factory.getRequestedHeartbeat()).isEqualTo(ConnectionFactory.DEFAULT_HEARTBEAT);
+        assertThat(factory.getRequestedHeartbeat()).isEqualTo(10);
     }
 
     /**

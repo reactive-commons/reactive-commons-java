@@ -9,6 +9,8 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
+import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
@@ -24,14 +26,19 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -46,8 +53,9 @@ import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
 @Log
-public class ReactiveMessageSender {
+public class ReactiveMessageSender implements AutoCloseable {
     static final Duration DEFAULT_SEND_TIMEOUT = Duration.ofSeconds(10);
+    private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
     private static final Duration AVAILABILITY_POLL_INTERVAL = Duration.ofMillis(50);
@@ -61,6 +69,7 @@ public class ReactiveMessageSender {
     private final TopologyCreator topologyCreator;
     private final boolean isMandatory;
     private final UnroutableMessageNotifier unroutableMessageNotifier;
+    @Getter
     private final Duration sendTimeout;
 
     private final AtomicReferenceArray<FluxSink<OutboundMessage>> confirmSinks =
@@ -68,6 +77,18 @@ public class ReactiveMessageSender {
     private final AtomicReference<FluxSink<OutboundMessage>> noConfirmSink = new AtomicReference<>();
     private final AtomicInteger nextConfirmSink = new AtomicInteger();
     private final AtomicLong counter = new AtomicLong();
+
+    private final AtomicInteger activeConfirmFlows = new AtomicInteger();
+    private final AtomicInteger activeNoConfirmFlows = new AtomicInteger();
+    private final AtomicReference<Instant> confirmFlowsDownSince = new AtomicReference<>();
+    private final AtomicLong consecutiveConfirmFailures = new AtomicLong();
+    private final AtomicReference<Instant> lastConfirmFailure = new AtomicReference<>();
+    private final AtomicReference<String> lastConfirmFailureMessage = new AtomicReference<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> firstResubscribeWarning = new ConcurrentHashMap<>();
+
+    private final List<Disposable> flowSubscriptions = new ArrayList<>(NUMBER_OF_SENDER_SUBSCRIPTIONS + 1);
+    private final Set<PendingMessage> pendingMessages = ConcurrentHashMap.newKeySet();
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
      * Completes the callers' Monos, so their continuations never run on the broker connection threads.
@@ -89,10 +110,10 @@ public class ReactiveMessageSender {
                 DEFAULT_SEND_TIMEOUT);
     }
 
-    ReactiveMessageSender(Sender sender, String sourceApplication,
-                          MessageConverter messageConverter, TopologyCreator topologyCreator,
-                          boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
-                          Duration sendTimeout) {
+    public ReactiveMessageSender(Sender sender, String sourceApplication,
+                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
+                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
+                                 Duration sendTimeout) {
         this.sender = sender;
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
@@ -107,23 +128,85 @@ public class ReactiveMessageSender {
         for (int i = 0; i < NUMBER_OF_SENDER_SUBSCRIPTIONS; ++i) {
             final int index = i;
             final String flowName = "publisher-confirms flow #" + index;
-            Flux.defer(() -> sender.sendWithTypedPublishConfirms(
-                            Flux.create(sink -> register(sink, () -> confirmSinks.set(index, sink),
-                                    () -> confirmSinks.compareAndSet(index, sink, null))),
+            flowSubscriptions.add(Flux.defer(() -> sender.sendWithTypedPublishConfirms(
+                            Flux.create(sink -> register(sink,
+                                    () -> onConfirmFlowRegistered(index, sink),
+                                    () -> onConfirmFlowDisposed(index, sink))),
                             confirmSendOptions()))
                     .doOnNext(this::onConfirmResult)
                     .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
-                    .retryWhen(resubscribe(flowName))
-                    .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ " + flowName + " stopped"));
+                    .retryWhen(resubscribe(flowName, true))
+                    .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ " + flowName + " stopped")));
         }
 
-        Flux.defer(() -> sender.send(
-                        Flux.create(sink -> register(sink, () -> noConfirmSink.set(sink),
-                                () -> noConfirmSink.compareAndSet(sink, null))),
+        flowSubscriptions.add(Flux.defer(() -> sender.send(
+                        Flux.create(sink -> register(sink,
+                                () -> onNoConfirmFlowRegistered(sink),
+                                () -> onNoConfirmFlowDisposed(sink))),
                         noConfirmSendOptions()))
                 .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
-                .retryWhen(resubscribe("no-confirm flow"))
-                .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ no-confirm flow stopped"));
+                .retryWhen(resubscribe("no-confirm flow", false))
+                .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ no-confirm flow stopped")));
+    }
+
+    /**
+     * Stops the publishing flows, fails the messages still waiting for an outcome and releases the sender threads.
+     * <p>
+     * A message whose hand-over races with the close may still be published after its caller was failed: delivery is
+     * at-least-once, so re-sending after a failure can produce a duplicate.
+     */
+    @Override
+    public void close() {
+        if (!closed.compareAndSet(false, true)) {
+            return;
+        }
+        pendingMessages.forEach(message -> message.fail(shutdownFailure(null)));
+        pendingMessages.clear();
+        // cancel the flows (and their re-subscription) before the executors: nothing must be re-subscribed
+        flowSubscriptions.forEach(Disposable::dispose);
+        flowSubscriptions.clear();
+        shutdownAndAwait(executorService2);
+        shutdownAndAwait(executorService);
+        sender.close();
+    }
+
+    private static SendFailureNoAckException shutdownFailure(Throwable cause) {
+        return new SendFailureNoAckException("Message not published: sender is shut down", cause);
+    }
+
+    private static void shutdownAndAwait(ExecutorService executor) {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private void onConfirmFlowRegistered(int index, FluxSink<OutboundMessage> sink) {
+        confirmSinks.set(index, sink);
+        activeConfirmFlows.incrementAndGet();
+        confirmFlowsDownSince.set(null);
+    }
+
+    private void onConfirmFlowDisposed(int index, FluxSink<OutboundMessage> sink) {
+        confirmSinks.compareAndSet(index, sink, null);
+        if (activeConfirmFlows.decrementAndGet() == 0) {
+            confirmFlowsDownSince.compareAndSet(null, Instant.now());
+        }
+    }
+
+    private void onNoConfirmFlowRegistered(FluxSink<OutboundMessage> sink) {
+        noConfirmSink.set(sink);
+        activeNoConfirmFlows.incrementAndGet();
+    }
+
+    private void onNoConfirmFlowDisposed(FluxSink<OutboundMessage> sink) {
+        noConfirmSink.compareAndSet(sink, null);
+        activeNoConfirmFlows.decrementAndGet();
     }
 
     /**
@@ -135,13 +218,43 @@ public class ReactiveMessageSender {
         add.run();
     }
 
-    private static Retry resubscribe(String flowName) {
+    /**
+     * Re-subscribes a terminated flow with backoff. The first failure of each flow is logged at WARNING so an outage
+     * is visible; later attempts are logged at FINE, otherwise a sustained outage would flood the log.
+     */
+    private Retry resubscribe(String flowName, boolean confirmFlow) {
         return Retry.backoff(Long.MAX_VALUE, RESUBSCRIBE_MIN_BACKOFF)
                 .maxBackoff(RESUBSCRIBE_MAX_BACKOFF)
                 .transientErrors(true)
-                .doBeforeRetry(signal -> log.log(Level.WARNING, () -> "RabbitMQ " + flowName
-                        + " terminated, re-subscribing with a new channel (attempt "
-                        + (signal.totalRetriesInARow() + 1) + "): " + signal.failure()));
+                .doBeforeRetry(signal -> {
+                    if (confirmFlow) {
+                        consecutiveConfirmFailures.incrementAndGet();
+                        lastConfirmFailure.set(Instant.now());
+                        lastConfirmFailureMessage.set(String.valueOf(signal.failure()));
+                    }
+                    log.log(resubscribeLogLevel(flowName), () -> "RabbitMQ " + flowName
+                            + " terminated, re-subscribing with a new channel (attempt "
+                            + (signal.totalRetriesInARow() + 1) + "): " + signal.failure());
+                });
+    }
+
+    private Level resubscribeLogLevel(String flowName) {
+        return firstResubscribeWarning.computeIfAbsent(flowName, key -> new AtomicBoolean())
+                .compareAndSet(false, true) ? Level.WARNING : Level.FINE;
+    }
+
+    /**
+     * In-memory liveness of the publishing flows, for health checks. A broken publishing path (e.g. flows endlessly
+     * re-subscribing while the connection stays open) can thus be told apart from a healthy one without network I/O.
+     */
+    public PublisherStatus publisherStatus() {
+        return new PublisherStatus(
+                activeConfirmFlows.get() > 0,
+                activeNoConfirmFlows.get() > 0,
+                consecutiveConfirmFailures.get(),
+                lastConfirmFailure.get(),
+                lastConfirmFailureMessage.get(),
+                confirmFlowsDownSince.get());
     }
 
     private SendOptions confirmSendOptions() {
@@ -191,6 +304,10 @@ public class ReactiveMessageSender {
 
     private void onConfirmResult(OutboundMessageResult<OutboundMessage> result) {
         try {
+            if (result.ack()) {
+                // a successful confirmation proves the publishing path works
+                consecutiveConfirmFailures.set(0);
+            }
             if (result.returned() && unroutableMessageNotifier != null) {
                 unroutableMessageNotifier.notifyUnroutableMessage(result);
             }
@@ -234,10 +351,21 @@ public class ReactiveMessageSender {
         final AtomicBoolean handedToAFlow = new AtomicBoolean();
         return Mono.<Void>create(monoSink -> {
                     final PendingMessage pending = messageFactory.apply(monoSink);
+                    if (closed.get()) {
+                        pending.fail(shutdownFailure(null));
+                        return;
+                    }
+                    pendingMessages.add(pending);
+                    pending.setOnFinished(() -> pendingMessages.remove(pending));
+                    if (closed.get()) {
+                        // close() may have collected the pending messages before this one was registered
+                        pending.fail(shutdownFailure(null));
+                        return;
+                    }
                     try {
                         executorService2.execute(() -> handOver(pending, sinkSelector, handedToAFlow));
                     } catch (RejectedExecutionException e) {
-                        pending.fail(new SendFailureNoAckException("Message not published: sender is shut down", e));
+                        pending.fail(shutdownFailure(e));
                     }
                 })
                 // no flow ready yet (start-up, re-subscription): wait for one
@@ -287,18 +415,33 @@ public class ReactiveMessageSender {
 
     public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey,
                                                                 Map<String, Object> headers, boolean persistent) {
-        return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
-                .as(outbound -> sender.sendWithPublishConfirms(outbound, new SendOptions()
-                        .exceptionHandler(ReactiveMessageSender::onConfirmPublishFailure)))
-                .flatMap(result -> {
-                    if (result.ack()) {
-                        return Mono.empty();
-                    }
-                    return Mono.error(result.unknown()
-                            ? new SendConfirmUnknownException("Event in doubt: the channel or the connection failed "
-                            + "before its confirmation")
-                            : new SendFailureNoAckException("Event no ACK in communications"));
-                });
+        return Flux.defer(() -> {
+            if (closed.get()) {
+                return Flux.<OutboundMessageResult>error(shutdownFailure(null));
+            }
+            return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
+                    .as(outbound -> sender.sendWithPublishConfirms(outbound, new SendOptions()
+                            .trackReturned(isMandatory)
+                            .exceptionHandler(ReactiveMessageSender::onConfirmPublishFailure)))
+                    .<OutboundMessageResult>flatMap(result -> {
+                        // a returned message is also acked: it must be checked first
+                        if (result.returned()) {
+                            return Mono.error(new SendFailureReturnedException("Message returned by the broker: no "
+                                    + "queue is bound to the routing key"));
+                        }
+                        if (result.ack()) {
+                            return Mono.empty();
+                        }
+                        return Mono.error(result.unknown()
+                                ? new SendConfirmUnknownException("Event in doubt: the channel or the connection "
+                                + "failed before its confirmation")
+                                : new SendFailureNoAckException("Event no ACK in communications"));
+                    });
+        })
+                .timeout(sendTimeout)
+                .onErrorMap(TimeoutException.class, e -> new SendConfirmUnknownException(
+                        "No confirmation received within " + sendTimeout + ": some messages of the batch may or "
+                        + "may not have reached the broker", e));
     }
 
     private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,
@@ -334,12 +477,23 @@ public class ReactiveMessageSender {
     private abstract static class PendingMessage extends OutboundMessage {
         private final MonoSink<Void> monoSink;
         private final AtomicBoolean finished = new AtomicBoolean();
+        private volatile Runnable onFinished = () -> { };
 
         PendingMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
                        MonoSink<Void> monoSink) {
             super(exchange, routingKey, properties, body);
             this.monoSink = monoSink;
-            monoSink.onCancel(() -> finished.set(true));
+            monoSink.onCancel(this::discard);
+        }
+
+        /**
+         * Registers a callback invoked exactly once when the message is finished (completed, failed or cancelled).
+         */
+        void setOnFinished(Runnable onFinished) {
+            this.onFinished = onFinished;
+            if (finished.get()) {
+                onFinished.run(); // finished before the hook was set: still notify
+            }
         }
 
         boolean isFinished() {
@@ -347,15 +501,27 @@ public class ReactiveMessageSender {
         }
 
         void succeed() {
-            if (finished.compareAndSet(false, true)) {
+            if (markFinished()) {
                 monoSink.success();
             }
         }
 
         void fail(Throwable error) {
-            if (finished.compareAndSet(false, true)) {
+            if (markFinished()) {
                 monoSink.error(error);
             }
+        }
+
+        private void discard() {
+            markFinished();
+        }
+
+        private boolean markFinished() {
+            if (finished.compareAndSet(false, true)) {
+                onFinished.run();
+                return true;
+            }
+            return false;
         }
 
         /**
@@ -377,7 +543,10 @@ public class ReactiveMessageSender {
         }
 
         void complete(OutboundMessageResult<OutboundMessage> result) {
-            if (result.ack()) {
+            if (result.returned()) {
+                fail(new SendFailureReturnedException("Message returned by the broker: no queue is bound to the "
+                        + "routing key"));
+            } else if (result.ack()) {
                 succeed();
             } else if (result.unknown()) {
                 fail(new SendConfirmUnknownException("The channel or the connection failed before the "

@@ -11,6 +11,8 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
+import java.time.Duration;
+
 
 @Getter
 @Setter
@@ -52,6 +54,14 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
 
     @Builder.Default
     private Integer retryDelay = 1000;
+
+    /**
+     * Maximum time a sender waits for the outcome of a message before failing the caller: a message that could not be
+     * handed to a publishing flow fails with {@code SendFailureNoAckException}, and a message handed to a flow but not
+     * confirmed in time fails with {@code SendConfirmUnknownException} (it may or may not have reached the broker).
+     */
+    @Builder.Default
+    private Duration sendTimeout = Duration.ofSeconds(10);
 
     @Builder.Default
     private Boolean listenReplies = null;

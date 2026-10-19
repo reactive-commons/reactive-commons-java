@@ -61,12 +61,13 @@ public class RabbitPropertiesBase {
 
     /**
      * Requested heartbeat timeout; zero for none. If a duration suffix is not specified,
-     * seconds will be used.
+     * seconds will be used. Defaults to 10 seconds (like Spring Boot's RabbitProperties), so a lost broker is
+     * detected within the heartbeat timeout instead of the client's 60-second default.
      */
     @Getter
     @Setter
     @DurationUnit(ChronoUnit.SECONDS)
-    private Duration requestedHeartbeat;
+    private Duration requestedHeartbeat = Duration.ofSeconds(10);
 
     /**
      * Whether to enable publisher confirms.

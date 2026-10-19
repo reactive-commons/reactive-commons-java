@@ -14,6 +14,7 @@ import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
@@ -25,6 +26,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -37,7 +40,10 @@ import static reactor.core.publisher.Mono.defer;
 @SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
+    private static final Duration RESTART_DELAY = Duration.ofMillis(200);
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
+    private final AtomicBoolean stopped = new AtomicBoolean(false);
+    private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
     protected final String queueName;
@@ -102,7 +108,7 @@ public abstract class GenericMessageListener {
                             " connection open: " + channel.getConnection().isOpen());
                     if (channel.getConnection().isOpen() && !channel.isOpen()) {
                         log.warning("Recovering listener for queue: " + queueName);
-                        onTerminate();
+                        scheduleRestart();
                     }
                 }));
 
@@ -117,7 +123,7 @@ public abstract class GenericMessageListener {
                     .transform(this::consumeFaultTolerant);
         }
 
-        onTerminate();
+        subscribe();
     }
 
     private String getRootCauseMessage(Throwable err) {
@@ -164,14 +170,47 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private void onTerminate() {
+    /**
+     * Stops consuming from the queue. The current subscription is cancelled and the listener is not restarted.
+     */
+    public void stop() {
+        stopped.set(true);
+        final Disposable subscription = activeSubscription.getAndSet(null);
+        if (subscription != null) {
+            subscription.dispose();
+        }
+    }
+
+    private void subscribe() {
+        if (stopped.get()) {
+            return;
+        }
         final Disposable subscription = messageFlux
-                .doOnTerminate(this::onTerminate)
+                .doOnTerminate(this::scheduleRestart)
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
         final Disposable previous = activeSubscription.getAndSet(subscription);
         if (previous != null && previous != subscription) {
             previous.dispose();
         }
+        if (stopped.get() && activeSubscription.compareAndSet(subscription, null)) {
+            // stop() ran while this subscription was being created
+            subscription.dispose();
+        }
+    }
+
+    /**
+     * Schedules a new subscription after the current one terminated. The restart is never done from within the
+     * termination callback: subscribing there would recurse until the stack overflows when the new subscription fails
+     * synchronously (e.g. the connection is already closed).
+     */
+    private void scheduleRestart() {
+        if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
+            return;
+        }
+        Schedulers.boundedElastic().schedule(() -> {
+            restartScheduled.set(false);
+            subscribe();
+        }, RESTART_DELAY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
     private void logExecution(String executorPath, Instant initTime, boolean success) {
