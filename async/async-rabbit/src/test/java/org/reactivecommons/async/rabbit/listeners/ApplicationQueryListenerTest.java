@@ -16,6 +16,7 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
@@ -44,6 +45,7 @@ import java.util.Optional;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyBoolean;
 import static org.mockito.Mockito.anyMap;
@@ -131,12 +133,10 @@ class ApplicationQueryListenerTest {
 
     @Test
     void shouldHandleErrorWhenNoQueryHandler() {
-        Function<Message, Mono<Object>> handler = applicationQueryListener.rawMessageHandler("nonExistent");
-        Message message = TestStubs.mockMessage();
-        Mono<Object> result = handler.apply(message);
-
-        StepVerifier.create(result)
-                .verifyErrorMessage("Handler Not registered for Query: nonExistent");
+        // not cached as a failing handler, and recognized by the listener as a message to discard
+        assertThatThrownBy(() -> applicationQueryListener.rawMessageHandler("nonExistent"))
+                .isInstanceOf(MissingHandlerException.class)
+                .hasMessage("No handler registered for query nonExistent");
     }
 
     @Test

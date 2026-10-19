@@ -3,6 +3,7 @@ package org.reactivecommons.async.starter.config;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.api.DefaultCommandHandler;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.DefaultQueryHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
@@ -49,15 +50,22 @@ public class ReactiveCommonsListenersConfig {
     @ConditionalOnMissingBean
     @SuppressWarnings("rawtypes")
     public DefaultQueryHandler defaultHandler() {
-        return (DefaultQueryHandler<Object, Object>) command ->
-                Mono.error(new RuntimeException("No Handler Registered"));
+        // a query without handler can never be served: listeners discard it instead of retrying it
+        return (DefaultQueryHandler<Object, Object>) query ->
+                Mono.error(new MissingHandlerException("query", "(served by the default handler)"));
     }
 
     @Bean
     @ConditionalOnMissingBean
     @SuppressWarnings("rawtypes")
     public DefaultCommandHandler defaultCommandHandler() {
-        return message -> Mono.error(new RuntimeException("No Handler Registered"));
+        // a command without handler can never be handled: listeners discard it instead of retrying it
+        return command -> Mono.error(new MissingHandlerException("command", commandName(command)));
+    }
+
+    private static String commandName(Object command) {
+        return command instanceof org.reactivecommons.api.domain.Command<?> domainCommand
+                ? domainCommand.getName() : String.valueOf(command);
     }
 
     @Bean

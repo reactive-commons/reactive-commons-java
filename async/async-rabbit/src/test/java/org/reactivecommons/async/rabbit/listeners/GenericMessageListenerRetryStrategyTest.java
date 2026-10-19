@@ -74,7 +74,7 @@ class GenericMessageListenerRetryStrategyTest {
 
         // retried: requeued after retryDelay, never discarded
         verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
-        verify(discardNotifier, never()).notifyDiscard(any(Message.class));
+        verify(discardNotifier, never()).tryNotifyDiscard(any(Message.class));
         verify(channel, never()).basicAck(anyLong(), anyBoolean());
         assertThat(handlerCalls.get()).isEqualTo(1);
     }
@@ -84,7 +84,7 @@ class GenericMessageListenerRetryStrategyTest {
         start(false, 2, delivery(null));
 
         verify(channel, timeout(2_000)).basicAck(DELIVERY_TAG, false);
-        verify(discardNotifier).notifyDiscard(any(Message.class));
+        verify(discardNotifier).tryNotifyDiscard(any(Message.class));
         verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
         assertThat(handlerCalls.get()).as("first attempt + 2 local retries").isEqualTo(3);
     }
@@ -94,7 +94,7 @@ class GenericMessageListenerRetryStrategyTest {
         start(true, -1, delivery(9L)); // -1 means 10 retries with DLQ
 
         verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, false);
-        verify(discardNotifier, after(200).never()).notifyDiscard(any(Message.class));
+        verify(discardNotifier, after(200).never()).tryNotifyDiscard(any(Message.class));
     }
 
     @Test
@@ -102,12 +102,25 @@ class GenericMessageListenerRetryStrategyTest {
         start(true, -1, delivery(10L));
 
         verify(channel, timeout(2_000)).basicAck(DELIVERY_TAG, false);
-        verify(discardNotifier).notifyDiscard(any(Message.class));
+        verify(discardNotifier).tryNotifyDiscard(any(Message.class));
         verify(channel, never()).basicNack(anyLong(), anyBoolean(), anyBoolean());
     }
 
+    @Test
+    void aDiscardWhoseNotificationFailsIsRequeuedInsteadOfAcknowledged() throws Exception {
+        start(false, 0, delivery(null), Mono.error(new IllegalStateException("broker blocked")));
+
+        verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
+        verify(channel, never()).basicAck(anyLong(), anyBoolean());
+    }
+
     private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery) {
-        lenient().when(discardNotifier.notifyDiscard(any(Message.class))).thenReturn(Mono.empty());
+        start(withDLQRetry, maxRetries, delivery, Mono.empty());
+    }
+
+    private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery,
+                       Mono<Void> discardNotification) {
+        lenient().when(discardNotifier.tryNotifyDiscard(any(Message.class))).thenReturn(discardNotification);
         lenient().when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class),
                 anyBoolean())).thenReturn(Mono.empty());
         // one delivery, then the consumer stays subscribed

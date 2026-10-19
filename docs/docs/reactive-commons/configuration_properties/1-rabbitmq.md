@@ -78,6 +78,20 @@ the broker drops the message (or dead-letters it if the queue has a dead letter 
 or a finite `maxRetries` if messages must not be dropped.
 :::
 
+:::note[Messages that are discarded instead of retried]
+Whatever the retry configuration, a failed message is discarded (its discard notified as a `<name>.dlq` event, then
+acknowledged) when retrying it can never help:
+
+- **No handler is registered** for its event, command, query or notification name (e.g. a binding left by a version
+  that had a handler for it).
+- **A query whose caller stopped waiting**: once its publication time plus the reply timeout it carries has passed.
+
+A discarded message is acknowledged only once its discard notification is published. If it cannot be published
+(e.g. the broker blocks the publishing connection), the message is requeued after `retryDelay` and discarded again
+later, so it is never lost. A query that was handled but whose reply could not be published is acknowledged without
+running it again: its caller does not receive the reply.
+:::
+
 ## Configuration approaches
 
 There are two ways to supply domain properties. Choose the one that best fits your use case.

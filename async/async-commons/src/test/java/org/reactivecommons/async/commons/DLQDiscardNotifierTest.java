@@ -10,6 +10,7 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
 import java.net.URI;
 import java.util.Map;
@@ -32,6 +33,22 @@ class DLQDiscardNotifierTest {
         notifier = new DLQDiscardNotifier(eventBus, messageConverter);
         when(eventBus.emit(any(DomainEvent.class))).thenReturn(Mono.empty());
         when(eventBus.emit(any(CloudEvent.class))).thenReturn(Mono.empty());
+    }
+
+    @Test
+    void tryNotifyDiscardFailsWhenTheNotificationCannotBePublished() {
+        var message = createMessage("body".getBytes(), "application/cloudevents+json");
+        var cloudEvent = CloudEventBuilder.v1()
+                .withId("123")
+                .withType("test.type")
+                .withSource(URI.create("/test"))
+                .build();
+        when(messageConverter.readCloudEvent(message)).thenReturn(cloudEvent);
+        when(eventBus.emit(any(CloudEvent.class))).thenReturn(Mono.error(new IllegalStateException("blocked")));
+
+        StepVerifier.create(notifier.tryNotifyDiscard(message)).verifyErrorMessage("blocked");
+        // the lenient variant keeps swallowing the failure for the callers that rely on it
+        StepVerifier.create(notifier.notifyDiscard(message)).verifyComplete();
     }
 
     @Test

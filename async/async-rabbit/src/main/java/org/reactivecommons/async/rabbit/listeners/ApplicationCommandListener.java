@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
 import org.reactivecommons.async.api.handlers.RawCommandHandler;
@@ -115,6 +116,9 @@ public class ApplicationCommandListener extends GenericMessageListener {
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredCommandHandler<Object, Object> commandHandler = resolver.getCommandHandler(executorPath);
+        if (commandHandler == null) {
+            throw new MissingHandlerException("command", executorPath);
+        }
         Function<Message, Object> converter = resolveConverter(commandHandler);
         final CommandExecutor<Object> executor = new CommandExecutor<>(commandHandler.handler(), converter);
         return msj -> executor.execute(msj).cast(Object.class);

@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.commons.communications.Message;
@@ -153,8 +154,9 @@ public abstract class GenericMessageListener {
             liveness.onDelivery();
             final Instant init = Instant.now();
             return handle(msj, init)
-                    .doOnSuccess(d -> {
-                        d.ack();
+                    // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
+                    .doOnSuccess(ignored -> {
+                        msj.ack();
                         metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
                     })
                     .onErrorResume(err -> requeueOrAck(msj, err, init));
@@ -321,6 +323,14 @@ public abstract class GenericMessageListener {
         return identity();
     }
 
+    /**
+     * Whether retrying a failed message can no longer be of any use, e.g. a query whose caller stopped waiting for
+     * its reply. Such a message is discarded instead of retried.
+     */
+    protected boolean retryIsUseless(AcknowledgableDelivery msj) {
+        return false;
+    }
+
     private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, Instant init) {
         final long retryNumber = getRetryNumber(msj);
         final Message rabbitMessage = RabbitMessage.fromDelivery(msj);
@@ -328,16 +338,11 @@ public abstract class GenericMessageListener {
         reportErrorMetric(msj, init);
         metrics.recordOutcome(ConsumerMetrics.OUTCOME_HANDLER_ERROR);
         sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
-        // maxRetries == -1 without DLQ means infinite fast retries, never discard
-        if (hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
+        // maxRetries == -1 without DLQ means infinite fast retries, never discard (unless retrying cannot help)
+        if (err instanceof MissingHandlerException || retryIsUseless(msj)
+                || hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
             logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
-            return discardNotifier
-                    .notifyDiscard(rabbitMessage)
-                    .doOnSuccess(_a -> {
-                        msj.ack();
-                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_DISCARD);
-                    })
-                    .thenReturn(msj);
+            return discard(msj, rabbitMessage);
         } else if (useDLQRetries) { // DLQ retries
             logError(err, msj, FallbackStrategy.RETRY_DLQ);
             msj.nack(false);
@@ -350,6 +355,29 @@ public abstract class GenericMessageListener {
                 metrics.recordOutcome(ConsumerMetrics.OUTCOME_NACK);
             });
         }
+    }
+
+    /**
+     * Acknowledges a discarded message only once its discard is notified: if the notification cannot be published
+     * (e.g. the broker blocks the publishing connection) the message is requeued and discarded again later, instead
+     * of being acknowledged and lost.
+     */
+    private Mono<AcknowledgableDelivery> discard(AcknowledgableDelivery msj, Message rabbitMessage) {
+        return discardNotifier.tryNotifyDiscard(rabbitMessage)
+                .then(Mono.fromCallable(() -> {
+                    msj.ack();
+                    metrics.recordOutcome(ConsumerMetrics.OUTCOME_DISCARD);
+                    return msj;
+                }))
+                .onErrorResume(notificationError -> {
+                    log.log(Level.WARNING, notificationError, () -> "Discard of message "
+                            + msj.getProperties().getMessageId() + " in queue " + queueName
+                            + " could not be notified: requeued to discard it again");
+                    return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> {
+                        m.nack(true);
+                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_NACK);
+                    });
+                });
     }
 
     private void sendErrorToCustomReporter(final Throwable err, final Message message, final boolean redelivered) {

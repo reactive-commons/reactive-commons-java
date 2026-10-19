@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.discard;
 
 import lombok.RequiredArgsConstructor;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.rabbit.ConnectionFactoryCustomizer;
@@ -29,7 +30,17 @@ public class RabbitMQDiscardProviderImpl implements DiscardProvider {
     private final ConnectionFactoryCustomizer cfCustomizer;
     private final AtomicReference<ReactiveMessageSender> defaultSender = new AtomicReference<>();
     private final AtomicReference<DiscardNotifier> delegate = new AtomicReference<>();
-    private final DiscardNotifier lazyNotifier = message -> Mono.defer(() -> resolve().notifyDiscard(message));
+    private final DiscardNotifier lazyNotifier = new DiscardNotifier() {
+        @Override
+        public Mono<Void> notifyDiscard(Message message) {
+            return Mono.defer(() -> resolve().notifyDiscard(message));
+        }
+
+        @Override
+        public Mono<Void> tryNotifyDiscard(Message message) {
+            return Mono.defer(() -> resolve().tryNotifyDiscard(message));
+        }
+    };
 
     /**
      * Sets the sender, over the connection of the default domain, used to publish the discarded messages.

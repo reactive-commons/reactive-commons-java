@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
@@ -66,8 +67,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
         if (handler == null) {
-            return message ->
-                    Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
+            throw new MissingHandlerException("query", executorPath);
         }
         Function<Message, Object> messageConverter = resolveConverter(handler.queryClass());
         final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.handler(), messageConverter);
@@ -169,6 +169,22 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return Instant.now();
     }
 
+    /**
+     * A failed query is not retried once its caller stopped waiting for the reply (its publication time plus the
+     * reply timeout it carries): nobody would receive the reply.
+     */
+    @Override
+    protected boolean retryIsUseless(AcknowledgableDelivery msj) {
+        AMQP.BasicProperties properties = msj.getProperties();
+        if (properties.getTimestamp() == null || properties.getHeaders() == null
+                || !properties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS)) {
+            return false;
+        }
+        return replyTimeoutMillis(properties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
+                .map(timeout -> properties.getTimestamp().getTime() + timeout <= currentTimestamp().toEpochMilli())
+                .orElse(false);
+    }
+
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
         return Mono.fromRunnable(() -> log.log(Level.WARNING, String.format("query with path %s discarded by timeout",
                 executorPath)));
@@ -194,7 +210,13 @@ public class ApplicationQueryListener extends GenericMessageListener {
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
             Object response = signal.get();
-            return sender.sendNoConfirm(response, replyExchange, replyID, headers, false);
+            // the query was handled: failing to publish its reply must not make it run again
+            return sender.sendNoConfirm(response, replyExchange, replyID, headers, false)
+                    .onErrorResume(replyError -> {
+                        log.log(Level.WARNING, replyError, () -> "Reply to query " + correlationID
+                                + " could not be published, its caller will not receive it");
+                        return Mono.empty();
+                    });
         });
     }
 
