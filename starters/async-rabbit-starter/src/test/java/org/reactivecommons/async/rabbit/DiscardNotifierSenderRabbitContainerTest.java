@@ -14,6 +14,7 @@ import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.reactivecommons.async.starter.impl.common.rabbit.RabbitMQConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.Container.ExecResult;
@@ -42,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * <p>The tests are skipped automatically when Docker is not available.
  */
 @Testcontainers(disabledWithoutDocker = true)
+@DirtiesContext
 @SpringBootTest(classes = {
         RabbitMQConfig.class,
         AsyncPropsDomain.class,
