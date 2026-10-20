@@ -7,7 +7,6 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.rabbit.listeners.ListenerSchedulers;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -92,7 +91,7 @@ class ListenerSchedulersRabbitContainerTest {
                             handled.countDown();
                         }
                     }), Map.class)
-                    .serveQuery("scenario.query", (QueryHandler<String, String>) query -> Mono.just("ok"),
+                    .serveQuery("scenario.query", query -> Mono.just("ok"),
                             String.class);
         }
     }
