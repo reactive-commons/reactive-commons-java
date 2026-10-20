@@ -78,7 +78,7 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
      * the broker is back-pressuring.
      */
     @Builder.Default
-    private int handOverQueueCapacity = 1024;
+    private int handOverQueueCapacity = 16_384;
 
     /**
      * How long a {@code connection.blocked} notification must persist before the health indicator reports DOWN. A

@@ -74,7 +74,11 @@ import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 public class ReactiveMessageSender implements AutoCloseable {
     static final Duration DEFAULT_SEND_TIMEOUT = Duration.ofSeconds(10);
     static final int DEFAULT_HAND_OVER_POOL_SIZE = 13;
-    static final int DEFAULT_HAND_OVER_QUEUE_CAPACITY = 1024;
+    /**
+     * About a second of a 15000 messages per second peak: a short pause (GC, scheduling, the broker flushing to disk)
+     * must not reject messages, only a connection the broker stopped draining.
+     */
+    static final int DEFAULT_HAND_OVER_QUEUE_CAPACITY = 16_384;
     private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);

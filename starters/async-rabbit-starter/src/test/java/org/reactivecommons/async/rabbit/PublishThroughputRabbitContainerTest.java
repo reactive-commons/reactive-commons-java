@@ -157,12 +157,12 @@ class PublishThroughputRabbitContainerTest {
             while (nextEvent < eventsDue) {
                 int index = nextEvent++;
                 Mono.from(bus.emit(event(index))).subscribe(v -> {
-                }, e -> events.failed.incrementAndGet(), () -> events.confirm(index, due));
+                }, events::fail, () -> events.confirm(index, due));
             }
             while (nextDiscard < discardsDue) {
                 int index = nextDiscard++;
                 discards.notifyDiscard(discardedEvent()).subscribe(v -> {
-                }, e -> discarded.failed.incrementAndGet(), () -> discarded.confirm(index, due));
+                }, discarded::fail, () -> discarded.confirm(index, due));
             }
         }
         long deadline = System.currentTimeMillis() + 30_000;
@@ -177,6 +177,7 @@ class PublishThroughputRabbitContainerTest {
         private final AtomicLongArray latenciesMicros;
         private final AtomicInteger confirmed = new AtomicInteger();
         private final AtomicInteger failed = new AtomicInteger();
+        private final Map<String, AtomicInteger> failures = new java.util.concurrent.ConcurrentHashMap<>();
         private volatile long lastConfirmation;
 
         Collector(String name, int total) {
@@ -192,6 +193,14 @@ class PublishThroughputRabbitContainerTest {
             latenciesMicros.set(index, (now - due) / 1_000);
             lastConfirmation = now;
             confirmed.incrementAndGet();
+        }
+
+        void fail(Throwable error) {
+            // the event bus wraps the failure of the sender
+            Throwable cause = error.getCause() != null ? error.getCause() : error;
+            failures.computeIfAbsent(cause.getClass().getSimpleName() + ": " + cause.getMessage(),
+                    key -> new AtomicInteger()).incrementAndGet();
+            failed.incrementAndGet();
         }
 
         int pending() {
@@ -210,6 +219,10 @@ class PublishThroughputRabbitContainerTest {
             sorted = Arrays.copyOf(sorted, n);
             Arrays.sort(sorted);
             double seconds = Math.max(1e-9, (lastConfirmation - start) / 1e9);
+            if (!failures.isEmpty() || pending() > 0) {
+                System.out.println("[REAL BROKER]   " + name + " failures: " + failures + ", still pending: "
+                        + pending());
+            }
             return new Stats(name, latenciesMicros.length(), confirmed.get(), failed.get() + pending(),
                     confirmed.get() / seconds, percentile(sorted, 0.50), percentile(sorted, 0.95),
                     percentile(sorted, 0.99), n == 0 ? 0 : sorted[n - 1] / 1_000);

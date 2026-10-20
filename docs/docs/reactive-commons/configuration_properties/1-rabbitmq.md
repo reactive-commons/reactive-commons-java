@@ -514,7 +514,7 @@ properties and their defaults:
 |-------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `sendTimeout`           | `10s`   | Maximum time a sender waits for the outcome of a message before failing the caller.                                                                                                                                                                                   |
 | `handOverPoolSize`      | `13`    | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure).                                                                                                                                                   |
-| `handOverQueueCapacity` | `1024`  | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. |
+| `handOverQueueCapacity` | `16384` | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. Size it to about one second of your peak publish rate: a smaller value rejects messages during short pauses (GC, scheduling) while the broker is still draining. |
 | `blockedHealthGrace`    | `5s`    | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN.                                                                                                                                                                          |
 
 ```yaml title="application.yaml"
@@ -523,7 +523,7 @@ app:
     app:
       sendTimeout: 10s
       handOverPoolSize: 13
-      handOverQueueCapacity: 1024
+      handOverQueueCapacity: 16384
       blockedHealthGrace: 5s
 ```
 
