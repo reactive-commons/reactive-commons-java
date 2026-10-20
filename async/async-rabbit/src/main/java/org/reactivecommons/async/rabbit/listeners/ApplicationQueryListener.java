@@ -22,6 +22,7 @@ import reactor.rabbitmq.ExchangeSpecification;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -119,6 +120,11 @@ public class ApplicationQueryListener extends GenericMessageListener {
     @Override
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         AMQP.BasicProperties messageProperties = msj.getProperties();
+        if (!canBeAnswered(messageProperties)) {
+            // e.g. published by another client: running the handler is pointless, nobody can get its reply
+            return Mono.error(new IllegalArgumentException("Query without the " + SERVED_QUERY_ID + ", " + REPLY_ID
+                    + " and " + CORRELATION_ID + " headers needed to serve it and reply to it"));
+        }
 
         boolean messageDoesNotContainTimeoutMetadata = messageProperties.getTimestamp() == null ||
                 !messageProperties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS);
@@ -165,6 +171,12 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return buildTimeOutFallback(executorPath);
     }
 
+    private static boolean canBeAnswered(AMQP.BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        return headers != null && headers.get(SERVED_QUERY_ID) != null && headers.get(REPLY_ID) != null
+                && headers.get(CORRELATION_ID) != null;
+    }
+
     private Instant currentTimestamp() {
         return Instant.now();
     }
@@ -176,6 +188,9 @@ public class ApplicationQueryListener extends GenericMessageListener {
     @Override
     protected boolean retryIsUseless(AcknowledgableDelivery msj) {
         AMQP.BasicProperties properties = msj.getProperties();
+        if (!canBeAnswered(properties)) {
+            return true;
+        }
         if (properties.getTimestamp() == null || properties.getHeaders() == null
                 || !properties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS)) {
             return false;

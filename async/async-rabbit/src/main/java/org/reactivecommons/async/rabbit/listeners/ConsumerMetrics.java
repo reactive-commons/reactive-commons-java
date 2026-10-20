@@ -21,6 +21,7 @@ import java.util.logging.Logger;
  *     <li>{@code reactive_commons.consumer.messages} — Counter, extra tag {@code outcome} ∈
  *     {ack, nack, discard, dlq, handler_error}.</li>
  *     <li>{@code reactive_commons.consumer.handler.latency} — Timer, around the handler's Mono.</li>
+ *     <li>{@code reactive_commons.consumer.handler.wait} — Timer, from the delivery to the start of its handler.</li>
  *     <li>{@code reactive_commons.consumer.restart} — Counter, extra tag {@code reason}
  *     (channel_shutdown, error, cancel).</li>
  *     <li>{@code reactive_commons.consumer.active} — Gauge from the registered {@link ListenerLiveness}.</li>
@@ -43,6 +44,7 @@ public final class ConsumerMetrics {
 
     private static final String M_MESSAGES = "reactive_commons.consumer.messages";
     private static final String M_LATENCY = "reactive_commons.consumer.handler.latency";
+    private static final String M_WAIT = "reactive_commons.consumer.handler.wait";
     private static final String M_RESTART = "reactive_commons.consumer.restart";
     private static final String M_ACTIVE = "reactive_commons.consumer.active";
     private static final String M_LAST_AGE = "reactive_commons.consumer.last_message_age_seconds";
@@ -55,13 +57,15 @@ public final class ConsumerMetrics {
     private final ConcurrentHashMap<String, Counter> outcomeCounters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Counter> restartCounters = new ConcurrentHashMap<>();
     private final Timer handlerLatency;
+    private final Timer handlerWait;
 
     public ConsumerMetrics(MeterRegistry registry, String domain, String queue, ListenerLiveness liveness) {
         this.registry = registry;
         this.domain = domain != null ? domain : "";
         this.queue = queue != null ? queue : "";
         this.baseTags = Tags.of("domain", this.domain, "queue", this.queue);
-        this.handlerLatency = registry != null ? safeRegisterTimer() : null;
+        this.handlerLatency = registry != null ? safeRegisterTimer(M_LATENCY) : null;
+        this.handlerWait = registry != null ? safeRegisterTimer(M_WAIT) : null;
         if (registry != null && liveness != null) {
             try {
                 registry.gauge(M_ACTIVE, baseTags, liveness, l -> l.isActive() ? 1.0 : 0.0);
@@ -75,9 +79,9 @@ public final class ConsumerMetrics {
         }
     }
 
-    private Timer safeRegisterTimer() {
+    private Timer safeRegisterTimer(String name) {
         try {
-            return Timer.builder(M_LATENCY).tags(baseTags).register(registry);
+            return Timer.builder(name).tags(baseTags).register(registry);
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer handler timer");
             return null;
@@ -120,6 +124,15 @@ public final class ConsumerMetrics {
 
     public Timer handlerLatency() {
         return handlerLatency;
+    }
+
+    /**
+     * Records how long a delivery waited for a handler thread (the pool is shared by every listener).
+     */
+    public void recordHandlerWait(Duration wait) {
+        if (handlerWait != null) {
+            handlerWait.record(wait);
+        }
     }
 
     /**

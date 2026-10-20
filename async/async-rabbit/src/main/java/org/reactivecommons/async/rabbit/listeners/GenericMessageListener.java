@@ -30,6 +30,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -44,10 +45,22 @@ public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
     static final Duration RESTART_MAX_BACKOFF = Duration.ofSeconds(5);
+    /**
+     * The handlers are resolved per routing key, which wildcard subscriptions do not bound: only this many are cached,
+     * the others are resolved on each message.
+     */
+    static final int MAX_CACHED_HANDLERS = 1_000;
+    /**
+     * A delivery waiting this long for a handler thread is reported: the handler pool is shared by every listener
+     * and the broker closes the channel of a delivery not acknowledged within its consumer_timeout (30 minutes by
+     * default), requeueing every delivery of the channel.
+     */
+    static final Duration HANDLER_WAIT_WARNING = Duration.ofMinutes(1);
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
     private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
+    private final AtomicLong lastHandlerWaitWarning = new AtomicLong();
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
     protected final String queueName;
@@ -169,8 +182,13 @@ public abstract class GenericMessageListener {
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
             final Message message = RabbitMessage.fromDelivery(msj, executorPath);
 
-            Mono<Object> flow = defer(() -> handler.apply(message))
-                    .transform(enrichPostProcess(message));
+            final AtomicBoolean started = new AtomicBoolean();
+            Mono<Object> flow = defer(() -> {
+                if (started.compareAndSet(false, true)) { // runs on the handler thread; local retries run it again
+                    onHandlerStarted(Duration.between(initTime, Instant.now()));
+                }
+                return handler.apply(message);
+            }).transform(enrichPostProcess(message));
             if (handlerTimeout != null) {
                 flow = flow.timeout(handlerTimeout);
             }
@@ -312,7 +330,30 @@ public abstract class GenericMessageListener {
     }
 
     private Function<Message, Mono<Object>> getExecutor(String path) {
-        return handlers.computeIfAbsent(path, this::rawMessageHandler);
+        final Function<Message, Mono<Object>> cached = handlers.get(path);
+        if (cached != null) {
+            return cached;
+        }
+        final Function<Message, Mono<Object>> handler = rawMessageHandler(path);
+        if (handlers.size() < MAX_CACHED_HANDLERS) {
+            handlers.putIfAbsent(path, handler);
+        }
+        return handler;
+    }
+
+    private void onHandlerStarted(Duration wait) {
+        metrics.recordHandlerWait(wait);
+        if (wait.compareTo(HANDLER_WAIT_WARNING) < 0) {
+            return;
+        }
+        final long now = System.currentTimeMillis();
+        final long last = lastHandlerWaitWarning.get();
+        if (now - last >= HANDLER_WAIT_WARNING.toMillis() && lastHandlerWaitWarning.compareAndSet(last, now)) {
+            log.warning(() -> "A delivery of queue " + queueName + " waited " + wait.toSeconds() + " s for a handler"
+                    + " thread: the handlers are busy. A delivery not acknowledged within the broker's"
+                    + " consumer_timeout gets its channel closed and every delivery of the channel requeued;"
+                    + " lower prefetchCount, or set handlerTimeout below consumer_timeout.");
+        }
     }
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);

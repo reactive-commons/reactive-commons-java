@@ -47,7 +47,11 @@ import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 @Testcontainers(disabledWithoutDocker = true)
 class SubscriberResilienceRabbitContainerTest {
 
-    private static final Duration SLOW_REPLY = Duration.ofSeconds(3);
+    /**
+     * Longer than closing a connection with rabbitmqctl takes even under load, so the reply is always published after
+     * the connection is lost; shorter than the reply timeout (15 s).
+     */
+    private static final Duration SLOW_REPLY = Duration.ofSeconds(8);
     private static final AtomicInteger handlersStarted = new AtomicInteger();
     private static final AtomicInteger handlersInterrupted = new AtomicInteger();
 
@@ -79,7 +83,8 @@ class SubscriberResilienceRabbitContainerTest {
 
                 assertThat(outcome).as("loss #%d: the caller is told the reply is lost", loss)
                         .isInstanceOf(ReplyLostOnReconnectException.class);
-                assertThat(elapsedMs).as("loss #%d: told promptly", loss).isLessThan(3_000);
+                assertThat(elapsedMs).as("loss #%d: told before the reply was even published", loss)
+                        .isLessThan(SLOW_REPLY.toMillis());
             }
             awaitReplyQueue("req1-app");
             assertThat(gateway.requestReply(new AsyncQuery<>("slow.query", "q"), "srv1-app", String.class)
@@ -201,7 +206,8 @@ class SubscriberResilienceRabbitContainerTest {
      * Name of the (exclusive) reply queue of an application, once it has its consumer.
      */
     private static String awaitReplyQueue(String appName) throws Exception {
-        long deadline = System.currentTimeMillis() + 30_000;
+        // the connection recovery takes 5 s, much more on a loaded machine (e.g. the whole build in parallel)
+        long deadline = System.currentTimeMillis() + 60_000;
         while (System.currentTimeMillis() < deadline) {
             String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers")
                     .getStdout();

@@ -5,6 +5,7 @@ import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Recoverable;
 import com.rabbitmq.client.ShutdownSignalException;
+import io.cloudevents.CloudEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -12,6 +13,8 @@ import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
 import lombok.Getter;
 import lombok.extern.java.Log;
+import org.reactivecommons.api.domain.Command;
+import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
@@ -35,6 +38,7 @@ import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.util.retry.Retry;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -80,6 +84,10 @@ public class ReactiveMessageSender implements AutoCloseable {
      * How long closing the sender waits for the broker before forcing a blocked connection closed.
      */
     private static final int BLOCKED_CONNECTION_ABORT_TIMEOUT_MILLIS = 1_000;
+    /**
+     * The AMQP message-id is a short string.
+     */
+    private static final int MAX_MESSAGE_ID_BYTES = 255;
 
     private static final String METRIC_PUBLISH_OUTCOME = "reactive_commons.publish.outcome";
     private static final String METRIC_FLOW_RESUBSCRIBE = "reactive_commons.publish.flow.resubscribe";
@@ -456,7 +464,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                           Map<String, Object> headers, boolean persistent) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
             final byte[] body = converted.getBody();
             return send(monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
                     this::nextConfirmSink, true);
@@ -471,7 +479,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                         Map<String, Object> headers, boolean persistent) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
             final byte[] body = converted.getBody();
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
             return send(monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
@@ -622,11 +630,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,
                                                   Map<String, Object> headers, boolean persistent) {
         final Message message = messageConverter.toMessage(object);
-        final AMQP.BasicProperties props = buildMessageProperties(message, headers, persistent);
+        final AMQP.BasicProperties props = buildMessageProperties(object, message, headers, persistent);
         return new OutboundMessage(exchange, routingKey, props, message.getBody());
     }
 
-    private AMQP.BasicProperties buildMessageProperties(Message message, Map<String, Object> headers,
+    private AMQP.BasicProperties buildMessageProperties(Object source, Message message, Map<String, Object> headers,
                                                         boolean persistent) {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
@@ -638,12 +646,32 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .contentEncoding(properties.getContentEncoding())
                 .deliveryMode(persistent ? 2 : 1)
                 .timestamp(Date.from(Instant.now()))
-                .messageId(UUID.randomUUID().toString())
+                .messageId(messageIdOf(source))
                 .headers(baseHeaders);
         if (headers.containsKey(DELAYED)) {
             builder.expiration((String) headers.get(DELAYED));
         }
         return builder.build();
+    }
+
+    /**
+     * The AMQP message-id is the business id of the message (the id of an event, a command or a CloudEvent), so a
+     * copy re-sent after an unknown outcome keeps the id of the original and consumers can deduplicate it. A message
+     * without one (e.g. a query or a reply), or with one that does not fit an AMQP short string, gets a unique id.
+     */
+    static String messageIdOf(Object message) {
+        String id = null;
+        if (message instanceof DomainEvent<?> event) {
+            id = event.getEventId();
+        } else if (message instanceof Command<?> command) {
+            id = command.getCommandId();
+        } else if (message instanceof CloudEvent cloudEvent) {
+            id = cloudEvent.getId();
+        }
+        if (id == null || id.isBlank() || id.getBytes(StandardCharsets.UTF_8).length > MAX_MESSAGE_ID_BYTES) {
+            return UUID.randomUUID().toString();
+        }
+        return id;
     }
 
     /**

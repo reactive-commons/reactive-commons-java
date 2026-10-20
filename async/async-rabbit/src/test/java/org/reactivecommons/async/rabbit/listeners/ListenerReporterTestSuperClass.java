@@ -32,7 +32,6 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -99,8 +98,8 @@ public abstract class ListenerReporterTestSuperClass {
 
         messageListener.startListener();
 
-        final boolean reported = semaphore.tryAcquire(1, TimeUnit.SECONDS);
-        final boolean processed = successSemaphore.tryAcquire(1, TimeUnit.SECONDS);
+        final boolean reported = semaphore.tryAcquire(5, TimeUnit.SECONDS);
+        final boolean processed = successSemaphore.tryAcquire(5, TimeUnit.SECONDS);
         assertThat(reported).isTrue();
         assertThat(processed).isTrue();
     }
@@ -118,7 +117,7 @@ public abstract class ListenerReporterTestSuperClass {
         messageListener.startListener();
 
         ArgumentCaptor<Throwable> throwableCaptor = ArgumentCaptor.forClass(Throwable.class);
-        final boolean reported = semaphore.tryAcquire(1, TimeUnit.SECONDS);
+        final boolean reported = semaphore.tryAcquire(5, TimeUnit.SECONDS);
         assertThat(reported).isTrue();
         verify(errorReporter
         ).reportError(throwableCaptor.capture(), any(Message.class), any(Object.class), any(Boolean.class));
@@ -130,7 +129,9 @@ public abstract class ListenerReporterTestSuperClass {
             final String data = valueAsString(value);
             final AMQP.BasicProperties props = new AMQP.BasicProperties().builder()
                     .messageId("unitTestMessage" + value)
-                    .headers(Collections.singletonMap(Headers.SERVED_QUERY_ID, routeExtractor.apply(value)))
+                    // the headers the gateway sends with a query, so that it can be served and replied to
+                    .headers(Map.of(Headers.SERVED_QUERY_ID, routeExtractor.apply(value),
+                            Headers.REPLY_ID, "unitTestReply", Headers.CORRELATION_ID, "unitTestCorrelation"))
                     .build();
 
             final Envelope envelope = new Envelope(

@@ -217,6 +217,39 @@ class ConsumerRetryRabbitContainerTest {
         }
     }
 
+    /**
+     * A query published without the headers to reply to it (e.g. by another client): it can never be answered, so it
+     * is discarded without running its handler, instead of failing after running it and being retried forever.
+     */
+    @Test
+    void aQueryWithoutReplyHeadersIsDiscardedWithoutRunningIt() throws Exception {
+        release = new CompletableFuture<>();
+        release.complete(null);
+        executions.set(0);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qmal",
+                false, false, HeldQueryHandlers.class, ListenQueries.class);
+             com.rabbitmq.client.Connection admin = adminConnection()) {
+            String queue = "qmal-app.query";
+            RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
+            Channel channel = admin.createChannel();
+            channel.exchangeDeclare(EVENTS_EXCHANGE, "topic", true); // this application does not emit events
+            String probe = probeQueue(channel, "held.query.dlq");
+
+            channel.basicPublish("directMessages", queue, new com.rabbitmq.client.AMQP.BasicProperties.Builder()
+                    .contentType("application/json")
+                    .headers(Map.of("x-serveQuery-id", "held.query")) // no reply-id nor correlation-id
+                    .build(), "{\"resource\":\"held.query\",\"queryData\":\"q\"}".getBytes());
+
+            boolean discarded = await(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
+            Thread.sleep(2_000);
+            System.out.println("[REAL BROKER] query without reply headers: discarded=" + discarded
+                    + ", executions=" + executions.get() + ", left in the queue " + messages(queue));
+
+            assertThat(discarded).as("discarded and notified").isTrue();
+            assertThat(executions.get()).as("its handler is not run").isZero();
+        }
+    }
+
     private static void emit(AnnotationConfigApplicationContext context, String name) {
         Mono.from(context.getBean(DomainEventBus.class).emit(new DomainEvent<>(name, UUID.randomUUID().toString(),
                 Map.of("k", "v")))).block(Duration.ofSeconds(10));

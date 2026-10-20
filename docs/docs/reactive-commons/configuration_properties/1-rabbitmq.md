@@ -85,6 +85,8 @@ acknowledged) when retrying it can never help:
 - **No handler is registered** for its event, command, query or notification name (e.g. a binding left by a version
   that had a handler for it).
 - **A query whose caller stopped waiting**: once its publication time plus the reply timeout it carries has passed.
+- **A query that cannot be answered**: published without the `x-serveQuery-id`, `x-reply_id` or `x-correlation-id`
+  headers (e.g. by another client). Its handler is not run.
 
 A discarded message is acknowledged only once its discard notification is published. If it cannot be published
 (e.g. the broker blocks the publishing connection), the message is requeued after `retryDelay` and discarded again
@@ -599,6 +601,25 @@ reply queues are fine, are not affected. A query sent while the reply connection
 the same way and then fails with the reply timeout. Design callers to be idempotent, or deduplicate replies with the
 correlation ID.
 
+### Handler threads and `consumer_timeout`
+
+The handlers of every listener run on one shared pool of up to 250 threads, while each listener can have up to
+`prefetchCount` deliveries in flight (250 by default). Non-blocking handlers release their thread right away, but
+with handlers that block, the deliveries of several listeners queue for a thread. RabbitMQ closes the channel of a
+delivery that is not acknowledged within its
+[`consumer_timeout`](https://www.rabbitmq.com/docs/consumers#acknowledgement-timeout) (30 minutes by default; from
+RabbitMQ 4.3 it only applies to quorum queues) and requeues every delivery of that channel, so they are processed
+again. With blocking handlers, keep `prefetchCount` × listeners close to the number of handlers that can run at the
+same time, set `handlerTimeout` well below `consumer_timeout`, and alert on `reactive_commons.consumer.handler.wait`;
+a delivery that waits more than a minute for a thread is also logged as a warning.
+
+### Message ids
+
+The AMQP `message-id` of an event, a command or a CloudEvent is its business id (`eventId`, `commandId` or the
+CloudEvent `id`), so a copy re-sent after a `SendConfirmUnknownException` carries the id of the original and
+consumers can deduplicate it. Queries and replies, which have no business id, get a unique one. Deduplicate by name
+and id: the discard notification of a message (`<name>.dlq`) carries the id of the original message.
+
 ### Subscriber metrics
 
 The listener side exposes the following metrics on the application's `MeterRegistry`:
@@ -607,6 +628,7 @@ The listener side exposes the following metrics on the application's `MeterRegis
 |------------------------------------------------------|---------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `reactive_commons.consumer.messages`                 | Counter | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain`                                                                                                                                                     | One per message processed by a listener, tagged with its outcome.                                                                                              |
 | `reactive_commons.consumer.handler.latency`          | Timer   | `queue`, `domain`                                                                                                                                                                                                                     | Time taken by the handler, from the moment the message was delivered to the moment it completed (ack) or failed.                                               |
+| `reactive_commons.consumer.handler.wait`             | Timer   | `queue`, `domain`                                                                                                                                                                                                                     | Time a delivery waited for a handler thread before its handler started. A growing value means the handlers are busy (see *Handler threads and `consumer_timeout`*). |
 | `reactive_commons.consumer.restart`                  | Counter | `reason` ∈ {`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology.  |
 | `reactive_commons.consumer.active`                   | Gauge   | `queue`, `domain`                                                                                                                                                                                                                     | `1` while the broker has a consumer registered for the listener, `0` otherwise.                                                                                |
 | `reactive_commons.consumer.last_message_age_seconds` | Gauge   | `queue`, `domain`                                                                                                                                                                                                                     | Seconds since the last message was delivered to the listener. A large value on a queue that should be receiving traffic is a reliable "stuck consumer" signal. |

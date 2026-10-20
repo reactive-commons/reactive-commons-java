@@ -230,6 +230,33 @@ class ReactiveMessageSenderRabbitContainerTest {
         }
     }
 
+    /**
+     * A caller that re-sends a message after an unknown outcome publishes it again: the AMQP message-id is the
+     * business id of the message, so the consumer can tell the copies apart from new messages and deduplicate them.
+     */
+    @Test
+    void theMessageIdIsTheBusinessIdOfTheMessage() throws Exception {
+        var event = new org.reactivecommons.api.domain.DomainEvent<>("order.created", "event-123", "data");
+        var command = new org.reactivecommons.api.domain.Command<>("order.create", "command-456", "data");
+        var query = new org.reactivecommons.async.api.AsyncQuery<>("order.find", "data");
+
+        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10));
+        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10)); // re-sent
+        messageSender.sendWithConfirm(command, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10));
+        messageSender.sendNoConfirm(query, EXCHANGE, ROUTING_KEY, new HashMap<>(), false).block(Duration.ofSeconds(10));
+        awaitQueueSize(4);
+
+        List<String> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) {
+            ids.add(admin.basicGet(queue, true).getProps().getMessageId());
+        }
+        System.out.println("[REAL BROKER] message ids: " + ids);
+
+        assertThat(ids.subList(0, 3)).containsExactly("event-123", "event-123", "command-456");
+        assertThat(ids.get(3)).as("a query has no business id: a unique one").isNotBlank()
+                .isNotIn("event-123", "command-456");
+    }
+
     private static double outcome(SimpleMeterRegistry registry, String outcome, boolean confirm) {
         Counter counter = registry.find("reactive_commons.publish.outcome").tag("domain", "app")
                 .tag("outcome", outcome).tag("confirm", Boolean.toString(confirm)).counter();
