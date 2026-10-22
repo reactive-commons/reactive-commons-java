@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.5.0) (2026-10-22)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.2...v7.5.0)
+
+**Merged pull requests:**
+
+- feat\(rabbit\): harden RabbitMQ sender/listener recovery and health reporting [\#186](https://github.com/reactive-commons/reactive-commons-java/pull/186) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.4.2](https://github.com/reactive-commons/reactive-commons-java/tree/v7.4.2) (2026-10-14)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.1...v7.4.2)
