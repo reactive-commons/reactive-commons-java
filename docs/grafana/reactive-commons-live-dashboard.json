@@ -303,14 +303,14 @@
         "textMode": "auto"
       },
       "title": "Handler success ratio",
-      "description": "ack outcomes over every processed outcome (ack, nack, discard, dlq, handler_error). Reads 100% while there is no traffic, so idling does not alarm.",
+      "description": "ack outcomes over every processed outcome (ack, nack, discard, dlq, handler_error). Reads 100% while there is no traffic, so idling does not alarm. Acked deliveries over all the delivered ones (final outcomes: ack, nack, dlq, discard); handler_error is not a final outcome, it counts the failed deliveries a second time.",
       "targets": [
         {
           "datasource": {
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "(((sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])) == 0) + 1) or (sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome=\"ack\"}[$__rate_interval])) / clamp_min(sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])), 1e-9))) or vector(1)",
+          "expr": "(((sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome!=\"handler_error\"}[$__rate_interval])) == 0) + 1) or (sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome=\"ack\"}[$__rate_interval])) / clamp_min(sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome!=\"handler_error\"}[$__rate_interval])), 1e-9))) or vector(1)",
           "legendFormat": "success ratio",
           "refId": "A"
         }
