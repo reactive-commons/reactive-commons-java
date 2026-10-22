@@ -88,7 +88,10 @@ class ReactiveMessageSenderTest {
         String sourceApplication = "TestApp";
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
             Flux<OutboundMessage> argument = invocation.getArgument(0);
-            return argument.map(msg -> new OutboundMessageResult<>(msg, false, true));
+            // the broker answers after the verify below started waiting, as on a slow runner: the notifier must not
+            // hold a lock the verification waits on (a synchronized method of a mock does)
+            return argument.delayElements(Duration.ofMillis(300))
+                    .map(msg -> new OutboundMessageResult<>(msg, false, true));
         });
 
         messageSender = new ReactiveMessageSender(

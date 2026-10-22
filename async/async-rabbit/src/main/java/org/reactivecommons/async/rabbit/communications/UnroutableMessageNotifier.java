@@ -20,6 +20,7 @@ public class UnroutableMessageNotifier {
 
     private final Sinks.Many<OutboundMessageResult<OutboundMessage>> sink;
     private final UnroutableMetrics metrics;
+    private final Object emitLock = new Object();
     private volatile Disposable currentSubscription;
 
     public UnroutableMessageNotifier() {
@@ -36,13 +37,19 @@ public class UnroutableMessageNotifier {
     }
 
     /**
-     * Synchronized: the default notifier is shared by every domain, so the returns of several connections may arrive
-     * at the same time, and a {@link Sinks.Many} rejects concurrent emissions ({@code FAIL_NON_SERIALIZED}) instead of
-     * queueing them: only a full buffer may fail an emission.
+     * The emissions are serialized: the default notifier is shared by every domain, so the returns of several
+     * connections may arrive at the same time, and a {@link Sinks.Many} rejects concurrent emissions
+     * ({@code FAIL_NON_SERIALIZED}) instead of queueing them: only a full buffer may fail an emission. The lock is a
+     * private one, not the notifier: a synchronized method would also lock a mock of it while Mockito waits for an
+     * invocation of it ({@code verify(mock, timeout(...))}), blocking the invocation it waits for.
      */
-    public synchronized void notifyUnroutableMessage(OutboundMessageResult<OutboundMessage> message) {
+    public void notifyUnroutableMessage(OutboundMessageResult<OutboundMessage> message) {
         metrics.recordUnroutable();
-        if (sink.tryEmitNext(message).isFailure()) {
+        final boolean emitted;
+        synchronized (emitLock) {
+            emitted = sink.tryEmitNext(message).isSuccess();
+        }
+        if (!emitted) {
             metrics.recordEmitFailure();
             log.warning("Failed to emit unroutable message: " + message);
         }
