@@ -84,10 +84,12 @@ subprojects {
         useJUnitPlatform()
         // The performance tests call mocks hundreds of thousands of times and Mockito keeps every invocation
         maxHeapSize = "1g"
-        if ("true".equals(System.getProperty("env.ci"))) {
-            systemProperty "env.ci", System.getProperty("env.ci")
+        testLogging {
+            exceptionFormat "full"
+            showExceptions true
+            showCauses true
+            showStackTraces true
         }
-
     }
 
     dependencyManagement {
@@ -125,7 +127,8 @@ subprojects {
 
         tasks.withType(Test) {
             testLogging {
-                events "skipped"
+                // events replaces the logged events: keep the failed tests, with their exception
+                events "skipped", "failed"
             }
         }
 
