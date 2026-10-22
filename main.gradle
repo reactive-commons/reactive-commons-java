@@ -90,6 +90,11 @@ subprojects {
             showCauses true
             showStackTraces true
         }
+        // -D options do not reach the test JVM: the performance tests and the Docker guard read it to know they run
+        // on CI
+        if ("true".equals(System.getProperty("env.ci"))) {
+            systemProperty "env.ci", System.getProperty("env.ci")
+        }
     }
 
     dependencyManagement {
