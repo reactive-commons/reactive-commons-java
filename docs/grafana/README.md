@@ -102,9 +102,12 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
   panels show `No data` until then, which is healthy.
 - **`handler.latency` vs `handler.execution`.** `handler.latency` is end-to-end (wait for a handler thread +
   execution + every local retry with its delay). `handler.execution` is per attempt around `handler.apply`, tagged
-  `outcome` ∈ {success, error, timeout} and `handler` = the executor path (bounded by the handler cache; unknown
-  or over-cap paths fall back to `unknown`). Diagnosis: `wait` high and `execution` low = pool saturation; `execution`
+  `outcome` ∈ {success, error, timeout} and `handler` = the executor path of a registered handler (bounded by the
+  handler cache: the ones beyond it fall back to `unknown`; a message without a handler has no sample). Diagnosis: `wait` high and `execution` low = pool saturation; `execution`
   high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent.
+- **RabbitMQ client metrics (`rabbitmq_*`).** Connections, channels, confirms and deliveries at the protocol level
+  are not exported by default: enable them with a `ConnectionFactoryCustomizer` (see *RabbitMQ client metrics* in the
+  RabbitMQ configuration guide). They are a cross-check of `publish.outcome` and `consumer.messages`.
 - **`nack` and `failed` are different publish outcomes.** `nack` means the broker received the message and
   answered `basic.nack` (e.g. a queue at its length limit with `x-overflow: reject-publish`); `failed` means it
   was never written to a channel (no channel, connection being recovered, sender shut down).

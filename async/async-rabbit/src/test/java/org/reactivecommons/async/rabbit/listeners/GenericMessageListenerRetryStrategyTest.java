@@ -187,6 +187,21 @@ class GenericMessageListenerRetryStrategyTest {
     }
 
     @Test
+    void aHandlerThatThrowsInsteadOfReturningAMonoRecordsAnExecutionError() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+
+        // e.g. the executor converting a message whose body is not valid JSON, before the handler returns a Mono
+        new HangingListener(listener(null), discardNotifier, errorReporter, message -> {
+            throw new IllegalArgumentException("the message cannot be converted");
+        }).startListener();
+
+        verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
+        assertThat(executionCount("error", "test-path")).isEqualTo(1L);
+    }
+
+    @Test
     void aRequeuedMessageIsCountedAsRedeliveredWhenItComesBack() throws Exception {
         start(false, -1, delivery(null, true)); // a fast retry: requeued, so the broker sets the redelivered flag
 

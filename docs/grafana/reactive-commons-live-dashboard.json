@@ -1552,7 +1552,7 @@
           {
             "matcher": {
               "id": "byName",
-              "options": "redelivered (x-death)"
+              "options": "redelivered (requeued or x-death)"
             },
             "properties": [
               {
@@ -1629,7 +1629,7 @@
             "uid": "${datasource}"
           },
           "expr": "sum(rate(reactive_commons_consumer_redelivered_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval]))",
-          "legendFormat": "redelivered (x-death)",
+          "legendFormat": "redelivered (requeued or x-death)",
           "refId": "C"
         },
         {

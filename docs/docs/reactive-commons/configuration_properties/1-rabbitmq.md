@@ -386,6 +386,66 @@ public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
 }
 ```
 
+### RabbitMQ client metrics
+
+The RabbitMQ Java client can report what happens on its connections and channels to Micrometer, at the AMQP protocol
+level (see *Metrics* in the [Java client API guide](https://www.rabbitmq.com/client-libraries/java-api-guide)). The
+library creates its own `ConnectionFactory`, which Spring Boot does not instrument (it only instruments the Spring
+AMQP connection factories), so enable it with a `ConnectionFactoryCustomizer`:
+
+```java
+import com.rabbitmq.client.impl.MicrometerMetricsCollector;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+
+@Bean
+public ConnectionFactoryCustomizer connectionFactoryCustomizer(MeterRegistry registry) {
+    return (connectionFactory, asyncProps) -> {
+        connectionFactory.setMetricsCollector(new MicrometerMetricsCollector(registry, "rabbitmq",
+                Tags.of("name", "reactive-commons-" + asyncProps.getAppName())));
+        return connectionFactory;
+    };
+}
+```
+
+The customizer is applied once per connection factory, that is once per domain. Defining it replaces the default one,
+which leaves the factory unchanged: keep your other customizations (exception handler, credentials provider...) in
+the same lambda.
+
+| Metric (Prometheus)                         | Type    | Meaning                                                                                                          |
+|---------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------|
+| `rabbitmq_connections`                      | Gauge   | Open connections. `0` means the application is disconnected from the broker.                                     |
+| `rabbitmq_channels`                         | Gauge   | Open channels. A value that keeps growing is a channel leak.                                                     |
+| `rabbitmq_published_total`                  | Counter | Messages written to a channel, with or without publisher confirms.                                               |
+| `rabbitmq_failed_to_publish_total`          | Counter | Publishes that threw (channel or connection closed).                                                             |
+| `rabbitmq_acknowledged_published_total`     | Counter | Publisher confirms received (`basic.ack`).                                                                       |
+| `rabbitmq_not_acknowledged_published_total` | Counter | Messages the broker rejected (`basic.nack`), e.g. a queue at its length limit with `x-overflow: reject-publish`. |
+| `rabbitmq_unrouted_published_total`         | Counter | Messages returned by the broker (`basic.return`). Only with `mandatory: true`, see below.                        |
+| `rabbitmq_consumed_total`                   | Counter | Deliveries received.                                                                                             |
+| `rabbitmq_acknowledged_total`               | Counter | Deliveries acknowledged (`basic.ack`).                                                                           |
+| `rabbitmq_rejected_total`                   | Counter | Deliveries rejected (`basic.nack`/`basic.reject`), requeued or sent to the DLQ.                                  |
+| `rabbitmq_requeued_total`                   | Counter | The rejected deliveries that were requeued.                                                                      |
+
+They complement the `reactive_commons.*` meters, they do not replace them:
+
+- **They see the protocol, not the outcome the caller got.** A message that never reached a channel (sender timeout,
+  full hand-over queue, broker blocking the connection) is in `publish.outcome` but not here. The other way round,
+  connections, channels and failed writes are only here.
+- **They are a cross-check.** `publish.outcome{confirm="true",outcome="ack"}` should follow
+  `rabbitmq_acknowledged_published_total`, and `publish.outcome{outcome="nack"}` should follow
+  `rabbitmq_not_acknowledged_published_total`: if they diverge, an outcome is misreported.
+- **They add up every connection of the factory**: the sender, the listeners, the topology creator and the queue-depth
+  poller of a domain share it.
+- **`rabbitmq_published_total` also counts the messages sent without confirms** (queries and replies), which never
+  get an ack or a nack.
+- **Unroutable messages are only counted with `mandatory: true`.** With `mandatory: false` the broker drops a message
+  that no queue is bound to and acknowledges it, so it is counted as acknowledged. Only the broker sees it
+  (`rabbitmq_global_messages_unroutable_dropped_total` in the RabbitMQ Prometheus plugin).
+
+The prefix `rabbitmq` and the tag `name` are the ones Spring Boot uses for the Spring AMQP connection factories: the
+same dashboards work for both, and an application using both reports them under the same tag keys, as Prometheus
+requires.
+
 ## Connections and channels
 
 Reactive Commons establishes **up to two connections to the RabbitMQ broker per domain**: one to publish
@@ -565,6 +625,9 @@ The sender exposes the following metrics on the application's `MeterRegistry`:
 | `reactive_commons.publish.unroutable.emit.failed`   | Counter             | `domain`                                           | Unroutable notifications that could not be emitted to the notifier (back-pressure).                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `reactive_commons.publish.unroutable.process.error` | Counter             | `domain`                                           | Errors thrown by the processors subscribed to the unroutable notifications.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 
+The RabbitMQ client can also report its connections, channels, confirms and deliveries at the protocol level, see
+[RabbitMQ client metrics](#rabbitmq-client-metrics).
+
 ## Subscriber resilience and observability
 
 Every listener (events, commands, queries, queue listeners, notifications, replies) is tracked individually: a
@@ -655,7 +718,7 @@ The listener side exposes the following metrics on the application's `MeterRegis
 |----------------------------------------------------------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `reactive_commons.consumer.messages`                     | Counter             | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain`                                                                                                                                                     | One per message processed by a listener, tagged with its outcome.                                                                                                                                                                                                                                                                                                                    |
 | `reactive_commons.consumer.handler.latency`              | Timer               | `queue`, `domain`                                                                                                                                                                                                                     | End-to-end time of a delivery, from arrival to the moment it completed (ack) or failed. Includes the wait for a handler thread and every local retry (with its retry delay). Compare with `handler.execution` to split that into wait + actual execution.                                                                                                                            |
-| `reactive_commons.consumer.handler.execution`            | Timer               | `outcome` ∈ {`success`, `error`, `timeout`}, `handler` (the executor path, bounded by the handler cache; unknown or over-cap paths bucket to `unknown`), `queue`, `domain`                                                            | Per-attempt time around `handler.apply`, so retries do not inflate it and it can be compared against `handlerTimeout`. `handler.wait` high + `execution` low = handler-pool saturation; `execution` high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent (alert with `histogram_quantile(0.99, ...execution_seconds_bucket) > 0.8 * handlerTimeout`). |
+| `reactive_commons.consumer.handler.execution`            | Timer               | `outcome` ∈ {`success`, `error`, `timeout`}, `handler` (the executor path of a registered handler, bounded by the handler cache: the ones beyond it bucket to `unknown`), `queue`, `domain`                                                            | Per-attempt time around `handler.apply` (a handler that throws, e.g. a message that cannot be converted, is an `error`; a message without a handler has no sample), so retries do not inflate it and it can be compared against `handlerTimeout`. `handler.wait` high + `execution` low = handler-pool saturation; `execution` high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent (alert with `histogram_quantile(0.99, ...execution_seconds_bucket) > 0.8 * handlerTimeout`). |
 | `reactive_commons.consumer.handler.wait`                 | Timer               | `queue`, `domain`                                                                                                                                                                                                                     | Time a delivery waited for a handler thread before its handler started. A growing value means the handlers are busy (see *Handler threads and `consumer_timeout`*).                                                                                                                                                                                                                  |
 | `reactive_commons.consumer.restart`                      | Counter             | `reason` ∈ {`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology.                                                                                                                                                                                                                        |
 | `reactive_commons.consumer.active`                       | Gauge               | `queue`, `domain`                                                                                                                                                                                                                     | `1` while the broker has a consumer registered for the listener, `0` otherwise.                                                                                                                                                                                                                                                                                                      |
