@@ -33,6 +33,14 @@ public class DLQDiscardNotifier implements DiscardNotifier {
         }
     }
 
+    /**
+     * Publishes the discard notification and fails if it could not be published.
+     */
+    @Override
+    public Mono<Void> tryNotifyDiscard(Message message) {
+        return Mono.defer(() -> notify(message));
+    }
+
     private Mono<Void> notify(Message message) {
         if (isCloudEvent(message)) {
             CloudEvent cloudEvent = messageConverter.readCloudEvent(message);

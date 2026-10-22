@@ -2,6 +2,7 @@ package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.ConnectionFactory;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +22,7 @@ import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.test.StepVerifier;
@@ -34,6 +36,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+@DirtiesContext
 @SpringBootTest(classes = {
         RabbitMQConfig.class,
         AsyncPropsDomain.class,
@@ -106,7 +109,7 @@ class RabbitMQConfigTest {
 
     @Test
     void shouldReturnDefaultUnroutableMessageNotifier() {
-        UnroutableMessageNotifier notifier = rabbitMQConfig.defaultUnroutableMessageNotifier();
+        UnroutableMessageNotifier notifier = rabbitMQConfig.defaultUnroutableMessageNotifier(new SimpleMeterRegistry());
 
         assertThat(notifier).isNotNull();
     }

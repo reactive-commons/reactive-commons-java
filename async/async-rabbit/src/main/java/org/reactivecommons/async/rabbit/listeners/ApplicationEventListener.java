@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
@@ -109,6 +110,9 @@ public class ApplicationEventListener extends GenericMessageListener {
     @Override
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
+        if (handler == null) {
+            throw new MissingHandlerException("event", executorPath); // not cached: a dynamic one may come later
+        }
 
         Function<Message, Object> converter = resolveConverter(handler);
         final EventExecutor<Object> executor = new EventExecutor<>(handler.handler(), converter);

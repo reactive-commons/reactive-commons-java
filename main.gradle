@@ -82,15 +82,22 @@ subprojects {
 
     test {
         useJUnitPlatform()
+        // The performance tests call mocks hundreds of thousands of times and Mockito keeps every invocation
+        maxHeapSize = "1g"
+        testLogging {
+            exceptionFormat "full"
+            showExceptions true
+            showCauses true
+            showStackTraces true
+        }
         if (System.getProperty("env.ci") == "true") {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
-
     }
 
     dependencyManagement {
         imports {
-            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.1'
+            mavenBom 'org.springframework.boot:spring-boot-dependencies:4.1.2'
         }
     }
 
@@ -119,6 +126,13 @@ subprojects {
 
         tasks.withType(GenerateModuleMetadata).configureEach {
             enabled = false
+        }
+
+        tasks.withType(Test).configureEach {
+            testLogging {
+                // events replaces the logged events: keep the failed tests, with their exception
+                events "skipped", "failed"
+            }
         }
 
         publishing {
@@ -186,6 +200,6 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.8.1'
+    gradleVersion = '9.8.2'
     validateDistributionUrl = true
 }

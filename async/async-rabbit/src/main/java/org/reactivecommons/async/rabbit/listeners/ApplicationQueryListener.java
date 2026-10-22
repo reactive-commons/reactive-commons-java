@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
@@ -21,6 +22,7 @@ import reactor.rabbitmq.ExchangeSpecification;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
 import java.util.logging.Level;
@@ -66,8 +68,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
         final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
         if (handler == null) {
-            return message ->
-                    Mono.error(new RuntimeException("Handler Not registered for Query: " + executorPath));
+            throw new MissingHandlerException("query", executorPath);
         }
         Function<Message, Object> messageConverter = resolveConverter(handler.queryClass());
         final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.handler(), messageConverter);
@@ -119,6 +120,11 @@ public class ApplicationQueryListener extends GenericMessageListener {
     @Override
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         AMQP.BasicProperties messageProperties = msj.getProperties();
+        if (!canBeAnswered(messageProperties)) {
+            // e.g. published by another client: running the handler is pointless, nobody can get its reply
+            return Mono.error(new IllegalArgumentException("Query without the " + SERVED_QUERY_ID + ", " + REPLY_ID
+                    + " and " + CORRELATION_ID + " headers needed to serve it and reply to it"));
+        }
 
         boolean messageDoesNotContainTimeoutMetadata = messageProperties.getTimestamp() == null ||
                 !messageProperties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS);
@@ -127,14 +133,37 @@ public class ApplicationQueryListener extends GenericMessageListener {
             return super.handle(msj, initTime);
         }
 
-        return handleWithTimeout(msj, initTime, messageProperties);
+        // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
+        return Mono.defer(() -> replyTimeoutMillis(messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
+                .map(timeout -> handleWithTimeout(msj, initTime, messageProperties, timeout))
+                .orElseGet(() -> {
+                    // counted here only: retryIsUseless parses the same header again when the query fails
+                    metrics.recordInvalidTimeoutHeader();
+                    return super.handle(msj, initTime);
+                }));
+    }
+
+    /**
+     * The gateway publishes the timeout as a {@code long}, which the RabbitMQ client decodes as a {@link Long};
+     * other publishers may send an {@link Integer} or a string.
+     */
+    private Optional<Long> replyTimeoutMillis(Object header) {
+        if (header instanceof Number number) {
+            return Optional.of(number.longValue());
+        }
+        try {
+            return Optional.of(Long.parseLong(String.valueOf(header).trim()));
+        } catch (NumberFormatException e) {
+            log.log(Level.WARNING, () -> "Ignoring invalid " + REPLY_TIMEOUT_MILLIS + " header: " + header);
+            return Optional.empty();
+        }
     }
 
     private Mono<AcknowledgableDelivery> handleWithTimeout(AcknowledgableDelivery msj,
                                                            Instant initTime,
-                                                           AMQP.BasicProperties messageProperties) {
-        long messageTimestamp = msj.getProperties().getTimestamp().getTime();
-        long replyTimeoutMillis = (int) messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS);
+                                                           AMQP.BasicProperties messageProperties,
+                                                           long replyTimeoutMillis) {
+        long messageTimestamp = messageProperties.getTimestamp().getTime();
         long millisUntilTimeout = (messageTimestamp + replyTimeoutMillis) - currentTimestamp().toEpochMilli();
         String executorPath = getExecutorPath(msj);
 
@@ -146,13 +175,40 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return buildTimeOutFallback(executorPath);
     }
 
+    private static boolean canBeAnswered(AMQP.BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        return headers != null && headers.get(SERVED_QUERY_ID) != null && headers.get(REPLY_ID) != null
+                && headers.get(CORRELATION_ID) != null;
+    }
+
     private Instant currentTimestamp() {
         return Instant.now();
     }
 
+    /**
+     * A failed query is not retried once its caller stopped waiting for the reply (its publication time plus the
+     * reply timeout it carries): nobody would receive the reply.
+     */
+    @Override
+    protected boolean retryIsUseless(AcknowledgableDelivery msj) {
+        AMQP.BasicProperties properties = msj.getProperties();
+        if (!canBeAnswered(properties)) {
+            return true;
+        }
+        if (properties.getTimestamp() == null || properties.getHeaders() == null
+                || !properties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS)) {
+            return false;
+        }
+        return replyTimeoutMillis(properties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
+                .map(timeout -> properties.getTimestamp().getTime() + timeout <= currentTimestamp().toEpochMilli())
+                .orElse(false);
+    }
+
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
-        return Mono.fromRunnable(() -> log.log(Level.WARNING, String.format("query with path %s discarded by timeout",
-                executorPath)));
+        return Mono.fromRunnable(() -> {
+            metrics.recordQueryDiscardedByTimeout();
+            log.log(Level.WARNING, String.format("query with path %s discarded by timeout", executorPath));
+        });
     }
 
     @Override
@@ -175,7 +231,14 @@ public class ApplicationQueryListener extends GenericMessageListener {
             final HashMap<String, Object> headers = new HashMap<>();
             headers.put(CORRELATION_ID, correlationID);
             Object response = signal.get();
-            return sender.sendNoConfirm(response, replyExchange, replyID, headers, false);
+            // the query was handled: failing to publish its reply must not make it run again
+            return sender.sendNoConfirm(response, replyExchange, replyID, headers, false)
+                    .onErrorResume(replyError -> {
+                        metrics.recordQueryReplyFailed();
+                        log.log(Level.WARNING, replyError, () -> "Reply to query " + correlationID
+                                + " could not be published, its caller will not receive it");
+                        return Mono.empty();
+                    });
         });
     }
 

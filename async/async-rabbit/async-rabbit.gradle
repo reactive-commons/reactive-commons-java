@@ -17,4 +17,7 @@ dependencies {
 
     implementation 'io.cloudevents:cloudevents-core:5.1.0'
     testImplementation 'io.projectreactor:reactor-test'
+    testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+    testImplementation 'org.testcontainers:testcontainers-rabbitmq'
+    testImplementation 'org.testcontainers:testcontainers-toxiproxy'
 }

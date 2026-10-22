@@ -25,6 +25,7 @@ import reactor.rabbitmq.Receiver;
 import reactor.test.publisher.PublisherProbe;
 import reactor.test.publisher.TestPublisher;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -108,7 +109,7 @@ class ApplicationReplyListenerTest {
     }
 
     @Test
-    void shouldResubscribeIfPreviousSubscriptionCompletes() {
+    void shouldResubscribeIfPreviousSubscriptionCompletes() throws Exception {
         TestPublisher<Delivery> initialSource = TestPublisher.create();
         PublisherProbe<Delivery> newSource = PublisherProbe.of(Flux.never());
 
@@ -118,6 +119,11 @@ class ApplicationReplyListenerTest {
         initialSource.complete();
 
         initialSource.assertWasSubscribed();
+        // the re-subscription is scheduled, never done from within the termination callback
+        long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+        while (!newSource.wasSubscribed() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
         newSource.assertWasSubscribed();
     }
 

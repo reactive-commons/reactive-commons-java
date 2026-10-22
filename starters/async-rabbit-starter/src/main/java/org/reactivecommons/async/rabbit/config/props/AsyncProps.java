@@ -11,6 +11,8 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
 
+import java.time.Duration;
+
 
 @Getter
 @Setter
@@ -52,6 +54,52 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
 
     @Builder.Default
     private Integer retryDelay = 1000;
+
+    /**
+     * Maximum time a sender waits for the outcome of a message before failing the caller: a message that could not be
+     * handed to a publishing flow fails with {@code SendFailureNoAckException}, and a message handed to a flow but not
+     * confirmed in time fails with {@code SendConfirmUnknownException} (it may or may not have reached the broker).
+     */
+    @Builder.Default
+    private Duration sendTimeout = Duration.ofSeconds(10);
+
+    /**
+     * Size of the publish hand-over thread pool: these threads hand each message to a publishing flow and can block
+     * inside {@code basicPublish} when the broker raises a resource alarm. Keep it small; back-pressure is
+     * surfaced through {@link #handOverQueueCapacity}.
+     */
+    @Builder.Default
+    private int handOverPoolSize = 13;
+
+    /**
+     * Maximum number of messages waiting to be written to a channel: queued in front of the publish hand-over pool,
+     * and handed to a publishing flow but not written yet (e.g. while the broker blocks the connection). When reached,
+     * new publishes fail fast with {@code SendFailureHandOverRejectedException} instead of queueing in memory while
+     * the broker is back-pressuring.
+     */
+    @Builder.Default
+    private int handOverQueueCapacity = 16_384;
+
+    /**
+     * How long a {@code connection.blocked} notification must persist before the health indicator reports DOWN. A
+     * short alarm (e.g. a transient disk flush) should not flap the health check.
+     */
+    @Builder.Default
+    private Duration blockedHealthGrace = Duration.ofSeconds(5);
+
+    /**
+     * How long a listener must stay inactive (channel closed, consumer cancelled, upstream error) before the health
+     * indicator reports DOWN. A short gap during normal re-subscription should not flap the check.
+     */
+    @Builder.Default
+    private Duration subscriberInactiveGrace = Duration.ofSeconds(10);
+
+    /**
+     * Maximum time a handler may run before its message is nacked as a failed delivery. {@code null} (default) means
+     * no timeout - a hung handler holds a prefetch slot forever. Combine with {@code maxRetries} or
+     * {@code withDLQRetry} to avoid a hot-requeue loop on a chronically slow handler.
+     */
+    private Duration handlerTimeout;
 
     @Builder.Default
     private Boolean listenReplies = null;

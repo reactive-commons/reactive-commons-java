@@ -20,24 +20,107 @@ import org.reactivecommons.async.rabbit.listeners.ApplicationNotificationListene
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueryListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationQueueListener;
 import org.reactivecommons.async.rabbit.listeners.ApplicationReplyListener;
+import org.reactivecommons.async.rabbit.listeners.GenericMessageListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
-public record RabbitMQBrokerProvider(String domain,
-                                     AsyncProps props,
-                                     BrokerConfig config,
-                                     ReactiveReplyRouter router,
-                                     RabbitJacksonMessageConverter converter,
-                                     MeterRegistry meterRegistry,
-                                     CustomReporter errorReporter,
-                                     RabbitReactiveHealthIndicator healthIndicator,
-                                     ReactiveMessageListener receiver,
-                                     ReactiveMessageSender sender,
-                                     DiscardNotifier discardNotifier) implements BrokerProvider<AsyncProps> {
+public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
+
+    private final String domain;
+    private final AsyncProps props;
+    private final BrokerConfig config;
+    private final ReactiveReplyRouter router;
+    private final RabbitJacksonMessageConverter converter;
+    private final MeterRegistry meterRegistry;
+    private final CustomReporter errorReporter;
+    private final RabbitReactiveHealthIndicator healthIndicator;
+    private final ReactiveMessageListener receiver;
+    private final ReactiveMessageSender sender;
+    private final DiscardNotifier discardNotifier;
+    private final ConsumerQueueDepth queueDepth;
+
+    private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
+    private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
+
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
+                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier) {
+        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
+                sender, discardNotifier, null);
+    }
+
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
+                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
+        this.domain = domain;
+        this.props = props;
+        this.config = config;
+        this.router = router;
+        this.converter = converter;
+        this.meterRegistry = meterRegistry;
+        this.errorReporter = errorReporter;
+        this.healthIndicator = healthIndicator;
+        this.receiver = receiver;
+        this.sender = sender;
+        this.discardNotifier = discardNotifier;
+        this.queueDepth = queueDepth;
+    }
+
+    public String domain() {
+        return domain;
+    }
+
+    @Override
+    public AsyncProps props() {
+        return props;
+    }
+
+    public BrokerConfig config() {
+        return config;
+    }
+
+    public ReactiveReplyRouter router() {
+        return router;
+    }
+
+    public RabbitJacksonMessageConverter converter() {
+        return converter;
+    }
+
+    public MeterRegistry meterRegistry() {
+        return meterRegistry;
+    }
+
+    public CustomReporter errorReporter() {
+        return errorReporter;
+    }
+
+    public RabbitReactiveHealthIndicator healthIndicator() {
+        return healthIndicator;
+    }
+
+    public ReactiveMessageListener receiver() {
+        return receiver;
+    }
+
+    public ReactiveMessageSender sender() {
+        return sender;
+    }
+
+    public DiscardNotifier discardNotifier() {
+        return discardNotifier;
+    }
 
     @Override
     public DomainEventBus getDomainBus() {
@@ -55,7 +138,7 @@ public record RabbitMQBrokerProvider(String domain,
             sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
         }
         listenReplies();
-        return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry);
+        return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry, domain);
     }
 
     @Override
@@ -74,21 +157,25 @@ public record RabbitMQBrokerProvider(String domain,
                     discardNotifier,
                     errorReporter,
                     props.getAppName());
+            listeners.add(listener);
             listener.startListener();
         }
     }
 
     @Override
     public void listenQueues(HandlerResolver resolver) {
-        resolver.getQueueListeners().values().forEach(registeredQueueListener ->
-                new ApplicationQueueListener(receiver,
-                props.getWithDLQRetry(),
-                props.getMaxRetries(),
-                props.getRetryDelay(),
-                registeredQueueListener,
-                discardNotifier,
-                errorReporter
-        ).startListener());
+        resolver.getQueueListeners().values().forEach(registeredQueueListener -> {
+            final ApplicationQueueListener listener = new ApplicationQueueListener(receiver,
+                    props.getWithDLQRetry(),
+                    props.getMaxRetries(),
+                    props.getRetryDelay(),
+                    registeredQueueListener,
+                    discardNotifier,
+                    errorReporter
+            );
+            listeners.add(listener);
+            listener.startListener();
+        });
     }
 
     @Override
@@ -108,6 +195,7 @@ public record RabbitMQBrokerProvider(String domain,
                     converter,
                     discardNotifier,
                     errorReporter);
+            listeners.add(listener);
             listener.startListener();
         }
     }
@@ -130,6 +218,7 @@ public record RabbitMQBrokerProvider(String domain,
                     discardNotifier,
                     errorReporter);
 
+            listeners.add(commandListener);
             commandListener.startListener();
         }
     }
@@ -154,6 +243,7 @@ public record RabbitMQBrokerProvider(String domain,
                     discardNotifier,
                     errorReporter);
 
+            listeners.add(listener);
             listener.startListener();
         }
     }
@@ -167,8 +257,27 @@ public record RabbitMQBrokerProvider(String domain,
                     props.getBrokerConfigProps().getGlobalReplyExchangeName(),
                     props.getCreateTopology()
             );
+            replyListeners.add(replyListener);
             replyListener.startListening(config.getRoutingKey());
         }
+    }
+
+    /**
+     * Stops the listeners and the publisher, and releases their threads. The connection shared by the sender and the
+     * listener is not closed here: it is cached per connection factory and shared by every domain.
+     */
+    @Override
+    public void close() {
+        if (queueDepth != null) {
+            queueDepth.close();
+        }
+        listeners.forEach(GenericMessageListener::stop);
+        listeners.clear();
+        replyListeners.forEach(ApplicationReplyListener::stop);
+        replyListeners.clear();
+        receiver.receiver().close();
+        receiver.topologyCreator().close(); // the listener declares through its own sender
+        sender.close();
     }
 
     @Override

@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.ConnectionFactory;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,8 +33,7 @@ class RabbitMQBrokerProviderFactoryTest {
     private final ReactiveReplyRouter router = new ReactiveReplyRouter();
     @Mock
     private RabbitJacksonMessageConverter converter;
-    @Mock
-    private MeterRegistry meterRegistry;
+    private final MeterRegistry meterRegistry = new SimpleMeterRegistry();
     @Mock
     private CustomReporter errorReporter;
     @Mock

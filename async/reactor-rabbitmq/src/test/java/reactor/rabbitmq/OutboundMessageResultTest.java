@@ -29,6 +29,21 @@ class OutboundMessageResultTest {
         var msg = new OutboundMessage("exch", "rk", "body".getBytes());
         var result = new OutboundMessageResult<>(msg, true, true);
         var str = result.toString();
-        assertThat(str).contains("ack=true").contains("returned=true");
+        assertThat(str).contains("ack=true").contains("returned=true").contains("unknown=false");
+    }
+
+    @Test
+    void shortConstructorsReportAKnownOutcome() {
+        var msg = new OutboundMessage("exch", "rk", "body".getBytes());
+        assertThat(new OutboundMessageResult<>(msg, true).unknown()).isFalse();
+        assertThat(new OutboundMessageResult<>(msg, false, false).unknown()).isFalse();
+    }
+
+    @Test
+    void unknownOutcome() {
+        var msg = new OutboundMessage("exch", "rk", "body".getBytes());
+        var result = new OutboundMessageResult<>(msg, false, false, true);
+        assertThat(result.unknown()).isTrue();
+        assertThat(result.ack()).isFalse();
     }
 }

@@ -157,6 +157,44 @@ class ReceiverTest {
     }
 
     @Test
+    void consumerRegisteredCallbackReceivesTheTagOnlyOnceTheConsumerIsRegistered() throws Exception {
+        var registered = new AtomicReference<String>();
+        var registeredLatch = new CountDownLatch(1);
+        when(channel.basicConsume(anyString(), eq(false), anyString(), eq(false), eq(false),
+                anyMap(), any(DeliverCallback.class), any(com.rabbitmq.client.CancelCallback.class)))
+                .thenAnswer(invocation -> {
+                    assertThat(registered.get()).as("not called before basicConsume returns").isNull();
+                    return "consumer-tag-registered";
+                });
+        receiver = new Receiver(new ReceiverOptions().connectionMono(Mono.just(connection)));
+
+        var disposable = receiver.consumeManualAck("test-queue", new ConsumeOptions()
+                .consumerRegisteredCallback(tag -> {
+                    registered.set(tag);
+                    registeredLatch.countDown();
+                })).subscribe();
+
+        assertThat(registeredLatch.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(registered.get()).isEqualTo("consumer-tag-registered");
+        disposable.dispose();
+    }
+
+    @Test
+    void consumerRegisteredCallbackIsNotCalledWhenTheConsumerIsRejected() throws Exception {
+        var registered = new AtomicReference<String>();
+        when(channel.basicConsume(anyString(), eq(false), anyString(), eq(false), eq(false),
+                anyMap(), any(DeliverCallback.class), any(com.rabbitmq.client.CancelCallback.class)))
+                .thenThrow(new IOException("NOT_FOUND - no queue 'test-queue'"));
+        receiver = new Receiver(new ReceiverOptions().connectionMono(Mono.just(connection)));
+
+        assertThatThrownBy(() -> receiver.consumeManualAck("test-queue",
+                        new ConsumeOptions().consumerRegisteredCallback(registered::set))
+                .blockLast(Duration.ofSeconds(5)))
+                .isInstanceOf(RabbitFluxException.class);
+        assertThat(registered.get()).isNull();
+    }
+
+    @Test
     void channelCallbackIsCalled() throws Exception {
         AtomicReference<DeliverCallback> deliverRef = new AtomicReference<>();
         when(channel.basicConsume(anyString(), eq(false), anyString(), eq(false), eq(false),

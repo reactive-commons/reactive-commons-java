@@ -23,6 +23,7 @@ import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
 import java.lang.reflect.Field;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -88,6 +89,9 @@ class GenericMessageListenerRecoveryTest {
         for (int cycle = 1; cycle <= 5; cycle++) {
             shutdownListener.shutdownCompleted(mockShutdownCause());
 
+            // the re-subscription is scheduled, never done from within the shutdown callback
+            awaitSubscriptions(cycle + 1);
+
             // After each recovery there must remain exactly one active consumer,
             // the old subscription must be disposed before the new one takes over.
             assertThat(activeConsumers.get())
@@ -96,6 +100,16 @@ class GenericMessageListenerRecoveryTest {
             assertThat(totalSubscriptions.get())
                     .as("a new subscription should be created on each recovery cycle")
                     .isEqualTo(cycle + 1);
+        }
+    }
+
+    private void awaitSubscriptions(int expected) throws InterruptedException {
+        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
+        while (totalSubscriptions.get() < expected) {
+            if (System.nanoTime() > deadline) {
+                throw new AssertionError("The listener was not restarted, subscriptions: " + totalSubscriptions.get());
+            }
+            Thread.sleep(20);
         }
     }
 

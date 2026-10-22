@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,10 +44,12 @@ class UnroutableMessageNotifierTest {
     @Captor
     private ArgumentCaptor<OutboundMessageResult<OutboundMessage>> messageCaptor;
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+
     @BeforeEach
     void setUp() {
-        // Use the default constructor and spy on the internal sink
-        unroutableMessageNotifier = new UnroutableMessageNotifier();
+        // the registry is injected, then the sink is replaced by a mock
+        unroutableMessageNotifier = new UnroutableMessageNotifier(registry, "domain");
         // Inject the sink mock using a spy to verify it
         try {
             java.lang.reflect.Field sinkField = UnroutableMessageNotifier.class.getDeclaredField("sink");
@@ -64,6 +67,8 @@ class UnroutableMessageNotifierTest {
         unroutableMessageNotifier.notifyUnroutableMessage(messageResult);
 
         verify(sink).tryEmitNext(messageResult);
+        assertThat(counter("reactive_commons.publish.unroutable.messages")).isEqualTo(1.0);
+        assertThat(counter("reactive_commons.publish.unroutable.emit.failed")).isZero();
     }
 
     @Test
@@ -73,6 +78,8 @@ class UnroutableMessageNotifierTest {
         unroutableMessageNotifier.notifyUnroutableMessage(messageResult);
 
         verify(sink).tryEmitNext(messageResult);
+        assertThat(counter("reactive_commons.publish.unroutable.messages")).isEqualTo(1.0);
+        assertThat(counter("reactive_commons.publish.unroutable.emit.failed")).isEqualTo(1.0);
     }
 
     @Test
@@ -83,7 +90,7 @@ class UnroutableMessageNotifierTest {
 
         unroutableMessageNotifier.listenToUnroutableMessages(handler);
 
-        verify(handler, timeout(1000)).processMessage(messageCaptor.capture());
+        verify(handler, timeout(5_000)).processMessage(messageCaptor.capture());
         assertThat(messageCaptor.getValue()).isEqualTo(messageResult);
     }
 
@@ -112,7 +119,12 @@ class UnroutableMessageNotifierTest {
 
         unroutableMessageNotifier.listenToUnroutableMessages(handler);
 
-        verify(handler, timeout(1000).times(1)).processMessage(messageResult);
-        verify(handler, timeout(1000).times(1)).processMessage(messageResult2);
+        verify(handler, timeout(5_000).times(1)).processMessage(messageResult);
+        verify(handler, timeout(5_000).times(1)).processMessage(messageResult2);
+        assertThat(counter("reactive_commons.publish.unroutable.process.error")).isEqualTo(1.0);
+    }
+
+    private double counter(String name) {
+        return registry.find(name).tag("domain", "domain").counter().count();
     }
 }

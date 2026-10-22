@@ -27,6 +27,7 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.ExchangeSpecification;
@@ -36,6 +37,7 @@ import reactor.test.StepVerifier;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -260,6 +262,28 @@ class RabbitMQBrokerProviderTest {
 
         verify(handlerResolver, times(0)).getTopicListeners();
         verify(receiver, times(0)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
+    void shouldStopConsumingAndCloseTheReceiverAndSenderOnClose() {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        when(handlerResolver.hasCommandHandlers()).thenReturn(true);
+        when(listener.topologyCreator()).thenReturn(creator);
+        when(creator.declare(any(ExchangeSpecification.class))).thenReturn(Mono.empty());
+        when(creator.declareQueue(any(String.class), any()))
+                .thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
+        when(creator.bind(any(BindingSpecification.class))).thenReturn(Mono.empty());
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
+        when(receiver.consumeManualAck(any(String.class), any()))
+                .thenReturn(Flux.<AcknowledgableDelivery>never().doOnCancel(() -> cancelled.set(true)));
+
+        brokerProvider.listenCommands(handlerResolver);
+        brokerProvider.close();
+
+        assertThat(cancelled).isTrue();
+        verify(receiver).close();
+        verify(sender).close();
     }
 
     @Test

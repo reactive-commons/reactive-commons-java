@@ -50,6 +50,13 @@ public class ConsumeOptions {
     private Consumer<Channel> channelCallback = ch -> {
     };
 
+    /**
+     * Called with the consumer tag once the broker has registered the consumer ({@code basic.consume-ok}), unlike
+     * {@link #channelCallback} which runs before the consumer is even requested.
+     */
+    private Consumer<String> consumerRegisteredCallback = tag -> {
+    };
+
     private Map<String, Object> arguments = Collections.emptyMap();
 
     public ConsumeOptions qos(int qos) {
@@ -90,6 +97,11 @@ public class ConsumeOptions {
 
     public ConsumeOptions channelCallback(Consumer<Channel> channelCallback) {
         this.channelCallback = channelCallback;
+        return this;
+    }
+
+    public ConsumeOptions consumerRegisteredCallback(Consumer<String> consumerRegisteredCallback) {
+        this.consumerRegisteredCallback = consumerRegisteredCallback;
         return this;
     }
 

@@ -24,6 +24,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
@@ -44,6 +45,8 @@ public class ReactiveCommonsConfig {
         ConnectionManager connectionManager = new ConnectionManager();
         props.forEach((beanName, domainProps) -> {
             final GenericAsyncProps defaultDomainProps = domainProps.getProps(DEFAULT_DOMAIN);
+            // ONE discard provider shared by all the domains of this broker type, not one per domain
+            final Map<BrokerProviderFactory, DiscardProvider> discardProviders = new HashMap<>();
             domainProps.forEach((domain, asyncPropsObject) -> {
                 String domainName = (String) domain;
                 final GenericAsyncProps asyncProps = (GenericAsyncProps) asyncPropsObject;
@@ -52,13 +55,20 @@ public class ReactiveCommonsConfig {
                     if (!defaultDomainProps.isEnabled()) {
                         asyncProps.setUseDiscardNotifierPerDomain(true);
                     }
-                    DiscardProvider discardProvider = factory.getDiscardProvider(defaultDomainProps);
+                    DiscardProvider discardProvider = discardProviders.computeIfAbsent(factory,
+                            f -> f.getDiscardProvider(defaultDomainProps));
                     BrokerProvider provider = factory.getProvider(domainName, asyncProps, discardProvider);
                     connectionManager.addDomain(domainName, provider);
                 }
             });
         });
         return connectionManager;
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public BrokerProviderLifecycleManager brokerProviderLifecycleManager(ConnectionManager connectionManager) {
+        return new BrokerProviderLifecycleManager(connectionManager);
     }
 
     @Bean

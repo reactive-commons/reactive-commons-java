@@ -32,7 +32,7 @@ app:
       brokerType: "rabbitmq" # please don't change this value
       queueType: null # you can set to 'classic' or to 'quorum' if your RabbitMQ cluster supports it, by default it will take the virtual host default queue type
       flux:
-        maxConcurrency: 250 # max concurrency of listener flow
+        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows up to 250 threads only when the handlers block (blocking I/O) and releases the idle threads after a minute
       domain:
         ignoreThisListener: false # Allows you to disable event listener for this specific domain
         events:
@@ -68,6 +68,30 @@ app:
 :::caution[Mandatory `app` Domain Configuration]
 To ensure a correct configuration, you should always override the properties of the `app` domain. If it is not
 configured, an exception will be thrown. You can also add properties for additional custom domain if needed.
+:::
+
+:::caution[Infinite retries and quorum queues]
+With `withDLQRetry: false` and `maxRetries: -1` a failed message is requeued every `retryDelay` indefinitely. On
+quorum queues, RabbitMQ 4.0 to 4.2 count those requeues against the queue
+[delivery limit](https://www.rabbitmq.com/docs/quorum-queues#poison-message-handling) (20 by default): once reached,
+the broker drops the message (or dead-letters it if the queue has a dead letter exchange). Use `withDLQRetry: true`
+or a finite `maxRetries` if messages must not be dropped.
+:::
+
+:::note[Messages that are discarded instead of retried]
+Whatever the retry configuration, a failed message is discarded (its discard notified as a `<name>.dlq` event, then
+acknowledged) when retrying it can never help:
+
+- **No handler is registered** for its event, command, query or notification name (e.g. a binding left by a version
+  that had a handler for it).
+- **A query whose caller stopped waiting**: once its publication time plus the reply timeout it carries has passed.
+- **A query that cannot be answered**: published without the `x-serveQuery-id`, `x-reply_id` or `x-correlation-id`
+  headers (e.g. by another client). Its handler is not run.
+
+A discarded message is acknowledged only once its discard notification is published. If it cannot be published (e.g. the
+broker blocks the publishing connection), the message is requeued after `retryDelay` and discarded again
+later, so it is never lost. A query that was handled but whose reply could not be published is acknowledged without
+running it again: its caller does not receive the reply.
 :::
 
 ## Configuration approaches
@@ -123,15 +147,15 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class RabbitMQConfig {
 
-  @Bean
-  public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
-    return domainProperties -> {
-      // Customize the "app" domain — YAML values are kept, only these fields are overridden
-      domainProperties.customize("app", app -> app.setQueueType("quorum"));
+    @Bean
+    public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
+        return domainProperties -> {
+            // Customize the "app" domain — YAML values are kept, only these fields are overridden
+            domainProperties.customize("app", app -> app.setQueueType("quorum"));
 
-      // Customize the "accounts" domain independently
-      domainProperties.customize("accounts", accounts -> accounts.setQueueType("quorum"));
-    };
+            // Customize the "accounts" domain independently
+            domainProperties.customize("accounts", accounts -> accounts.setQueueType("quorum"));
+        };
     }
 
 }
@@ -307,15 +331,15 @@ public class RabbitMQConfig {
     @Bean
     public AsyncPropsDomain.RabbitPropsCustomizer rabbitPropsCustomizer() {
         return domainProperties -> {
-          domainProperties.customize("app", properties -> {
-            RabbitProperties connectionProperties = properties.getConnectionProperties();
-            connectionProperties.setHost(rabbitMQConnectionProperties.host());
-            connectionProperties.setPort(rabbitMQConnectionProperties.port());
-            connectionProperties.setVirtualHost(rabbitMQConnectionProperties.virtualhost());
-            connectionProperties.setUsername(rabbitMQConnectionProperties.username());
-            connectionProperties.setPassword(rabbitMQConnectionProperties.password());
-            connectionProperties.getSsl().setEnabled(rabbitMQConnectionProperties.ssl());
-          });
+            domainProperties.customize("app", properties -> {
+                RabbitProperties connectionProperties = properties.getConnectionProperties();
+                connectionProperties.setHost(rabbitMQConnectionProperties.host());
+                connectionProperties.setPort(rabbitMQConnectionProperties.port());
+                connectionProperties.setVirtualHost(rabbitMQConnectionProperties.virtualhost());
+                connectionProperties.setUsername(rabbitMQConnectionProperties.username());
+                connectionProperties.setPassword(rabbitMQConnectionProperties.password());
+                connectionProperties.getSsl().setEnabled(rabbitMQConnectionProperties.ssl());
+            });
         };
     }
 }
@@ -362,12 +386,75 @@ public ConnectionFactoryCustomizer connectionFactoryCustomizer() {
 }
 ```
 
+### RabbitMQ client metrics
+
+The RabbitMQ Java client can report what happens on its connections and channels to Micrometer, at the AMQP protocol
+level (see *Metrics* in the [Java client API guide](https://www.rabbitmq.com/client-libraries/java-api-guide)). The
+library creates its own `ConnectionFactory`, which Spring Boot does not instrument (it only instruments the Spring
+AMQP connection factories), so enable it with a `ConnectionFactoryCustomizer`:
+
+```java
+import com.rabbitmq.client.impl.MicrometerMetricsCollector;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Tags;
+
+@Bean
+public ConnectionFactoryCustomizer connectionFactoryCustomizer(MeterRegistry registry) {
+    return (connectionFactory, asyncProps) -> {
+        connectionFactory.setMetricsCollector(new MicrometerMetricsCollector(registry, "rabbitmq",
+                Tags.of("name", "reactive-commons-" + asyncProps.getAppName())));
+        return connectionFactory;
+    };
+}
+```
+
+The customizer is applied once per connection factory, that is once per domain. Defining it replaces the default one,
+which leaves the factory unchanged: keep your other customizations (exception handler, credentials provider...) in
+the same lambda.
+
+| Metric (Prometheus)                         | Type    | Meaning                                                                                                          |
+|---------------------------------------------|---------|------------------------------------------------------------------------------------------------------------------|
+| `rabbitmq_connections`                      | Gauge   | Open connections. `0` means the application is disconnected from the broker.                                     |
+| `rabbitmq_channels`                         | Gauge   | Open channels. A value that keeps growing is a channel leak.                                                     |
+| `rabbitmq_published_total`                  | Counter | Messages written to a channel, with or without publisher confirms.                                               |
+| `rabbitmq_failed_to_publish_total`          | Counter | Publishes that threw (channel or connection closed).                                                             |
+| `rabbitmq_acknowledged_published_total`     | Counter | Publisher confirms received (`basic.ack`).                                                                       |
+| `rabbitmq_not_acknowledged_published_total` | Counter | Messages the broker rejected (`basic.nack`), e.g. a queue at its length limit with `x-overflow: reject-publish`. |
+| `rabbitmq_unrouted_published_total`         | Counter | Messages returned by the broker (`basic.return`). Only with `mandatory: true`, see below.                        |
+| `rabbitmq_consumed_total`                   | Counter | Deliveries received.                                                                                             |
+| `rabbitmq_acknowledged_total`               | Counter | Deliveries acknowledged (`basic.ack`).                                                                           |
+| `rabbitmq_rejected_total`                   | Counter | Deliveries rejected (`basic.nack`/`basic.reject`), requeued or sent to the DLQ.                                  |
+| `rabbitmq_requeued_total`                   | Counter | The rejected deliveries that were requeued.                                                                      |
+
+They complement the `reactive_commons.*` meters, they do not replace them:
+
+- **They see the protocol, not the outcome the caller got.** A message that never reached a channel (sender timeout,
+  full hand-over queue, broker blocking the connection) is in `publish.outcome` but not here. The other way round,
+  connections, channels and failed writes are only here.
+- **They are a cross-check.** `publish.outcome{confirm="true",outcome="ack"}` should follow
+  `rabbitmq_acknowledged_published_total`, and `publish.outcome{outcome="nack"}` should follow
+  `rabbitmq_not_acknowledged_published_total`: if they diverge, an outcome is misreported.
+- **They add up every connection of the factory**: the sender, the listeners, the topology creator and the queue-depth
+  poller of a domain share it.
+- **`rabbitmq_published_total` also counts the messages sent without confirms** (queries and replies), which never
+  get an ack or a nack.
+- **Unroutable messages are only counted with `mandatory: true`.** With `mandatory: false` the broker drops a message
+  that no queue is bound to and acknowledges it, so it is counted as acknowledged. Only the broker sees it
+  (`rabbitmq_global_messages_unroutable_dropped_total` in the RabbitMQ Prometheus plugin).
+
+The prefix `rabbitmq` and the tag `name` are the ones Spring Boot uses for the Spring AMQP connection factories: the
+same dashboards work for both, and an application using both reports them under the same tag keys, as Prometheus
+requires.
+
 ## Connections and channels
 
-Reactive Commons establishes **a single connection to the RabbitMQ broker**, which is reused for all messaging
-operations, both sending and listening. However, the number of open **channels** within that connection varies depending
-on the enabled annotations and the type of interaction (sending, listening, or both). Each scenario described below
-shows how the number of channels changes according to the applied configuration.
+Reactive Commons establishes **up to two connections to the RabbitMQ broker per domain**: one to publish
+(`<appName>-<host>-sender`) and, as soon as the application listens (listeners or `listenReplies`), one to consume
+(`<appName>-<host>-listener`). During a [resource alarm](https://www.rabbitmq.com/docs/alarms) the broker stops reading
+from the connections that publish; keeping the consumers on their own connection lets them keep acknowledging messages,
+which is what drains the queues and frees the broker. The number of open **channels** varies depending on the enabled
+annotations and the type of interaction (sending, listening, or both); the tables report the channels of both
+connections of a domain. Each scenario described below shows how they change according to the applied configuration.
 
 In the context of this documentation, a domain refers to a connection with a broker. The configuration supports up to
 two brokers, which means the described scenarios are limited to a maximum of two domains.
@@ -395,8 +482,8 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker     | Connections | Channels |
 |----------------------------|---------------|------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app | 1           | 13       |
-|                            | false         | Broker app | 1           | 11       |
+| One or all for sending [1] | true          | Broker app | 2           | 8        |
+|                            | false         | Broker app | 1           | 6        |
 
 ### 2. Sending messages (multiple domains)
 
@@ -405,9 +492,9 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations        | listenReplies | Broker            | Connections | Channels |
 |----------------------------|---------------|-------------------|-------------|----------|
-| One or all for sending [1] | true          | Broker app        | 1           | 18       |
-|                            |               | Additional broker | 1           | 8        |
-| One or all for sending [1] | false         | Broker app        | 1           | 16       |
+| One or all for sending [1] | true          | Broker app        | 2           | 8        |
+|                            |               | Additional broker | 2           | 8        |
+| One or all for sending [1] | false         | Broker app        | 1           | 6        |
 |                            |               | Additional broker | 1           | 6        |
 
 ### 3. Listening for messages (single domain)
@@ -416,7 +503,7 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations          | Broker     | Connections | Channels |
 |------------------------------|------------|-------------|----------|
-| One or all for listening [2] | Broker app | 1           | 14       |
+| One or all for listening [2] | Broker app | 2           | 9        |
 
 ### 4. Listening for messages (multiple domains)
 
@@ -424,20 +511,21 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations   | Broker            | Connections | Channels |
 |-----------------------|-------------------|-------------|----------|
-| All for listening [2] | Broker app        | 1           | 19       |
-|                       | Additional broker | 1           | 8        |
-| Two for listening [2] | Broker app        | 1           | 18       |
-|                       | Additional broker | 1           | 8        |
-| One for listening [2] | Broker app        | 1           | 17       |
-|                       | Additional broker | 1           | 7        |
+| All for listening [2] | Broker app        | 2           | 9        |
+|                       | Additional broker | 2           | 8        |
+| Two for listening [2] | Broker app        | 2           | 8        |
+|                       | Additional broker | 2           | 8        |
+| One for listening [2] | Broker app        | 2           | 7        |
+|                       | Additional broker | 2           | 7        |
 
 ### 5. Sending and listening for messages (single domain)
 
 > This scenario enables both sending and listening for messages on a single broker, with all annotations enabled:
 
-| Enabled annotations                           | Broker     | Connections | Channels |
-|-----------------------------------------------|------------|-------------|----------|
-| All for sending [1] and all for listening [2] | Broker app | 1           | 16       |
+| Enabled annotations                           | listenReplies | Broker     | Connections | Channels |
+|-----------------------------------------------|---------------|------------|-------------|----------|
+| All for sending [1] and all for listening [2] | true          | Broker app | 2           | 11       |
+|                                               | false         | Broker app | 2           | 10       |
 
 ### 6. Sending and listening for messages (multiple domains)
 
@@ -445,16 +533,26 @@ two brokers, which means the described scenarios are limited to a maximum of two
 
 | Enabled annotations                           | Broker            | Connections | Channels |
 |-----------------------------------------------|-------------------|-------------|----------|
-| All for sending [1] and all for listening [2] | Broker app        | 1           | 21       |
-|                                               | Additional broker | 1           | 10       |
-| One for sending [1] and all for listening [2] | Broker app        | 1           | 20       |
-|                                               | Additional broker | 1           | 9        |
-| All for sending [1] and two for listening [2] | Broker app        | 1           | 20       |
-|                                               | Additional broker | 1           | 10       |
-| All for sending [1] and one for listening [2] | Broker app        | 1           | 19       |
-|                                               | Additional broker | 1           | 8        |
-| All for sending [1]                           | Broker app        | 1           | 16       |
+| All for sending [1] and all for listening [2] | Broker app        | 2           | 10       |
+|                                               | Additional broker | 2           | 9        |
+| One for sending [1] and all for listening [2] | Broker app        | 2           | 10       |
+|                                               | Additional broker | 2           | 9        |
+| All for sending [1] and two for listening [2] | Broker app        | 2           | 9        |
+|                                               | Additional broker | 2           | 9        |
+| All for sending [1] and one for listening [2] | Broker app        | 2           | 8        |
+|                                               | Additional broker | 2           | 8        |
+| All for sending [1]                           | Broker app        | 1           | 6        |
 |                                               | Additional broker | 1           | 6        |
+
+### How the channels are used
+
+- **The number of channels does not grow with the traffic.** Each domain opens a fixed set of channels when it
+  starts: the sender uses 5 (4 with publisher confirms and 1 without them) and each listener uses its own. More
+  messages per second travel through the same channels.
+- **Discarded messages share the sender of the default domain.** The notification of a discarded message (the
+  `.dlq` events) is published through the sender of the `app` domain, so it does not open channels of its own, no
+  matter how many domains are configured. Only a domain that sets `useDiscardNotifierPerDomain` publishes the
+  notifications of its own discards through its own sender.
 
 ### Recommendations
 
@@ -465,6 +563,197 @@ two brokers, which means the described scenarios are limited to a maximum of two
 - **Proper Use of Configuration Properties:** Adjusting configuration properties according to the specific use case
   allows for resource optimization and avoids unnecessary configurations.
 
+## Sender resilience and back-pressure
+
+Every publish terminates within a bounded time with a typed outcome, so a hung broker (or socket) cannot silently
+stall the publisher. While the broker signals `connection.blocked` (memory or disk alarm), new publishes fail
+immediately with `SendFailureBrokerBlockedException` instead of waiting for `sendTimeout`: the message is definitively
+not published, so the caller can retry it safely once the alarm clears. This is not configurable. The relevant
+properties and their defaults:
+
+| Property                | Default | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                |
+|-------------------------|---------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `sendTimeout`           | `10s`   | Maximum time a sender waits for the outcome of a message before failing the caller.                                                                                                                                                                                                                                                                                                                                                    |
+| `handOverPoolSize`      | `13`    | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure).                                                                                                                                                                                                                                                                                                                    |
+| `handOverQueueCapacity` | `16384` | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. Size it to about one second of your peak publish rate: a smaller value rejects messages during short pauses (GC, scheduling) while the broker is still draining. |
+| `blockedHealthGrace`    | `5s`    | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN.                                                                                                                                                                                                                                                                                                                                           |
+
+```yaml title="application.yaml"
+app:
+  async:
+    app:
+      sendTimeout: 10s
+      handOverPoolSize: 13
+      handOverQueueCapacity: 16384
+      blockedHealthGrace: 5s
+```
+
+### Publisher outcome exceptions
+
+Every send terminates with one of the following typed exceptions. They all extend `SendFailureNoAckException`, so
+existing catch-blocks keep working.
+
+| Exception                              | When it fires                                                                                                                                                                                                             | Caller contract                                                                                                                                                               |
+|----------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `SendFailureNoAckException`            | No publishing flow became available within `sendTimeout`, the message was still waiting to be written when `sendTimeout` elapsed (it is then dropped, never published late), or the broker returned a channel-level nack. | Message was NOT published. Safe to retry.                                                                                                                                     |
+| `SendConfirmUnknownException`          | Message was handed to a flow but the broker did not confirm it in time (channel/connection failed, or `sendTimeout` elapsed with the message already in flight).                                                          | **At-least-once:** the message may or may not have reached the broker; a retry can produce a duplicate. Make the consumer idempotent, or use a correlation ID to deduplicate. |
+| `SendFailureReturnedException`         | Mandatory publish with no queue bound to the routing key.                                                                                                                                                                 | Message was NOT delivered. Safe to retry after fixing the topology.                                                                                                           |
+| `SendFailureBrokerBlockedException`    | The broker signalled `connection.blocked` (memory or disk alarm) and has not unblocked the connection yet: the publish fails immediately instead of waiting for `sendTimeout`.                                            | Message was NOT published. Safe to retry after the alarm clears.                                                                                                              |
+| `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached).                                                                                                                                  | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces.                                             |
+
+:::caution[`requestReply` is at-least-once]
+The query request and its reply are both published with `sendNoConfirm`. On a `SendFailureNoAckException` after
+`sendTimeout`, the request **may still have reached the broker** — callers must either be idempotent or use a
+correlation ID to deduplicate replies. The same caveat applies to the `reply(...)` call in query handlers.
+:::
+
+### Observability
+
+The sender exposes the following metrics on the application's `MeterRegistry`:
+
+| Metric                                              | Type                | Tags                                               | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+|-----------------------------------------------------|---------------------|----------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reactive_commons.publish.outcome`                  | Counter             | `outcome`, `confirm` ∈ {`true`, `false`}, `domain` | One per published message, tagged with the outcome its caller got (a confirm arriving after the `sendTimeout` reported as `timeout` is not counted again). With `confirm=true` (events, commands): `ack`, `nack` (the broker answered `basic.nack`, e.g. a queue at its length limit with `x-overflow: reject-publish`), `unknown`, `returned`, `rejected`, `timeout`, `blocked`, `failed` (never written to a channel, e.g. the connection was being recovered). With `confirm=false` (queries and replies): `published` (written to the channel, **not** confirmed by the broker), `failed`, `rejected`, `timeout`, `blocked`. |
+| `reactive_commons.publish.flow.resubscribe`         | Counter             | `kind` ∈ {`confirm`, `noConfirm`}, `domain`        | A publishing flow terminated and is being re-subscribed.                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `reactive_commons.publish.flow.live`                | Gauge               | `kind`, `domain`                                   | Number of publishing flows currently holding a channel.                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `reactive_commons.publish.connection.blocked`       | FunctionCounter     | `domain`                                           | Number of `connection.blocked` alarms observed since the application started.                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| `reactive_commons.publish.connection.blocked.state` | Gauge               | `domain`                                           | `1` while the broker is blocking the connection, `0` otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| `reactive_commons.publish.hand_over.queue.size`     | Gauge               | `domain`                                           | Current depth of the publish hand-over queue — a sustained non-zero value signals back-pressure.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `reactive_commons.publish.latency`                  | Timer               | `outcome`, `confirm`, `domain`                     | Caller-visible latency of each publish: from the subscription to the publisher confirm (or the failure), including the hand-over wait. `outcome` values as in `publish.outcome` (`failed` also covers a sender already shut down); a cancelled publish is not recorded.                                                                                                                                                                                                                                                         |
+| `reactive_commons.publish.message.size`             | DistributionSummary | `confirm`, `domain`                                | Size in bytes of each published body (base unit `bytes`: `reactive_commons_publish_message_size_bytes_*` in Prometheus).                                                                                                                                                                                                                                                                                                                                                                                                        |
+| `reactive_commons.publish.unroutable.messages`      | Counter             | `domain`                                           | Mandatory messages the broker returned as unroutable (`basic.return`). The default notifier is shared by every domain, so its `domain` tag is empty; `publish.outcome{outcome=returned}` tells which domain returned it.                                                                                                                                                                                                                                                                                                        |
+| `reactive_commons.publish.unroutable.emit.failed`   | Counter             | `domain`                                           | Unroutable notifications that could not be emitted to the notifier: its buffer is full because the processors are not keeping up.                                                                                                                                                                                                                                                                                                                                                                                               |
+| `reactive_commons.publish.unroutable.process.error` | Counter             | `domain`                                           | Errors thrown by the processors subscribed to the unroutable notifications.                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+
+The RabbitMQ client can also report its connections, channels, confirms and deliveries at the protocol level, see
+[RabbitMQ client metrics](#rabbitmq-client-metrics).
+
+Each `requestReply` is also measured with the Reactor Micrometer listener (`Micrometer.metrics`), named `async_query`:
+
+| Metric                      | Type    | Tags                                                                                                                              | Meaning                                                                                                                                                                                                                         |
+|-----------------------------|---------|-----------------------------------------------------------------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `async_query.subscribed`    | Counter | `operation` (the query resource), `target` (the application queried), `type` = `Mono`                                             | One per query sent.                                                                                                                                                                                                             |
+| `async_query.flow.duration` | Timer   | `operation`, `target`, `type`, `status` ∈ {`completed`, `completedEmpty`, `error`, `cancelled`}, `exception` (empty unless error) | Time from the query until its reply, its failure (e.g. `TimeoutException` after the reply timeout, `ReplyLostOnReconnectException`) or its cancellation by the caller. Its count by `status` gives the outcomes of the queries. |
+
+Like any Reactor Micrometer meter they are registered with the first query: their panels show `No data` until then.
+
+## Subscriber resilience and observability
+
+Every listener (events, commands, queries, queue listeners, notifications, replies) is tracked individually: a
+listener that silently stops delivering (orphaned consumer tag, failing restart loop, lost reply queue, hung
+handler) surfaces as DOWN in the health check with the broken queue in the details, and as counters/gauges on the
+`MeterRegistry`.
+
+| Property                  | Default | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+|---------------------------|---------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `subscriberInactiveGrace` | `10s`   | How long a listener may stay inactive (channel closed, consumer cancelled, upstream error) before the health indicator reports DOWN. A short gap during normal re-subscription should not flap the check.                                                                                                                                                                                                                                                                                                    |
+| `handlerTimeout`          | *(off)* | Maximum time a handler may run before its message is nacked as a failed delivery. When set, a hung handler nacks instead of holding a prefetch slot forever, and its thread is interrupted (code that ignores interrupts, such as a socket read without timeout, keeps it). The message is redelivered while the timed-out handler may still have produced side effects: handlers must be idempotent. Combine with `maxRetries` or `withDLQRetry` to avoid a hot-requeue loop on a chronically slow handler. |
+
+```yaml title="application.yaml"
+app:
+  async:
+    app:
+      subscriberInactiveGrace: 10s
+      handlerTimeout: 30s
+```
+
+### Listener restart
+
+When the subscription terminates (channel closed, consumer cancelled, upstream error), the listener re-subscribes
+with the same **200 ms → 5 s exponential backoff** used by the sender's publisher-confirms flows. The first restart
+per listener is logged at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when
+the broker is continuously unavailable. A listener is active once the broker has registered its consumer
+(`basic.consume-ok`), not when its channel opens. The failure counter is cleared when a message is delivered, or
+once the consumer has stayed registered for 5 seconds, so a recovered listener on a queue without traffic is healthy
+again, while one that keeps failing (e.g. a `PRECONDITION_FAILED` loop on a diverged queue) or that the broker keeps
+dropping right after registering it stays reported as broken.
+
+### Request/reply replies are at-least-once
+
+`requestReply` publishes the request with `sendNoConfirm` and expects the reply through an **exclusive + autoDelete**
+reply queue. The broker deletes that queue as soon as its connection is lost, and any reply routed to it until the
+connection is recovered is dropped. When the reply connection is lost, or the reply listener's subscription
+terminates, the pending `requestReply` calls **of that domain** fail immediately with a
+`ReplyLostOnReconnectException` instead of waiting for the reply timeout; the queries of the other domains, whose
+reply queues are fine, are not affected. A query sent while the reply connection is still down can lose its reply
+the same way and then fails with the reply timeout. Design callers to be idempotent, or deduplicate replies with the
+correlation ID.
+
+### Handler threads and `consumer_timeout`
+
+The handlers of every listener run on one shared pool of up to 250 threads, while each listener can have up to
+`prefetchCount` deliveries in flight (250 by default). Non-blocking handlers release their thread right away, but
+with handlers that block, the deliveries of several listeners queue for a thread. RabbitMQ closes the channel of a
+delivery that is not acknowledged within its
+[`consumer_timeout`](https://www.rabbitmq.com/docs/consumers#acknowledgement-timeout) (30 minutes by default; from
+RabbitMQ 4.3 it only applies to quorum queues) and requeues every delivery of that channel, so they are processed
+again. With blocking handlers, keep `prefetchCount` × listeners close to the number of handlers that can run at the
+same time, set `handlerTimeout` well below `consumer_timeout`, and alert on `reactive_commons.consumer.handler.wait`;
+a delivery that waits more than a minute for a thread is also logged as a warning.
+
+### Scheduler metrics
+
+The handler pool and the error-reporter scheduler are shared by every listener of the JVM. While at least one
+application context using them has a `MeterRegistry`, the handler pool is exported to that registry:
+
+| Metric                                               | Type            | Meaning                                                                   |
+|------------------------------------------------------|-----------------|---------------------------------------------------------------------------|
+| `reactive_commons.schedulers.handler.pool.size`      | Gauge           | Threads of the handler pool (it grows only when its queued tasks starve). |
+| `reactive_commons.schedulers.handler.threads.active` | Gauge           | Handler threads currently running a task.                                 |
+| `reactive_commons.schedulers.handler.queue.size`     | Gauge           | Tasks queued for a handler thread.                                        |
+| `reactive_commons.schedulers.handler.growth`         | FunctionCounter | Times the pool grew because its queued tasks were starving.               |
+
+These meters have no `domain` or `queue` tag: the pool is shared by the JVM. The meters of a registry are removed
+when its application context closes. The error-reporter pool is a Reactor `boundedElastic` scheduler, which does not
+expose its queue.
+
+:::tip[Ready-to-import Grafana dashboard]
+The repository includes a Grafana dashboard as code for these meters, with their Prometheus queries and the scrape
+configuration it expects: see `docs/grafana/` (`reactive-commons-live-dashboard.json` and its README).
+:::
+
+### Message ids
+
+The AMQP `message-id` of an event, a command or a CloudEvent is its business id (`eventId`, `commandId` or the
+CloudEvent `id`), so a copy re-sent after a `SendConfirmUnknownException` carries the id of the original and
+consumers can deduplicate it. Queries and replies, which have no business id, get a unique one. Deduplicate by name
+and id: the discard notification of a message (`<name>.dlq`) carries the id of the original message.
+
+### Subscriber metrics
+
+The listener side exposes the following metrics on the application's `MeterRegistry`:
+
+| Metric                                                   | Type                | Tags                                                                                                                                                                                                                                  | Meaning                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+|----------------------------------------------------------|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `reactive_commons.consumer.messages`                     | Counter             | `outcome` ∈ {`ack`, `nack`, `discard`, `dlq`, `handler_error`}, `queue`, `domain`                                                                                                                                                     | The final outcome of each delivery: exactly one of `ack`, `nack` (requeued), `dlq` or `discard`. `handler_error` counts in addition each delivery whose handler failed (after its local retries), whatever its final outcome.                                                                                                                                                                                                                                                                                    |
+| `reactive_commons.consumer.handler.latency`              | Timer               | `queue`, `domain`                                                                                                                                                                                                                     | End-to-end time of a delivery, from arrival to the moment it completed (ack) or failed. Includes the wait for a handler thread and every local retry (with its retry delay). Compare with `handler.execution` to split that into wait + actual execution.                                                                                                                                                                                                                                                        |
+| `reactive_commons.consumer.handler.execution`            | Timer               | `outcome` ∈ {`success`, `error`, `timeout`}, `handler` (the executor path of a registered handler, bounded by the handler cache: the ones beyond it bucket to `unknown`), `queue`, `domain`                                           | Per-attempt time around `handler.apply` (a handler that throws, e.g. a message that cannot be converted, is an `error`; a message without a handler has no sample), so retries do not inflate it and it can be compared against `handlerTimeout`. `handler.wait` high + `execution` low = handler-pool saturation; `execution` high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent (alert with `histogram_quantile(0.99, ...execution_seconds_bucket) > 0.8 * handlerTimeout`). |
+| `reactive_commons.consumer.handler.wait`                 | Timer               | `queue`, `domain`                                                                                                                                                                                                                     | Time a delivery waited for a handler thread before its handler started. A growing value means the handlers are busy (see *Handler threads and `consumer_timeout`*).                                                                                                                                                                                                                                                                                                                                              |
+| `reactive_commons.consumer.restart`                      | Counter             | `reason` ∈ {`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology.                                                                                                                                                                                                                                                                                                                                                    |
+| `reactive_commons.consumer.active`                       | Gauge               | `queue`, `domain`                                                                                                                                                                                                                     | `1` while the broker has a consumer registered for the listener, `0` otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `reactive_commons.consumer.last_message_age_seconds`     | Gauge               | `queue`, `domain`                                                                                                                                                                                                                     | Seconds since the last message was delivered to the listener. A large value on a queue that should be receiving traffic is a reliable "stuck consumer" signal.                                                                                                                                                                                                                                                                                                                                                   |
+| `reactive_commons.consumer.replies.lost`                 | Counter             | `domain`                                                                                                                                                                                                                              | Number of pending `requestReply` correlations that were failed with `ReplyLostOnReconnectException` because the reply listener lost its connection or its subscription ended.                                                                                                                                                                                                                                                                                                                                    |
+| `reactive_commons.consumer.retry.attempts`               | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Local retries of a failed handler (`maxRetries` without DLQ), one per re-run.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| `reactive_commons.consumer.retry.exhausted`              | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Messages whose local retries were exhausted; they are discarded next.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `reactive_commons.consumer.redelivered`                  | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Deliveries of a message delivered before: requeued (the AMQP `redelivered` flag, e.g. a fast retry or a channel failure) or dead-lettered back from the retry queue (`x-death` count greater than zero). The same definition as the `redelivered` flag passed to the `CustomReporter`.                                                                                                                                                                                                                           |
+| `reactive_commons.consumer.handler.timeout`              | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Handlers that exceeded `handlerTimeout`; the delivery then follows the retry strategy of a failed one. A `TimeoutException` raised by the handler itself (e.g. a downstream call) is a `handler_error` but is not counted here.                                                                                                                                                                                                                                                                                  |
+| `reactive_commons.consumer.query.discarded`              | Counter             | `reason` = `timeout`, `queue`, `domain`                                                                                                                                                                                               | Queries discarded because their reply deadline elapsed, before running or while running: nobody would receive the reply. The delivery is acknowledged, so it is also counted as `consumer.messages{outcome=ack}`.                                                                                                                                                                                                                                                                                                |
+| `reactive_commons.consumer.query.reply.failed`           | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Query replies that could not be published. The handler is not run again; its caller will not receive the reply.                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `reactive_commons.consumer.discard.notify.failed`        | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Discards whose notification could not be published; the message is requeued and discarded again later.                                                                                                                                                                                                                                                                                                                                                                                                           |
+| `reactive_commons.consumer.query.invalid.timeout_header` | Counter             | `queue`, `domain`                                                                                                                                                                                                                     | Queries whose `replyTimeoutMillis` header was not a number and was ignored.                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `reactive_commons.consumer.message.size`                 | DistributionSummary | `queue`, `domain`                                                                                                                                                                                                                     | Size in bytes of each consumed body (base unit `bytes`: `reactive_commons_consumer_message_size_bytes_*` in Prometheus). Its count is the number of deliveries received.                                                                                                                                                                                                                                                                                                                                         |
+| `reactive_commons.consumer.queue.depth`                  | Gauge               | `queue`, `domain`                                                                                                                                                                                                                     | Messages **ready** in the queue, read from the broker with a passive declare every 10 seconds. Deliveries in flight (handed to a consumer but not acknowledged) are not included, see `consumer.in_flight`; `NaN` while the broker cannot be queried.                                                                                                                                                                                                                                                            |
+| `reactive_commons.consumer.in_flight`                    | Gauge               | `queue`, `domain`                                                                                                                                                                                                                     | Deliveries received and not acknowledged (acked or nacked) yet: waiting for a handler thread, running, or failed and waiting `retryDelay` to be requeued. It drops back when the listener stops, as the broker requeues them. Bounded by `prefetchCount`: a value stuck at the prefetch means the listener is saturated, and with `consumer.queue.depth` it gives the whole backlog.                                                                                                                             |
+
+The reply listener of `requestReply` only reports `consumer.active`, `consumer.last_message_age_seconds`,
+`consumer.restart` and `consumer.replies.lost`: its replies are routed to the waiting callers, never handled, so it has
+no delivery meters (outcomes, latencies, retries, in flight...).
+
+The `consumer.messages` outcomes, the `consumer.restart` reasons, `consumer.replies.lost`, the `publish.outcome`
+series (both the eight `confirm=true` outcomes and the five `confirm=false` ones) and the two
+`publish.flow.resubscribe` kinds are registered at zero when the listener or sender starts, so a failure series
+exists, and `increase()` counts its first occurrence, before the first failure happens.
+
 ### Connections in microservices with multiple replicas
 
 In a typical cloud production environment, such as AWS, microservices are deployed in containers orchestrated by
@@ -472,15 +761,16 @@ Kubernetes, using managed services like Amazon EKS. For the messaging broker, Am
 in a 3-node cluster with a Multi-AZ deployment to ensure high availability and fault tolerance.
 
 When working with microservices that use multiple replicas (instances) and implement Reactive Commons, it is important
-to understand how connections to the message broker are managed. Each replica of a microservice establishes **a single
-connection** to the broker, which is used for both sending and listening to messages.
+to understand how connections to the message broker are managed. Each replica of a microservice establishes, per domain,
+**one connection to send** messages and, if it listens, **one connection to listen** to them.
 
-The number of open channels within that single connection will depend on the configuration of the annotations used, as
+The number of open channels within those connections will depend on the configuration of the annotations used, as
 described in the connection scenarios above. This allows each replica to manage its messaging operations independently,
 distributing the workload efficiently.
 
-For example, if a microservice is deployed with **4 replicas**, each of them will establish its own connection to the
-broker. As a result, the entire microservice deployment will have a total of **4 connections** to the broker.
+For example, if a microservice that sends and listens on one domain is deployed with **4 replicas**, each of them will
+establish its own two connections to the broker. As a result, the entire microservice deployment will have a total of
+**8 connections** to the broker (4 if it only sends with `listenReplies: false`).
 
 ## Mandatory property
 

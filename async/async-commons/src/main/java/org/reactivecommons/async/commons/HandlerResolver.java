@@ -13,6 +13,7 @@ import org.reactivecommons.async.commons.utils.matcher.Matcher;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
 @Log
@@ -32,6 +33,16 @@ public class HandlerResolver {
 
     private final Matcher matcher = new KeyMatcher();
 
+    /**
+     * Wildcard matches are cached apart from the registered handlers (which a lookup without match scans) and up to
+     * a limit, since the routing keys matched by a wildcard are not bounded.
+     */
+    static final int MAX_CACHED_MATCHES = 1_000;
+    private final Map<String, RegisteredQueryHandler<?, ?>> matchedQueryHandlers = new ConcurrentHashMap<>();
+    private final Map<String, RegisteredCommandHandler<?, ?>> matchedCommandHandlers = new ConcurrentHashMap<>();
+    private final Map<String, RegisteredEventListener<?, ?>> matchedNotificationListeners =
+            new ConcurrentHashMap<>();
+
     public boolean hasNotificationListeners() {
         return !eventNotificationListeners.isEmpty();
     }
@@ -45,13 +56,11 @@ public class HandlerResolver {
     }
 
     public <T, M> RegisteredQueryHandler<T, M> getQueryHandler(String path) {
-        return (RegisteredQueryHandler<T, M>) queryHandlers
-                .computeIfAbsent(path, getMatchHandler(queryHandlers));
+        return (RegisteredQueryHandler<T, M>) resolve(queryHandlers, matchedQueryHandlers, path);
     }
 
     public <T, D> RegisteredCommandHandler<T, D> getCommandHandler(String path) {
-        return (RegisteredCommandHandler<T, D>) commandHandlers
-                .computeIfAbsent(path, getMatchHandler(commandHandlers));
+        return (RegisteredCommandHandler<T, D>) resolve(commandHandlers, matchedCommandHandlers, path);
     }
 
     public <T, D> RegisteredEventListener<T, D> getEventListener(String path) {
@@ -67,8 +76,7 @@ public class HandlerResolver {
 
     @SuppressWarnings("unchecked")
     public <T, D> RegisteredEventListener<T, D> getNotificationListener(String path) {
-        return (RegisteredEventListener<T, D>) eventNotificationListeners
-                .computeIfAbsent(path, getMatchHandler(eventNotificationListeners));
+        return (RegisteredEventListener<T, D>) resolve(eventNotificationListeners, matchedNotificationListeners, path);
     }
 
     // Returns only the listenEvent not the handleDynamicEvents
@@ -95,6 +103,22 @@ public class HandlerResolver {
             );
         }
         queryHandlers.put(handler.path(), handler);
+    }
+
+    private <T> T resolve(Map<String, T> registered, Map<String, T> matched, String path) {
+        final T exact = registered.get(path);
+        if (exact != null) {
+            return exact;
+        }
+        final T cached = matched.get(path);
+        if (cached != null) {
+            return cached;
+        }
+        final T match = getMatchHandler(registered).apply(path);
+        if (match != null && matched.size() < MAX_CACHED_MATCHES) {
+            matched.putIfAbsent(path, match);
+        }
+        return match;
     }
 
     private <T> Function<String, T> getMatchHandler(Map<String, T> handlers) {

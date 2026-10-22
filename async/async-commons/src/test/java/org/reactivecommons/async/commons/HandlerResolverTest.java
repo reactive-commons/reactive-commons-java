@@ -197,4 +197,25 @@ class HandlerResolverTest {
                 notificationListeners, commandHandlers, queueListeners, topicListeners);
         assertThat(resolver.getTopicListeners()).containsEntry("topic", tl);
     }
+
+    @Test
+    void resolvingManyRoutingKeysThroughAWildcardDoesNotGrowTheRegisteredHandlers() {
+        var command = new RegisteredCommandHandler<>("cmd.*", mock(), Object.class);
+        var query = new RegisteredQueryHandler<>("query.*", mock(), Object.class);
+        var notification = new RegisteredEventListener<>("notification.*", mock(), Object.class);
+        commandHandlers.put("cmd.*", command);
+        queryHandlers.put("query.*", query);
+        notificationListeners.put("notification.*", notification);
+
+        for (int i = 0; i < 5_000; i++) {
+            assertThat(resolver.getCommandHandler("cmd." + i)).isSameAs(command);
+            assertThat(resolver.getQueryHandler("query." + i)).isSameAs(query);
+            assertThat(resolver.getNotificationListener("notification." + i)).isSameAs(notification);
+        }
+
+        // the routing keys are not added to the registered handlers, which every lookup without match scans
+        assertThat(commandHandlers).containsOnlyKeys("cmd.*");
+        assertThat(queryHandlers).containsOnlyKeys("query.*");
+        assertThat(notificationListeners).containsOnlyKeys("notification.*");
+    }
 }
