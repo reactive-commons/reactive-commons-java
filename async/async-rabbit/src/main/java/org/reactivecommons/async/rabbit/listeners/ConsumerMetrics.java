@@ -305,7 +305,7 @@ public final class ConsumerMetrics {
 
     public void recordMessageSize(long bytes) {
         if (messageSize != null) {
-            messageSize.record(bytes);
+            messageSize.record((double) bytes);
         }
     }
 
@@ -316,21 +316,40 @@ public final class ConsumerMetrics {
     }
 
     /**
-     * Registers (idempotently) a counter {@code reactive_commons.consumer.replies.lost} tagged with the given
-     * domain and increments it by {@code count}. Called by {@code ApplicationReplyListener} when the reply
-     * listener restarts and in-flight correlations are failed.
+     * Registers (idempotently) the counter {@code reactive_commons.consumer.replies.lost} of the given domain at 0.
+     * Called when the reply listener is created, so the series exists, and {@code increase()} counts the first lost
+     * replies, before any is lost.
+     */
+    public static void registerRepliesLost(MeterRegistry registry, String domain) {
+        if (registry == null) {
+            return;
+        }
+        repliesLostCounter(registry, domain);
+    }
+
+    /**
+     * Increments the counter {@code reactive_commons.consumer.replies.lost} of the given domain by {@code count}.
+     * Called by {@code ApplicationReplyListener} when the reply listener restarts and in-flight correlations are
+     * failed.
      */
     public static void recordRepliesLost(MeterRegistry registry, String domain, long count) {
         if (registry == null || count <= 0) {
             return;
         }
+        final Counter counter = repliesLostCounter(registry, domain);
+        if (counter != null) {
+            counter.increment((double) count);
+        }
+    }
+
+    private static Counter repliesLostCounter(MeterRegistry registry, String domain) {
         try {
-            Counter.builder(M_REPLIES_LOST)
+            return Counter.builder(M_REPLIES_LOST)
                     .tags(Tags.of("domain", domain != null ? domain : ""))
-                    .register(registry)
-                    .increment(count);
+                    .register(registry);
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer replies.lost counter");
+            return null;
         }
     }
 }

@@ -68,6 +68,7 @@ public class ApplicationReplyListener {
         this.metrics = new ConsumerMetrics(meterRegistry, listener.domain(), queueName, liveness);
         this.subscriberRegistry = listener.subscriberRegistry();
         this.domain = listener.domain();
+        ConsumerMetrics.registerRepliesLost(meterRegistry, domain);
     }
 
     public void startListening(String routeKey) {

@@ -945,6 +945,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                     // register every known outcome at 0 so increase()/rate() can see the first incident
                     CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, true));
                     NO_CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, false));
+                    resubscribeCounter(true);
+                    resubscribeCounter(false);
                 } catch (Exception e) {
                     // never let a mis-wired registry break the sender; metrics are best-effort
                     log.log(Level.WARNING, e, () -> "Could not register publish metrics");
@@ -972,11 +974,15 @@ public class ReactiveMessageSender implements AutoCloseable {
             if (registry == null) {
                 return;
             }
-            resubscribes.computeIfAbsent(confirmFlow, key ->
+            resubscribeCounter(confirmFlow).increment();
+        }
+
+        private Counter resubscribeCounter(boolean confirmFlow) {
+            return resubscribes.computeIfAbsent(confirmFlow, key ->
                     Counter.builder(METRIC_FLOW_RESUBSCRIBE)
                             .tags(baseTags)
                             .tag("kind", key ? "confirm" : "noConfirm")
-                            .register(registry)).increment();
+                            .register(registry));
         }
 
         /**
@@ -1009,7 +1015,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                 .baseUnit(BaseUnits.BYTES)
                                 .tags(baseTags)
                                 .tag("confirm", key.toString())
-                                .register(registry)).record(bytes);
+                                .register(registry)).record((double) bytes);
             } catch (Exception e) {
                 log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
             }

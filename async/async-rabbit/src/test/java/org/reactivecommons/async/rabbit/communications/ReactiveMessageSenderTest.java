@@ -146,10 +146,9 @@ class ReactiveMessageSenderTest {
     @Test
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+        try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
                 false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain");
-        try {
+                registry, "test-domain")) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .verifyComplete();
@@ -164,8 +163,21 @@ class ReactiveMessageSenderTest {
             assertThat(size).as("message size summary").isNotNull();
             assertThat(size.count()).isEqualTo(1);
             assertThat(size.totalAmount()).isPositive();
-        } finally {
-            meteredSender.close();
+        }
+    }
+
+    @Test
+    void theFlowResubscriptionCountersExistAtZeroBeforeAnyFlowIsResubscribed() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain")) {
+            for (String kind : List.of("confirm", "noConfirm")) {
+                Counter resubscribed = registry.find("reactive_commons.publish.flow.resubscribe")
+                        .tags("domain", "test-domain", "kind", kind).counter();
+                assertThat(resubscribed).as("kind=%s registered with the sender", kind).isNotNull();
+                assertThat(resubscribed.count()).isZero();
+            }
         }
     }
 
@@ -180,10 +192,9 @@ class ReactiveMessageSenderTest {
             return argument.map(msg -> new OutboundMessageResult<>(msg, false, false));
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+        try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
                 false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain");
-        try {
+                registry, "test-domain")) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectErrorSatisfies(error -> assertThat(error)
@@ -202,8 +213,6 @@ class ReactiveMessageSenderTest {
             assertThat(nackCounter).as("outcome=nack is pre-registered at 0").isNotNull();
             assertThat(nackCounter.count()).as("the broker never nacked it").isZero();
             assertThat(registry.find("reactive_commons.publish.latency").tag("outcome", "nack").timer()).isNull();
-        } finally {
-            meteredSender.close();
         }
     }
 
@@ -214,15 +223,12 @@ class ReactiveMessageSenderTest {
             return argument.map(msg -> new OutboundMessageResult<>(msg, true, true));
         });
         // the flows are subscribed when the sender is created: use a new sender so it sees this stub
-        ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier);
-        try {
+        try (ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier)) {
             StepVerifier.create(returningSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectError(SendFailureReturnedException.class)
                     .verify(Duration.ofSeconds(5));
-        } finally {
-            returningSender.close();
         }
     }
 
@@ -241,15 +247,12 @@ class ReactiveMessageSenderTest {
     @Test
     void sendWithConfirmBatchFailsWithUnknownOutcomeWhenNoConfirmationArrives() {
         when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class))).thenReturn(Flux.never());
-        ReactiveMessageSender shortTimeoutSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
-                null, false, unroutableMessageNotifier, Duration.ofMillis(100));
-        try {
+        try (ReactiveMessageSender shortTimeoutSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier, Duration.ofMillis(100))) {
             StepVerifier.create(shortTimeoutSender.sendWithConfirmBatch(Flux.just(new SomeClass("1", "a", new Date())),
                             "exchange", "rkey", new HashMap<>(), true))
                     .expectError(SendConfirmUnknownException.class)
                     .verify(Duration.ofSeconds(5));
-        } finally {
-            shortTimeoutSender.close();
         }
     }
 
@@ -322,19 +325,14 @@ class ReactiveMessageSenderTest {
         Level previousLevel = logger.getLevel();
         logger.setLevel(Level.ALL);
         logger.addHandler(handler);
-        ReactiveMessageSender failingSender = null;
-        try {
-            failingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
-                    unroutableMessageNotifier);
+        try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
+                unroutableMessageNotifier)) {
             await(() -> count(records, "publisher-confirms flow #0", Level.WARNING) >= 1
                     && count(records, "publisher-confirms flow #0", Level.FINE) >= 1);
 
             assertThat(count(records, "publisher-confirms flow #0", Level.WARNING)).isEqualTo(1);
             assertThat(count(records, "publisher-confirms flow #0", Level.FINE)).isGreaterThanOrEqualTo(1);
         } finally {
-            if (failingSender != null) {
-                failingSender.close();
-            }
             logger.removeHandler(handler);
             logger.setLevel(previousLevel);
         }
