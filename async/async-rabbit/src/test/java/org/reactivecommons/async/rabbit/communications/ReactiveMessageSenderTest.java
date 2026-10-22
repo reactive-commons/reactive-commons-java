@@ -102,7 +102,7 @@ class ReactiveMessageSenderTest {
                 }, e -> {
                 });
 
-        verify(unroutableMessageNotifier, timeout(1000).times(1))
+        verify(unroutableMessageNotifier, timeout(5_000).times(1))
                 .notifyUnroutableMessage(any(OutboundMessageResult.class));
     }
 

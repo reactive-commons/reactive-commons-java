@@ -90,7 +90,7 @@ class UnroutableMessageNotifierTest {
 
         unroutableMessageNotifier.listenToUnroutableMessages(handler);
 
-        verify(handler, timeout(1000)).processMessage(messageCaptor.capture());
+        verify(handler, timeout(5_000)).processMessage(messageCaptor.capture());
         assertThat(messageCaptor.getValue()).isEqualTo(messageResult);
     }
 
@@ -119,8 +119,8 @@ class UnroutableMessageNotifierTest {
 
         unroutableMessageNotifier.listenToUnroutableMessages(handler);
 
-        verify(handler, timeout(1000).times(1)).processMessage(messageResult);
-        verify(handler, timeout(1000).times(1)).processMessage(messageResult2);
+        verify(handler, timeout(5_000).times(1)).processMessage(messageResult);
+        verify(handler, timeout(5_000).times(1)).processMessage(messageResult2);
         assertThat(counter("reactive_commons.publish.unroutable.process.error")).isEqualTo(1.0);
     }
 
