@@ -67,7 +67,12 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
         } else {
             discardNotifier = discardProvider.get();
         }
+        final ConsumerQueueDepth queueDepth = meterRegistry != null
+                ? new ConsumerQueueDepth(meterRegistry, domain,
+                        RabbitMQSetupUtils.listenerConnectionMono(provider, props.getAppName()),
+                        listener.subscriberRegistry()::snapshot)
+                : null;
         return new RabbitMQBrokerProvider(domain, props, config, router, converter, meterRegistry, errorReporter,
-                healthIndicator, listener, sender, discardNotifier);
+                healthIndicator, listener, sender, discardNotifier, queueDepth);
     }
 }

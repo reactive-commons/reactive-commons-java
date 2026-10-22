@@ -1,5 +1,6 @@
 package org.reactivecommons.async.starter.impl.common.rabbit;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
@@ -50,8 +51,10 @@ public class RabbitMQConfig {
 
     @Bean
     @ConditionalOnMissingBean(UnroutableMessageNotifier.class)
-    public UnroutableMessageNotifier defaultUnroutableMessageNotifier() {
-        return new UnroutableMessageNotifier();
+    public UnroutableMessageNotifier defaultUnroutableMessageNotifier(MeterRegistry meterRegistry) {
+        // the notifier is shared by every domain: its counters cannot carry a per-domain tag, the domain-tagged
+        // publish outcome (outcome=returned) already tells which domain returned a message
+        return new UnroutableMessageNotifier(meterRegistry, null);
     }
 
     @Bean
@@ -76,8 +79,8 @@ public class RabbitMQConfig {
 
     @Bean
     @ConditionalOnMissingBean(ListenerSchedulersLifecycleManager.class)
-    public ListenerSchedulersLifecycleManager listenerSchedulersLifecycleManager() {
-        return new ListenerSchedulersLifecycleManager();
+    public ListenerSchedulersLifecycleManager listenerSchedulersLifecycleManager(MeterRegistry meterRegistry) {
+        return new ListenerSchedulersLifecycleManager(meterRegistry);
     }
 
 }

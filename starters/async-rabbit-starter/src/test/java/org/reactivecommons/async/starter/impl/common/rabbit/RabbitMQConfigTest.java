@@ -2,6 +2,7 @@ package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.ConnectionFactory;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -108,7 +109,7 @@ class RabbitMQConfigTest {
 
     @Test
     void shouldReturnDefaultUnroutableMessageNotifier() {
-        UnroutableMessageNotifier notifier = rabbitMQConfig.defaultUnroutableMessageNotifier();
+        UnroutableMessageNotifier notifier = rabbitMQConfig.defaultUnroutableMessageNotifier(new SimpleMeterRegistry());
 
         assertThat(notifier).isNotNull();
     }

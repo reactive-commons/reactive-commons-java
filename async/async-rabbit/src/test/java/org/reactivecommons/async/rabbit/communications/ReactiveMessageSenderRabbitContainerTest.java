@@ -170,6 +170,16 @@ class ReactiveMessageSenderRabbitContainerTest {
             assertThat(outcome(registry, "published", false)).isEqualTo(7);
             assertThat(registry.find("reactive_commons.publish.outcome").tag("confirm", "false")
                     .tag("outcome", "ack").counter()).as("a no-confirm message is never reported as acked").isNull();
+            assertThat(registry.find("reactive_commons.publish.latency")
+                    .tags("domain", "app", "confirm", "true", "outcome", "ack").timer().count())
+                    .as("one latency per confirmed message").isEqualTo(20);
+            assertThat(registry.find("reactive_commons.publish.latency")
+                    .tags("domain", "app", "confirm", "false", "outcome", "published").timer().count())
+                    .as("one latency per no-confirm message").isEqualTo(7);
+            assertThat(registry.find("reactive_commons.publish.message.size")
+                    .tags("domain", "app", "confirm", "true").summary().count()).isEqualTo(20);
+            assertThat(registry.find("reactive_commons.publish.message.size")
+                    .tags("domain", "app", "confirm", "false").summary().count()).isEqualTo(7);
         }
     }
 

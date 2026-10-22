@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -73,7 +74,7 @@ public abstract class GenericMessageListener {
     private final String objectType;
     private final CustomReporter customReporter;
     private final ListenerLiveness liveness;
-    private final ConsumerMetrics metrics;
+    protected final ConsumerMetrics metrics;
     private final Duration handlerTimeout;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
     private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
@@ -165,6 +166,10 @@ public abstract class GenericMessageListener {
     private Flux<AcknowledgableDelivery> consumeFaultTolerant(Flux<AcknowledgableDelivery> messageFlux) {
         return messageFlux.flatMap(msj -> {
             liveness.onDelivery();
+            metrics.recordMessageSize(msj.getBody().length);
+            if (getRetryNumber(msj) > 0) {
+                metrics.recordRedelivered();
+            }
             final Instant init = Instant.now();
             return handle(msj, init)
                     // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
@@ -193,10 +198,12 @@ public abstract class GenericMessageListener {
                 flow = flow.timeout(handlerTimeout);
             }
             if (hasLocalRetries()) {
-                flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay))
+                flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)
+                                .doBeforeRetry(signal -> metrics.recordHandlerRetry()))
                         .onErrorMap(err -> {
                             if (err.getMessage() != null && err.getMessage().contains("Retries exhausted")) {
                                 log.warning(err.getMessage());
+                                metrics.recordRetriesExhausted();
                                 return err.getCause();
                             }
                             return err;
@@ -373,6 +380,9 @@ public abstract class GenericMessageListener {
     }
 
     private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, Instant init) {
+        if (err instanceof TimeoutException) {
+            metrics.recordHandlerTimeout();
+        }
         final long retryNumber = getRetryNumber(msj);
         final Message rabbitMessage = RabbitMessage.fromDelivery(msj);
         final boolean redeliver = msj.getEnvelope().isRedeliver();
@@ -411,6 +421,7 @@ public abstract class GenericMessageListener {
                     return msj;
                 }))
                 .onErrorResume(notificationError -> {
+                    metrics.recordDiscardNotificationFailed();
                     log.log(Level.WARNING, notificationError, () -> "Discard of message "
                             + msj.getProperties().getMessageId() + " in queue " + queueName
                             + " could not be notified: requeued to discard it again");

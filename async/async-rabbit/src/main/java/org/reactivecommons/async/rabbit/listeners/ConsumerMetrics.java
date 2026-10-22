@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
@@ -26,6 +27,21 @@ import java.util.logging.Logger;
  *     (channel_shutdown, error, cancel).</li>
  *     <li>{@code reactive_commons.consumer.active} — Gauge from the registered {@link ListenerLiveness}.</li>
  *     <li>{@code reactive_commons.consumer.last_message_age_seconds} — Gauge polling the liveness.</li>
+ *     <li>{@code reactive_commons.consumer.retry.attempts} — Counter, local retries of a failed handler.</li>
+ *     <li>{@code reactive_commons.consumer.retry.exhausted} — Counter, local retries exhausted.</li>
+ *     <li>{@code reactive_commons.consumer.redelivered} — Counter, deliveries dead-lettered at least once
+ *     ({@code x-death} count &gt; 0).</li>
+ *     <li>{@code reactive_commons.consumer.handler.timeout} — Counter, handlers that exceeded
+ *     {@code handlerTimeout}.</li>
+ *     <li>{@code reactive_commons.consumer.query.discarded} — Counter, extra tag {@code reason}
+ *     (timeout): queries discarded because their caller stopped waiting.</li>
+ *     <li>{@code reactive_commons.consumer.query.reply.failed} — Counter, query replies that could not be
+ *     published.</li>
+ *     <li>{@code reactive_commons.consumer.discard.notify.failed} — Counter, discards that could not be notified
+ *     (the message is requeued).</li>
+ *     <li>{@code reactive_commons.consumer.query.invalid.timeout_header} — Counter, invalid reply timeout
+ *     headers ignored.</li>
+ *     <li>{@code reactive_commons.consumer.message.size} — DistributionSummary, bytes of each consumed body.</li>
  * </ul>
  */
 public final class ConsumerMetrics {
@@ -41,6 +57,7 @@ public final class ConsumerMetrics {
     public static final String REASON_CHANNEL_SHUTDOWN = "channel_shutdown";
     public static final String REASON_ERROR = "error";
     public static final String REASON_CANCEL = "cancel";
+    public static final String REASON_TIMEOUT = "timeout";
 
     private static final String M_MESSAGES = "reactive_commons.consumer.messages";
     private static final String M_LATENCY = "reactive_commons.consumer.handler.latency";
@@ -49,6 +66,15 @@ public final class ConsumerMetrics {
     private static final String M_ACTIVE = "reactive_commons.consumer.active";
     private static final String M_LAST_AGE = "reactive_commons.consumer.last_message_age_seconds";
     private static final String M_REPLIES_LOST = "reactive_commons.consumer.replies.lost";
+    private static final String M_RETRY_ATTEMPTS = "reactive_commons.consumer.retry.attempts";
+    private static final String M_RETRY_EXHAUSTED = "reactive_commons.consumer.retry.exhausted";
+    private static final String M_REDELIVERED = "reactive_commons.consumer.redelivered";
+    private static final String M_HANDLER_TIMEOUT = "reactive_commons.consumer.handler.timeout";
+    private static final String M_QUERY_DISCARDED = "reactive_commons.consumer.query.discarded";
+    private static final String M_QUERY_REPLY_FAILED = "reactive_commons.consumer.query.reply.failed";
+    private static final String M_DISCARD_NOTIFY_FAILED = "reactive_commons.consumer.discard.notify.failed";
+    private static final String M_INVALID_TIMEOUT_HEADER = "reactive_commons.consumer.query.invalid.timeout_header";
+    private static final String M_MESSAGE_SIZE = "reactive_commons.consumer.message.size";
 
     private final MeterRegistry registry;
     private final String domain;
@@ -58,6 +84,15 @@ public final class ConsumerMetrics {
     private final ConcurrentHashMap<String, Counter> restartCounters = new ConcurrentHashMap<>();
     private final Timer handlerLatency;
     private final Timer handlerWait;
+    private final Counter retryAttempts;
+    private final Counter retriesExhausted;
+    private final Counter redelivered;
+    private final Counter handlerTimeout;
+    private final Counter queryDiscardedTimeout;
+    private final Counter queryReplyFailed;
+    private final Counter discardNotifyFailed;
+    private final Counter invalidTimeoutHeader;
+    private final DistributionSummary messageSize;
 
     public ConsumerMetrics(MeterRegistry registry, String domain, String queue, ListenerLiveness liveness) {
         this.registry = registry;
@@ -66,6 +101,16 @@ public final class ConsumerMetrics {
         this.baseTags = Tags.of("domain", this.domain, "queue", this.queue);
         this.handlerLatency = registry != null ? safeRegisterTimer(M_LATENCY) : null;
         this.handlerWait = registry != null ? safeRegisterTimer(M_WAIT) : null;
+        this.retryAttempts = registry != null ? safeRegisterCounter(M_RETRY_ATTEMPTS) : null;
+        this.retriesExhausted = registry != null ? safeRegisterCounter(M_RETRY_EXHAUSTED) : null;
+        this.redelivered = registry != null ? safeRegisterCounter(M_REDELIVERED) : null;
+        this.handlerTimeout = registry != null ? safeRegisterCounter(M_HANDLER_TIMEOUT) : null;
+        this.queryDiscardedTimeout = registry != null
+                ? safeRegisterCounter(M_QUERY_DISCARDED, Tags.of("reason", REASON_TIMEOUT)) : null;
+        this.queryReplyFailed = registry != null ? safeRegisterCounter(M_QUERY_REPLY_FAILED) : null;
+        this.discardNotifyFailed = registry != null ? safeRegisterCounter(M_DISCARD_NOTIFY_FAILED) : null;
+        this.invalidTimeoutHeader = registry != null ? safeRegisterCounter(M_INVALID_TIMEOUT_HEADER) : null;
+        this.messageSize = registry != null ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
         if (registry != null && liveness != null) {
             try {
                 registry.gauge(M_ACTIVE, baseTags, liveness, l -> l.isActive() ? 1.0 : 0.0);
@@ -84,6 +129,28 @@ public final class ConsumerMetrics {
             return Timer.builder(name).tags(baseTags).register(registry);
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer handler timer");
+            return null;
+        }
+    }
+
+    private Counter safeRegisterCounter(String name) {
+        return safeRegisterCounter(name, Tags.empty());
+    }
+
+    private Counter safeRegisterCounter(String name, Tags extraTags) {
+        try {
+            return Counter.builder(name).tags(baseTags.and(extraTags)).register(registry);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e, () -> "Could not register consumer counter " + name);
+            return null;
+        }
+    }
+
+    private DistributionSummary safeRegisterSummary(String name) {
+        try {
+            return DistributionSummary.builder(name).tags(baseTags).register(registry);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e, () -> "Could not register consumer summary " + name);
             return null;
         }
     }
@@ -132,6 +199,53 @@ public final class ConsumerMetrics {
     public void recordHandlerWait(Duration wait) {
         if (handlerWait != null) {
             handlerWait.record(wait);
+        }
+    }
+
+    public void recordHandlerRetry() {
+        increment(retryAttempts);
+    }
+
+    public void recordRetriesExhausted() {
+        increment(retriesExhausted);
+    }
+
+    public void recordRedelivered() {
+        increment(redelivered);
+    }
+
+    public void recordHandlerTimeout() {
+        increment(handlerTimeout);
+    }
+
+    /**
+     * A query whose caller stopped waiting for its reply, discarded instead of retried or run.
+     */
+    public void recordQueryDiscardedByTimeout() {
+        increment(queryDiscardedTimeout);
+    }
+
+    public void recordQueryReplyFailed() {
+        increment(queryReplyFailed);
+    }
+
+    public void recordDiscardNotificationFailed() {
+        increment(discardNotifyFailed);
+    }
+
+    public void recordInvalidTimeoutHeader() {
+        increment(invalidTimeoutHeader);
+    }
+
+    public void recordMessageSize(long bytes) {
+        if (messageSize != null) {
+            messageSize.record(bytes);
+        }
+    }
+
+    private void increment(Counter counter) {
+        if (counter != null) {
+            counter.increment();
         }
     }
 

@@ -150,6 +150,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
         try {
             return Optional.of(Long.parseLong(String.valueOf(header).trim()));
         } catch (NumberFormatException e) {
+            metrics.recordInvalidTimeoutHeader();
             log.log(Level.WARNING, () -> "Ignoring invalid " + REPLY_TIMEOUT_MILLIS + " header: " + header);
             return Optional.empty();
         }
@@ -201,8 +202,10 @@ public class ApplicationQueryListener extends GenericMessageListener {
     }
 
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
-        return Mono.fromRunnable(() -> log.log(Level.WARNING, String.format("query with path %s discarded by timeout",
-                executorPath)));
+        return Mono.fromRunnable(() -> {
+            metrics.recordQueryDiscardedByTimeout();
+            log.log(Level.WARNING, String.format("query with path %s discarded by timeout", executorPath));
+        });
     }
 
     @Override
@@ -228,6 +231,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
             // the query was handled: failing to publish its reply must not make it run again
             return sender.sendNoConfirm(response, replyExchange, replyID, headers, false)
                     .onErrorResume(replyError -> {
+                        metrics.recordQueryReplyFailed();
                         log.log(Level.WARNING, replyError, () -> "Reply to query " + correlationID
                                 + " could not be published, its caller will not receive it");
                         return Mono.empty();

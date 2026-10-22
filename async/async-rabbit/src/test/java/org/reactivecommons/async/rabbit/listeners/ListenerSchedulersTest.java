@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -137,6 +139,63 @@ class ListenerSchedulersTest {
 
         assertThatThrownBy(() -> Mono.just(1).subscribeOn(first).block(Duration.ofSeconds(5)))
                 .isInstanceOf(RuntimeException.class);
+    }
+
+    @Test
+    void shouldRegisterThePoolMetersWhileAnApplicationWantsThemAndRemoveThemOnRelease() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ListenerSchedulers.retain(registry);
+        try {
+            ListenerSchedulers.handlers(); // creates the pool, then registers its gauges
+
+            assertThat(registry.find("reactive_commons.schedulers.handler.pool.size").gauge()).isNotNull();
+            assertThat(registry.find("reactive_commons.schedulers.handler.threads.active").gauge()).isNotNull();
+            assertThat(registry.find("reactive_commons.schedulers.handler.queue.size").gauge()).isNotNull();
+            assertThat(registry.find("reactive_commons.schedulers.handler.growth").functionCounter()).isNotNull();
+        } finally {
+            ListenerSchedulers.release(registry);
+        }
+
+        assertThat(registry.find("reactive_commons.schedulers.handler.pool.size").gauge()).isNull();
+        assertThat(registry.find("reactive_commons.schedulers.handler.threads.active").gauge()).isNull();
+        assertThat(registry.find("reactive_commons.schedulers.handler.queue.size").gauge()).isNull();
+        assertThat(registry.find("reactive_commons.schedulers.handler.growth").functionCounter()).isNull();
+    }
+
+    @Test
+    void shouldRemoveTheMetersOfTheReleasedRegistryOnly() {
+        SimpleMeterRegistry first = new SimpleMeterRegistry();
+        SimpleMeterRegistry second = new SimpleMeterRegistry();
+        ListenerSchedulers.retain(first);
+        ListenerSchedulers.retain(second);
+        try {
+            ListenerSchedulers.handlers();
+            ListenerSchedulers.release(first);
+
+            assertThat(first.find("reactive_commons.schedulers.handler.pool.size").gauge()).isNull();
+            assertThat(second.find("reactive_commons.schedulers.handler.pool.size").gauge()).isNotNull();
+        } finally {
+            ListenerSchedulers.release(second);
+        }
+    }
+
+    @Test
+    void shouldCountTheTimesThePoolGrewBecauseItsTasksWereStarving() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ListenerSchedulers.retain(registry);
+        try {
+            Scheduler handlers = ListenerSchedulers.handlers();
+            // more blocking tasks than threads (whatever the core count): the queued head starves and the pool grows
+            Flux.range(0, 400)
+                    .flatMap(i -> Mono.fromRunnable(() -> sleep(20)).subscribeOn(handlers), 400)
+                    .blockLast(Duration.ofSeconds(30));
+
+            FunctionCounter growth = registry.find("reactive_commons.schedulers.handler.growth").functionCounter();
+            assertThat(growth).isNotNull();
+            assertThat(growth.count()).as("the pool grew at least once").isPositive();
+        } finally {
+            ListenerSchedulers.release(registry);
+        }
     }
 
     private static void sleep(long millis) {

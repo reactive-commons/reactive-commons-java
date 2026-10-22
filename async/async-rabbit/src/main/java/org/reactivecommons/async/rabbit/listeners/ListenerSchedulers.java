@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import lombok.extern.java.Log;
@@ -7,7 +11,12 @@ import org.jspecify.annotations.NonNull;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -17,6 +26,8 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 
 /**
@@ -33,6 +44,11 @@ import java.util.logging.Level;
  * They are created when first used, and disposed when the last application using them is released (see
  * {@link #retain()} and {@link #release()}); they are created again if used afterwards, e.g. by another application
  * context in the same JVM.
+ *
+ * <p>While some application retaining them wants metrics, the handler pool is exported as
+ * {@code reactive_commons.schedulers.handler.pool.size}, {@code ...threads.active}, {@code ...queue.size} (gauges)
+ * and {@code ...growth} (the times the pool grew because its tasks were starving). The pools are shared by the JVM,
+ * so these meters have no domain tag; the meters of an application's registry are removed when it releases them.
  */
 @Log
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -45,11 +61,21 @@ public final class ListenerSchedulers {
     private static final int ERROR_REPORTER_QUEUE = 256;
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 10;
 
+    private static final String M_POOL_SIZE = "reactive_commons.schedulers.handler.pool.size";
+    private static final String M_THREADS_ACTIVE = "reactive_commons.schedulers.handler.threads.active";
+    private static final String M_QUEUE_SIZE = "reactive_commons.schedulers.handler.queue.size";
+    private static final String M_GROWTH = "reactive_commons.schedulers.handler.growth";
+
     private static final Object LOCK = new Object();
     private static ElasticExecutor executor; // guarded by LOCK
     private static volatile Scheduler handlers;
     private static volatile Scheduler errorReporter;
     private static int users; // guarded by LOCK
+    // the registries of the applications using the schedulers, and the meters registered on each: the pools are
+    // shared JVM-wide, so a gauge can only exist while some application using them wants metrics
+    private static final Set<MeterRegistry> registries =
+            Collections.newSetFromMap(new IdentityHashMap<>()); // guarded by LOCK
+    private static final Map<MeterRegistry, List<Meter.Id>> meterIds = new IdentityHashMap<>(); // guarded by LOCK
 
     /**
      * The scheduler that runs the handlers of every listener.
@@ -63,6 +89,10 @@ public final class ListenerSchedulers {
                 current = handlers;
                 if (current == null || current.isDisposed()) {
                     executor = new ElasticExecutor(MAX_HANDLER_THREADS, daemonThreads("rc-handlers"));
+                    for (MeterRegistry registry : registries) {
+                        removeMeterIds(registry); // the stale gauges pointed to the previous pool
+                        registerSchedulerMetrics(registry, executor);
+                    }
                     current = Schedulers.fromExecutor(executor);
                     handlers = current;
                 }
@@ -106,8 +136,22 @@ public final class ListenerSchedulers {
      * Registers an application that uses the shared schedulers.
      */
     public static void retain() {
+        retain(null);
+    }
+
+    /**
+     * Registers an application that uses the shared schedulers and wants their metrics in the given registry.
+     * The gauges are registered when the handler pool exists, which may be after this call.
+     */
+    public static void retain(MeterRegistry registry) {
         synchronized (LOCK) {
             users++;
+            if (registry != null) {
+                registries.add(registry);
+                if (executor != null && !meterIds.containsKey(registry)) {
+                    registerSchedulerMetrics(registry, executor);
+                }
+            }
         }
     }
 
@@ -116,14 +160,29 @@ public final class ListenerSchedulers {
      * submitted are allowed to finish (up to {@value #SHUTDOWN_TIMEOUT_SECONDS} seconds).
      */
     public static void release() {
+        release(null);
+    }
+
+    /**
+     * Unregisters an application. The meters registered for its registry, if any, are removed even if other
+     * applications still use the schedulers. When the last application is gone the schedulers are disposed and
+     * every remaining meter is removed.
+     */
+    public static void release(MeterRegistry registry) {
         ElasticExecutor toStop;
         Scheduler reporter;
         synchronized (LOCK) {
             if (users > 0) {
                 users--;
             }
+            if (registry != null) {
+                removeSchedulerMetrics(registry);
+            }
             if (users > 0) {
                 return;
+            }
+            for (MeterRegistry remaining : new ArrayList<>(registries)) {
+                removeSchedulerMetrics(remaining);
             }
             toStop = executor;
             reporter = errorReporter;
@@ -136,6 +195,48 @@ public final class ListenerSchedulers {
         }
         if (toStop != null) {
             stop(toStop);
+        }
+    }
+
+    /**
+     * Registers the gauges of the handler pool in the registry, unless they are already registered (the method is
+     * called both when the pool is created and when an application retains the schedulers after that).
+     */
+    private static void registerSchedulerMetrics(MeterRegistry registry, ElasticExecutor pool) {
+        // never let a mis-wired registry break the listeners; metrics are best-effort. The ids of the meters that
+        // could be registered are kept even if another one fails, so they are removed on release.
+        final List<Meter.Id> ids = new ArrayList<>(4);
+        register(ids, () -> Gauge.builder(M_POOL_SIZE, pool, e -> e.getPoolSize()).register(registry).getId());
+        register(ids, () -> Gauge.builder(M_THREADS_ACTIVE, pool, e -> e.getActiveCount()).register(registry).getId());
+        register(ids, () -> Gauge.builder(M_QUEUE_SIZE, pool, e -> e.getQueue().size()).register(registry).getId());
+        register(ids, () -> FunctionCounter.builder(M_GROWTH, pool, e -> e.growthCount()).register(registry).getId());
+        if (!ids.isEmpty()) {
+            meterIds.put(registry, ids);
+        }
+    }
+
+    private static void register(List<Meter.Id> ids, Supplier<Meter.Id> registration) {
+        try {
+            ids.add(registration.get());
+        } catch (Exception e) {
+            log.log(Level.WARNING, e, () -> "Could not register a scheduler metric");
+        }
+    }
+
+    private static void removeSchedulerMetrics(MeterRegistry registry) {
+        registries.remove(registry);
+        removeMeterIds(registry);
+    }
+
+    private static void removeMeterIds(MeterRegistry registry) {
+        final List<Meter.Id> ids = meterIds.remove(registry);
+        if (ids == null) {
+            return;
+        }
+        try {
+            ids.forEach(registry::remove);
+        } catch (Exception e) {
+            log.log(Level.WARNING, e, () -> "Could not remove the scheduler metrics");
         }
     }
 
@@ -177,6 +278,7 @@ public final class ListenerSchedulers {
 
         private final ScheduledThreadPoolExecutor monitor;
         private final AtomicBoolean checkScheduled = new AtomicBoolean();
+        private final AtomicLong growthCount = new AtomicLong();
         private Runnable headSeenInThePreviousCheck; // only used by the monitor thread
 
         ElasticExecutor(int maxThreads, ThreadFactory threadFactory) {
@@ -223,6 +325,7 @@ public final class ListenerSchedulers {
                 final int target = Math.min(getMaximumPoolSize(), poolSize + step);
                 if (target > poolSize) {
                     // the new threads take the waiting tasks, and go away when idle for a minute
+                    growthCount.incrementAndGet();
                     setCorePoolSize(target);
                     prestartAllCoreThreads();
                     setCorePoolSize(baseThreads(getMaximumPoolSize()));
@@ -236,6 +339,10 @@ public final class ListenerSchedulers {
 
         private static int baseThreads(int maxThreads) {
             return Math.min(maxThreads, Math.max(2, Runtime.getRuntime().availableProcessors()));
+        }
+
+        long growthCount() {
+            return growthCount.get();
         }
     }
 

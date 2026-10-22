@@ -4,6 +4,8 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -18,7 +20,9 @@ import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -76,6 +80,33 @@ class GenericMessageListenerHandlerCacheTest {
         assertThat(wait.count()).isEqualTo(1);
     }
 
+    @Test
+    void theSizeOfTheConsumedMessagesIsMeasured() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        start(Flux.just(delivery(0, "event.0")), registry);
+
+        verify(channel, timeout(5_000)).basicAck(anyLong(), any(Boolean.class));
+        DistributionSummary size = registry.find("reactive_commons.consumer.message.size")
+                .tag("queue", "test-queue").summary();
+
+        assertThat(size).as("message size summary registered").isNotNull();
+        assertThat(size.totalAmount()).isEqualTo("{}".length());
+        assertThat(size.count()).isEqualTo(1);
+    }
+
+    @Test
+    void aDeliveryDeadLetteredBeforeIsCountedAsRedelivered() throws Exception {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        start(Flux.just(delivery(0, "event.0", 1L)), registry);
+
+        verify(channel, timeout(5_000)).basicAck(anyLong(), any(Boolean.class));
+        Counter redelivered = registry.find("reactive_commons.consumer.redelivered")
+                .tag("queue", "test-queue").counter();
+
+        assertThat(redelivered).as("redelivered counter registered").isNotNull();
+        assertThat(redelivered.count()).isEqualTo(1.0);
+    }
+
     private TestListener start(Flux<AcknowledgableDelivery> deliveries, SimpleMeterRegistry registry) {
         when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
                 .thenReturn(deliveries.concatWith(Flux.never()));
@@ -87,7 +118,17 @@ class GenericMessageListenerHandlerCacheTest {
     }
 
     private AcknowledgableDelivery delivery(long tag, String routingKey) {
+        return delivery(tag, routingKey, null);
+    }
+
+    private AcknowledgableDelivery delivery(long tag, String routingKey, Long deadLetterings) {
         Map<String, Object> headers = new HashMap<>();
+        if (deadLetterings != null) {
+            HashMap<String, Object> death = new HashMap<>();
+            death.put("count", deadLetterings);
+            death.put("queue", "test-queue");
+            headers.put("x-death", new ArrayList<>(List.of(death)));
+        }
         AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder().messageId("m-" + tag).headers(headers)
                 .build();
         Delivery delivery = new Delivery(new Envelope(tag + 1, false, "exchange", routingKey), properties,

@@ -5,6 +5,7 @@ import com.rabbitmq.client.Delivery;
 import com.rabbitmq.client.Envelope;
 import com.rabbitmq.client.impl.ValueReader;
 import com.rabbitmq.client.impl.ValueWriter;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -88,11 +89,14 @@ class ApplicationQueryListenerTest {
     @Mock
     private ReactiveMessageListener reactiveMessageListener;
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+
     private ApplicationQueryListener applicationQueryListener;
 
     @BeforeEach
     void setUp() {
         when(reactiveMessageListener.receiver()).thenReturn(receiver);
+        when(reactiveMessageListener.meterRegistry()).thenReturn(registry);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
         HandlerResolver resolver = getHandlerResolver();
         applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
@@ -225,6 +229,8 @@ class ApplicationQueryListenerTest {
 
         StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, Instant.now()))
                 .verifyComplete();
+
+        assertThat(counter("reactive_commons.consumer.query.discarded")).isEqualTo(1.0);
     }
 
     @Test
@@ -287,6 +293,7 @@ class ApplicationQueryListenerTest {
                 .verifyComplete();
 
         verifyNoInteractions(sender);
+        assertThat(counter("reactive_commons.consumer.query.discarded")).isEqualTo(1.0);
     }
 
     @Test
@@ -298,6 +305,25 @@ class ApplicationQueryListenerTest {
         StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
                 .expectNext(delivery)
                 .verifyComplete();
+
+        assertThat(counter("reactive_commons.consumer.query.invalid.timeout_header")).isEqualTo(1.0);
+    }
+
+    @Test
+    void aReplyThatCannotBePublishedIsCounted() {
+        Message message = TestStubs.mockMessage();
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.error(new IllegalStateException("broker blocked")));
+        Function<Mono<Object>, Mono<Object>> handler = applicationQueryListener.enrichPostProcess(message);
+
+        StepVerifier.create(handler.apply(just("OK")))
+                .verifyComplete(); // the failure is still swallowed: the query must not run again
+
+        assertThat(counter("reactive_commons.consumer.query.reply.failed")).isEqualTo(1.0);
+    }
+
+    private double counter(String name) {
+        return registry.find(name).tags("domain", "", "queue", "queue").counter().count();
     }
 
     /**

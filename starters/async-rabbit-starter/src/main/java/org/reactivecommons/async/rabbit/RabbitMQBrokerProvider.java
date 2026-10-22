@@ -44,6 +44,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final ReactiveMessageListener receiver;
     private final ReactiveMessageSender sender;
     private final DiscardNotifier discardNotifier;
+    private final ConsumerQueueDepth queueDepth;
 
     private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
@@ -53,6 +54,15 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                                   CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
                                   ReactiveMessageListener receiver, ReactiveMessageSender sender,
                                   DiscardNotifier discardNotifier) {
+        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
+                sender, discardNotifier, null);
+    }
+
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
+                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
         this.domain = domain;
         this.props = props;
         this.config = config;
@@ -64,6 +74,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
         this.receiver = receiver;
         this.sender = sender;
         this.discardNotifier = discardNotifier;
+        this.queueDepth = queueDepth;
     }
 
     public String domain() {
@@ -257,6 +268,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
      */
     @Override
     public void close() {
+        if (queueDepth != null) {
+            queueDepth.close();
+        }
         listeners.forEach(GenericMessageListener::stop);
         listeners.clear();
         replyListeners.forEach(ApplicationReplyListener::stop);

@@ -7,10 +7,12 @@ import com.rabbitmq.client.Recoverable;
 import com.rabbitmq.client.ShutdownSignalException;
 import io.cloudevents.CloudEvent;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.FunctionCounter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
+import io.micrometer.core.instrument.Timer;
 import lombok.Getter;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
@@ -96,6 +98,8 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final String METRIC_PUBLISH_OUTCOME = "reactive_commons.publish.outcome";
     private static final String METRIC_FLOW_RESUBSCRIBE = "reactive_commons.publish.flow.resubscribe";
     private static final String METRIC_CONNECTION_BLOCKED = "reactive_commons.publish.connection.blocked";
+    private static final String METRIC_PUBLISH_LATENCY = "reactive_commons.publish.latency";
+    private static final String METRIC_PUBLISH_MESSAGE_SIZE = "reactive_commons.publish.message.size";
     static final String OUTCOME_ACK = "ack";
     static final String OUTCOME_NACK = "nack";
     static final String OUTCOME_UNKNOWN = "unknown";
@@ -470,6 +474,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             final Message converted = messageConverter.toMessage(message);
             final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
             final byte[] body = converted.getBody();
+            metrics.recordMessageSize(true, body.length);
             return send(monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
                     this::nextConfirmSink, true);
         });
@@ -485,6 +490,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             final Message converted = messageConverter.toMessage(message);
             final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
             final byte[] body = converted.getBody();
+            metrics.recordMessageSize(false, body.length);
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
             return send(monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
                     executorService, onPublished), this::availableNoConfirmSink, false);
@@ -495,6 +501,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                             Supplier<FluxSink<OutboundMessage>> sinkSelector, boolean confirmFlow) {
         final AtomicBoolean handedToAFlow = new AtomicBoolean();
         final AtomicReference<PendingMessage> current = new AtomicReference<>();
+        final AtomicBoolean timedOut = new AtomicBoolean();
+        final long startNanos = System.nanoTime();
         return Mono.<Void>create(monoSink -> {
                     final PendingMessage pending = messageFactory.apply(monoSink);
                     current.set(pending);
@@ -535,6 +543,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                         .filter(NoFlowAvailableException.class::isInstance))
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
+                    timedOut.set(true);
                     metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
                     final PendingMessage pending = current.get();
                     if (!handedToAFlow.get()) {
@@ -547,7 +556,37 @@ public class ReactiveMessageSender implements AutoCloseable {
                     }
                     return new SendConfirmUnknownException("No confirmation received within " + sendTimeout
                             + ": the message may or may not have reached the broker", e);
-                });
+                })
+                // recorded before the terminal signal reaches the caller; a cancelled subscription records nothing:
+                // the caller stopped waiting, but the message may still be published
+                .doOnSuccess(ignored -> metrics.recordPublishLatency(confirmFlow,
+                        confirmFlow ? OUTCOME_ACK : OUTCOME_PUBLISHED,
+                        Duration.ofNanos(System.nanoTime() - startNanos)))
+                .doOnError(error -> metrics.recordPublishLatency(confirmFlow,
+                        latencyOutcome(error, timedOut.get()),
+                        Duration.ofNanos(System.nanoTime() - startNanos)));
+    }
+
+    private static String latencyOutcome(Throwable error, boolean timedOut) {
+        if (timedOut) {
+            return OUTCOME_TIMEOUT;
+        }
+        if (error instanceof SendFailureReturnedException) {
+            return OUTCOME_RETURNED;
+        }
+        if (error instanceof SendFailureBrokerBlockedException) {
+            return OUTCOME_BLOCKED;
+        }
+        if (error instanceof SendFailureHandOverRejectedException) {
+            return OUTCOME_REJECTED;
+        }
+        if (error instanceof SendConfirmUnknownException) {
+            return OUTCOME_UNKNOWN;
+        }
+        if (error instanceof SendFailureNoAckException) {
+            return OUTCOME_NACK;
+        }
+        return OUTCOME_FAILED;
     }
 
     private void handOver(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
@@ -856,6 +895,10 @@ public class ReactiveMessageSender implements AutoCloseable {
      * Micrometer counters/gauges on the publish path. All operations are no-ops when no {@link MeterRegistry} is
      * provided, so the sender can be instantiated in tests without one. The counters are registered once and cached:
      * looking a meter up in the registry on every message would cost far more than incrementing it.
+     *
+     * <p>Besides the outcome/flow/connection meters, it records {@code reactive_commons.publish.latency} (Timer,
+     * tags {@code outcome} + {@code confirm}) and {@code reactive_commons.publish.message.size}
+     * (DistributionSummary, tag {@code confirm}).
      */
     private static final class PublishMetrics {
         private final MeterRegistry registry;
@@ -863,6 +906,8 @@ public class ReactiveMessageSender implements AutoCloseable {
         private final Map<String, Counter> confirmOutcomes = new ConcurrentHashMap<>();
         private final Map<String, Counter> noConfirmOutcomes = new ConcurrentHashMap<>();
         private final Map<Boolean, Counter> resubscribes = new ConcurrentHashMap<>();
+        private final Map<String, Timer> latencyTimers = new ConcurrentHashMap<>();
+        private final Map<Boolean, DistributionSummary> messageSizes = new ConcurrentHashMap<>();
 
         PublishMetrics(MeterRegistry registry, String domain, ConnectionBlockedState blockedState,
                        AtomicInteger activeConfirmFlows, AtomicInteger activeNoConfirmFlows,
@@ -911,6 +956,32 @@ public class ReactiveMessageSender implements AutoCloseable {
                             .tags(baseTags)
                             .tag("kind", key ? "confirm" : "noConfirm")
                             .register(registry)).increment();
+        }
+
+        /**
+         * Caller-visible latency of a publish: hand-over wait + flow buffer wait + broker confirm round-trip.
+         */
+        void recordPublishLatency(boolean confirmFlow, String outcome, Duration elapsed) {
+            if (registry == null) {
+                return;
+            }
+            latencyTimers.computeIfAbsent(confirmFlow + ":" + outcome, key ->
+                    Timer.builder(METRIC_PUBLISH_LATENCY)
+                            .tags(baseTags)
+                            .tag("outcome", outcome)
+                            .tag("confirm", Boolean.toString(confirmFlow))
+                            .register(registry)).record(elapsed);
+        }
+
+        void recordMessageSize(boolean confirmFlow, long bytes) {
+            if (registry == null) {
+                return;
+            }
+            messageSizes.computeIfAbsent(confirmFlow, key ->
+                    DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
+                            .tags(baseTags)
+                            .tag("confirm", key.toString())
+                            .register(registry)).record(bytes);
         }
     }
 }

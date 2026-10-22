@@ -225,6 +225,14 @@ public final class RabbitMQSetupUtils {
                 .connectionMono(senderConnection);
     }
 
+    /**
+     * The cached Mono of the connection the listeners of the application use, shared with the queue-depth poller so
+     * it never opens a connection of its own.
+     */
+    static Mono<Connection> listenerConnectionMono(ConnectionFactoryProvider provider, String appName) {
+        return createConnectionMono(provider.getConnectionFactory(), appName, ConnectionRole.LISTENER);
+    }
+
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName,
                                                          ConnectionRole role) {
         return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role), key -> {

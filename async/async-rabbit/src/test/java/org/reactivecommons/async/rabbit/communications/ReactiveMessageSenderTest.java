@@ -1,5 +1,8 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -137,6 +140,32 @@ class ReactiveMessageSenderTest {
         final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
+    }
+
+    @Test
+    void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain");
+        try {
+            StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                            "rkey", new HashMap<>(), true))
+                    .verifyComplete();
+
+            Timer latency = registry.find("reactive_commons.publish.latency")
+                    .tags("domain", "test-domain", "confirm", "true", "outcome", "ack").timer();
+            assertThat(latency).as("latency timer tagged with the ack outcome").isNotNull();
+            assertThat(latency.count()).isEqualTo(1);
+
+            DistributionSummary size = registry.find("reactive_commons.publish.message.size")
+                    .tags("domain", "test-domain", "confirm", "true").summary();
+            assertThat(size).as("message size summary").isNotNull();
+            assertThat(size.count()).isEqualTo(1);
+            assertThat(size.totalAmount()).isPositive();
+        } finally {
+            meteredSender.close();
+        }
     }
 
     @Test

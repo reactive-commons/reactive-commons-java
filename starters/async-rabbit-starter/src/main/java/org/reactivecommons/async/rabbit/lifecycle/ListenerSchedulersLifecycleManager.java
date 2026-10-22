@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.lifecycle;
 
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.listeners.ListenerSchedulers;
 import org.springframework.context.SmartLifecycle;
@@ -14,12 +15,24 @@ import org.springframework.context.SmartLifecycle;
 @Slf4j
 public class ListenerSchedulersLifecycleManager implements SmartLifecycle {
 
+    private final MeterRegistry meterRegistry;
     private volatile boolean running = false;
+
+    public ListenerSchedulersLifecycleManager() {
+        this(null);
+    }
+
+    /**
+     * @param meterRegistry where the metrics of the shared schedulers are registered, {@code null} for none
+     */
+    public ListenerSchedulersLifecycleManager(MeterRegistry meterRegistry) {
+        this.meterRegistry = meterRegistry;
+    }
 
     @Override
     public synchronized void start() {
         if (!running) {
-            ListenerSchedulers.retain();
+            ListenerSchedulers.retain(meterRegistry);
             running = true;
         }
     }
@@ -31,7 +44,7 @@ public class ListenerSchedulersLifecycleManager implements SmartLifecycle {
         }
         try {
             running = false;
-            ListenerSchedulers.release();
+            ListenerSchedulers.release(meterRegistry);
         } catch (Exception e) {
             log.error("Error shutting down the listener schedulers", e);
         }
