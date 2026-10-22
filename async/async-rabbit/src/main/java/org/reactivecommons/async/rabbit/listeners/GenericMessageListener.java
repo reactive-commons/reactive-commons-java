@@ -189,17 +189,33 @@ public abstract class GenericMessageListener {
             final String executorPath = getExecutorPath(msj);
             final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
             final Message message = RabbitMessage.fromDelivery(msj, executorPath);
+            // bounded by MAX_CACHED_HANDLERS: unregistered or over-cap paths bucket to "unknown" so a message
+            // with an arbitrary routing key cannot explode the metric cardinality
+            final String handlerTag = handlers.containsKey(executorPath)
+                    ? executorPath : ConsumerMetrics.UNKNOWN_HANDLER;
 
             final AtomicBoolean started = new AtomicBoolean();
+            final AtomicReference<Instant> attemptStart = new AtomicReference<>();
             Mono<Object> flow = defer(() -> {
+                attemptStart.set(Instant.now()); // each local retry re-runs the defer: fresh per-attempt timing
                 if (started.compareAndSet(false, true)) { // runs on the handler thread; local retries run it again
                     onHandlerStarted(Duration.between(initTime, Instant.now()));
                 }
-                return handler.apply(message);
+                return handler.apply(message)
+                        .doOnSuccess(ignored -> metrics.recordHandlerExecution(handlerTag,
+                                ConsumerMetrics.EXECUTION_SUCCESS,
+                                Duration.between(attemptStart.get(), Instant.now())))
+                        // the outer timeout cancels the inner on expiry, so doOnError does not fire for timeouts
+                        .doOnError(err -> metrics.recordHandlerExecution(handlerTag,
+                                ConsumerMetrics.EXECUTION_ERROR,
+                                Duration.between(attemptStart.get(), Instant.now())));
             }).transform(enrichPostProcess(message));
             if (handlerTimeout != null) {
                 // a dedicated type, so a TimeoutException thrown by the handler itself is not counted as one
-                flow = flow.timeout(handlerTimeout, Mono.error(() -> new HandlerTimeoutException(handlerTimeout)));
+                flow = flow.timeout(handlerTimeout, Mono.error(() -> new HandlerTimeoutException(handlerTimeout)))
+                        .doOnError(HandlerTimeoutException.class, err -> metrics.recordHandlerExecution(
+                                handlerTag, ConsumerMetrics.EXECUTION_TIMEOUT,
+                                Duration.between(attemptStart.get(), Instant.now())));
             }
             if (hasLocalRetries()) {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)

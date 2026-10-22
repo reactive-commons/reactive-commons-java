@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -196,8 +197,10 @@ class ReactiveMessageSenderTest {
             assertThat(registry.find("reactive_commons.publish.latency")
                     .tags("domain", "test-domain", "confirm", "true", "outcome", "failed").timer().count())
                     .isEqualTo(1);
-            assertThat(registry.find("reactive_commons.publish.outcome").tag("outcome", "nack").counter())
-                    .as("the broker never nacked it").isNull();
+            Counter nackCounter = registry.find("reactive_commons.publish.outcome")
+                    .tag("outcome", "nack").counter();
+            assertThat(nackCounter).as("outcome=nack is pre-registered at 0").isNotNull();
+            assertThat(nackCounter.count()).as("the broker never nacked it").isZero();
             assertThat(registry.find("reactive_commons.publish.latency").tag("outcome", "nack").timer()).isNull();
         } finally {
             meteredSender.close();

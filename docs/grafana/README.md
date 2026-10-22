@@ -72,6 +72,7 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 | `reactive_commons.publish.unroutable.process.error` | `reactive_commons_publish_unroutable_process_error_total` | Unroutable messages /s |
 | `reactive_commons.consumer.messages` | `reactive_commons_consumer_messages_total{outcome,queue,domain}` | Consumer outcomes /s, success ratio |
 | `reactive_commons.consumer.handler.latency` | `reactive_commons_consumer_handler_latency_seconds_*` | Handler latency |
+| `reactive_commons.consumer.handler.execution` | `reactive_commons_consumer_handler_execution_seconds_*{outcome,handler,queue,domain}` | Handler execution |
 | `reactive_commons.consumer.handler.wait` | `reactive_commons_consumer_handler_wait_seconds_*` | Handler wait |
 | `reactive_commons.consumer.retry.attempts` | `reactive_commons_consumer_retry_attempts_total{queue,domain}` | Retries /s |
 | `reactive_commons.consumer.retry.exhausted` | `reactive_commons_consumer_retry_exhausted_total{queue,domain}` | Retries /s |
@@ -95,9 +96,15 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 ## Things to know
 
 - **Some series appear on first use.** The consumer meters (outcomes at 0, restarts at 0, retries, timeouts,
-  discards, query anomalies, size, latency, in flight) are registered with the listener. The publish outcomes and
-  latency, `replies.lost`, `flow.resubscribe` and `async_query_*` are registered with their first occurrence: their
+  discards, query anomalies, size, latency, wait, in flight) are registered with the listener. The publish outcomes
+  (also at 0, from this release on), `publish.latency`, `handler.execution` (per outcome × handler),
+  `replies.lost`, `flow.resubscribe` and `async_query_*` are registered with their first occurrence: their
   panels show `No data` until then, which is healthy.
+- **`handler.latency` vs `handler.execution`.** `handler.latency` is end-to-end (wait for a handler thread +
+  execution + every local retry with its delay). `handler.execution` is per attempt around `handler.apply`, tagged
+  `outcome` ∈ {success, error, timeout} and `handler` = the executor path (bounded by the handler cache; unknown
+  or over-cap paths fall back to `unknown`). Diagnosis: `wait` high and `execution` low = pool saturation; `execution`
+  high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent.
 - **`nack` and `failed` are different publish outcomes.** `nack` means the broker received the message and
   answered `basic.nack` (e.g. a queue at its length limit with `x-overflow: reject-publish`); `failed` means it
   was never written to a channel (no channel, connection being recovered, sender shut down).
@@ -111,6 +118,7 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
         percentiles-histogram:
           reactive_commons.publish.latency: true
           reactive_commons.consumer.handler.latency: true
+          reactive_commons.consumer.handler.execution: true
           reactive_commons.consumer.handler.wait: true
   ```
 

@@ -24,7 +24,13 @@ import java.util.logging.Logger;
  * <ul>
  *     <li>{@code reactive_commons.consumer.messages} — Counter, extra tag {@code outcome} ∈
  *     {ack, nack, discard, dlq, handler_error}.</li>
- *     <li>{@code reactive_commons.consumer.handler.latency} — Timer, around the handler's Mono.</li>
+ *     <li>{@code reactive_commons.consumer.handler.latency} — Timer, around the handler's Mono. End-to-end:
+ *     includes handler-pool wait, every local retry and the retry delays.</li>
+ *     <li>{@code reactive_commons.consumer.handler.execution} — Timer, per attempt around {@code handler.apply}.
+ *     Extra tags: {@code outcome} ∈ {success, error, timeout} and {@code handler} (the executor path, bounded by
+ *     {@link GenericMessageListener#MAX_CACHED_HANDLERS}; unregistered paths bucket to {@code unknown}). Compare
+ *     against {@code handler.latency} to split handler-pool wait from handler duration, and against
+ *     {@code handlerTimeout} to see how close attempts run to the per-attempt deadline.</li>
  *     <li>{@code reactive_commons.consumer.handler.wait} — Timer, from the delivery to the start of its handler.</li>
  *     <li>{@code reactive_commons.consumer.restart} — Counter, extra tag {@code reason}
  *     (channel_shutdown, error, cancel).</li>
@@ -62,6 +68,11 @@ public final class ConsumerMetrics {
     public static final String OUTCOME_DLQ = "dlq";
     public static final String OUTCOME_HANDLER_ERROR = "handler_error";
 
+    public static final String EXECUTION_SUCCESS = "success";
+    public static final String EXECUTION_ERROR = "error";
+    public static final String EXECUTION_TIMEOUT = "timeout";
+    public static final String UNKNOWN_HANDLER = "unknown";
+
     public static final String REASON_CHANNEL_SHUTDOWN = "channel_shutdown";
     public static final String REASON_ERROR = "error";
     public static final String REASON_CANCEL = "cancel";
@@ -69,6 +80,7 @@ public final class ConsumerMetrics {
 
     private static final String M_MESSAGES = "reactive_commons.consumer.messages";
     private static final String M_LATENCY = "reactive_commons.consumer.handler.latency";
+    private static final String M_EXECUTION = "reactive_commons.consumer.handler.execution";
     private static final String M_WAIT = "reactive_commons.consumer.handler.wait";
     private static final String M_RESTART = "reactive_commons.consumer.restart";
     private static final String M_ACTIVE = "reactive_commons.consumer.active";
@@ -94,6 +106,7 @@ public final class ConsumerMetrics {
     private final Tags baseTags;
     private final ConcurrentHashMap<String, Counter> outcomeCounters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, Counter> restartCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Timer> executionTimers = new ConcurrentHashMap<>();
     private final Timer handlerLatency;
     private final Timer handlerWait;
     private final Counter retryAttempts;
@@ -225,6 +238,33 @@ public final class ConsumerMetrics {
         if (handlerWait != null) {
             handlerWait.record(wait);
         }
+    }
+
+    /**
+     * Records a per-attempt handler execution. Each local retry is a new attempt and gets its own sample, so this
+     * metric does not include retry delays and can be compared directly against {@code handlerTimeout}.
+     */
+    public void recordHandlerExecution(String handler, String outcome, Duration took) {
+        if (registry == null) {
+            return;
+        }
+        final Timer timer = executionTimer(outcome, handler != null ? handler : UNKNOWN_HANDLER);
+        if (timer != null) {
+            timer.record(took);
+        }
+    }
+
+    private Timer executionTimer(String outcome, String handler) {
+        return executionTimers.computeIfAbsent(outcome + '|' + handler, key -> {
+            try {
+                return Timer.builder(M_EXECUTION)
+                        .tags(baseTags.and("outcome", outcome).and("handler", handler))
+                        .register(registry);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, e, () -> "Could not register consumer handler execution timer");
+                return null;
+            }
+        });
     }
 
     public void recordHandlerRetry() {

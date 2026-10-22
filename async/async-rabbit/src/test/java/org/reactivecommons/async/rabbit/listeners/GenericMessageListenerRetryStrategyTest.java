@@ -95,6 +95,8 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(handlerCalls.get()).as("first attempt + 2 local retries").isEqualTo(3);
         assertThat(counter("reactive_commons.consumer.retry.attempts")).isEqualTo(2.0);
         assertThat(counter("reactive_commons.consumer.retry.exhausted")).isEqualTo(1.0);
+        // each attempt is its own execution sample, so retry delays do not inflate the per-attempt Timer
+        assertThat(executionCount("error", "test-path")).as("one sample per attempt").isEqualTo(3L);
     }
 
     @Test
@@ -135,6 +137,8 @@ class GenericMessageListenerRetryStrategyTest {
 
         verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
         assertThat(counter("reactive_commons.consumer.handler.timeout")).isEqualTo(1.0);
+        assertThat(executionCount("timeout", "test-path")).as("execution timer tagged timeout")
+                .isEqualTo(1L);
         assertThat(awaitInFlight(0)).as("no longer in flight once nacked").isTrue();
     }
 
@@ -165,6 +169,21 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(awaitInFlight(1)).as("received, neither acked nor nacked").isTrue();
         verify(channel, after(200).never()).basicAck(anyLong(), anyBoolean());
         assertThat(outcome("ack")).as("the outcomes exist at zero before any happens").isZero();
+    }
+
+    @Test
+    void aSuccessfulHandlerRecordsExecutionWithSuccessOutcome() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+
+        new HangingListener(listener(null), discardNotifier, errorReporter, message -> Mono.empty())
+                .startListener();
+
+        verify(channel, timeout(2_000)).basicAck(DELIVERY_TAG, false);
+        assertThat(executionCount("success", "test-path")).isEqualTo(1L);
+        assertThat(executionCount("error", "test-path")).isZero();
+        assertThat(executionCount("timeout", "test-path")).isZero();
     }
 
     @Test
@@ -204,6 +223,12 @@ class GenericMessageListenerRetryStrategyTest {
     private double outcome(String outcome) {
         return registry.find("reactive_commons.consumer.messages")
                 .tags("domain", DOMAIN, "queue", QUEUE, "outcome", outcome).counter().count();
+    }
+
+    private long executionCount(String outcome, String handler) {
+        io.micrometer.core.instrument.Timer timer = registry.find("reactive_commons.consumer.handler.execution")
+                .tags("domain", DOMAIN, "queue", QUEUE, "outcome", outcome, "handler", handler).timer();
+        return timer == null ? 0L : timer.count();
     }
 
     private ReactiveMessageListener listener(Duration handlerTimeout) {

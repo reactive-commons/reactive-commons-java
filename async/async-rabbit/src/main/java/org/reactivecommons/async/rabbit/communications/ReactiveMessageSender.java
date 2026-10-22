@@ -114,6 +114,16 @@ public class ReactiveMessageSender implements AutoCloseable {
     static final String OUTCOME_PUBLISHED = "published";
     static final String OUTCOME_FAILED = "failed";
 
+    /**
+     * Outcomes that may be reported through the confirm flow. Pre-registered at 0 so Prometheus has a prior sample
+     * for every known series and {@code increase()} / {@code rate()} count the very first incident.
+     */
+    private static final List<String> CONFIRM_OUTCOMES = List.of(
+            OUTCOME_ACK, OUTCOME_NACK, OUTCOME_UNKNOWN, OUTCOME_RETURNED,
+            OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED);
+    private static final List<String> NO_CONFIRM_OUTCOMES = List.of(
+            OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED);
+
     @Getter
     private final Sender sender;
     private final String sourceApplication;
@@ -932,6 +942,9 @@ public class ReactiveMessageSender implements AutoCloseable {
                                     ConnectionBlockedState::blockCount)
                             .tags(baseTags)
                             .register(registry);
+                    // register every known outcome at 0 so increase()/rate() can see the first incident
+                    CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, true));
+                    NO_CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, false));
                 } catch (Exception e) {
                     // never let a mis-wired registry break the sender; metrics are best-effort
                     log.log(Level.WARNING, e, () -> "Could not register publish metrics");
@@ -943,12 +956,16 @@ public class ReactiveMessageSender implements AutoCloseable {
             if (registry == null) {
                 return;
             }
-            (confirmFlow ? confirmOutcomes : noConfirmOutcomes).computeIfAbsent(outcome, key ->
+            outcomeCounter(outcome, confirmFlow).increment();
+        }
+
+        private Counter outcomeCounter(String outcome, boolean confirmFlow) {
+            return (confirmFlow ? confirmOutcomes : noConfirmOutcomes).computeIfAbsent(outcome, key ->
                     Counter.builder(METRIC_PUBLISH_OUTCOME)
                             .tags(baseTags)
                             .tag("outcome", key)
                             .tag("confirm", Boolean.toString(confirmFlow))
-                            .register(registry)).increment();
+                            .register(registry));
         }
 
         void recordResubscribe(boolean confirmFlow) {
