@@ -105,6 +105,10 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
   `publish.message.size`, `handler.execution` (per outcome × handler), the handler pool gauges (when the pool is
   created, with the first message handled) and `async_query_*` are registered with their first occurrence: their
   panels show `No data` until then, which is healthy.
+- **Stats show the value now.** The stat panels run instant queries, so they do not keep the last value of the time
+  range once an application is gone. When the dashboard reads a Prometheus that federates another one, set
+  `track_timestamps_staleness: true` in the federation job: `/federate` exposes the samples with their timestamps, and
+  without it the series of a pod that is gone keep their last value for 5 minutes.
 - **`handler.latency` vs `handler.execution`.** `handler.latency` is end-to-end (wait for a handler thread +
   execution + every local retry with its delay). `handler.execution` is per attempt around `handler.apply`, tagged
   `outcome` ∈ {success, error, timeout} and `handler` = the executor path of a registered handler (bounded by the

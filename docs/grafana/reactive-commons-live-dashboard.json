@@ -68,7 +68,9 @@
           },
           "expr": "sum(rate(reactive_commons_publish_outcome_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",outcome=~\"ack|published\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "published",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -131,7 +133,9 @@
           },
           "expr": "sum(rate(reactive_commons_publish_outcome_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",outcome=~\"nack|unknown|returned|rejected|timeout|blocked|failed\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "failures",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -182,7 +186,9 @@
           },
           "expr": "sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome=\"ack\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "consumed",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -245,7 +251,9 @@
           },
           "expr": "sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome=\"handler_error\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "handler errors",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -312,7 +320,9 @@
           },
           "expr": "(((sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome!=\"handler_error\"}[$__rate_interval])) == 0) + 1) or (sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome=\"ack\"}[$__rate_interval])) / clamp_min(sum(rate(reactive_commons_consumer_messages_total{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\",outcome!=\"handler_error\"}[$__rate_interval])), 1e-9))) or vector(1)",
           "legendFormat": "success ratio",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -361,9 +371,11 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(reactive_commons_consumer_active{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
+          "expr": "sum(reactive_commons_consumer_active{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}) or vector(0)",
           "legendFormat": "active",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -414,7 +426,9 @@
           },
           "expr": "sum(reactive_commons_consumer_queue_depth{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
           "legendFormat": "ready messages",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         },
         {
           "datasource": {
@@ -423,7 +437,9 @@
           },
           "expr": "sum(reactive_commons_consumer_in_flight{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
           "legendFormat": "in flight (not acked)",
-          "refId": "B"
+          "refId": "B",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -488,7 +504,9 @@
           },
           "expr": "max(reactive_commons_publish_connection_blocked_state{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\"}) or vector(0)",
           "legendFormat": "blocked",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2712,7 +2730,9 @@
           },
           "expr": "sum(rate(async_query_subscribed_total{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) or vector(0)",
           "legendFormat": "queries",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2763,7 +2783,9 @@
           },
           "expr": "sum(rate(async_query_flow_duration_seconds_sum{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) / clamp_min(sum(rate(async_query_flow_duration_seconds_count{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])), 1e-9)",
           "legendFormat": "average",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2814,7 +2836,9 @@
           },
           "expr": "max(async_query_flow_duration_seconds_max{job=~\"$job\",instance=~\"$instance\"})",
           "legendFormat": "max",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2881,7 +2905,9 @@
           },
           "expr": "(((sum(rate(async_query_flow_duration_seconds_count{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])) == 0) + 1) or (sum(rate(async_query_flow_duration_seconds_count{job=~\"$job\",instance=~\"$instance\",status=\"completed\"}[$__rate_interval])) / clamp_min(sum(rate(async_query_flow_duration_seconds_count{job=~\"$job\",instance=~\"$instance\"}[$__rate_interval])), 1e-9))) or vector(1)",
           "legendFormat": "success ratio",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2944,7 +2970,9 @@
           },
           "expr": "max(up{job=~\"$job\",instance=~\"$instance\"})",
           "legendFormat": "up",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -2995,7 +3023,9 @@
           },
           "expr": "max(process_uptime_seconds{job=~\"$job\",instance=~\"$instance\"})",
           "legendFormat": "uptime",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -3046,7 +3076,9 @@
           },
           "expr": "sum(jvm_memory_used_bytes{area=\"heap\",job=~\"$job\",instance=~\"$instance\"})",
           "legendFormat": "heap",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -3113,7 +3145,9 @@
           },
           "expr": "max(process_cpu_usage{job=~\"$job\",instance=~\"$instance\"})",
           "legendFormat": "process",
-          "refId": "A"
+          "refId": "A",
+          "instant": true,
+          "range": false
         }
       ],
       "type": "stat"
@@ -4493,7 +4527,6 @@
         "type": "datasource"
       },
       {
-        "allValue": ".*",
         "current": {
           "selected": true,
           "text": [
@@ -4507,19 +4540,20 @@
           "type": "prometheus",
           "uid": "${datasource}"
         },
-        "definition": "label_values(up, job)",
+        "definition": "label_values({__name__=~\"reactive_commons_.+\"}, job)",
         "hide": 0,
         "includeAll": true,
         "label": "Job",
         "multi": true,
         "name": "job",
         "options": [],
-        "query": "label_values(up, job)",
+        "query": "label_values({__name__=~\"reactive_commons_.+\"}, job)",
         "refresh": 2,
         "regex": "",
         "skipUrlSync": false,
         "sort": 1,
-        "type": "query"
+        "type": "query",
+        "description": "The applications that export Reactive Commons meters (the Prometheus jobs of their own, such as a federation or a self-scrape job, are not listed)."
       },
       {
         "allValue": ".*",
