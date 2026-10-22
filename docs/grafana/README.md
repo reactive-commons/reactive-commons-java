@@ -67,11 +67,12 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 | `reactive_commons.publish.flow.resubscribe` | `reactive_commons_publish_flow_resubscribe_total{kind,domain}` | Publish flow resubscriptions /s |
 | `reactive_commons.publish.hand_over.queue.size` | `reactive_commons_publish_hand_over_queue_size{domain}` | Publish flows and hand-over queue |
 | `reactive_commons.publish.connection.blocked.state` | `reactive_commons_publish_connection_blocked_state{domain}` | Broker blocking publishes |
+| `reactive_commons.publish.connection.blocked` | `reactive_commons_publish_connection_blocked_total{domain}` | Broker blocking the publishing connection |
 | `reactive_commons.publish.unroutable.messages` | `reactive_commons_publish_unroutable_messages_total` | Unroutable messages /s |
 | `reactive_commons.publish.unroutable.emit.failed` | `reactive_commons_publish_unroutable_emit_failed_total` | Unroutable messages /s |
 | `reactive_commons.publish.unroutable.process.error` | `reactive_commons_publish_unroutable_process_error_total` | Unroutable messages /s |
 | `reactive_commons.consumer.messages` | `reactive_commons_consumer_messages_total{outcome,queue,domain}` | Consumer outcomes /s, success ratio |
-| `reactive_commons.consumer.handler.latency` | `reactive_commons_consumer_handler_latency_seconds_*` | Handler latency |
+| `reactive_commons.consumer.handler.latency` | `reactive_commons_consumer_handler_latency_seconds_*` | Handler latency, handler latency and wait (max) |
 | `reactive_commons.consumer.handler.execution` | `reactive_commons_consumer_handler_execution_seconds_*{outcome,handler,queue,domain}` | Handler execution |
 | `reactive_commons.consumer.handler.wait` | `reactive_commons_consumer_handler_wait_seconds_*` | Handler wait |
 | `reactive_commons.consumer.retry.attempts` | `reactive_commons_consumer_retry_attempts_total{queue,domain}` | Retries /s |
@@ -84,6 +85,7 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 | `reactive_commons.consumer.query.invalid.timeout_header` | `reactive_commons_consumer_query_invalid_timeout_header_total{queue,domain}` | Discards and query anomalies /s |
 | `reactive_commons.consumer.restart` | `reactive_commons_consumer_restart_total{reason,queue,domain}` | Listener restarts /s |
 | `reactive_commons.consumer.active` | `reactive_commons_consumer_active{queue,domain}` | Active consumers |
+| `reactive_commons.consumer.last_message_age_seconds` | `reactive_commons_consumer_last_message_age_seconds{queue,domain}` | Time since the last message by queue |
 | `reactive_commons.consumer.replies.lost` | `reactive_commons_consumer_replies_lost_total{domain}` | Replies lost /s |
 | `reactive_commons.consumer.message.size` | `reactive_commons_consumer_message_size_bytes_{count,sum,max}` | Consumed message size |
 | `reactive_commons.consumer.queue.depth` | `reactive_commons_consumer_queue_depth{queue,domain}` | Total queue backlog, consumer backlog |
@@ -92,13 +94,16 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 | `reactive_commons.schedulers.handler.threads.active` | `reactive_commons_schedulers_handler_threads_active` | Handler pool threads |
 | `reactive_commons.schedulers.handler.queue.size` | `reactive_commons_schedulers_handler_queue_size` | Queued handler tasks |
 | `reactive_commons.schedulers.handler.growth` | `reactive_commons_schedulers_handler_growth_total` | Handler pool growth /s |
+| `async_query.subscribed` | `async_query_subscribed_total{operation,target,type}` | Async queries /s, query throughput by target |
+| `async_query.flow.duration` | `async_query_flow_duration_seconds_*{operation,target,type,status,exception}` | Query latency, query outcomes by status, query failures by exception |
 
 ## Things to know
 
-- **Some series appear on first use.** The consumer meters (outcomes at 0, restarts at 0, retries, timeouts,
-  discards, query anomalies, size, latency, wait, in flight) are registered with the listener. The publish outcomes
-  (also at 0, from this release on), `publish.latency`, `handler.execution` (per outcome × handler),
-  `replies.lost`, `flow.resubscribe` and `async_query_*` are registered with their first occurrence: their
+- **Some series appear on first use.** The consumer meters (outcomes at 0, restarts at 0, `replies.lost` at 0,
+  retries, timeouts, discards, query anomalies, size, latency, wait, in flight) are registered with the listener,
+  and the publish outcomes and `flow.resubscribe` (both at 0) with the sender. `publish.latency`,
+  `publish.message.size`, `handler.execution` (per outcome × handler), the handler pool gauges (when the pool is
+  created, with the first message handled) and `async_query_*` are registered with their first occurrence: their
   panels show `No data` until then, which is healthy.
 - **`handler.latency` vs `handler.execution`.** `handler.latency` is end-to-end (wait for a handler thread +
   execution + every local retry with its delay). `handler.execution` is per attempt around `handler.apply`, tagged
