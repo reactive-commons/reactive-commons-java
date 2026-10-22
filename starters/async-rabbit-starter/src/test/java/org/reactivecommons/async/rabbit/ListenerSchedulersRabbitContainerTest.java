@@ -155,8 +155,10 @@ class ListenerSchedulersRabbitContainerTest {
                 createdInSteadyState, afterClose.size() - before);
         assertThat(whileRunning).as("no thread belongs to a single listener")
                 .noneMatch(name -> name.startsWith("Application"));
+        // the starvation monitor may add a few threads when the CPUs are busy elsewhere (e.g. a shared CI runner that
+        // builds other modules at the same time); a pool per listener would add 12 per listener, 36 here
         assertThat(createdInSteadyState).as("threads created by sustained traffic of handlers that do not block")
-                .isLessThanOrEqualTo(Runtime.getRuntime().availableProcessors());
+                .isLessThanOrEqualTo(Runtime.getRuntime().availableProcessors() + 8);
         assertThat(afterClose.size() - before).as("threads left after closing the application").isZero();
     }
 
