@@ -35,7 +35,12 @@ public class UnroutableMessageNotifier {
         this.metrics = new UnroutableMetrics(registry, domain);
     }
 
-    public void notifyUnroutableMessage(OutboundMessageResult<OutboundMessage> message) {
+    /**
+     * Synchronized: the default notifier is shared by every domain, so the returns of several connections may arrive
+     * at the same time, and a {@link Sinks.Many} rejects concurrent emissions ({@code FAIL_NON_SERIALIZED}) instead of
+     * queueing them: only a full buffer may fail an emission.
+     */
+    public synchronized void notifyUnroutableMessage(OutboundMessageResult<OutboundMessage> message) {
         metrics.recordUnroutable();
         if (sink.tryEmitNext(message).isFailure()) {
             metrics.recordEmitFailure();

@@ -182,6 +182,47 @@ class ReactiveMessageSenderTest {
     }
 
     /**
+     * A confirm that arrives after the sendTimeout reported to the caller does not count the message a second time:
+     * publish.outcome has one outcome per message, the one its caller got.
+     */
+    @Test
+    void aConfirmArrivingAfterTheSendTimeoutDoesNotCountTheMessageTwice() throws Exception {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            Flux<OutboundMessage> argument = invocation.getArgument(0);
+            return argument.delayElements(Duration.ofMillis(300)).map(msg -> new OutboundMessageResult<>(msg, true));
+        });
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofMillis(100), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain")) {
+            StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                            "rkey", new HashMap<>(), true))
+                    .expectError(SendConfirmUnknownException.class)
+                    .verify(Duration.ofSeconds(5));
+            Thread.sleep(600); // the late confirm arrives
+
+            assertThat(outcomeCount(registry, "timeout")).isEqualTo(1);
+            assertThat(outcomeCount(registry, "ack")).as("the late confirm is not a second outcome").isZero();
+        }
+    }
+
+    @Test
+    void thePublishMetersAreTaggedWithAnEmptyDomainWhenTheSenderHasNone() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, null)) {
+            assertThat(registry.find("reactive_commons.publish.outcome").tags("domain", "", "outcome", "ack")
+                    .counter()).as("same tag keys as the senders of a domain, as Prometheus requires").isNotNull();
+        }
+    }
+
+    private static double outcomeCount(SimpleMeterRegistry registry, String outcome) {
+        return registry.find("reactive_commons.publish.outcome")
+                .tags("domain", "test-domain", "confirm", "true", "outcome", outcome).counter().count();
+    }
+
+    /**
      * A negative confirmation for a message that was never written to a channel (here the mocked sender never
      * writes it) is a local failure, not a broker {@code basic.nack}: both the outcome and the latency say so.
      */

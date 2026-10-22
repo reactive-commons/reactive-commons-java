@@ -122,25 +122,44 @@ public final class ConsumerMetrics {
     private final AtomicInteger inFlight = new AtomicInteger(); // strongly held: Micrometer keeps gauges weakly
 
     public ConsumerMetrics(MeterRegistry registry, String domain, String queue, ListenerLiveness liveness) {
+        this(registry, domain, queue, liveness, true);
+    }
+
+    /**
+     * The meters of the reply listener: only its liveness ({@code active}, {@code last_message_age_seconds}) and its
+     * restarts. Its replies are routed to the callers waiting for them, never handled, so the delivery meters
+     * (outcomes, latencies, retries, in flight...) would stay at 0 forever, and with a new series on every start, as
+     * the name of the reply queue is unique per instance.
+     */
+    public static ConsumerMetrics forReplyListener(MeterRegistry registry, String domain, String queue,
+                                                   ListenerLiveness liveness) {
+        return new ConsumerMetrics(registry, domain, queue, liveness, false);
+    }
+
+    private ConsumerMetrics(MeterRegistry registry, String domain, String queue, ListenerLiveness liveness,
+                            boolean handlesDeliveries) {
         this.registry = registry;
         this.domain = domain != null ? domain : "";
         this.queue = queue != null ? queue : "";
         this.baseTags = Tags.of("domain", this.domain, "queue", this.queue);
-        this.handlerLatency = registry != null ? safeRegisterTimer(M_LATENCY) : null;
-        this.handlerWait = registry != null ? safeRegisterTimer(M_WAIT) : null;
-        this.retryAttempts = registry != null ? safeRegisterCounter(M_RETRY_ATTEMPTS) : null;
-        this.retriesExhausted = registry != null ? safeRegisterCounter(M_RETRY_EXHAUSTED) : null;
-        this.redelivered = registry != null ? safeRegisterCounter(M_REDELIVERED) : null;
-        this.handlerTimeout = registry != null ? safeRegisterCounter(M_HANDLER_TIMEOUT) : null;
-        this.queryDiscardedTimeout = registry != null
+        final boolean deliveries = registry != null && handlesDeliveries;
+        this.handlerLatency = deliveries ? safeRegisterTimer(M_LATENCY) : null;
+        this.handlerWait = deliveries ? safeRegisterTimer(M_WAIT) : null;
+        this.retryAttempts = deliveries ? safeRegisterCounter(M_RETRY_ATTEMPTS) : null;
+        this.retriesExhausted = deliveries ? safeRegisterCounter(M_RETRY_EXHAUSTED) : null;
+        this.redelivered = deliveries ? safeRegisterCounter(M_REDELIVERED) : null;
+        this.handlerTimeout = deliveries ? safeRegisterCounter(M_HANDLER_TIMEOUT) : null;
+        this.queryDiscardedTimeout = deliveries
                 ? safeRegisterCounter(M_QUERY_DISCARDED, Tags.of("reason", REASON_TIMEOUT)) : null;
-        this.queryReplyFailed = registry != null ? safeRegisterCounter(M_QUERY_REPLY_FAILED) : null;
-        this.discardNotifyFailed = registry != null ? safeRegisterCounter(M_DISCARD_NOTIFY_FAILED) : null;
-        this.invalidTimeoutHeader = registry != null ? safeRegisterCounter(M_INVALID_TIMEOUT_HEADER) : null;
-        this.messageSize = registry != null ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
+        this.queryReplyFailed = deliveries ? safeRegisterCounter(M_QUERY_REPLY_FAILED) : null;
+        this.discardNotifyFailed = deliveries ? safeRegisterCounter(M_DISCARD_NOTIFY_FAILED) : null;
+        this.invalidTimeoutHeader = deliveries ? safeRegisterCounter(M_INVALID_TIMEOUT_HEADER) : null;
+        this.messageSize = deliveries ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
         if (registry != null) {
-            OUTCOMES.forEach(this::outcomeCounter);
             RESTART_REASONS.forEach(this::restartCounter);
+        }
+        if (deliveries) {
+            OUTCOMES.forEach(this::outcomeCounter);
             try {
                 registry.gauge(M_IN_FLIGHT, baseTags, inFlight);
             } catch (Exception e) {

@@ -456,7 +456,10 @@ public class ReactiveMessageSender implements AutoCloseable {
             if (result.returned() && unroutableMessageNotifier != null) {
                 unroutableMessageNotifier.notifyUnroutableMessage(result);
             }
-            metrics.recordOutcome(outcomeOf(result), true);
+            // one outcome per message: a confirm arriving after the sendTimeout reported to the caller is not counted
+            if (!(result.outboundMessage() instanceof PendingMessage pending) || pending.claimOutcome()) {
+                metrics.recordOutcome(outcomeOf(result), true);
+            }
             if (result.outboundMessage() instanceof ConfirmableMessage message) {
                 executorService.execute(() -> message.complete(result));
             }
@@ -557,8 +560,10 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
                     timedOut.set(true);
-                    metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
                     final PendingMessage pending = current.get();
+                    if (pending == null || pending.claimOutcome()) {
+                        metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
+                    }
                     if (!handedToAFlow.get()) {
                         return new SendFailureNoAckException("Message not published: no RabbitMQ publishing flow "
                                 + "available within " + sendTimeout, e);
@@ -742,6 +747,7 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         private final MonoSink<Void> monoSink;
         private final AtomicBoolean finished = new AtomicBoolean();
+        private final AtomicBoolean outcomeCounted = new AtomicBoolean();
         private volatile Runnable onFinished = () -> { };
         /**
          * NEW until handed to a flow, BUFFERED in the flow until it is either CLAIMED to be written or DROPPED
@@ -802,6 +808,14 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         boolean wasDropped() {
             return bufferState.get() == DROPPED;
+        }
+
+        /**
+         * Claims the right to count the outcome of this message in {@code publish.outcome}: true only for the first
+         * caller, so a confirm racing with the send timeout counts the message once.
+         */
+        boolean claimOutcome() {
+            return outcomeCounted.compareAndSet(false, true);
         }
 
         private boolean leaveBuffer(int state) {
@@ -927,7 +941,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                        AtomicInteger activeConfirmFlows, AtomicInteger activeNoConfirmFlows,
                        ThreadPoolExecutor handOverExecutor) {
             this.registry = registry;
-            this.baseTags = domain != null ? Tags.of(Tag.of("domain", domain)) : Tags.empty();
+            // always tagged: Prometheus requires every meter of a name to have the same tag keys
+            this.baseTags = Tags.of(Tag.of("domain", domain != null ? domain : ""));
             if (registry != null) {
                 try {
                     registry.gauge("reactive_commons.publish.flow.live", baseTags.and("kind", "confirm"),

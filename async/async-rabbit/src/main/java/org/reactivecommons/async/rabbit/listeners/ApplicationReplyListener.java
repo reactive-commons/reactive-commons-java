@@ -65,7 +65,7 @@ public class ApplicationReplyListener {
                 ? listener.subscriberRegistry().register(queueName)
                 : new ListenerLiveness(queueName);
         this.meterRegistry = listener.meterRegistry();
-        this.metrics = new ConsumerMetrics(meterRegistry, listener.domain(), queueName, liveness);
+        this.metrics = ConsumerMetrics.forReplyListener(meterRegistry, listener.domain(), queueName, liveness);
         this.subscriberRegistry = listener.subscriberRegistry();
         this.domain = listener.domain();
         ConsumerMetrics.registerRepliesLost(meterRegistry, domain);
