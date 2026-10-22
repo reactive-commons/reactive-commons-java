@@ -90,9 +90,7 @@ subprojects {
             showCauses true
             showStackTraces true
         }
-        // -D options do not reach the test JVM: the performance tests and the Docker guard read it to know they run
-        // on CI
-        if ("true".equals(System.getProperty("env.ci"))) {
+        if (System.getProperty("env.ci") == "true") {
             systemProperty "env.ci", System.getProperty("env.ci")
         }
     }
@@ -130,7 +128,7 @@ subprojects {
             enabled = false
         }
 
-        tasks.withType(Test) {
+        tasks.withType(Test).configureEach {
             testLogging {
                 // events replaces the logged events: keep the failed tests, with their exception
                 events "skipped", "failed"
