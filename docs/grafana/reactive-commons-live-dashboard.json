@@ -405,7 +405,7 @@
         "textMode": "auto"
       },
       "title": "Total queue backlog",
-      "description": "Ready messages in the consumed queues (passive declares, polled every 10 s). Deliveries in flight are not included.",
+      "description": "Ready messages in the consumed queues (passive declares, polled every 10 s). Deliveries in flight are not included. Ready: messages waiting in the broker queues (polled every 10 s). In flight: deliveries received by the listeners and not acked/nacked yet.",
       "targets": [
         {
           "datasource": {
@@ -415,6 +415,15 @@
           "expr": "sum(reactive_commons_consumer_queue_depth{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
           "legendFormat": "ready messages",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "sum(reactive_commons_consumer_in_flight{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
+          "legendFormat": "in flight (not acked)",
+          "refId": "B"
         }
       ],
       "type": "stat"
@@ -868,7 +877,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum by (confirm) (rate(reactive_commons_publish_message_size_sum{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\"}[$__rate_interval])) / clamp_min(sum by (confirm) (rate(reactive_commons_publish_message_size_count{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\"}[$__rate_interval])), 1e-9)",
+          "expr": "sum by (confirm) (rate(reactive_commons_publish_message_size_bytes_sum{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\"}[$__rate_interval])) / clamp_min(sum by (confirm) (rate(reactive_commons_publish_message_size_bytes_count{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\"}[$__rate_interval])), 1e-9)",
           "legendFormat": "confirm={{confirm}}",
           "refId": "A"
         }
@@ -921,7 +930,7 @@
           "sort": "desc"
         }
       },
-      "title": "Consumer queue depth (ready messages)",
+      "title": "Consumer backlog (ready and in flight)",
       "description": "queue.declare-ok message-count, polled every 10 s with a passive declare. Deliveries in flight are not included.",
       "targets": [
         {
@@ -932,6 +941,15 @@
           "expr": "max by (queue) (reactive_commons_consumer_queue_depth{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
           "legendFormat": "{{queue}}",
           "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${datasource}"
+          },
+          "expr": "max by (queue) (reactive_commons_consumer_in_flight{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"})",
+          "legendFormat": "{{queue}} in flight",
+          "refId": "B"
         }
       ],
       "type": "timeseries"
@@ -1260,7 +1278,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(reactive_commons_consumer_message_size_sum{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])) / clamp_min(sum(rate(reactive_commons_consumer_message_size_count{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])), 1e-9)",
+          "expr": "sum(rate(reactive_commons_consumer_message_size_bytes_sum{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])) / clamp_min(sum(rate(reactive_commons_consumer_message_size_bytes_count{job=~\"$job\",instance=~\"$instance\",domain=~\"$domain\",queue=~\"$queue\"}[$__rate_interval])), 1e-9)",
           "legendFormat": "average consumed body",
           "refId": "A"
         }
@@ -4132,7 +4150,7 @@
           "showLineNumbers": false,
           "showMiniMap": false
         },
-        "content": "## About this dashboard\n\nIt charts the data available in the Prometheus at `http://localhost:9090`, which now scrapes **two** applications built with the current library: `spring-boot-sender-app` and `spring-boot-listener-app`.\n\n- **Reactive Commons meters** (`reactive_commons.*`): publish outcomes/latency/message size, consumer outcomes/retries/discards/handler latency/queue depth, unroutable messages and the shared handler scheduler. Filter by `Job`, `Instance`, `Domain` and `Queue` above.\n- **Request/reply (`async_query_*`)**: the Reactor Micrometer tap of the library's `requestReply` path; its stats and timeseries are in the *Request/reply and runtime overview* and *Async queries* sections.\n- **Application runtime**: executors, HTTP, JVM, logs and scrape health of the scraped applications.\n\n**Failure series appear on first use.** Counters registered eagerly (retries, timeouts, discards, query anomalies) exist at 0; counters registered on first increment (listener restarts, lost replies, flow resubscriptions) stay absent until they happen — an empty panel there is healthy.\n\n**Averages, not percentiles.** Timers and summaries expose count/sum/max; enable percentile histograms in the applications to switch the latency panels to `histogram_quantile(...)` (see the README).\n\n**Queue depth** is `queue.declare-ok.message-count` (ready messages) polled every 10 s; deliveries in flight are not included.",
+        "content": "## About this dashboard\n\nIt charts the meters of the applications built with Reactive Commons (RabbitMQ) that the selected Prometheus datasource scrapes: one Prometheus `job` per application.\n\n- **Reactive Commons meters** (`reactive_commons.*`): publish outcomes/latency/message size, consumer outcomes/retries/discards/handler latency/queue depth, unroutable messages and the shared handler scheduler. Filter by `Job`, `Instance`, `Domain` and `Queue` above.\n- **Request/reply (`async_query_*`)**: the Reactor Micrometer tap of the library's `requestReply` path; its stats and timeseries are in the *Request/reply and runtime overview* and *Async queries* sections.\n- **Application runtime**: executors, HTTP, JVM, logs and scrape health of the scraped applications.\n\n**Failure series appear on first use.** The consumer counters (outcomes, listener restarts, retries, timeouts, discards, query anomalies) exist at 0 from the start; counters registered on first increment (publish outcomes and latency, lost replies, flow resubscriptions) stay absent until they happen — an empty panel there is healthy.\n\n**Averages, not percentiles.** Timers and summaries expose count/sum/max; enable percentile histograms in the applications to switch the latency panels to `histogram_quantile(...)` (see the README).\n\n**Queue depth** is `queue.declare-ok.message-count` (ready messages) polled every 10 s; deliveries in flight are not included: they are the `consumer.in_flight` gauge (received and not acked/nacked yet), charted next to it.",
         "mode": "markdown"
       },
       "title": "About these metrics",

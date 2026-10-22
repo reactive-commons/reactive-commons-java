@@ -136,7 +136,11 @@ public class ApplicationQueryListener extends GenericMessageListener {
         // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
         return Mono.defer(() -> replyTimeoutMillis(messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
                 .map(timeout -> handleWithTimeout(msj, initTime, messageProperties, timeout))
-                .orElseGet(() -> super.handle(msj, initTime)));
+                .orElseGet(() -> {
+                    // counted here only: retryIsUseless parses the same header again when the query fails
+                    metrics.recordInvalidTimeoutHeader();
+                    return super.handle(msj, initTime);
+                }));
     }
 
     /**
@@ -150,7 +154,6 @@ public class ApplicationQueryListener extends GenericMessageListener {
         try {
             return Optional.of(Long.parseLong(String.valueOf(header).trim()));
         } catch (NumberFormatException e) {
-            metrics.recordInvalidTimeoutHeader();
             log.log(Level.WARNING, () -> "Ignoring invalid " + REPLY_TIMEOUT_MILLIS + " header: " + header);
             return Optional.empty();
         }

@@ -167,17 +167,20 @@ public abstract class GenericMessageListener {
         return messageFlux.flatMap(msj -> {
             liveness.onDelivery();
             metrics.recordMessageSize(msj.getBody().length);
-            if (getRetryNumber(msj) > 0) {
+            if (isRedelivered(msj)) {
                 metrics.recordRedelivered();
             }
             final Instant init = Instant.now();
+            metrics.recordDeliveryStarted();
             return handle(msj, init)
                     // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
                     .doOnSuccess(ignored -> {
                         msj.ack();
                         metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
                     })
-                    .onErrorResume(err -> requeueOrAck(msj, err, init));
+                    .onErrorResume(err -> requeueOrAck(msj, err, init))
+                    // after the ack/nack (a requeue waits retryDelay first), or cancelled when the listener stops
+                    .doFinally(signal -> metrics.recordDeliveryFinished());
         }, messageListener.maxConcurrency());
     }
 
@@ -195,7 +198,8 @@ public abstract class GenericMessageListener {
                 return handler.apply(message);
             }).transform(enrichPostProcess(message));
             if (handlerTimeout != null) {
-                flow = flow.timeout(handlerTimeout);
+                // a dedicated type, so a TimeoutException thrown by the handler itself is not counted as one
+                flow = flow.timeout(handlerTimeout, Mono.error(() -> new HandlerTimeoutException(handlerTimeout)));
             }
             if (hasLocalRetries()) {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)
@@ -380,15 +384,14 @@ public abstract class GenericMessageListener {
     }
 
     private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, Instant init) {
-        if (err instanceof TimeoutException) {
+        if (err instanceof HandlerTimeoutException) {
             metrics.recordHandlerTimeout();
         }
         final long retryNumber = getRetryNumber(msj);
         final Message rabbitMessage = RabbitMessage.fromDelivery(msj);
-        final boolean redeliver = msj.getEnvelope().isRedeliver();
         reportErrorMetric(msj, init);
         metrics.recordOutcome(ConsumerMetrics.OUTCOME_HANDLER_ERROR);
-        sendErrorToCustomReporter(err, rabbitMessage, redeliver || retryNumber > 0);
+        sendErrorToCustomReporter(err, rabbitMessage, isRedelivered(msj));
         // maxRetries == -1 without DLQ means infinite fast retries, never discard (unless retrying cannot help)
         if (err instanceof MissingHandlerException || retryIsUseless(msj)
                 || hasLocalRetries() || (maxRetries != -1 && retryNumber >= maxRetries)) { // Discard
@@ -451,6 +454,25 @@ public abstract class GenericMessageListener {
                 .map(list -> list.get(0))
                 .map(hashMap -> (Long) hashMap.get("count"))
                 .orElse(0L);
+    }
+
+    /**
+     * Whether the message was delivered before: requeued (the AMQP {@code redelivered} flag, e.g. a fast retry or a
+     * channel failure) or dead-lettered back from the retry queue ({@code x-death}).
+     */
+    private boolean isRedelivered(AcknowledgableDelivery delivery) {
+        return (delivery.getEnvelope() != null && delivery.getEnvelope().isRedeliver())
+                || getRetryNumber(delivery) > 0;
+    }
+
+    /**
+     * The handler did not complete within the listener's {@code handlerTimeout}. Still a {@link TimeoutException}
+     * for the error reporters, but distinguishable from a timeout raised by the handler itself.
+     */
+    static final class HandlerTimeoutException extends TimeoutException {
+        HandlerTimeoutException(Duration handlerTimeout) {
+            super("The handler did not complete within the handlerTimeout of " + handlerTimeout);
+        }
     }
 
     protected abstract Object parseMessageForReporter(Message msj);

@@ -10,10 +10,6 @@ before the first `requestReply`, `consumer.restart`/`replies.lost`/`flow.resubsc
 HTTP non-success before the first non-2xx, and GC pause before the first collection. That is expected and spelled
 out in the dashboard's About panel.
 
-All panels of both dashboards were validated against a live Prometheus: every query returns data, except the
-failure panels (`status!="completed"`, `outcome!="SUCCESS"`, `handler_error`, discards, etc.), which stay empty
-until the corresponding failure happens — that is expected.
-
 ## Requirements in the application
 
 ```groovy
@@ -31,21 +27,24 @@ management:
 The library registers its meters on the application's `MeterRegistry`; with the Prometheus registry on the
 classpath, Spring Boot exposes them at `/actuator/prometheus`.
 
-## Quick start (local showcase)
+## Prometheus scrape configuration
+
+Point a Prometheus at the actuator endpoint of each application (one job per application: the dashboard's `Job`
+variable is the Prometheus `job` label):
+
+```yaml
+scrape_configs:
+  - job_name: 'my-sender-app'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['host.docker.internal:8080'] # the application, as seen from the Prometheus container
+```
 
 1. Start an application that uses the RabbitMQ transport (see `samples/`), listening on port `8080`. Generate
-   some traffic: send events/commands, force a handler error, let a query expire.
-2. From this directory:
+some traffic: send events/commands, force a handler error, let a query expire.
 
-   ```bash
-   docker compose up -d
-   ```
-
-3. Open Grafana at <http://localhost:3000> (anonymous admin) → **Dashboards → Reactive Commons → Reactive Commons —
-   RabbitMQ**. Prometheus is at <http://localhost:9090>.
-
-The scrape target assumes the application is reachable at `host.docker.internal:8080`; adjust `prometheus.yml` if
-it runs elsewhere.
+2. Open Grafana at <http://localhost:3000> (anonymous admin) → **Dashboards → Reactive Commons → Reactive Commons —
+RabbitMQ**. Prometheus is at <http://localhost:9090>.
 
 ## Import into an existing Grafana
 
@@ -56,14 +55,14 @@ it runs elsewhere.
 ## Metric names
 
 Micrometer names are exported to Prometheus with dots replaced by underscores and type suffixes
-(`_total` for counters, `_seconds_count`/`_seconds_sum`/`_seconds_max` for timers, `_count`/`_sum`/`_max` for
-distribution summaries):
+(`_total` for counters, `_seconds_count`/`_seconds_sum`/`_seconds_max` for timers, `_bytes_count`/`_bytes_sum`/
+`_bytes_max` for the size summaries, whose base unit is bytes):
 
 | Micrometer meter | Prometheus series | Panels |
 |---|---|---|
 | `reactive_commons.publish.outcome` | `reactive_commons_publish_outcome_total{outcome,confirm,domain}` | Publish outcomes /s |
 | `reactive_commons.publish.latency` | `reactive_commons_publish_latency_seconds_{count,sum,max}` | Publish latency |
-| `reactive_commons.publish.message.size` | `reactive_commons_publish_message_size_{count,sum,max}` | Published message size |
+| `reactive_commons.publish.message.size` | `reactive_commons_publish_message_size_bytes_{count,sum,max}` | Published message size |
 | `reactive_commons.publish.flow.live` | `reactive_commons_publish_flow_live{kind,domain}` | Publish flows and hand-over queue |
 | `reactive_commons.publish.flow.resubscribe` | `reactive_commons_publish_flow_resubscribe_total{kind,domain}` | Publish flow resubscriptions /s |
 | `reactive_commons.publish.hand_over.queue.size` | `reactive_commons_publish_hand_over_queue_size{domain}` | Publish flows and hand-over queue |
@@ -85,8 +84,9 @@ distribution summaries):
 | `reactive_commons.consumer.restart` | `reactive_commons_consumer_restart_total{reason,queue,domain}` | Listener restarts /s |
 | `reactive_commons.consumer.active` | `reactive_commons_consumer_active{queue,domain}` | Active consumers |
 | `reactive_commons.consumer.replies.lost` | `reactive_commons_consumer_replies_lost_total{domain}` | Replies lost /s |
-| `reactive_commons.consumer.message.size` | `reactive_commons_consumer_message_size_{count,sum,max}` | Consumed message size |
-| `reactive_commons.consumer.queue.depth` | `reactive_commons_consumer_queue_depth{queue,domain}` | Queue depth, backlog |
+| `reactive_commons.consumer.message.size` | `reactive_commons_consumer_message_size_bytes_{count,sum,max}` | Consumed message size |
+| `reactive_commons.consumer.queue.depth` | `reactive_commons_consumer_queue_depth{queue,domain}` | Total queue backlog, consumer backlog |
+| `reactive_commons.consumer.in_flight` | `reactive_commons_consumer_in_flight{queue,domain}` | Total queue backlog, consumer backlog |
 | `reactive_commons.schedulers.handler.pool.size` | `reactive_commons_schedulers_handler_pool_size` | Handler pool threads |
 | `reactive_commons.schedulers.handler.threads.active` | `reactive_commons_schedulers_handler_threads_active` | Handler pool threads |
 | `reactive_commons.schedulers.handler.queue.size` | `reactive_commons_schedulers_handler_queue_size` | Queued handler tasks |
@@ -94,9 +94,13 @@ distribution summaries):
 
 ## Things to know
 
-- **Series appear on first use.** Micrometer registers a counter with its first increment: a failure panel shows
-  `No data` until the first failure happens, which is healthy. Latency/size summaries are created with the
-  listener/sender, but have no data until messages flow.
+- **Some series appear on first use.** The consumer meters (outcomes at 0, restarts at 0, retries, timeouts,
+  discards, query anomalies, size, latency, in flight) are registered with the listener. The publish outcomes and
+  latency, `replies.lost`, `flow.resubscribe` and `async_query_*` are registered with their first occurrence: their
+  panels show `No data` until then, which is healthy.
+- **`nack` and `failed` are different publish outcomes.** `nack` means the broker received the message and
+  answered `basic.nack` (e.g. a queue at its length limit with `x-overflow: reject-publish`); `failed` means it
+  was never written to a channel (no channel, connection being recovered, sender shut down).
 - **Averages, not percentiles.** Timers and summaries expose count/sum/max. To get p95/p99, enable percentile
   histograms and use `histogram_quantile(..._bucket)`:
 
@@ -111,8 +115,9 @@ distribution summaries):
   ```
 
 - **Queue depth** is `queue.declare-ok`'s message count, read with a passive declare every 10 seconds. It counts
-  **ready** messages: deliveries already handed to a consumer but not acknowledged are not included, so a busy
-  prefetch window can hide backlog from this gauge. Combine it with handler wait and the scheduler panels.
+  **ready** messages: deliveries already handed to a consumer but not acknowledged are the `consumer.in_flight`
+  gauge instead (bounded by `prefetchCount`), so the backlog of a queue is both. An in-flight value stuck at the
+  prefetch means the listener is saturated: check the handler wait and the scheduler panels.
 - **Scheduler meters are JVM-wide** (the handler pool is shared by every listener), so they carry no `domain` or
   `queue` tag.
 - The **Unroutable** panels are not filtered by domain: the default `UnroutableMessageNotifier` is a singleton

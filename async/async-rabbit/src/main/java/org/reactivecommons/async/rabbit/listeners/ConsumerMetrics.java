@@ -5,10 +5,13 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.BaseUnits;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -29,8 +32,8 @@ import java.util.logging.Logger;
  *     <li>{@code reactive_commons.consumer.last_message_age_seconds} — Gauge polling the liveness.</li>
  *     <li>{@code reactive_commons.consumer.retry.attempts} — Counter, local retries of a failed handler.</li>
  *     <li>{@code reactive_commons.consumer.retry.exhausted} — Counter, local retries exhausted.</li>
- *     <li>{@code reactive_commons.consumer.redelivered} — Counter, deliveries dead-lettered at least once
- *     ({@code x-death} count &gt; 0).</li>
+ *     <li>{@code reactive_commons.consumer.redelivered} — Counter, deliveries of a message delivered before: requeued
+ *     (AMQP {@code redelivered} flag) or dead-lettered back from the retry queue ({@code x-death} count &gt; 0).</li>
  *     <li>{@code reactive_commons.consumer.handler.timeout} — Counter, handlers that exceeded
  *     {@code handlerTimeout}.</li>
  *     <li>{@code reactive_commons.consumer.query.discarded} — Counter, extra tag {@code reason}
@@ -42,7 +45,12 @@ import java.util.logging.Logger;
  *     <li>{@code reactive_commons.consumer.query.invalid.timeout_header} — Counter, invalid reply timeout
  *     headers ignored.</li>
  *     <li>{@code reactive_commons.consumer.message.size} — DistributionSummary, bytes of each consumed body.</li>
+ *     <li>{@code reactive_commons.consumer.in_flight} — Gauge, deliveries received and not acknowledged (acked or
+ *     nacked) yet.</li>
  * </ul>
+ *
+ * <p>The {@code messages} outcomes and the {@code restart} reasons are registered at zero with the listener, so a
+ * failure series exists (and {@code increase()} counts its first occurrence) before the first failure happens.
  */
 public final class ConsumerMetrics {
 
@@ -75,6 +83,10 @@ public final class ConsumerMetrics {
     private static final String M_DISCARD_NOTIFY_FAILED = "reactive_commons.consumer.discard.notify.failed";
     private static final String M_INVALID_TIMEOUT_HEADER = "reactive_commons.consumer.query.invalid.timeout_header";
     private static final String M_MESSAGE_SIZE = "reactive_commons.consumer.message.size";
+    private static final String M_IN_FLIGHT = "reactive_commons.consumer.in_flight";
+    private static final List<String> OUTCOMES =
+            List.of(OUTCOME_ACK, OUTCOME_NACK, OUTCOME_DISCARD, OUTCOME_DLQ, OUTCOME_HANDLER_ERROR);
+    private static final List<String> RESTART_REASONS = List.of(REASON_CHANNEL_SHUTDOWN, REASON_ERROR, REASON_CANCEL);
 
     private final MeterRegistry registry;
     private final String domain;
@@ -93,6 +105,7 @@ public final class ConsumerMetrics {
     private final Counter discardNotifyFailed;
     private final Counter invalidTimeoutHeader;
     private final DistributionSummary messageSize;
+    private final AtomicInteger inFlight = new AtomicInteger(); // strongly held: Micrometer keeps gauges weakly
 
     public ConsumerMetrics(MeterRegistry registry, String domain, String queue, ListenerLiveness liveness) {
         this.registry = registry;
@@ -111,6 +124,15 @@ public final class ConsumerMetrics {
         this.discardNotifyFailed = registry != null ? safeRegisterCounter(M_DISCARD_NOTIFY_FAILED) : null;
         this.invalidTimeoutHeader = registry != null ? safeRegisterCounter(M_INVALID_TIMEOUT_HEADER) : null;
         this.messageSize = registry != null ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
+        if (registry != null) {
+            OUTCOMES.forEach(this::outcomeCounter);
+            RESTART_REASONS.forEach(this::restartCounter);
+            try {
+                registry.gauge(M_IN_FLIGHT, baseTags, inFlight);
+            } catch (Exception e) {
+                LOG.log(Level.WARNING, e, () -> "Could not register consumer in-flight gauge");
+            }
+        }
         if (registry != null && liveness != null) {
             try {
                 registry.gauge(M_ACTIVE, baseTags, liveness, l -> l.isActive() ? 1.0 : 0.0);
@@ -148,7 +170,7 @@ public final class ConsumerMetrics {
 
     private DistributionSummary safeRegisterSummary(String name) {
         try {
-            return DistributionSummary.builder(name).tags(baseTags).register(registry);
+            return DistributionSummary.builder(name).baseUnit(BaseUnits.BYTES).tags(baseTags).register(registry);
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer summary " + name);
             return null;
@@ -159,34 +181,37 @@ public final class ConsumerMetrics {
         if (registry == null) {
             return;
         }
-        Counter counter = outcomeCounters.computeIfAbsent(outcome, key -> {
-            try {
-                return Counter.builder(M_MESSAGES).tags(baseTags.and("outcome", key)).register(registry);
-            } catch (Exception e) {
-                LOG.log(Level.WARNING, e, () -> "Could not register consumer outcome counter");
-                return null;
-            }
-        });
-        if (counter != null) {
-            counter.increment();
-        }
+        increment(outcomeCounter(outcome));
     }
 
     public void recordRestart(String reason) {
         if (registry == null) {
             return;
         }
-        Counter counter = restartCounters.computeIfAbsent(reason, key -> {
-            try {
-                return Counter.builder(M_RESTART).tags(baseTags.and("reason", key)).register(registry);
-            } catch (Exception e) {
-                LOG.log(Level.WARNING, e, () -> "Could not register consumer restart counter");
-                return null;
-            }
-        });
-        if (counter != null) {
-            counter.increment();
-        }
+        increment(restartCounter(reason));
+    }
+
+    private Counter outcomeCounter(String outcome) {
+        return outcomeCounters.computeIfAbsent(outcome,
+                key -> safeRegisterCounter(M_MESSAGES, Tags.of("outcome", key)));
+    }
+
+    private Counter restartCounter(String reason) {
+        return restartCounters.computeIfAbsent(reason, key -> safeRegisterCounter(M_RESTART, Tags.of("reason", key)));
+    }
+
+    /**
+     * A delivery was received: it is in flight until {@link #recordDeliveryFinished()}.
+     */
+    public void recordDeliveryStarted() {
+        inFlight.incrementAndGet();
+    }
+
+    /**
+     * A delivery was acknowledged or nacked, or abandoned because its listener stopped (the broker requeues it).
+     */
+    public void recordDeliveryFinished() {
+        inFlight.decrementAndGet();
     }
 
     public Timer handlerLatency() {

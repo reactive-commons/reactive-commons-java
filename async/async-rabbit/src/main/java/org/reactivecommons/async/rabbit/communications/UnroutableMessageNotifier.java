@@ -73,7 +73,8 @@ public class UnroutableMessageNotifier {
                 this.processError = null;
                 return;
             }
-            final Tags tags = domain != null ? Tags.of("domain", domain) : Tags.empty();
+            // always tagged: Prometheus requires every meter of a name to have the same tag keys
+            final Tags tags = Tags.of("domain", domain != null ? domain : "");
             this.unroutable = safeCounter(registry, M_UNROUTABLE, tags);
             this.emitFailed = safeCounter(registry, M_EMIT_FAILED, tags);
             this.processError = safeCounter(registry, M_PROCESS_ERROR, tags);

@@ -168,6 +168,42 @@ class ReactiveMessageSenderTest {
         }
     }
 
+    /**
+     * A negative confirmation for a message that was never written to a channel (here the mocked sender never
+     * writes it) is a local failure, not a broker {@code basic.nack}: both the outcome and the latency say so.
+     */
+    @Test
+    void aMessageNeverWrittenToTheChannelIsCountedAsFailedNotAsNacked() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            Flux<OutboundMessage> argument = invocation.getArgument(0);
+            return argument.map(msg -> new OutboundMessageResult<>(msg, false, false));
+        });
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain");
+        try {
+            StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                            "rkey", new HashMap<>(), true))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isExactlyInstanceOf(SendFailureNoAckException.class)
+                            .hasMessageStartingWith("Message not published"))
+                    .verify();
+
+            assertThat(registry.find("reactive_commons.publish.outcome")
+                    .tags("domain", "test-domain", "confirm", "true", "outcome", "failed").counter().count())
+                    .isEqualTo(1);
+            assertThat(registry.find("reactive_commons.publish.latency")
+                    .tags("domain", "test-domain", "confirm", "true", "outcome", "failed").timer().count())
+                    .isEqualTo(1);
+            assertThat(registry.find("reactive_commons.publish.outcome").tag("outcome", "nack").counter())
+                    .as("the broker never nacked it").isNull();
+            assertThat(registry.find("reactive_commons.publish.latency").tag("outcome", "nack").timer()).isNull();
+        } finally {
+            meteredSender.close();
+        }
+    }
+
     @Test
     void sendWithConfirmFailsWhenTheBrokerReturnsTheMessage() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {

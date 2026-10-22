@@ -14,6 +14,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.io.IOException;
 import java.time.Duration;
 import java.util.Iterator;
 import java.util.Map;
@@ -50,11 +51,14 @@ public final class ConsumerQueueDepth implements AutoCloseable {
     private final Map<String, QueueProbe> probes = new ConcurrentHashMap<>();
     private final AtomicBoolean warned = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final Mono<Connection> listenerConnection;
+    private final AtomicBoolean connectionRequested = new AtomicBoolean();
     private final Scheduler scheduler;
     private final Disposable subscription;
 
+    private volatile Disposable connectionSubscription;
     private volatile Connection connection;
-    private volatile Channel channel;
+    private volatile Channel channel; // only used by the poller thread, and by close()
 
     public ConsumerQueueDepth(MeterRegistry registry, String domain, Mono<Connection> listenerConnection,
                               Supplier<Map<String, SubscriberStatus>> queuesSupplier) {
@@ -66,10 +70,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
         this.registry = registry;
         this.domain = domain != null ? domain : "";
         this.queuesSupplier = queuesSupplier;
-        // the connection is the cached one of the listeners: opened once and kept (and recovered) for the
-        // lifetime of the connection factory, so waiting for its first value here never opens an extra connection
-        listenerConnection.subscribe(established -> this.connection = established,
-                error -> log.log(Level.FINE, error, () -> "Queue depth: no listener connection yet"));
+        this.listenerConnection = listenerConnection;
         this.scheduler = Schedulers.newSingle("rc-queue-depth", true);
         this.subscription = Flux.interval(pollInterval, scheduler)
                 .onBackpressureDrop() // a slow tick is skipped, never queued
@@ -80,43 +81,83 @@ public final class ConsumerQueueDepth implements AutoCloseable {
         if (closed.get()) {
             return;
         }
-        final Map<String, SubscriberStatus> queues = queuesSupplier.get();
-        removeQueuesNoLongerConsumed(queues);
-        if (queues.isEmpty()) {
-            return;
+        try {
+            final Map<String, SubscriberStatus> queues = queuesSupplier.get();
+            removeQueuesNoLongerConsumed(queues);
+            if (!queues.isEmpty()) {
+                poll(queues.keySet());
+            }
+        } catch (Exception e) {
+            // an error escaping a tick would terminate the interval and stop the polling for good
+            fail(e);
         }
-        final Connection current = connection;
+    }
+
+    private void poll(Iterable<String> queues) {
+        final Connection current = connection();
         if (current == null || !current.isOpen()) {
+            probes.values().forEach(probe -> probe.count().set(null)); // a stale depth would hide a backlog
             fail(new IllegalStateException("the listener connection is not available"));
             return;
         }
-        Throwable firstError = null;
-        try {
-            Channel currentChannel = channel;
-            if (currentChannel == null || !currentChannel.isOpen()) {
-                currentChannel = current.createChannel();
-                channel = currentChannel;
-            }
-            for (String queue : queues.keySet()) {
-                final QueueProbe probe = probes.computeIfAbsent(queue, this::registerProbe);
-                try {
-                    probe.count().set((long) currentChannel.queueDeclarePassive(queue).getMessageCount());
-                } catch (Exception e) {
-                    probe.count().set(null); // unknown: the gauge reads NaN
-                    if (firstError == null) {
-                        firstError = e;
-                    }
+        Exception firstError = null;
+        for (String queue : queues) {
+            final QueueProbe probe = probes.computeIfAbsent(queue, this::registerProbe);
+            try {
+                probe.count().set((long) channel(current).queueDeclarePassive(queue).getMessageCount());
+            } catch (Exception e) {
+                probe.count().set(null); // unknown: the gauge reads NaN
+                // a failed passive declare closes its channel: the next queue gets a new one
+                discardChannel();
+                if (firstError == null) {
+                    firstError = e;
                 }
             }
-        } catch (Exception e) {
-            firstError = e;
         }
         if (firstError != null) {
-            // a failed passive declare closes its channel: get a new one on the next tick
-            channel = null;
             fail(firstError);
         } else {
             warned.set(false);
+        }
+    }
+
+    /**
+     * The cached connection of the listeners. It is requested on the first poll with consumed queues, when the
+     * listeners already opened it: an application without listeners never opens a listener connection for this.
+     */
+    private Connection connection() {
+        if (connectionRequested.compareAndSet(false, true)) {
+            connectionSubscription = listenerConnection.subscribe(established -> this.connection = established,
+                    error -> log.log(Level.FINE, error, () -> "Queue depth: no listener connection"));
+        }
+        return connection;
+    }
+
+    private Channel channel(Connection current) throws IOException {
+        Channel currentChannel = channel;
+        if (currentChannel == null || !currentChannel.isOpen()) {
+            currentChannel = current.createChannel();
+            if (currentChannel == null) {
+                throw new IOException("no channel available on the listener connection (channel_max reached)");
+            }
+            channel = currentChannel;
+            if (closed.get()) { // close() ran while the channel was being created: it must not leak
+                discardChannel();
+                throw new IllegalStateException("the queue depth poller is closed");
+            }
+        }
+        return currentChannel;
+    }
+
+    private void discardChannel() {
+        final Channel toClose = channel;
+        channel = null;
+        if (toClose != null && toClose.isOpen()) {
+            try {
+                toClose.close();
+            } catch (Exception e) {
+                log.log(Level.FINE, e, () -> "Could not close the queue depth channel");
+            }
         }
     }
 
@@ -177,15 +218,11 @@ public final class ConsumerQueueDepth implements AutoCloseable {
         }
         subscription.dispose();
         scheduler.dispose();
-        final Channel toClose = channel;
-        channel = null;
-        if (toClose != null) {
-            try {
-                toClose.close();
-            } catch (Exception e) {
-                log.log(Level.FINE, e, () -> "Could not close the queue depth channel");
-            }
+        final Disposable pendingConnection = connectionSubscription;
+        if (pendingConnection != null) {
+            pendingConnection.dispose(); // only stops waiting: the connection is the listeners' one
         }
+        discardChannel();
         probes.values().forEach(probe -> {
             if (probe.id() != null) {
                 try {

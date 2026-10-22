@@ -310,6 +310,17 @@ class ApplicationQueryListenerTest {
     }
 
     @Test
+    void anInvalidTimeoutHeaderIsCountedOnceEvenWhenTheQueryFails() {
+        AcknowledgableDelivery delivery = queryDelivery(Date.from(Instant.now().minusSeconds(20)), "not-a-number");
+        applicationQueryListener.handle(delivery, Instant.now()).subscribe(ignored -> { }, ignored -> { });
+
+        // on a failure the listener also checks whether retrying is useless, which reads the same header
+        assertThat(applicationQueryListener.retryIsUseless(delivery)).isFalse();
+
+        assertThat(counter("reactive_commons.consumer.query.invalid.timeout_header")).isEqualTo(1.0);
+    }
+
+    @Test
     void aReplyThatCannotBePublishedIsCounted() {
         Message message = TestStubs.mockMessage();
         when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))

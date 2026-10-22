@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -128,12 +129,51 @@ class GenericMessageListenerRetryStrategyTest {
         when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
                 .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
 
-        new HangingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
-                new SubscriberRegistry(), registry, DOMAIN, Duration.ofMillis(100)), discardNotifier, errorReporter)
+        new HangingListener(listener(Duration.ofMillis(100)), discardNotifier, errorReporter,
+                message -> Mono.never()) // its handlerTimeout must fire
                 .startListener();
 
         verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
         assertThat(counter("reactive_commons.consumer.handler.timeout")).isEqualTo(1.0);
+        assertThat(awaitInFlight(0)).as("no longer in flight once nacked").isTrue();
+    }
+
+    @Test
+    void aTimeoutRaisedByTheHandlerItselfIsNotCountedAsAHandlerTimeout() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+
+        new HangingListener(listener(Duration.ofSeconds(30)), discardNotifier, errorReporter,
+                message -> Mono.error(new TimeoutException("a downstream call of the handler timed out")))
+                .startListener();
+
+        verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
+        assertThat(outcome("handler_error")).isEqualTo(1.0);
+        assertThat(counter("reactive_commons.consumer.handler.timeout")).isZero();
+    }
+
+    @Test
+    void aDeliveryIsInFlightUntilItsHandlerFinishes() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+
+        new HangingListener(listener(null), discardNotifier, errorReporter, message -> Mono.never())
+                .startListener();
+
+        assertThat(awaitInFlight(1)).as("received, neither acked nor nacked").isTrue();
+        verify(channel, after(200).never()).basicAck(anyLong(), anyBoolean());
+        assertThat(outcome("ack")).as("the outcomes exist at zero before any happens").isZero();
+    }
+
+    @Test
+    void aRequeuedMessageIsCountedAsRedeliveredWhenItComesBack() throws Exception {
+        start(false, -1, delivery(null, true)); // a fast retry: requeued, so the broker sets the redelivered flag
+
+        verify(channel, timeout(2_000)).basicNack(DELIVERY_TAG, false, true);
+        assertThat(counter("reactive_commons.consumer.redelivered")).isEqualTo(1.0);
+        assertThat(outcome("nack")).isEqualTo(1.0);
     }
 
     private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery) {
@@ -161,11 +201,40 @@ class GenericMessageListenerRetryStrategyTest {
         return registry.find(name).tags("domain", DOMAIN, "queue", QUEUE).counter().count();
     }
 
+    private double outcome(String outcome) {
+        return registry.find("reactive_commons.consumer.messages")
+                .tags("domain", DOMAIN, "queue", QUEUE, "outcome", outcome).counter().count();
+    }
+
+    private ReactiveMessageListener listener(Duration handlerTimeout) {
+        return new ReactiveMessageListener(receiver, topologyCreator, 250, 250, new SubscriberRegistry(), registry,
+                DOMAIN, handlerTimeout);
+    }
+
+    private boolean awaitInFlight(double expected) throws InterruptedException {
+        final long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
+        while (System.nanoTime() < deadline) {
+            if (registry.find("reactive_commons.consumer.in_flight").tags("domain", DOMAIN, "queue", QUEUE)
+                    .gauge().value() == expected) {
+                return true;
+            }
+            Thread.sleep(10);
+        }
+        return false;
+    }
+
     /**
      * @param deadLetterings the {@code x-death} count of the message, or null when it was never dead-lettered.
      *                       Built with the types the RabbitMQ client decodes AMQP tables and arrays into.
      */
     private AcknowledgableDelivery delivery(Long deadLetterings) {
+        return delivery(deadLetterings, false);
+    }
+
+    /**
+     * @param redelivered the AMQP {@code redelivered} flag the broker sets on a requeued message
+     */
+    private AcknowledgableDelivery delivery(Long deadLetterings, boolean redelivered) {
         Map<String, Object> headers = new HashMap<>();
         if (deadLetterings != null) {
             HashMap<String, Object> death = new HashMap<>();
@@ -177,7 +246,7 @@ class GenericMessageListenerRetryStrategyTest {
                 .messageId("message-1")
                 .headers(headers)
                 .build();
-        Delivery delivery = new Delivery(new Envelope(DELIVERY_TAG, false, "exchange", "rk"), properties,
+        Delivery delivery = new Delivery(new Envelope(DELIVERY_TAG, redelivered, "exchange", "rk"), properties,
                 "{}".getBytes());
         return new AcknowledgableDelivery(delivery, channel, (context, error) -> {
             throw new IllegalStateException(error);
@@ -219,15 +288,17 @@ class GenericMessageListenerRetryStrategyTest {
     }
 
     private static class HangingListener extends GenericMessageListener {
+        private final Function<Message, Mono<Object>> handler;
 
         HangingListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
-                        CustomReporter errorReporter) {
+                        CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
             super(QUEUE, listener, false, false, -1, RETRY_DELAY, discardNotifier, "command", errorReporter);
+            this.handler = handler;
         }
 
         @Override
         protected Function<Message, Mono<Object>> rawMessageHandler(String executorPath) {
-            return message -> Mono.never(); // its handlerTimeout must fire
+            return handler;
         }
 
         @Override

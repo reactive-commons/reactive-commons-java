@@ -44,6 +44,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * Runs {@link ReactiveMessageSender} against a REAL RabbitMQ broker (Testcontainers) and checks that it recovers
@@ -180,6 +181,36 @@ class ReactiveMessageSenderRabbitContainerTest {
                     .tags("domain", "app", "confirm", "true").summary().count()).isEqualTo(20);
             assertThat(registry.find("reactive_commons.publish.message.size")
                     .tags("domain", "app", "confirm", "false").summary().count()).isEqualTo(7);
+        }
+    }
+
+    /**
+     * A queue at its length limit with {@code x-overflow: reject-publish} makes the broker answer {@code basic.nack}
+     * for a message it received: the caller gets "No ACK when sending message", and both the outcome and the
+     * latency are reported as {@code nack}.
+     */
+    @Test
+    void aMessageTheBrokerRejectsIsReportedAsNacked() throws Exception {
+        String fullQueue = "tc.full." + UUID.randomUUID();
+        String fullRoutingKey = "tc.full.rkey";
+        admin.queueDeclare(fullQueue, true, false, false, Map.of("x-max-length", 0, "x-overflow", "reject-publish"));
+        admin.queueBind(fullQueue, EXCHANGE, fullRoutingKey);
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
+                Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
+        try (ReactiveMessageSender metered = new ReactiveMessageSender(sender, "TestApp", converter, null, false,
+                new UnroutableMessageNotifier(), Duration.ofSeconds(10), 2, 16, new ConnectionBlockedState(),
+                registry, "app")) {
+            Mono<Void> send = metered.sendWithConfirm("rejected", EXCHANGE, fullRoutingKey, new HashMap<>(), true);
+
+            assertThatThrownBy(() -> send.block(Duration.ofSeconds(10)))
+                    .isExactlyInstanceOf(SendFailureNoAckException.class)
+                    .hasMessage("No ACK when sending message");
+            assertThat(outcome(registry, "nack", true)).isEqualTo(1);
+            assertThat(registry.find("reactive_commons.publish.latency")
+                    .tags("domain", "app", "confirm", "true", "outcome", "nack").timer().count()).isEqualTo(1);
+        } finally {
+            admin.queueDelete(fullQueue);
         }
     }
 

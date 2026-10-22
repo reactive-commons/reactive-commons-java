@@ -180,6 +180,24 @@ class ListenerSchedulersTest {
     }
 
     @Test
+    void shouldKeepTheMetersOfARegistryWhileAnotherApplicationRetainsIt() {
+        SimpleMeterRegistry shared = new SimpleMeterRegistry(); // e.g. the registry of a parent context
+        ListenerSchedulers.retain(shared);
+        ListenerSchedulers.retain(shared);
+        try {
+            ListenerSchedulers.handlers();
+            ListenerSchedulers.release(shared);
+
+            assertThat(shared.find("reactive_commons.schedulers.handler.pool.size").gauge())
+                    .as("the other application still uses the registry").isNotNull();
+        } finally {
+            ListenerSchedulers.release(shared);
+        }
+
+        assertThat(shared.find("reactive_commons.schedulers.handler.pool.size").gauge()).isNull();
+    }
+
+    @Test
     void shouldCountTheTimesThePoolGrewBecauseItsTasksWereStarving() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ListenerSchedulers.retain(registry);

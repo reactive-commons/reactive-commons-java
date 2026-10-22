@@ -12,11 +12,9 @@ import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.RejectedExecutionException;
@@ -71,10 +69,10 @@ public final class ListenerSchedulers {
     private static volatile Scheduler handlers;
     private static volatile Scheduler errorReporter;
     private static int users; // guarded by LOCK
-    // the registries of the applications using the schedulers, and the meters registered on each: the pools are
-    // shared JVM-wide, so a gauge can only exist while some application using them wants metrics
-    private static final Set<MeterRegistry> registries =
-            Collections.newSetFromMap(new IdentityHashMap<>()); // guarded by LOCK
+    // the registries of the applications using the schedulers (with the number of applications retaining each, as
+    // contexts may share one), and the meters registered on each: the pools are shared JVM-wide, so a gauge can
+    // only exist while some application using them wants metrics
+    private static final Map<MeterRegistry, Integer> registries = new IdentityHashMap<>(); // guarded by LOCK
     private static final Map<MeterRegistry, List<Meter.Id>> meterIds = new IdentityHashMap<>(); // guarded by LOCK
 
     /**
@@ -89,7 +87,7 @@ public final class ListenerSchedulers {
                 current = handlers;
                 if (current == null || current.isDisposed()) {
                     executor = new ElasticExecutor(MAX_HANDLER_THREADS, daemonThreads("rc-handlers"));
-                    for (MeterRegistry registry : registries) {
+                    for (MeterRegistry registry : registries.keySet()) {
                         removeMeterIds(registry); // the stale gauges pointed to the previous pool
                         registerSchedulerMetrics(registry, executor);
                     }
@@ -147,7 +145,7 @@ public final class ListenerSchedulers {
         synchronized (LOCK) {
             users++;
             if (registry != null) {
-                registries.add(registry);
+                registries.merge(registry, 1, Integer::sum);
                 if (executor != null && !meterIds.containsKey(registry)) {
                     registerSchedulerMetrics(registry, executor);
                 }
@@ -164,9 +162,9 @@ public final class ListenerSchedulers {
     }
 
     /**
-     * Unregisters an application. The meters registered for its registry, if any, are removed even if other
-     * applications still use the schedulers. When the last application is gone the schedulers are disposed and
-     * every remaining meter is removed.
+     * Unregisters an application. The meters registered for its registry, if any, are removed once no other
+     * application retaining the same registry remains, even if other applications still use the schedulers. When
+     * the last application is gone the schedulers are disposed and every remaining meter is removed.
      */
     public static void release(MeterRegistry registry) {
         ElasticExecutor toStop;
@@ -176,14 +174,21 @@ public final class ListenerSchedulers {
                 users--;
             }
             if (registry != null) {
-                removeSchedulerMetrics(registry);
+                final Integer retaining = registries.get(registry);
+                if (retaining != null && retaining > 1) {
+                    registries.put(registry, retaining - 1); // another application still uses this registry
+                } else {
+                    registries.remove(registry);
+                    removeMeterIds(registry);
+                }
             }
             if (users > 0) {
                 return;
             }
-            for (MeterRegistry remaining : new ArrayList<>(registries)) {
-                removeSchedulerMetrics(remaining);
+            for (MeterRegistry remaining : new ArrayList<>(registries.keySet())) {
+                removeMeterIds(remaining);
             }
+            registries.clear();
             toStop = executor;
             reporter = errorReporter;
             executor = null;
@@ -221,11 +226,6 @@ public final class ListenerSchedulers {
         } catch (Exception e) {
             log.log(Level.WARNING, e, () -> "Could not register a scheduler metric");
         }
-    }
-
-    private static void removeSchedulerMetrics(MeterRegistry registry) {
-        registries.remove(registry);
-        removeMeterIds(registry);
     }
 
     private static void removeMeterIds(MeterRegistry registry) {

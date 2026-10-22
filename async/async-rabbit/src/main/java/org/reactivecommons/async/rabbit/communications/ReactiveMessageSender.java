@@ -13,6 +13,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
+import io.micrometer.core.instrument.binder.BaseUnits;
 import lombok.Getter;
 import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.Command;
@@ -465,7 +466,9 @@ public class ReactiveMessageSender implements AutoCloseable {
         if (result.unknown()) {
             return OUTCOME_UNKNOWN;
         }
-        return OUTCOME_NACK;
+        // a negative result for a message never written to the channel is not a broker nack
+        final OutboundMessage message = result.outboundMessage();
+        return message != null && !message.isPublished() ? OUTCOME_FAILED : OUTCOME_NACK;
     }
 
     public <T> Mono<Void> sendWithConfirm(T message, String exchange, String routingKey,
@@ -563,11 +566,11 @@ public class ReactiveMessageSender implements AutoCloseable {
                         confirmFlow ? OUTCOME_ACK : OUTCOME_PUBLISHED,
                         Duration.ofNanos(System.nanoTime() - startNanos)))
                 .doOnError(error -> metrics.recordPublishLatency(confirmFlow,
-                        latencyOutcome(error, timedOut.get()),
+                        latencyOutcome(error, timedOut.get(), current.get()),
                         Duration.ofNanos(System.nanoTime() - startNanos)));
     }
 
-    private static String latencyOutcome(Throwable error, boolean timedOut) {
+    private static String latencyOutcome(Throwable error, boolean timedOut, PendingMessage pending) {
         if (timedOut) {
             return OUTCOME_TIMEOUT;
         }
@@ -583,7 +586,8 @@ public class ReactiveMessageSender implements AutoCloseable {
         if (error instanceof SendConfirmUnknownException) {
             return OUTCOME_UNKNOWN;
         }
-        if (error instanceof SendFailureNoAckException) {
+        // the same exception reports a broker nack and a message that was never written (e.g. no channel, shut down)
+        if (error instanceof SendFailureNoAckException && pending != null && pending.isPublished()) {
             return OUTCOME_NACK;
         }
         return OUTCOME_FAILED;
@@ -965,23 +969,33 @@ public class ReactiveMessageSender implements AutoCloseable {
             if (registry == null) {
                 return;
             }
-            latencyTimers.computeIfAbsent(confirmFlow + ":" + outcome, key ->
-                    Timer.builder(METRIC_PUBLISH_LATENCY)
-                            .tags(baseTags)
-                            .tag("outcome", outcome)
-                            .tag("confirm", Boolean.toString(confirmFlow))
-                            .register(registry)).record(elapsed);
+            // recorded inside the caller's Mono: a failure here must never turn a publish into an error
+            try {
+                latencyTimers.computeIfAbsent(confirmFlow + ":" + outcome, key ->
+                        Timer.builder(METRIC_PUBLISH_LATENCY)
+                                .tags(baseTags)
+                                .tag("outcome", outcome)
+                                .tag("confirm", Boolean.toString(confirmFlow))
+                                .register(registry)).record(elapsed);
+            } catch (Exception e) {
+                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_LATENCY);
+            }
         }
 
         void recordMessageSize(boolean confirmFlow, long bytes) {
             if (registry == null) {
                 return;
             }
-            messageSizes.computeIfAbsent(confirmFlow, key ->
-                    DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
-                            .tags(baseTags)
-                            .tag("confirm", key.toString())
-                            .register(registry)).record(bytes);
+            try {
+                messageSizes.computeIfAbsent(confirmFlow, key ->
+                        DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
+                                .baseUnit(BaseUnits.BYTES)
+                                .tags(baseTags)
+                                .tag("confirm", key.toString())
+                                .register(registry)).record(bytes);
+            } catch (Exception e) {
+                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
+            }
         }
     }
 }
