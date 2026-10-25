@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
@@ -57,6 +58,7 @@ public abstract class GenericMessageListener {
      * default), requeueing every delivery of the channel.
      */
     static final Duration HANDLER_WAIT_WARNING = Duration.ofMinutes(1);
+    private static final long DRAIN_POLL_MILLIS = 20;
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
@@ -78,6 +80,11 @@ public abstract class GenericMessageListener {
     private final Duration handlerTimeout;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
     private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
+    /**
+     * The channel the consumer of the current subscription is registered on, to cancel it on shutdown.
+     */
+    private final AtomicReference<Channel> consumingChannel = new AtomicReference<>();
+    private volatile String consumerTag;
 
     protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                      boolean createTopology, long maxRetries, long retryDelay,
@@ -125,21 +132,25 @@ public abstract class GenericMessageListener {
         }
 
         final String tag = consumerTag();
+        this.consumerTag = tag;
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
                 .consumerTag(tag)
                 .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
                 // active only once the broker registered the consumer, not when its channel opens
                 .consumerRegisteredCallback(liveness::onSubscribed)
-                .channelCallback(channel -> channel.addShutdownListener(cause -> {
-                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
-                            + " channel open: " + channel.isOpen() +
-                            " connection open: " + channel.getConnection().isOpen());
-                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                        log.warning("Recovering listener for queue: " + queueName);
-                        scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
-                    }
-                }));
+                .channelCallback(channel -> {
+                    consumingChannel.set(channel);
+                    channel.addShutdownListener(cause -> {
+                        log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                                + " channel open: " + channel.isOpen() +
+                                " connection open: " + channel.getConnection().isOpen());
+                        if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                            log.warning("Recovering listener for queue: " + queueName);
+                            scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+                        }
+                    });
+                });
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())
@@ -241,6 +252,49 @@ public abstract class GenericMessageListener {
                     "Severe Warning! ", msj.getProperties().getMessageId()));
             return Mono.error(e);
         }
+    }
+
+    /**
+     * First step of a graceful shutdown: the broker stops delivering to this listener ({@code basic.cancel}), while
+     * the deliveries already received keep being handled and acknowledged on their channel. The listener is not
+     * restarted anymore. Follow with {@link #awaitInFlight(Duration)} and {@link #stop()}.
+     */
+    public void stopConsuming() {
+        stopped.set(true);
+        final Channel channel = consumingChannel.get();
+        if (channel == null || !channel.isOpen()) {
+            return;
+        }
+        try {
+            channel.basicCancel(consumerTag);
+        } catch (Exception e) {
+            // not registered (yet) or the channel is closing: stop() closes the channel anyway
+            log.log(Level.FINE, e, () -> "Consumer of queue " + queueName + " not cancelled");
+        }
+    }
+
+    /**
+     * Waits until every delivery received by this listener has been acknowledged (or nacked).
+     *
+     * @param timeout how long to wait at most
+     * @return whether no delivery is in flight anymore
+     */
+    public boolean awaitInFlight(Duration timeout) {
+        final long deadline = System.nanoTime() + timeout.toNanos();
+        while (metrics.inFlight() > 0) {
+            if (System.nanoTime() - deadline >= 0) {
+                log.warning(() -> metrics.inFlight() + " deliveries of queue " + queueName + " still in flight after "
+                        + timeout + ": the broker redelivers them");
+                return false;
+            }
+            try {
+                Thread.sleep(DRAIN_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

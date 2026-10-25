@@ -187,7 +187,7 @@ public class Receiver implements Closeable {
                         try {
                             if (channel.isOpen() && channel.getConnection().isOpen()) {
                                 if (basicCancel.compareAndSet(true, false)) {
-                                    channel.basicCancel(consumerTag);
+                                    cancelConsumer(channel, consumerTag);
                                 }
                                 channel.close();
                             }
@@ -200,6 +200,18 @@ public class Receiver implements Closeable {
                 emitter.error(new RabbitFluxException(e));
             }
         }, emitter::error), options.getOverflowStrategy());
+    }
+
+    /**
+     * The consumer may already be cancelled (e.g. to stop consuming before the in-flight deliveries are
+     * acknowledged): the channel must still be closed afterward.
+     */
+    private static void cancelConsumer(Channel channel, String consumerTag) {
+        try {
+            channel.basicCancel(consumerTag);
+        } catch (IOException e) {
+            LOGGER.debug("Consumer {} not cancelled: {}", consumerTag, e.getMessage());
+        }
     }
 
     protected boolean isRecoverable(Connection connection) {

@@ -57,6 +57,9 @@ public class ListenerSchedulersLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        return -5; // lifecycle beans stop in descending phase: before the connections (phase -10)
+        // lifecycle beans stop in descending phase: after the broker providers (-7), which stop their listeners and
+        // wait for the deliveries in flight, so no listener dispatches to the pools once they are released; before
+        // the connections (-10)
+        return -8;
     }
 }

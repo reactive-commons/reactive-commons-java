@@ -6,9 +6,9 @@ import org.springframework.context.SmartLifecycle;
 /**
  * Closes the broker providers (listeners, senders and the threads they own) when the application context closes.
  * <p>
- * It stops after the listener schedulers (phase {@code -5}) and before the connections/event loop group (phase
- * {@code -10}): handlers already running get a chance to finish, and the providers are stopped while the connections
- * are still usable.
+ * It stops before the listener schedulers (phase {@code -8}) and the connections/event loop group (phase {@code -10}):
+ * the providers stop their listeners and wait for the deliveries in flight while the handler pools and the
+ * connections are still usable.
  */
 @Slf4j
 public class BrokerProviderLifecycleManager implements SmartLifecycle {
@@ -45,6 +45,6 @@ public class BrokerProviderLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        return -7; // descending stop order: after the listener schedulers (-5), before the connections (-10)
+        return -7; // descending stop order: before the listener schedulers (-8) and the connections (-10)
     }
 }

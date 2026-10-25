@@ -247,6 +247,13 @@ public final class ConsumerMetrics {
         inFlight.decrementAndGet();
     }
 
+    /**
+     * @return the deliveries received and not acknowledged (acked or nacked) yet
+     */
+    public int inFlight() {
+        return inFlight.get();
+    }
+
     public Timer handlerLatency() {
         return handlerLatency;
     }

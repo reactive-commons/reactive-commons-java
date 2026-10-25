@@ -25,6 +25,7 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -32,6 +33,13 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
+
+    /**
+     * How long closing the provider waits for the deliveries in flight to be acknowledged (the counterpart of the
+     * {@code shutdownTimeout} of the Spring AMQP listener containers). The same as the time the shared handler pool
+     * is given to finish its tasks afterward.
+     */
+    static final Duration DRAIN_TIMEOUT = Duration.ofSeconds(10);
 
     private final String domain;
     private final AsyncProps props;
@@ -263,14 +271,21 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     }
 
     /**
-     * Stops the listeners and the publisher, and releases their threads. The connection shared by the sender and the
-     * listener is not closed here: it is cached per connection factory and shared by every domain.
+     * Stops the listeners and the publisher, and releases their threads. The listeners stop consuming first and their
+     * deliveries in flight are given up to {@link #DRAIN_TIMEOUT} to be handled and acknowledged, so they are not
+     * redelivered (and handled twice) after the shutdown; the publisher stays open meanwhile for the handlers. The
+     * connection shared by the sender and the listener is not closed here: it is cached per connection factory and
+     * shared by every domain.
      */
     @Override
     public void close() {
         if (queueDepth != null) {
             queueDepth.close();
         }
+        listeners.forEach(GenericMessageListener::stopConsuming);
+        final long deadline = System.nanoTime() + DRAIN_TIMEOUT.toNanos();
+        listeners.forEach(listener ->
+                listener.awaitInFlight(Duration.ofNanos(Math.max(0, deadline - System.nanoTime()))));
         listeners.forEach(GenericMessageListener::stop);
         listeners.clear();
         replyListeners.forEach(ApplicationReplyListener::stop);

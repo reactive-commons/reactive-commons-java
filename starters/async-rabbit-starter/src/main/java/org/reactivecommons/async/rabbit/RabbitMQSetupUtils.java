@@ -57,6 +57,7 @@ import java.util.concurrent.ConcurrentMap;
 public final class RabbitMQSetupUtils {
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
+    private static final int CONNECTION_CLOSE_TIMEOUT_MILLIS = 5_000;
 
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionKey, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
@@ -375,8 +376,9 @@ public final class RabbitMQSetupUtils {
     }
 
     /**
-     * Unregisters an application context. When the last one is gone, the cached factories and connections are
-     * forgotten and the shared event loop group is shut down; the next context creates new ones.
+     * Unregisters an application context. When the last one is gone, the cached connections are closed, the cached
+     * factories and connections are forgotten and the shared event loop group is shut down; the next context creates
+     * new ones.
      */
     public static void releaseEventLoopGroup() {
         synchronized (EVENT_LOOP_GROUP_LOCK) {
@@ -387,11 +389,27 @@ public final class RabbitMQSetupUtils {
                 log.info("Shared Netty EventLoopGroup still used by {} application context(s)", eventLoopGroupUsers);
                 return;
             }
+            ESTABLISHED_CONNECTIONS.values().forEach(RabbitMQSetupUtils::closeConnection);
             FACTORY_CACHE.clear();
             CONNECTION_CACHE.clear();
             ESTABLISHED_CONNECTIONS.clear();
             CONNECTION_BLOCKED_STATES.clear();
             shutdownEventLoopGroup();
+        }
+    }
+
+    /**
+     * Closes the connection with the AMQP handshake, so the broker does not see its socket cut when the event loop
+     * group shuts down. Forced closed after {@link #CONNECTION_CLOSE_TIMEOUT_MILLIS}, e.g. if the broker blocks it.
+     */
+    private static void closeConnection(Connection connection) {
+        if (!connection.isOpen()) {
+            return;
+        }
+        try {
+            connection.close(CONNECTION_CLOSE_TIMEOUT_MILLIS);
+        } catch (Exception e) {
+            log.warn("Error closing RabbitMQ connection {}", connection.getClientProvidedName(), e);
         }
     }
 
