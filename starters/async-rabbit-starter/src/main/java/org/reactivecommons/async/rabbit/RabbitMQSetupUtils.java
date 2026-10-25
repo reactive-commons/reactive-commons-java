@@ -167,7 +167,7 @@ public final class RabbitMQSetupUtils {
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
                 props.getMandatory(), unroutableMessageNotifier, sendTimeout,
                 props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
-                blockedState, meterRegistry, domain);
+                blockedState, meterRegistry, domain, props.getMaxMessageSize());
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {

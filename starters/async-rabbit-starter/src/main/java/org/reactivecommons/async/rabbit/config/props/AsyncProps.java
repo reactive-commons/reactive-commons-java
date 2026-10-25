@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.reactivecommons.async.commons.config.IBrokerConfigProps;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.starter.props.GenericAsyncProps;
 import org.springframework.boot.context.properties.NestedConfigurationProperty;
@@ -79,6 +80,15 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
      */
     @Builder.Default
     private int handOverQueueCapacity = 16_384;
+
+    /**
+     * Maximum size in bytes of the body of a published message: set it to the {@code max_message_size} of the
+     * broker (16 MiB by default in RabbitMQ 4). A larger message fails fast with
+     * {@code SendFailureMessageTooLargeException} before being written: the broker would not reject it alone, it
+     * would close the channel, failing the other messages published on it.
+     */
+    @Builder.Default
+    private int maxMessageSize = ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE;
 
     /**
      * How long a {@code connection.blocked} notification must persist before the health indicator reports DOWN. A

@@ -12,6 +12,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
@@ -166,6 +167,37 @@ class ReactiveMessageSenderTest {
             assertThat(size).as("message size summary").isNotNull();
             assertThat(size.count()).isEqualTo(1);
             assertThat(size.totalAmount()).isPositive();
+        }
+    }
+
+    @Test
+    void aMessageLargerThanTheMaximumSizeIsRejectedBeforeBeingWrittenAndCountedAsTooLarge() {
+        when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation ->
+                Flux.from(invocation.<Publisher<OutboundMessage>>getArgument(0))
+                        .map(message -> new OutboundMessageResult<>(message, true)));
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender limitedSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain", 64)) {
+            SomeClass large = new SomeClass("42", "x".repeat(100), new Date());
+
+            StepVerifier.create(limitedSender.sendWithConfirm(large, "exchange", "rkey", new HashMap<>(), true))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendNoConfirm(large, "exchange", "rkey", new HashMap<>(), false))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendWithConfirmBatch(Flux.just(large), "exchange", "rkey",
+                            new HashMap<>(), true))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
+                            new HashMap<>(), true))
+                    .verifyComplete();
+
+            for (String confirm : List.of("true", "false")) {
+                Counter tooLarge = registry.find("reactive_commons.publish.outcome")
+                        .tags("domain", "test-domain", "confirm", confirm, "outcome", "too_large").counter();
+                assertThat(tooLarge).as("too_large outcome, confirm=%s", confirm).isNotNull();
+                assertThat(tooLarge.count()).isEqualTo("true".equals(confirm) ? 2 : 1);
+            }
         }
     }
 

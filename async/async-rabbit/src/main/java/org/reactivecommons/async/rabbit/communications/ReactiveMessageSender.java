@@ -23,6 +23,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
 import org.reactivecommons.async.commons.exceptions.SendFailureHandOverRejectedException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import reactor.core.Disposable;
@@ -82,6 +83,10 @@ public class ReactiveMessageSender implements AutoCloseable {
      * must not reject messages, only a connection the broker stopped draining.
      */
     static final int DEFAULT_HAND_OVER_QUEUE_CAPACITY = 16_384;
+    /**
+     * The default {@code max_message_size} of RabbitMQ 4: a larger body makes the broker close the channel.
+     */
+    public static final int DEFAULT_MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
     private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
@@ -108,6 +113,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     static final String OUTCOME_REJECTED = "rejected";
     static final String OUTCOME_TIMEOUT = "timeout";
     static final String OUTCOME_BLOCKED = "blocked";
+    static final String OUTCOME_TOO_LARGE = "too_large";
     /**
      * No-confirm outcomes: the message was written to the channel (not confirmed by the broker), or it could not be.
      */
@@ -120,9 +126,9 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private static final List<String> CONFIRM_OUTCOMES = List.of(
             OUTCOME_ACK, OUTCOME_NACK, OUTCOME_UNKNOWN, OUTCOME_RETURNED,
-            OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED);
+            OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED, OUTCOME_TOO_LARGE);
     private static final List<String> NO_CONFIRM_OUTCOMES = List.of(
-            OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED);
+            OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_TOO_LARGE);
 
     @Getter
     private final Sender sender;
@@ -151,6 +157,7 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private final AtomicInteger bufferedMessages = new AtomicInteger();
     private final int maxBufferedMessages;
+    private final int maxMessageSize;
     /**
      * The flows release their channels concurrently when the sender is closed: only the first one aborts a blocked
      * connection, the others' channels die with it.
@@ -199,7 +206,24 @@ public class ReactiveMessageSender implements AutoCloseable {
                                  Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
                                  ConnectionBlockedState blockedState,
                                  MeterRegistry meterRegistry, String domain) {
+        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
+                sendTimeout, handOverPoolSize, handOverQueueCapacity, blockedState, meterRegistry, domain,
+                DEFAULT_MAX_MESSAGE_SIZE);
+    }
+
+    /**
+     * @param maxMessageSize the {@code max_message_size} of the broker, in bytes: a message with a larger body is
+     *                       rejected with {@link SendFailureMessageTooLargeException} before being written, instead of
+     *                       making the broker close the channel it shares with other messages
+     */
+    public ReactiveMessageSender(Sender sender, String sourceApplication,
+                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
+                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
+                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
+                                 ConnectionBlockedState blockedState,
+                                 MeterRegistry meterRegistry, String domain, int maxMessageSize) {
         this.sender = sender;
+        this.maxMessageSize = maxMessageSize;
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
@@ -534,6 +558,12 @@ public class ReactiveMessageSender implements AutoCloseable {
                         metrics.recordOutcome(OUTCOME_BLOCKED, confirmFlow);
                         return;
                     }
+                    // the broker would not reject it alone: it would close the channel shared with other messages
+                    if (pending.getBody().length > maxMessageSize) {
+                        pending.fail(tooLarge(pending.getBody().length));
+                        metrics.recordOutcome(OUTCOME_TOO_LARGE, confirmFlow);
+                        return;
+                    }
                     pendingMessages.add(pending);
                     pending.setOnFinished(() -> pendingMessages.remove(pending));
                     if (closed.get()) {
@@ -594,6 +624,9 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
         if (error instanceof SendFailureBrokerBlockedException) {
             return OUTCOME_BLOCKED;
+        }
+        if (error instanceof SendFailureMessageTooLargeException) {
+            return OUTCOME_TOO_LARGE;
         }
         if (error instanceof SendFailureHandOverRejectedException) {
             return OUTCOME_REJECTED;
@@ -689,9 +722,18 @@ public class ReactiveMessageSender implements AutoCloseable {
                 });
     }
 
+    private SendFailureMessageTooLargeException tooLarge(int bodySize) {
+        return new SendFailureMessageTooLargeException("Message not published: its body (" + bodySize
+                + " bytes) is larger than the maximum message size of " + maxMessageSize + " bytes");
+    }
+
     private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,
                                                   Map<String, Object> headers, boolean persistent) {
         final Message message = messageConverter.toMessage(object);
+        if (message.getBody().length > maxMessageSize) {
+            metrics.recordOutcome(OUTCOME_TOO_LARGE, true);
+            throw tooLarge(message.getBody().length);
+        }
         final AMQP.BasicProperties props = buildMessageProperties(object, message, headers, persistent);
         return new OutboundMessage(exchange, routingKey, props, message.getBody());
     }
