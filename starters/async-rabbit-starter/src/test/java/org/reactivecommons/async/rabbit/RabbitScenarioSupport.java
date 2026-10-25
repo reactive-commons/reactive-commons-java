@@ -94,6 +94,17 @@ final class RabbitScenarioSupport {
     static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, String prefix,
                                                                 boolean twoDomains, boolean listenReplies,
                                                                 Class<?> handlers, Class<?>... features) {
+        return startWithHandlers(rabbit, prefix, twoDomains, listenReplies, Map.of(), handlers, features);
+    }
+
+    /**
+     * Same as above, with additional properties (e.g. {@code app.async.app.direct.discardTimeoutQueries}), which win
+     * over the defaults of the scenario.
+     */
+    static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, String prefix,
+                                                                boolean twoDomains, boolean listenReplies,
+                                                                Map<String, Object> extraProperties,
+                                                                Class<?> handlers, Class<?>... features) {
         Map<String, Object> properties = new HashMap<>();
         properties.put("spring.application.name", prefix);
         properties.put("spring.rabbitmq.host", rabbit.getHost());
@@ -104,6 +115,7 @@ final class RabbitScenarioSupport {
         if (twoDomains) {
             domain(properties, EXTRA_DOMAIN, prefix + "-extra", listenReplies);
         }
+        properties.putAll(extraProperties);
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
         context.register(handlers, RabbitMQConfig.class, AsyncPropsDomain.class,

@@ -13,4 +13,5 @@ public final class Headers {
     public static final String SERVED_QUERY_ID = "x-serveQuery-id";
     public static final String SOURCE_APPLICATION = "sourceApplication";
     public static final String REPLY_TIMEOUT_MILLIS = "x-reply-timeout-millis";
+    public static final String REPLY_DEADLINE_MILLIS = "x-reply-deadline-millis";
 }

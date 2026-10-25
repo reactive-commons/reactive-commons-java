@@ -28,6 +28,7 @@ import static java.lang.Boolean.TRUE;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_DEADLINE_MILLIS;
 import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
@@ -156,6 +157,8 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                     headers.put(SERVED_QUERY_ID, queryTypeExtractor.apply(query));
                     headers.put(CORRELATION_ID, correlationID);
                     headers.put(REPLY_TIMEOUT_MILLIS, replyTimeout.toMillis());
+                    // the reply timeout starts once the query is published: this deadline is never later than it
+                    headers.put(REPLY_DEADLINE_MILLIS, System.currentTimeMillis() + replyTimeout.toMillis());
 
                     return resolveSender(domain)
                             .sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)

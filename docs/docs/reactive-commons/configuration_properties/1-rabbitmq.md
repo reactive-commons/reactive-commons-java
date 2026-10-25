@@ -43,7 +43,7 @@ app:
         exchange: directMessages # you can change the exchange, but you should do it in all applications
         querySuffix: query # queries queue name suffix, name will be like ${spring.application.name}.${app.async.direct.querySuffix}
         commandSuffix: '' # commands queue name suffix, name will be like ${spring.application.name}.${app.async.direct.querySuffix} or ${spring.application.name} if empty by default
-        discardTimeoutQueries: false # enable to discard this condition
+        discardTimeoutQueries: false # enable to discard the queries whose caller stopped waiting for the reply (deadline from the x-reply-deadline-millis header, or from the AMQP timestamp, accurate to one second, for queries published by older versions)
       global:
         exchange: globalReply # you can change the exchange, but you should do it in all applications
         repliesSuffix: replies # async query replies events queue name suffix
