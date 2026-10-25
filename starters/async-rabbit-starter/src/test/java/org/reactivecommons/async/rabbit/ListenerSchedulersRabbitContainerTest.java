@@ -58,7 +58,7 @@ class ListenerSchedulersRabbitContainerTest {
     private static final int BLOCKING_COMMANDS = 1_000;
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     private static final AtomicInteger RUNNING = new AtomicInteger();
     private static final AtomicInteger PEAK = new AtomicInteger();

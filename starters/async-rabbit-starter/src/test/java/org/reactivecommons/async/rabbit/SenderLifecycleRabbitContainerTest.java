@@ -38,7 +38,7 @@ class SenderLifecycleRabbitContainerTest {
     private static final Pattern SENDER_THREADS = Pattern.compile("^RMessageSender[12]-.*");
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @Test
     void reportsLiveFlowsAndReleasesTheSenderThreadsWhenTheApplicationCloses() throws Exception {

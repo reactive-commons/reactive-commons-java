@@ -57,7 +57,7 @@ class DiscardNotifierSenderRabbitContainerTest {
     private static final String DOMAIN_EVENTS_EXCHANGE = "domainEvents";
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {

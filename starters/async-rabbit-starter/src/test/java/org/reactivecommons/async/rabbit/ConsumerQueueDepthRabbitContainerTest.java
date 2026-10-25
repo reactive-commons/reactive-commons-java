@@ -37,7 +37,7 @@ class ConsumerQueueDepthRabbitContainerTest {
     private static final String QUEUE = "qd-app.subsEvents";
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @Test
     @Timeout(180)

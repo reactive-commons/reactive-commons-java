@@ -57,7 +57,7 @@ class PublishThroughputRabbitContainerTest {
     private static final String NOTE = "x".repeat(200); // ~300 bytes of JSON per event
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     private record Stats(String name, int sent, int confirmed, int failed, double confirmedPerSecond,
                          long p50Ms, long p95Ms, long p99Ms, long maxMs) {

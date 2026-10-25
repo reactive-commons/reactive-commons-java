@@ -31,7 +31,7 @@ class SubscriberHealthRabbitContainerTest {
     private static final String QUEUE = "sub-app.subsEvents";
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     /**
      * The queue of a listener is deleted and re-created by someone else with other arguments: the broker cancels the

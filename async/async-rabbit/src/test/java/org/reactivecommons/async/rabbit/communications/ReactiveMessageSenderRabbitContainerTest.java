@@ -72,7 +72,7 @@ class ReactiveMessageSenderRabbitContainerTest {
     private static final Network NETWORK = Network.newNetwork();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine")
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine")
             .withNetwork(NETWORK)
             .withNetworkAliases("rabbit");
 

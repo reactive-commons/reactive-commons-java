@@ -48,7 +48,7 @@ class RabbitMQSetupUtilsRabbitContainerTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     /**
      * A channel-level error closes the channel, and the client never recovers channels closed by channel-level

@@ -50,7 +50,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
     private static volatile CompletableFuture<Void> releaseHandlers = new CompletableFuture<>();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @AfterEach
     void clearAlarm() throws Exception {

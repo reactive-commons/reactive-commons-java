@@ -49,7 +49,7 @@ class ApplicationQueueListenerRecoveryRabbitContainerTest {
     private static final int QUEUES = 3;
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     private final Map<String, AtomicInteger> received = new ConcurrentHashMap<>();
     private Connection listenerConnection;

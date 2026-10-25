@@ -50,7 +50,7 @@ class ConsumerRetryRabbitContainerTest {
     private static volatile CompletableFuture<Void> release = new CompletableFuture<>();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @AfterEach
     void cleanUp() throws Exception {

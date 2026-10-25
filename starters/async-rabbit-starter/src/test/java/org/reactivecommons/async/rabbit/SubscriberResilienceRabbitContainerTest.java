@@ -56,7 +56,7 @@ class SubscriberResilienceRabbitContainerTest {
     private static final AtomicInteger handlersInterrupted = new AtomicInteger();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     /**
      * The requester's consuming connection drops while a query is in flight: the reply is published while its
