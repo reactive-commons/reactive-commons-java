@@ -25,9 +25,8 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -521,14 +520,19 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private Long getRetryNumber(AcknowledgableDelivery delivery) {
-        return Optional.ofNullable(delivery.getProperties())
-                .map(AMQP.BasicProperties::getHeaders)
-                .map(x -> (List<HashMap>) x.get("x-death"))
-                .filter(list -> !list.isEmpty())
-                .map(list -> list.get(0))
-                .map(hashMap -> (Long) hashMap.get("count"))
-                .orElse(0L);
+    /**
+     * The times the message was dead-lettered, from the {@code count} of the first entry of its {@code x-death}
+     * header. Read without assuming its shape: the header may come from another client (e.g. with a 32-bit
+     * {@code count}), and a failure here would terminate the whole listener and redeliver the message in a loop.
+     */
+    private static long getRetryNumber(AcknowledgableDelivery delivery) {
+        final AMQP.BasicProperties properties = delivery.getProperties();
+        final Map<String, Object> headers = properties != null ? properties.getHeaders() : null;
+        if (headers != null && headers.get("x-death") instanceof List<?> deaths && !deaths.isEmpty()
+                && deaths.get(0) instanceof Map<?, ?> lastDeath && lastDeath.get("count") instanceof Number count) {
+            return count.longValue();
+        }
+        return 0L;
     }
 
     /**
