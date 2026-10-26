@@ -20,6 +20,7 @@ import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConv
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Operators;
 import reactor.core.publisher.Sinks;
 import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.OutboundMessage;
@@ -28,6 +29,7 @@ import reactor.rabbitmq.RabbitFluxException;
 import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
+import reactor.util.context.Context;
 import tools.jackson.databind.json.JsonMapper;
 
 import java.time.Duration;
@@ -43,6 +45,7 @@ import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
@@ -187,6 +190,35 @@ class ReactiveMessageSenderTest {
                     + "registered%n", messages, handOversWhileWaiting, completedAfterMs);
             assertThat(handOversWhileWaiting).as("hand-overs while no flow is available").isLessThanOrEqualTo(messages);
             assertThat(completedAfterMs).as("time to publish once a flow is registered").isLessThan(2_000);
+        }
+    }
+
+    /**
+     * The flows the message is handed to die before writing it (e.g. their channels close), and no flow gets a channel
+     * again before the send timeout: the message was never published, so its outcome is not in doubt.
+     */
+    @Test
+    void aMessageWhoseFlowsDiedBeforeWritingItIsReportedAsNotPublished() {
+        AtomicInteger subscriptions = new AtomicInteger();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            if (subscriptions.getAndIncrement() >= 4) {
+                return Flux.never(); // re-subscribed flows never get a channel again
+            }
+            // like a flow whose channel closed: the message reaching it is discarded unwritten and the flow ends
+            return argument.concatMap(message -> Mono.deferContextual(context -> {
+                Operators.onDiscard(message, Context.of(context));
+                return Mono.error(new IllegalStateException("channel closed"));
+            }));
+        });
+        try (ReactiveMessageSender dyingFlowsSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier, Duration.ofSeconds(1))) {
+            StepVerifier.create(dyingFlowsSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()),
+                            "exchange", "rkey", new HashMap<>(), true))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOf(SendFailureNoAckException.class)
+                            .hasMessageContaining("not published"))
+                    .verify(Duration.ofSeconds(5));
         }
     }
 

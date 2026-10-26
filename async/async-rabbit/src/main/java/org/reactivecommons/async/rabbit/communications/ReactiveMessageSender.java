@@ -601,7 +601,6 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private Mono<Void> send(String exchange, Function<MonoSink<Void>, PendingMessage> messageFactory,
                             Supplier<FluxSink<OutboundMessage>> sinkSelector, boolean confirmFlow) {
-        final AtomicBoolean handedToAFlow = new AtomicBoolean();
         final AtomicReference<PendingMessage> current = new AtomicReference<>();
         final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
@@ -635,7 +634,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                         return;
                     }
                     try {
-                        executorService2.execute(() -> handOver(pending, sinkSelector, handedToAFlow, confirmFlow));
+                        executorService2.execute(() -> handOver(pending, sinkSelector, confirmFlow));
                     } catch (RejectedExecutionException e) {
                         if (closed.get() || executorService2.isShutdown()) {
                             pending.fail(shutdownFailure(e));
@@ -658,16 +657,17 @@ public class ReactiveMessageSender implements AutoCloseable {
                     if (pending == null || pending.claimOutcome()) {
                         metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
                     }
-                    if (!handedToAFlow.get()) {
-                        return new SendFailureNoAckException("Message not published: no RabbitMQ publishing flow "
-                                + "available within " + sendTimeout, e);
+                    // the current attempt only: a previous one was retried because it was never written
+                    if (pending != null && pending.mayHaveBeenWritten()) {
+                        return new SendConfirmUnknownException("No confirmation received within " + sendTimeout
+                                + ": the message may or may not have reached the broker", e);
                     }
                     if (pending != null && pending.wasDropped()) {
                         return new SendFailureNoAckException("Message not published within " + sendTimeout
                                 + ": its publishing flow was busy (e.g. the broker is blocking the connection)", e);
                     }
-                    return new SendConfirmUnknownException("No confirmation received within " + sendTimeout
-                            + ": the message may or may not have reached the broker", e);
+                    return new SendFailureNoAckException("Message not published: no RabbitMQ publishing flow "
+                            + "available within " + sendTimeout, e);
                 })
                 // recorded before the terminal signal reaches the caller; a cancelled subscription records nothing:
                 // the caller stopped waiting, but the message may still be published
@@ -706,7 +706,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     private void handOver(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
-                          AtomicBoolean handedToAFlow, boolean confirmFlow) {
+                          boolean confirmFlow) {
         if (pending.isFinished()) {
             return; // cancelled (e.g. timeout) before being published
         }
@@ -721,7 +721,6 @@ public class ReactiveMessageSender implements AutoCloseable {
             metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
             return;
         }
-        handedToAFlow.set(true);
         try {
             sink.next(pending);
         } catch (Exception e) {
@@ -930,6 +929,14 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         boolean wasDropped() {
             return bufferState.get() == DROPPED;
+        }
+
+        /**
+         * Whether a flow claimed the message to write it: from then on it may reach the broker, even if it is not
+         * {@linkplain #isPublished() published} yet.
+         */
+        boolean mayHaveBeenWritten() {
+            return bufferState.get() == CLAIMED || isPublished();
         }
 
         /**
