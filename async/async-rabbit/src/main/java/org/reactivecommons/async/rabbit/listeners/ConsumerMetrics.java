@@ -2,16 +2,20 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.BaseUnits;
+import org.reactivecommons.async.rabbit.MeterUsage;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -157,22 +161,31 @@ public final class ConsumerMetrics {
         this.messageSize = deliveries ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
         if (registry != null) {
             RESTART_REASONS.forEach(this::restartCounter);
+            if (!handlesDeliveries) {
+                // the counter of the domain: the reply listener releases it when it stops
+                try {
+                    track(() -> repliesLostCounter(registry, this.domain));
+                } catch (Exception e) {
+                    LOG.log(Level.WARNING, e, () -> "Could not register consumer replies.lost counter");
+                }
+            }
         }
         if (deliveries) {
             OUTCOMES.forEach(this::outcomeCounter);
             try {
-                registry.gauge(M_IN_FLIGHT, baseTags, inFlight);
+                track(() -> Gauge.builder(M_IN_FLIGHT, inFlight, AtomicInteger::get).tags(baseTags).register(registry));
             } catch (Exception e) {
                 LOG.log(Level.WARNING, e, () -> "Could not register consumer in-flight gauge");
             }
         }
         if (registry != null && liveness != null) {
             try {
-                registry.gauge(M_ACTIVE, baseTags, liveness, l -> l.isActive() ? 1.0 : 0.0);
-                registry.gauge(M_LAST_AGE, baseTags, liveness, l -> {
+                track(() -> Gauge.builder(M_ACTIVE, liveness, l -> l.isActive() ? 1.0 : 0.0).tags(baseTags)
+                        .register(registry));
+                track(() -> Gauge.builder(M_LAST_AGE, liveness, l -> {
                     Instant last = l.snapshot().lastDeliveryAt();
                     return last == null ? Double.NaN : Duration.between(last, Instant.now()).toMillis() / 1000.0;
-                });
+                }).tags(baseTags).register(registry));
             } catch (Exception e) {
                 LOG.log(Level.WARNING, e, () -> "Could not register consumer gauges");
             }
@@ -181,7 +194,7 @@ public final class ConsumerMetrics {
 
     private Timer safeRegisterTimer(String name) {
         try {
-            return Timer.builder(name).tags(baseTags).register(registry);
+            return track(() -> Timer.builder(name).tags(baseTags).register(registry));
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer handler timer");
             return null;
@@ -194,7 +207,7 @@ public final class ConsumerMetrics {
 
     private Counter safeRegisterCounter(String name, Tags extraTags) {
         try {
-            return Counter.builder(name).tags(baseTags.and(extraTags)).register(registry);
+            return track(() -> Counter.builder(name).tags(baseTags.and(extraTags)).register(registry));
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer counter " + name);
             return null;
@@ -203,10 +216,33 @@ public final class ConsumerMetrics {
 
     private DistributionSummary safeRegisterSummary(String name) {
         try {
-            return DistributionSummary.builder(name).baseUnit(BaseUnits.BYTES).tags(baseTags).register(registry);
+            return track(() -> DistributionSummary.builder(name).baseUnit(BaseUnits.BYTES).tags(baseTags)
+                    .register(registry));
         } catch (Exception e) {
             LOG.log(Level.WARNING, e, () -> "Could not register consumer summary " + name);
             return null;
+        }
+    }
+
+    /**
+     * Registers a meter of this listener: removed from the registry when the listener stops, unless another live
+     * listener with the same tags uses it (see {@link MeterUsage}).
+     */
+    private <M extends Meter> M track(Supplier<M> registration) {
+        return MeterUsage.register(registry, this, registration);
+    }
+
+    /**
+     * Releases the meters of this listener. Called when the listener stops.
+     */
+    public void close() {
+        if (registry == null) {
+            return;
+        }
+        try {
+            MeterUsage.release(registry, this);
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, e, () -> "Could not remove consumer metrics");
         }
     }
 
@@ -284,9 +320,9 @@ public final class ConsumerMetrics {
     private Timer executionTimer(String outcome, String handler) {
         return executionTimers.computeIfAbsent(outcome + '|' + handler, key -> {
             try {
-                return Timer.builder(M_EXECUTION)
+                return track(() -> Timer.builder(M_EXECUTION)
                         .tags(baseTags.and("outcome", outcome).and("handler", handler))
-                        .register(registry);
+                        .register(registry));
             } catch (Exception e) {
                 LOG.log(Level.WARNING, e, () -> "Could not register consumer handler execution timer");
                 return null;

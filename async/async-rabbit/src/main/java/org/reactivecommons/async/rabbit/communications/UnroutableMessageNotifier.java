@@ -4,6 +4,7 @@ import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import lombok.extern.java.Log;
+import org.reactivecommons.async.rabbit.MeterUsage;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -80,15 +81,29 @@ public class UnroutableMessageNotifier {
     }
 
     /**
+     * Stops processing the unroutable messages and removes the counters of this notifier from the registry. Called by
+     * Spring when the application context closes (inferred destroy method of the bean).
+     */
+    public void close() {
+        final Disposable subscription = currentSubscription;
+        if (subscription != null) {
+            subscription.dispose();
+        }
+        metrics.close();
+    }
+
+    /**
      * Counters of the unroutable-message path: every mandatory message the broker returned, failures emitting it
      * to the notifications sink and errors of the processors subscribed to it.
      */
     private static final class UnroutableMetrics {
+        private final MeterRegistry registry;
         private final Counter unroutable;
         private final Counter emitFailed;
         private final Counter processError;
 
         UnroutableMetrics(MeterRegistry registry, String domain) {
+            this.registry = registry;
             if (registry == null) {
                 this.unroutable = null;
                 this.emitFailed = null;
@@ -102,13 +117,28 @@ public class UnroutableMessageNotifier {
             this.processError = safeCounter(registry, M_PROCESS_ERROR, tags);
         }
 
-        private static Counter safeCounter(MeterRegistry registry, String name, Tags tags) {
+        private Counter safeCounter(MeterRegistry registry, String name, Tags tags) {
             try {
-                return Counter.builder(name).tags(tags).register(registry);
+                return MeterUsage.register(registry, this, () -> Counter.builder(name).tags(tags).register(registry));
             } catch (Exception e) {
                 // never let a mis-wired registry break the publishing path; metrics are best-effort
                 log.log(Level.WARNING, e, () -> "Could not register " + name);
                 return null;
+            }
+        }
+
+        /**
+         * Releases the counters of this notifier: removed from the registry unless another live notifier uses them
+         * (see {@link MeterUsage}).
+         */
+        void close() {
+            if (registry == null) {
+                return;
+            }
+            try {
+                MeterUsage.release(registry, this);
+            } catch (Exception e) {
+                log.log(Level.WARNING, e, () -> "Could not remove the unroutable counters");
             }
         }
 

@@ -235,6 +235,25 @@ class ReactiveMessageSenderTest {
         }
     }
 
+    /**
+     * A sender created after another one closed, with the same tags, gets gauges of its own instead of those bound to
+     * the closed sender.
+     */
+    @Test
+    void closingTheSenderRemovesItsMeters() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ReactiveMessageSender closed = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
+                unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(), registry,
+                "test-domain");
+        StepVerifier.create(closed.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
+                new HashMap<>(), true)).verifyComplete();
+        assertThat(registry.getMeters()).isNotEmpty();
+
+        closed.close();
+
+        assertThat(registry.getMeters()).as("meters of the closed sender").isEmpty();
+    }
+
     @Test
     void theFlowResubscriptionCountersExistAtZeroBeforeAnyFlowIsResubscribed() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();

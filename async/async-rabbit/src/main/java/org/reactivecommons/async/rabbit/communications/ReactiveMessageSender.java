@@ -9,6 +9,8 @@ import io.cloudevents.CloudEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
@@ -26,6 +28,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureHandOverRejectedE
 import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import org.reactivecommons.async.rabbit.MeterUsage;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -307,6 +310,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         shutdownAndAwait(executorService2);
         shutdownAndAwait(executorService);
         sender.close();
+        metrics.close();
     }
 
     private static SendFailureNoAckException shutdownFailure(Throwable cause) {
@@ -1023,18 +1027,18 @@ public class ReactiveMessageSender implements AutoCloseable {
             this.baseTags = Tags.of(Tag.of("domain", domain != null ? domain : ""));
             if (registry != null) {
                 try {
-                    registry.gauge("reactive_commons.publish.flow.live", baseTags.and("kind", "confirm"),
-                            activeConfirmFlows);
-                    registry.gauge("reactive_commons.publish.flow.live", baseTags.and("kind", "noConfirm"),
-                            activeNoConfirmFlows);
-                    registry.gauge(METRIC_CONNECTION_BLOCKED + ".state", baseTags, blockedState,
-                            s -> s.isBlocked() ? 1.0 : 0.0);
-                    registry.gauge("reactive_commons.publish.hand_over.queue.size", baseTags, handOverExecutor,
-                            e -> e.getQueue().size());
-                    FunctionCounter.builder(METRIC_CONNECTION_BLOCKED, blockedState,
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeConfirmFlows,
+                            AtomicInteger::get).tags(baseTags.and("kind", "confirm")).register(registry));
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeNoConfirmFlows,
+                            AtomicInteger::get).tags(baseTags.and("kind", "noConfirm")).register(registry));
+                    track(() -> Gauge.builder(METRIC_CONNECTION_BLOCKED + ".state", blockedState,
+                            s -> s.isBlocked() ? 1.0 : 0.0).tags(baseTags).register(registry));
+                    track(() -> Gauge.builder("reactive_commons.publish.hand_over.queue.size", handOverExecutor,
+                            e -> e.getQueue().size()).tags(baseTags).register(registry));
+                    track(() -> FunctionCounter.builder(METRIC_CONNECTION_BLOCKED, blockedState,
                                     ConnectionBlockedState::blockCount)
                             .tags(baseTags)
-                            .register(registry);
+                            .register(registry));
                     // register every known outcome at 0 so increase()/rate() can see the first incident
                     CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, true));
                     NO_CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, false));
@@ -1047,6 +1051,28 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
         }
 
+        /**
+         * Registers a meter of this sender: removed from the registry when the sender closes, unless another live
+         * sender with the same tags uses it (see {@link MeterUsage}).
+         */
+        private <M extends Meter> M track(Supplier<M> registration) {
+            return MeterUsage.register(registry, this, registration);
+        }
+
+        /**
+         * Releases the meters of this sender.
+         */
+        void close() {
+            if (registry == null) {
+                return;
+            }
+            try {
+                MeterUsage.release(registry, this);
+            } catch (Exception e) {
+                log.log(Level.WARNING, e, () -> "Could not remove publish metrics");
+            }
+        }
+
         void recordOutcome(String outcome, boolean confirmFlow) {
             if (registry == null) {
                 return;
@@ -1056,11 +1082,11 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         private Counter outcomeCounter(String outcome, boolean confirmFlow) {
             return (confirmFlow ? confirmOutcomes : noConfirmOutcomes).computeIfAbsent(outcome, key ->
-                    Counter.builder(METRIC_PUBLISH_OUTCOME)
+                    track(() -> Counter.builder(METRIC_PUBLISH_OUTCOME)
                             .tags(baseTags)
                             .tag("outcome", key)
                             .tag("confirm", Boolean.toString(confirmFlow))
-                            .register(registry));
+                            .register(registry)));
         }
 
         void recordResubscribe(boolean confirmFlow) {
@@ -1072,10 +1098,10 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         private Counter resubscribeCounter(boolean confirmFlow) {
             return resubscribes.computeIfAbsent(confirmFlow, key ->
-                    Counter.builder(METRIC_FLOW_RESUBSCRIBE)
+                    track(() -> Counter.builder(METRIC_FLOW_RESUBSCRIBE)
                             .tags(baseTags)
                             .tag("kind", key ? "confirm" : "noConfirm")
-                            .register(registry));
+                            .register(registry)));
         }
 
         /**
@@ -1088,11 +1114,11 @@ public class ReactiveMessageSender implements AutoCloseable {
             // recorded inside the caller's Mono: a failure here must never turn a publish into an error
             try {
                 latencyTimers.computeIfAbsent(confirmFlow + ":" + outcome, key ->
-                        Timer.builder(METRIC_PUBLISH_LATENCY)
+                        track(() -> Timer.builder(METRIC_PUBLISH_LATENCY)
                                 .tags(baseTags)
                                 .tag("outcome", outcome)
                                 .tag("confirm", Boolean.toString(confirmFlow))
-                                .register(registry)).record(elapsed);
+                                .register(registry))).record(elapsed);
             } catch (Exception e) {
                 log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_LATENCY);
             }
@@ -1104,11 +1130,11 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
             try {
                 messageSizes.computeIfAbsent(confirmFlow, key ->
-                        DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
+                        track(() -> DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
                                 .baseUnit(BaseUnits.BYTES)
                                 .tags(baseTags)
                                 .tag("confirm", key.toString())
-                                .register(registry)).record((double) bytes);
+                                .register(registry))).record((double) bytes);
             } catch (Exception e) {
                 log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
             }

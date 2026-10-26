@@ -319,6 +319,7 @@ public abstract class GenericMessageListener {
         if (handlerPoolRoom.compareAndSet(true, false)) {
             ListenerSchedulers.unregisterListener(messageListener.maxConcurrency());
         }
+        metrics.close();
     }
 
     private void subscribe() {
