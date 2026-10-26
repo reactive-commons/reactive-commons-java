@@ -417,7 +417,7 @@ public final class ListenerSchedulers {
         private transient volatile ElasticExecutor owner;
 
         @Override
-        public boolean offer(Runnable task) {
+        public boolean offer(@NonNull Runnable task) {
             final boolean queued = super.offer(task);
             final ElasticExecutor pool = owner;
             if (pool != null) {

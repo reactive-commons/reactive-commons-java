@@ -5,8 +5,10 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
 import lombok.extern.java.Log;
 import reactor.core.Disposable;
+import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
+import reactor.util.concurrent.Queues;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
@@ -32,7 +34,9 @@ public class UnroutableMessageNotifier {
      * @param domain   tag of the counters; {@code null} when the notifier is shared by every domain
      */
     public UnroutableMessageNotifier(MeterRegistry registry, String domain) {
-        this.sink = Sinks.many().multicast().onBackpressureBuffer();
+        // no auto-cancel: a handler that starts listening after another one (whose subscription is disposed) would
+        // otherwise find the sink terminated, and every unroutable message would fail to be emitted from then on
+        this.sink = Sinks.many().multicast().onBackpressureBuffer(Queues.SMALL_BUFFER_SIZE, false);
         this.metrics = new UnroutableMetrics(registry, domain);
     }
 
@@ -55,17 +59,23 @@ public class UnroutableMessageNotifier {
         }
     }
 
+    /**
+     * Makes the handler the one that processes the unroutable messages, instead of the previous one. It runs off the
+     * thread that emits the returns, which is the I/O thread of the connection: a handler that blocks would otherwise
+     * delay every publisher confirm and return of the connection. A handler that fails only fails its message.
+     */
     public void listenToUnroutableMessages(UnroutableMessageHandler handler) {
         if (currentSubscription != null && !currentSubscription.isDisposed()) {
             currentSubscription.dispose();
         }
         currentSubscription = sink.asFlux()
-                .subscribeOn(Schedulers.boundedElastic())
-                .flatMap(handler::processMessage)
-                .onErrorContinue((throwable, o) -> {
-                    metrics.recordProcessingError();
-                    log.severe("Error processing unroutable message: " + throwable.getMessage());
-                })
+                .publishOn(Schedulers.boundedElastic())
+                .flatMap(message -> Mono.defer(() -> handler.processMessage(message))
+                        .onErrorResume(throwable -> {
+                            metrics.recordProcessingError();
+                            log.severe("Error processing unroutable message: " + throwable.getMessage());
+                            return Mono.empty();
+                        }))
                 .subscribe();
     }
 
