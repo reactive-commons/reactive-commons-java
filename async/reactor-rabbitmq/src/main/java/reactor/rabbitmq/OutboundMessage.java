@@ -18,7 +18,6 @@ package reactor.rabbitmq;
 
 import com.rabbitmq.client.AMQP.BasicProperties;
 import lombok.Getter;
-import java.util.Arrays;
 import java.util.function.Consumer;
 
 @Getter
@@ -55,7 +54,8 @@ public class OutboundMessage {
                 "exchange='" + exchange + '\'' +
                 ", routingKey='" + routingKey + '\'' +
                 ", properties=" + properties +
-                ", body=" + Arrays.toString(body) +
+                // the size only: the body may hold sensitive data and be large
+                ", bodySize=" + (body != null ? body.length : 0) +
                 '}';
     }
 

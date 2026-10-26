@@ -398,16 +398,20 @@ public abstract class GenericMessageListener {
                 objectType, executorPath, timeElapsed));
     }
 
+    /**
+     * Logs a failed message, which happens again on every retry: only the beginning of its body is written.
+     */
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
-        String messageID = msj.getProperties().getMessageId();
+        final String messageID = msj.getProperties().getMessageId();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s", messageID), err);
-            log.warning(format("Message %s Headers: %s", messageID, msj.getProperties().getHeaders().toString()));
-            log.warning(format("Message %s Body: %s", messageID, new String(msj.getBody())));
+            log.log(Level.SEVERE, err, () -> format("Error encounter while processing message %s of queue %s "
+                    + "(%d bytes)", messageID, queueName, msj.getBody().length));
+            log.warning(() -> format("Message %s Headers: %s Body: %s", messageID, msj.getProperties().getHeaders(),
+                    RabbitMessage.bodyPreview(msj.getBody())));
         } catch (Exception e) {
             log.log(Level.SEVERE, "Error Login message Content!!", e);
         } finally {
-            log.warning(format(strategy.message, messageID));
+            log.warning(() -> format(strategy.message, messageID));
         }
     }
 
