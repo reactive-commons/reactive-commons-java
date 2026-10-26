@@ -210,6 +210,65 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(outcome("nack")).isEqualTo(1.0);
     }
 
+    @Test
+    void localRetriesThatCanOutlastTheConsumerTimeoutAreReportedAtStartup() {
+        // 60 retries x 30 s = 30 minutes without acknowledging the delivery
+        assertThat(startupWarnings(false, 60, 30_000, null))
+                .singleElement().satisfies(warning -> assertThat(warning)
+                        .contains("test-queue", "PT30M plus the handler attempts", "maxRetries 60"));
+    }
+
+    @Test
+    void theHandlerTimeoutOfEachAttemptCountsTowardsTheConsumerTimeout() {
+        // 10 retries x 1 s + 11 attempts x 3 min = 33 minutes 10 seconds
+        assertThat(startupWarnings(false, 10, 1_000, Duration.ofMinutes(3)))
+                .singleElement().satisfies(warning -> assertThat(warning).contains("PT33M10S", "handlerTimeout PT3M"));
+    }
+
+    @Test
+    void shortLocalRetriesAndOtherStrategiesAreNotReported() {
+        assertThat(startupWarnings(false, 3, RETRY_DELAY, null)).as("short local retries").isEmpty();
+        assertThat(startupWarnings(false, -1, 30_000, null)).as("requeued retries").isEmpty();
+        assertThat(startupWarnings(true, 60, 30_000, null)).as("DLQ retries").isEmpty();
+    }
+
+    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, long retryDelay,
+                                         Duration handlerTimeout) {
+        lenient().when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.never());
+        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(GenericMessageListener.class.getName());
+        List<String> warnings = new java.util.concurrent.CopyOnWriteArrayList<>();
+        java.util.logging.Handler capture = new java.util.logging.Handler() {
+            @Override
+            public void publish(java.util.logging.LogRecord logRecord) {
+                if (logRecord.getLevel() == java.util.logging.Level.WARNING
+                        && logRecord.getMessage().contains("consumer_timeout")) {
+                    warnings.add(logRecord.getMessage());
+                }
+            }
+
+            @Override
+            public void flush() {
+                // nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // nothing to release
+            }
+        };
+        logger.addHandler(capture);
+        FailingListener listener = new FailingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
+                new SubscriberRegistry(), registry, DOMAIN, handlerTimeout), withDLQRetry, maxRetries, retryDelay,
+                discardNotifier, errorReporter, handlerCalls);
+        try {
+            listener.startListener();
+        } finally {
+            logger.removeHandler(capture);
+            listener.stop();
+        }
+        return warnings;
+    }
+
     private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery) {
         start(withDLQRetry, maxRetries, delivery, Mono.empty());
     }
@@ -298,7 +357,12 @@ class GenericMessageListenerRetryStrategyTest {
 
         FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries,
                         DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            super("test-queue", listener, useDLQRetries, false, maxRetries, RETRY_DELAY, discardNotifier,
+            this(listener, useDLQRetries, maxRetries, RETRY_DELAY, discardNotifier, errorReporter, handlerCalls);
+        }
+
+        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, long retryDelay,
+                        DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
+            super("test-queue", listener, useDLQRetries, false, maxRetries, retryDelay, discardNotifier,
                     "command", errorReporter);
             this.handlerCalls = handlerCalls;
         }

@@ -15,6 +15,7 @@ import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.Disposable;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -57,6 +58,8 @@ public abstract class GenericMessageListener {
      * default), requeueing every delivery of the channel.
      */
     static final Duration HANDLER_WAIT_WARNING = Duration.ofMinutes(1);
+    // the delivery acknowledgement timeout of the broker by default
+    static final Duration DEFAULT_CONSUMER_TIMEOUT = Duration.ofMinutes(30);
     private static final long DRAIN_POLL_MILLIS = 20;
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
@@ -133,6 +136,7 @@ public abstract class GenericMessageListener {
         } else {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
+        warnIfLocalRetriesOutlastTheConsumerTimeout();
 
         final String tag = consumerTag();
         this.consumerTag = tag;
@@ -171,6 +175,28 @@ public abstract class GenericMessageListener {
             ListenerSchedulers.registerListener(messageListener.maxConcurrency());
         }
         subscribe();
+    }
+
+    /**
+     * Local retries keep the delivery unacknowledged: beyond the consumer timeout of the broker, it stops waiting for
+     * the acknowledgement and requeues the delivery (and, depending on the queue type, every delivery of the channel).
+     */
+    private void warnIfLocalRetriesOutlastTheConsumerTimeout() {
+        if (!hasLocalRetries()) {
+            return;
+        }
+        Duration unacknowledged = retryDelay.multipliedBy(maxRetries);
+        if (handlerTimeout != null) {
+            unacknowledged = unacknowledged.plus(handlerTimeout.multipliedBy(maxRetries + 1));
+        }
+        if (unacknowledged.compareTo(DEFAULT_CONSUMER_TIMEOUT) >= 0) {
+            final String held = unacknowledged + (handlerTimeout == null ? " plus the handler attempts" : "");
+            log.warning(() -> format("The local retries of queue %s can keep a delivery unacknowledged for %s "
+                    + "(maxRetries %d, retryDelay %s, handlerTimeout %s), beyond the default consumer_timeout of the "
+                    + "broker (%s): the broker would requeue it. Lower maxRetries or retryDelay, or use withDLQRetry.",
+                    queueName, held, maxRetries, retryDelay, handlerTimeout == null ? "none" : handlerTimeout,
+                    DEFAULT_CONSUMER_TIMEOUT));
+        }
     }
 
     private String getRootCauseMessage(Throwable err) {
@@ -240,7 +266,7 @@ public abstract class GenericMessageListener {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)
                                 .doBeforeRetry(signal -> metrics.recordHandlerRetry()))
                         .onErrorMap(err -> {
-                            if (err.getMessage() != null && err.getMessage().contains("Retries exhausted")) {
+                            if (Exceptions.isRetryExhausted(err)) {
                                 log.warning(err.getMessage());
                                 metrics.recordRetriesExhausted();
                                 return err.getCause();

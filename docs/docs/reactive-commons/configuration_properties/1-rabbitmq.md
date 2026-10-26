@@ -694,6 +694,11 @@ again. With blocking handlers, keep `prefetchCount` × listeners close to the nu
 same time, set `handlerTimeout` well below `consumer_timeout`, and alert on `reactive_commons.consumer.handler.wait`;
 a delivery that waits more than a minute for a thread is also logged as a warning.
 
+With `withDLQRetry: false` and a finite `maxRetries`, the retries run in memory and the delivery stays
+unacknowledged until the last one: up to `maxRetries` × `retryDelay`, plus the time of each attempt (at most
+`handlerTimeout` when set). A listener whose retries can reach 30 minutes logs a warning when it starts: lower
+`maxRetries` or `retryDelay`, or use `withDLQRetry: true`, whose retries wait in the DLQ instead.
+
 ### Scheduler metrics
 
 The handler pool and the error-reporter scheduler are shared by every listener of the JVM. The handler pool can grow
