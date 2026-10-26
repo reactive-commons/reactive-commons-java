@@ -33,6 +33,7 @@ import tools.jackson.databind.json.JsonMapper;
 import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -150,6 +151,49 @@ class ReactiveMessageSenderTest {
         final Mono<Void> voidMono = messageSender.sendWithConfirm(some, "exchange", "rkey", new HashMap<>(), true);
 
         StepVerifier.create(voidMono).verifyComplete();
+    }
+
+    /**
+     * While no publishing flow is available (e.g. the connection is being recovered), the messages wait for one to be
+     * registered instead of being handed over again and again until it is.
+     */
+    @Test
+    void messagesWaitingForAPublishingFlowAreHandedOverOnceItIsRegistered() throws Exception {
+        java.util.concurrent.CompletableFuture<Void> flowsReady = new java.util.concurrent.CompletableFuture<>();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            // the flows get their channel (and register) only once flowsReady completes
+            return Mono.fromFuture(flowsReady).thenMany(argument
+                    .map(outboundMessage -> new OutboundMessageResult<>(outboundMessage, true)));
+        });
+        int messages = 200;
+        try (ReactiveMessageSender waitingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(10))) {
+            List<java.util.concurrent.CompletableFuture<Void>> sends = new ArrayList<>();
+            for (int i = 0; i < messages; i++) {
+                sends.add(waitingSender.sendWithConfirm(new SomeClass(String.valueOf(i), "a", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true).toFuture());
+            }
+            Thread.sleep(1_000);
+            long handOversWhileWaiting = handOvers(waitingSender);
+
+            long registeredAt = System.nanoTime();
+            flowsReady.complete(null);
+            java.util.concurrent.CompletableFuture.allOf(sends.toArray(java.util.concurrent.CompletableFuture[]::new))
+                    .get(5, java.util.concurrent.TimeUnit.SECONDS);
+            long completedAfterMs = Duration.ofNanos(System.nanoTime() - registeredAt).toMillis();
+
+            System.out.printf("hand-overs of %d messages waiting 1 s for a flow: %d, completed %d ms after the flows "
+                    + "registered%n", messages, handOversWhileWaiting, completedAfterMs);
+            assertThat(handOversWhileWaiting).as("hand-overs while no flow is available").isLessThanOrEqualTo(messages);
+            assertThat(completedAfterMs).as("time to publish once a flow is registered").isLessThan(2_000);
+        }
+    }
+
+    private static long handOvers(ReactiveMessageSender sender) throws Exception {
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField("executorService2");
+        field.setAccessible(true);
+        return ((java.util.concurrent.ThreadPoolExecutor) field.get(sender)).getCompletedTaskCount();
     }
 
     /**

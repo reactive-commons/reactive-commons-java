@@ -35,6 +35,7 @@ import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.SignalType;
+import reactor.core.publisher.Sinks;
 import reactor.rabbitmq.ChannelCloseHandlers;
 import reactor.rabbitmq.ExceptionHandlers;
 import reactor.rabbitmq.ExchangeSpecification;
@@ -96,7 +97,6 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
-    private static final Duration AVAILABILITY_POLL_INTERVAL = Duration.ofMillis(50);
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
     /**
      * How long closing the sender waits for the broker before forcing a blocked connection closed.
@@ -152,6 +152,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private final AtomicReferenceArray<FluxSink<OutboundMessage>> confirmSinks =
             new AtomicReferenceArray<>(NUMBER_OF_SENDER_SUBSCRIPTIONS);
     private final AtomicReference<FluxSink<OutboundMessage>> noConfirmSink = new AtomicReference<>();
+    /**
+     * Completes when a publishing flow is registered (or the sender is closed), waking the messages waiting for one;
+     * then replaced by a new one for the next wait.
+     */
+    private final AtomicReference<Sinks.Empty<Void>> flowRegistered = new AtomicReference<>(Sinks.empty());
     private final AtomicInteger nextConfirmSink = new AtomicInteger();
     private final AtomicLong counter = new AtomicLong();
 
@@ -312,6 +317,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
         pendingMessages.forEach(message -> message.fail(shutdownFailure(null)));
         pendingMessages.clear();
+        signalFlowRegistered(); // the messages waiting for a flow retry now, and fail as the sender is closed
         // cancel the flows (and their re-subscription) before the executors: nothing must be re-subscribed
         flowSubscriptions.forEach(Disposable::dispose);
         flowSubscriptions.clear();
@@ -349,6 +355,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         confirmSinks.set(index, sink);
         activeConfirmFlows.incrementAndGet();
         confirmFlowsDownSince.set(null);
+        signalFlowRegistered();
     }
 
     private void onConfirmFlowDisposed(int index, FluxSink<OutboundMessage> sink) {
@@ -361,6 +368,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     private void onNoConfirmFlowRegistered(FluxSink<OutboundMessage> sink) {
         noConfirmSink.set(sink);
         activeNoConfirmFlows.incrementAndGet();
+        signalFlowRegistered();
     }
 
     private void onNoConfirmFlowDisposed(FluxSink<OutboundMessage> sink) {
@@ -639,9 +647,10 @@ public class ReactiveMessageSender implements AutoCloseable {
                         metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
                     }
                 }))
-                // no flow ready yet (start-up, re-subscription): wait for one
-                .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, AVAILABILITY_POLL_INTERVAL)
-                        .filter(NoFlowAvailableException.class::isInstance))
+                // no flow ready yet (start-up, re-subscription): wait until one is registered
+                .retryWhen(Retry.from(signals -> signals.concatMap(signal ->
+                        signal.failure() instanceof NoFlowAvailableException
+                                ? flowAvailable(sinkSelector) : Mono.error(signal.failure()))))
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
                     timedOut.set(true);
@@ -718,6 +727,22 @@ public class ReactiveMessageSender implements AutoCloseable {
         } catch (Exception e) {
             pending.fail(new SendFailureNoAckException("Message not published: " + e.getMessage(), e));
         }
+    }
+
+    /**
+     * Emits once a flow is available to retry the hand-over: right away if one already is, otherwise when the next one
+     * is registered. The signal is taken before checking the flows, so a flow registered in between is not missed.
+     */
+    private Mono<Boolean> flowAvailable(Supplier<FluxSink<OutboundMessage>> sinkSelector) {
+        return Mono.defer(() -> {
+            final Mono<Void> registration = flowRegistered.get().asMono();
+            return closed.get() || sinkSelector.get() != null
+                    ? Mono.just(true) : registration.thenReturn(true);
+        });
+    }
+
+    private void signalFlowRegistered() {
+        flowRegistered.getAndSet(Sinks.empty()).tryEmitEmpty();
     }
 
     private FluxSink<OutboundMessage> nextConfirmSink() {
