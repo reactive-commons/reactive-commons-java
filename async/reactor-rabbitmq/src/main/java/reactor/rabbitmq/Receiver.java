@@ -113,6 +113,10 @@ public class Receiver implements Closeable {
     protected void completeOnChannelShutdown(Channel channel, FluxSink<?> emitter) {
         channel.addShutdownListener(reason -> {
             if (isRecoverable(channel)) {
+                if (!reason.isHardError() && !reason.isInitiatedByApplication()) {
+                    emitter.error(reason);
+                    return;
+                }
                 // we complete only on "normal" (channels closed by application) for recoverable channels
                 // other cases includes disconnection, so the channel should recover and resume consuming
                 if (!AutorecoveringConnection.DEFAULT_CONNECTION_RECOVERY_TRIGGERING_CONDITION.test(reason)) {

@@ -3,9 +3,14 @@ package reactor.rabbitmq;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.DeliverCallback;
+import com.rabbitmq.client.RecoverableChannel;
+import com.rabbitmq.client.ShutdownListener;
+import com.rabbitmq.client.ShutdownSignalException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.io.IOException;
@@ -225,5 +230,38 @@ class ReceiverTest {
 
         assertThat(latch.await(5, TimeUnit.SECONDS)).isTrue();
         assertThat(callbackCalled.await(5, TimeUnit.SECONDS)).isTrue();
+    }
+
+    @Test
+    void aChannelErrorOnARecoverableChannelFailsTheConsumer() {
+        assertThat(terminationOnShutdown(new ShutdownSignalException(false, false, null, null)))
+                .isInstanceOf(ShutdownSignalException.class);
+    }
+
+    @Test
+    void aConnectionLossOnARecoverableChannelKeepsTheConsumerForTheRecovery() {
+        assertThat(terminationOnShutdown(new ShutdownSignalException(true, false, null, null)))
+                .isEqualTo("still subscribed");
+    }
+
+    @Test
+    void aRecoverableChannelClosedByTheApplicationCompletesTheConsumer() {
+        assertThat(terminationOnShutdown(new ShutdownSignalException(false, true, null, null)))
+                .isEqualTo("completed");
+    }
+
+    private Object terminationOnShutdown(ShutdownSignalException reason) {
+        receiver = new Receiver(new ReceiverOptions().connectionMono(Mono.just(connection)));
+        RecoverableChannel recoverable = mock(RecoverableChannel.class);
+        AtomicReference<Object> termination = new AtomicReference<>("still subscribed");
+        Flux.create(emitter -> receiver.completeOnChannelShutdown(recoverable, emitter))
+                .subscribe(ignored -> {
+                }, termination::set, () -> termination.set("completed"));
+        ArgumentCaptor<ShutdownListener> listener = ArgumentCaptor.forClass(ShutdownListener.class);
+        verify(recoverable).addShutdownListener(listener.capture());
+
+        listener.getValue().shutdownCompleted(reason);
+
+        return termination.get();
     }
 }
