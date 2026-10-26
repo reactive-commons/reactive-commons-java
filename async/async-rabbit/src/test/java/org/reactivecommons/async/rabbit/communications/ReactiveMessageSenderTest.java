@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
@@ -19,6 +20,8 @@ import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConv
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
+import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.RabbitFluxException;
@@ -33,6 +36,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Handler;
 import java.util.logging.Level;
@@ -42,6 +46,7 @@ import java.util.logging.Logger;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -198,6 +203,35 @@ class ReactiveMessageSenderTest {
                 assertThat(tooLarge).as("too_large outcome, confirm=%s", confirm).isNotNull();
                 assertThat(tooLarge.count()).isEqualTo("true".equals(confirm) ? 2 : 1);
             }
+        }
+    }
+
+    @Test
+    void aPublishWaitsForTheDeclarationOfItsExchangeAndGoesOnWhenItFails() throws Exception {
+        TopologyCreator topologyCreator = mock(TopologyCreator.class);
+        Sinks.One<AMQP.Exchange.DeclareOk> declared = Sinks.one();
+        when(topologyCreator.declare(any(ExchangeSpecification.class)))
+                .thenReturn(declared.asMono())
+                .thenReturn(Mono.error(new TopologyCreator.TopologyDefException(new IllegalStateException("406"))));
+        try (ReactiveMessageSender declaringSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                topologyCreator, false, unroutableMessageNotifier)) {
+            declaringSender.declareExchange(ExchangeSpecification.exchange("exchange"));
+            AtomicBoolean published = new AtomicBoolean();
+            declaringSender.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey", new HashMap<>(), true)
+                    .subscribe(ignored -> { }, error -> { }, () -> published.set(true));
+
+            // other exchanges do not wait
+            StepVerifier.create(declaringSender.sendWithConfirm(new SomeClass("2", "b", null), "other", "rkey",
+                    new HashMap<>(), true)).verifyComplete();
+            assertThat(published).as("published before its exchange is declared").isFalse();
+
+            declared.tryEmitValue(mock(AMQP.Exchange.DeclareOk.class));
+            await(published::get);
+
+            // a declaration that fails does not fail the publishes
+            declaringSender.declareExchange(ExchangeSpecification.exchange("exchange"));
+            StepVerifier.create(declaringSender.sendWithConfirm(new SomeClass("3", "c", null), "exchange", "rkey",
+                    new HashMap<>(), true)).verifyComplete();
         }
     }
 

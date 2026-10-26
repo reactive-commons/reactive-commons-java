@@ -34,6 +34,7 @@ import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.SignalType;
 import reactor.rabbitmq.ChannelCloseHandlers;
 import reactor.rabbitmq.ExceptionHandlers;
+import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.RabbitFluxException;
@@ -171,6 +172,11 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private final List<Disposable> flowSubscriptions = new ArrayList<>(NUMBER_OF_SENDER_SUBSCRIPTIONS + 1);
     private final Set<PendingMessage> pendingMessages = ConcurrentHashMap.newKeySet();
+    /**
+     * Declarations started by {@link #declareExchange} that have not completed yet, by exchange name: the publishes
+     * to those exchanges wait for them.
+     */
+    private final Map<String, Mono<Void>> exchangeDeclarations = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
@@ -515,7 +521,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(true, body.length);
-            return send(monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
+            return send(exchange, monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
                     this::nextConfirmSink, true);
         });
     }
@@ -532,18 +538,47 @@ public class ReactiveMessageSender implements AutoCloseable {
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(false, body.length);
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
-            return send(monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
+            return send(exchange, monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
                     executorService, onPublished), this::availableNoConfirmSink, false);
         });
     }
 
-    private Mono<Void> send(Function<MonoSink<Void>, PendingMessage> messageFactory,
+    /**
+     * Declares the exchange, and makes the publishes to it wait (within their {@code sendTimeout}) until the
+     * declaration completes: otherwise the first publishes after the start could reach the broker before the
+     * exchange exists, and the broker would close their channel ({@code 404 NOT_FOUND}), failing the other messages
+     * published on it. A declaration that fails (e.g. the exchange already exists with other arguments) is logged and
+     * the publishes go on, to the exchange as it is.
+     *
+     * @param exchange the exchange the publishes of this sender go to
+     */
+    public void declareExchange(ExchangeSpecification exchange) {
+        final String name = exchange.getName();
+        final Mono<Void> declaration = topologyCreator.declare(exchange)
+                .then()
+                .onErrorResume(error -> {
+                    log.log(Level.WARNING, error, () -> "Exchange " + name + " could not be declared, publishing"
+                            + " to it as it is: " + error.getMessage());
+                    return Mono.empty();
+                })
+                .cache();
+        exchangeDeclarations.put(name, declaration);
+        declaration.subscribe(null, null, () -> exchangeDeclarations.remove(name, declaration));
+    }
+
+    private Mono<Void> exchangeDeclared(String exchange) {
+        final Mono<Void> declaration = exchangeDeclarations.get(exchange);
+        return declaration != null ? declaration : Mono.empty();
+    }
+
+    private Mono<Void> send(String exchange, Function<MonoSink<Void>, PendingMessage> messageFactory,
                             Supplier<FluxSink<OutboundMessage>> sinkSelector, boolean confirmFlow) {
         final AtomicBoolean handedToAFlow = new AtomicBoolean();
         final AtomicReference<PendingMessage> current = new AtomicReference<>();
         final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
-        return Mono.<Void>create(monoSink -> {
+        // waits for the declaration within the sendTimeout below, so a broker that never answers it fails the send
+        return exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
                     final PendingMessage pending = messageFactory.apply(monoSink);
                     current.set(pending);
                     if (closed.get()) {
@@ -583,7 +618,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                         }
                         metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
                     }
-                })
+                }))
                 // no flow ready yet (start-up, re-subscription): wait for one
                 .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, AVAILABILITY_POLL_INTERVAL)
                         .filter(NoFlowAvailableException.class::isInstance))
@@ -693,7 +728,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                         "Batch not published: broker signalled connection.blocked ("
                                 + blockedState.blockedReason() + ")"));
             }
-            return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
+            return exchangeDeclared(exchange).thenMany(messages)
+                    .map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
                     .as(outbound -> sender.sendWithPublishConfirms(outbound, new SendOptions()
                             .trackReturned(isMandatory)
                             .exceptionHandler(ReactiveMessageSender::onConfirmPublishFailure)))

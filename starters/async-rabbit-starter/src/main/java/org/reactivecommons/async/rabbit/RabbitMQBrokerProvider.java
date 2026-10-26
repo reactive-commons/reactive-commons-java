@@ -28,6 +28,7 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
@@ -56,6 +57,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean listeningReplies = new AtomicBoolean();
 
     public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
                                   RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
@@ -134,7 +136,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public DomainEventBus getDomainBus() {
         final String exchangeName = props.getBrokerConfigProps().getDomainEventsExchangeName();
         if (Boolean.TRUE.equals(props.getCreateTopology())) {
-            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+            sender.declareExchange(exchange(exchangeName).durable(true).type("topic"));
         }
         return new RabbitDomainEventBus(sender, exchangeName, config);
     }
@@ -143,7 +145,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public DirectAsyncGateway getDirectAsyncGateway() {
         String exchangeName = props.getBrokerConfigProps().getDirectMessagesExchangeName();
         if (Boolean.TRUE.equals(props.getCreateTopology())) {
-            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
+            sender.declareExchange(exchange(exchangeName).durable(true).type("direct"));
         }
         listenReplies();
         return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry, domain);
@@ -256,9 +258,13 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
         }
     }
 
+    /**
+     * Starts the listener of the replies once: every call after the first one (e.g. requesting the direct gateway
+     * again) would add another consumer to the same exclusive reply queue.
+     */
     @Override
     public void listenReplies() {
-        if (Boolean.TRUE.equals(props.getListenReplies())) {
+        if (Boolean.TRUE.equals(props.getListenReplies()) && listeningReplies.compareAndSet(false, true)) {
             final ApplicationReplyListener replyListener = new ApplicationReplyListener(router,
                     receiver,
                     props.getBrokerConfigProps().getReplyQueue(),

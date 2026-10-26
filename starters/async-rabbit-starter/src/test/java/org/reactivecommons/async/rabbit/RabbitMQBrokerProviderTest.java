@@ -100,18 +100,16 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldCreateDomainEventBus() {
-        when(sender.getTopologyCreator()).thenReturn(creator);
-        when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.empty());
         // Act
         DomainEventBus domainBus = brokerProvider.getDomainBus();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(RabbitDomainEventBus.class);
+        // declared through the sender, so the first events wait for the exchange
+        verify(sender).declareExchange(any(ExchangeSpecification.class));
     }
 
     @Test
     void shouldCreateDirectAsyncGateway() {
-        when(sender.getTopologyCreator()).thenReturn(creator);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.empty());
@@ -123,8 +121,12 @@ class RabbitMQBrokerProviderTest {
         when(receiver.consumeAutoAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         // Act
         DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
+        brokerProvider.getDirectAsyncGateway();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(RabbitDirectAsyncGateway.class);
+        verify(sender, times(2)).declareExchange(any(ExchangeSpecification.class));
+        // a single reply listener, however many times the gateway is requested
+        verify(receiver, times(1)).consumeAutoAck(any(String.class), any(ConsumeOptions.class));
     }
 
     @Test
