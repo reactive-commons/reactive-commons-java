@@ -25,7 +25,7 @@ app:
       listenReplies: null # Allows true or false values. If you're using the ReqReply pattern, set it to true. If you don't, set it to false.
       createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
       delayedCommands: false # Enable to send a delayed command to an external target
-      prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this setting acts per instance of your service
+      prefetchCount: 250 # is the maximum number of in flight messages you can reduce it to process less concurrent messages, this setting acts per instance of your service. It must be at least 1: the application does not start with 0 (no limit for the broker) or a negative value
       useDiscardNotifierPerDomain: false # if true it uses a discard notifier for each domain,when false it uses a single discard notifier for all domains with default 'app' domain
       enabled: true # if you want to disable this domain you can set it to false
       mandatory: false # if you want to enable mandatory messages, you can set it to true, this will throw an exception if the message cannot be routed to any queue
