@@ -682,7 +682,7 @@ public class Sender implements AutoCloseable {
             var baseProperties = properties != null ? properties : new AMQP.BasicProperties();
             var headers = baseProperties.getHeaders() != null
                     ? new HashMap<>(baseProperties.getHeaders()) : new HashMap<String, Object>();
-            headers.putIfAbsent(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER, deliveryTag);
+            headers.put(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER, deliveryTag);
             return baseProperties.builder().headers(headers).build();
         }
 

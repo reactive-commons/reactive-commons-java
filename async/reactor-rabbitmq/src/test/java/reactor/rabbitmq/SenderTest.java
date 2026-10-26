@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -540,6 +541,26 @@ class SenderTest {
             if (confirmRef.get() != null) {
                 confirmRef.get().handleAck(42, false);
             }
+        }
+
+        /**
+         * A message consumed and published again carries the tag of its previous publication: the tag of this one
+         * replaces it, otherwise its basic.return would be correlated with another message.
+         */
+        @Test
+        void theDeliveryTagOfAPreviousPublicationIsReplaced() throws Exception {
+            when(channel.getNextPublishSeqNo()).thenReturn(42L);
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+            AMQP.BasicProperties relayed = new AMQP.BasicProperties.Builder()
+                    .headers(Map.of("reactor_rabbitmq_delivery_tag", 7L))
+                    .build();
+
+            sender.sendWithPublishConfirms(Flux.just(new OutboundMessage("exch", "rk", relayed, "m".getBytes())),
+                    new SendOptions().trackReturned(true)).subscribe();
+
+            ArgumentCaptor<AMQP.BasicProperties> propsCaptor = ArgumentCaptor.forClass(AMQP.BasicProperties.class);
+            verify(channel).basicPublish(eq("exch"), eq("rk"), eq(true), propsCaptor.capture(), any(byte[].class));
+            assertThat(propsCaptor.getValue().getHeaders()).containsEntry("reactor_rabbitmq_delivery_tag", 42L);
         }
     }
 
