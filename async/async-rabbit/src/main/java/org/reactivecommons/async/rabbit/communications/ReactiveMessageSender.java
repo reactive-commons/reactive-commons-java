@@ -720,6 +720,13 @@ public class ReactiveMessageSender implements AutoCloseable {
         return sink != null && !sink.isCancelled() ? sink : null;
     }
 
+    /**
+     * Publishes every message of the batch with confirms. Each message must be confirmed within the send timeout,
+     * however long the whole batch takes. A failed message does not stop the batch: once every message is settled,
+     * the batch fails with the exception of its first failure ({@link SendFailureNoAckException},
+     * {@link SendFailureReturnedException}, {@link SendConfirmUnknownException} or
+     * {@link SendFailureMessageTooLargeException}), whose message tells which messages failed and why.
+     */
     public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey,
                                                                 Map<String, Object> headers, boolean persistent) {
         return Flux.defer(() -> {
@@ -732,50 +739,42 @@ public class ReactiveMessageSender implements AutoCloseable {
                         "Batch not published: broker signalled connection.blocked ("
                                 + blockedState.blockedReason() + ")"));
             }
-            return exchangeDeclared(exchange).thenMany(messages)
-                    .map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
-                    .as(outbound -> sender.sendWithPublishConfirms(outbound, new SendOptions()
-                            .trackReturned(isMandatory)
-                            .exceptionHandler(ReactiveMessageSender::onConfirmPublishFailure)))
-                    .<OutboundMessageResult>flatMap(result -> {
+            final ConfirmBatch batch = new ConfirmBatch(sendTimeout);
+            final Mono<OutboundMessageResult> published = exchangeDeclared(exchange)
+                    .thenMany(messages.doOnSubscribe(subscription -> batch.sourceSubscribed()))
+                    .<OutboundMessage>handle((object, sink) -> {
+                        final Message message = messageConverter.toMessage(object);
+                        if (message.getBody().length > maxMessageSize) {
+                            metrics.recordOutcome(OUTCOME_TOO_LARGE, true);
+                            batch.tooLarge(messageIdOf(object));
+                            return;
+                        }
+                        final AMQP.BasicProperties props = buildMessageProperties(object, message, headers,
+                                persistent);
+                        sink.next(batch.published(new OutboundMessage(exchange, routingKey, props,
+                                message.getBody())));
+                    })
+                    .as(outbound -> sender.sendWithPublishConfirms(outbound, confirmSendOptions()))
+                    .doOnNext(result -> {
                         metrics.recordOutcome(outcomeOf(result), true);
-                        // a returned message is also acked: it must be checked first
-                        if (result.returned()) {
-                            return Mono.error(new SendFailureReturnedException("Message returned by the broker: no "
-                                    + "queue is bound to the routing key"));
-                        }
-                        if (result.ack()) {
-                            return Mono.empty();
-                        }
-                        return Mono.error(result.unknown()
-                                ? new SendConfirmUnknownException("Event in doubt: the channel or the connection "
-                                + "failed before its confirmation")
-                                : new SendFailureNoAckException("Event no ACK in communications"));
+                        batch.settled(result);
+                    })
+                    .onErrorMap(batch::stoppedBy)
+                    .then(Mono.defer(batch::outcome));
+            final Mono<OutboundMessageResult> timedOut = Flux.interval(batch.checkPeriod())
+                    .mapNotNull(tick -> batch.expired())
+                    .next()
+                    .flatMap(failure -> {
+                        metrics.recordOutcome(OUTCOME_TIMEOUT, true);
+                        return Mono.error(failure);
                     });
-        })
-                .timeout(sendTimeout)
-                .onErrorMap(TimeoutException.class, e -> {
-                    metrics.recordOutcome(OUTCOME_TIMEOUT, true);
-                    return new SendConfirmUnknownException(
-                            "No confirmation received within " + sendTimeout + ": some messages of the batch may or "
-                                    + "may not have reached the broker", e);
-                });
+            return Mono.firstWithSignal(published, timedOut).flux();
+        });
     }
 
     private SendFailureMessageTooLargeException tooLarge(int bodySize) {
         return new SendFailureMessageTooLargeException("Message not published: its body (" + bodySize
                 + " bytes) is larger than the maximum message size of " + maxMessageSize + " bytes");
-    }
-
-    private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,
-                                                  Map<String, Object> headers, boolean persistent) {
-        final Message message = messageConverter.toMessage(object);
-        if (message.getBody().length > maxMessageSize) {
-            metrics.recordOutcome(OUTCOME_TOO_LARGE, true);
-            throw tooLarge(message.getBody().length);
-        }
-        final AMQP.BasicProperties props = buildMessageProperties(object, message, headers, persistent);
-        return new OutboundMessage(exchange, routingKey, props, message.getBody());
     }
 
     private AMQP.BasicProperties buildMessageProperties(Object source, Message message, Map<String, Object> headers,
