@@ -152,6 +152,28 @@ class ReactiveMessageSenderTest {
         StepVerifier.create(voidMono).verifyComplete();
     }
 
+    /**
+     * A sender that is never closed (e.g. used outside Spring) must not keep the JVM alive, nor keep idle threads
+     * forever.
+     */
+    @Test
+    void thePoolsOfTheSenderUseDaemonThreadsReleasedWhenIdle() throws Exception {
+        StepVerifier.create(messageSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                "rkey", new HashMap<>(), true)).verifyComplete();
+
+        List<Thread> poolThreads = Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().startsWith("RMessageSender"))
+                .toList();
+        assertThat(poolThreads).as("threads of the hand-over and completion pools").isNotEmpty()
+                .allSatisfy(thread -> assertThat(thread.isDaemon()).as(thread.getName()).isTrue());
+        for (String pool : List.of("executorService", "executorService2")) {
+            java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField(pool);
+            field.setAccessible(true);
+            assertThat(((java.util.concurrent.ThreadPoolExecutor) field.get(messageSender)).allowsCoreThreadTimeOut())
+                    .as("idle threads of %s are released", pool).isTrue();
+        }
+    }
+
     @Test
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();

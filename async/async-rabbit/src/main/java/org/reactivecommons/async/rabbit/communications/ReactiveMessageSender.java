@@ -60,8 +60,9 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -87,6 +88,7 @@ public class ReactiveMessageSender implements AutoCloseable {
      * must not reject messages, only a connection the broker stopped draining.
      */
     static final int DEFAULT_HAND_OVER_QUEUE_CAPACITY = 16_384;
+    private static final Duration IDLE_THREAD_KEEP_ALIVE = Duration.ofSeconds(60);
     /**
      * The default {@code max_message_size} of RabbitMQ 4: a larger body makes the broker close the channel.
      */
@@ -183,9 +185,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
-     * Completes the callers' Monos, so their continuations never run on the broker connection threads.
+     * Completes the callers' Monos, so their continuations never run on the broker connection threads. Its queue is
+     * not bounded: a completion cannot be rejected (its caller would wait forever) nor run on the connection thread,
+     * and it only holds the outcomes of the messages the application published concurrently.
      */
-    private final ExecutorService executorService;
+    private final ThreadPoolExecutor executorService;
     /**
      * Publishes the messages (a publish can block, e.g. on a broker resource alarm). Bounded on purpose: a sustained
      * block fills this queue and surfaces as {@link SendFailureHandOverRejectedException} to the caller instead of
@@ -241,16 +245,20 @@ public class ReactiveMessageSender implements AutoCloseable {
         this.sendTimeout = sendTimeout;
         this.blockedState = blockedState != null ? blockedState : new ConnectionBlockedState();
         this.maxBufferedMessages = Math.max(1, handOverQueueCapacity);
-        this.executorService = Executors.newFixedThreadPool(
-                handOverPoolSize,
-                r -> new Thread(r, "RMessageSender1-" + counter.getAndIncrement())
-        );
+        this.executorService = new ThreadPoolExecutor(
+                handOverPoolSize, handOverPoolSize,
+                IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                daemonThreads("RMessageSender1-"));
         this.executorService2 = new ThreadPoolExecutor(
                 handOverPoolSize, handOverPoolSize,
-                0L, TimeUnit.MILLISECONDS,
+                IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(Math.max(1, handOverQueueCapacity)),
-                r -> new Thread(r, "RMessageSender2-" + counter.getAndIncrement()),
+                daemonThreads("RMessageSender2-"),
                 new ThreadPoolExecutor.AbortPolicy());
+        // a sender that is not closed (e.g. used outside Spring) neither keeps idle threads nor the JVM alive
+        this.executorService.allowCoreThreadTimeOut(true);
+        this.executorService2.allowCoreThreadTimeOut(true);
         this.metrics = new PublishMetrics(meterRegistry, domain, this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
         initializeSenders();
@@ -315,6 +323,14 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private static SendFailureNoAckException shutdownFailure(Throwable cause) {
         return new SendFailureNoAckException("Message not published: sender is shut down", cause);
+    }
+
+    private ThreadFactory daemonThreads(String namePrefix) {
+        return runnable -> {
+            final Thread thread = new Thread(runnable, namePrefix + counter.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     private static void shutdownAndAwait(ExecutorService executor) {
