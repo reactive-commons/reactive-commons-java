@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
 import java.util.Map;
@@ -94,7 +95,8 @@ class CommandBatchRabbitContainerTest {
 
     /**
      * A memory alarm is raised in the middle of the batch: the broker stops reading from the connection, so the
-     * messages published from then on are never confirmed and the batch fails within the send timeout.
+     * messages published from then on (cmd-2 to cmd-5) are never confirmed and the batch fails within the send
+     * timeout.
      */
     @Test
     void aBatchFailsWhenItsMessagesAreNotConfirmedWithinTheSendTimeout() throws Exception {
@@ -103,17 +105,20 @@ class CommandBatchRabbitContainerTest {
              Connection connection = connect()) {
             bindQueue(connection, target, Map.of());
             AtomicLong lastProducedAt = new AtomicLong();
-            Flux<Command<Map<String, Integer>>> commands = Flux.range(0, 6)
-                    .delayElements(Duration.ofMillis(300))
+            Sinks.Empty<Void> alarmRaised = Sinks.empty();
+            // cmd-0 and cmd-1 right away, the rest once the alarm is raised
+            Flux<Command<Map<String, Integer>>> commands = Flux.concat(Flux.range(0, 2),
+                            alarmRaised.asMono().thenMany(Flux.range(2, 4)))
                     .doOnNext(i -> lastProducedAt.set(System.currentTimeMillis()))
                     .map(i -> new Command<>("scenario.command", "cmd-" + i, Map.of("i", i)));
 
             var send = gateway(context).sendCommands(commands, target).then().toFuture();
-            Thread.sleep(800); // cmd-0 and cmd-1 are confirmed before the alarm
+            Thread.sleep(500); // cmd-0 and cmd-1 are confirmed before the alarm
             Throwable error;
             long sinceLastMessage;
             try {
                 rabbitmqctl("set_vm_memory_high_watermark", "0");
+                alarmRaised.tryEmitEmpty();
                 error = outcome(Mono.fromFuture(send));
                 sinceLastMessage = System.currentTimeMillis() - lastProducedAt.get();
             } finally {
