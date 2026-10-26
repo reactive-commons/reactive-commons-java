@@ -136,6 +136,11 @@ public class ApplicationReplyListener {
         if (stopped.get()) {
             return;
         }
+        // the previous consumer is cancelled before the new one is registered, so they never overlap
+        final Disposable previous = activeSubscription.getAndSet(null);
+        if (previous != null) {
+            previous.dispose();
+        }
         final AtomicReference<Throwable> terminationCause = new AtomicReference<>();
         final Disposable subscription = deliveryFlux
                 .doOnError(terminationCause::set)
@@ -146,9 +151,9 @@ public class ApplicationReplyListener {
                             ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
-        final Disposable previous = activeSubscription.getAndSet(subscription);
-        if (previous != null && previous != subscription) {
-            previous.dispose();
+        final Disposable concurrent = activeSubscription.getAndSet(subscription);
+        if (concurrent != null && concurrent != subscription) {
+            concurrent.dispose();
         }
         if (stopped.get() && activeSubscription.compareAndSet(subscription, null)) {
             // stop() ran while this subscription was being created
