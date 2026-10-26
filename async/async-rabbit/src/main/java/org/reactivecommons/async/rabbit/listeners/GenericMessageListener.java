@@ -83,6 +83,10 @@ public abstract class GenericMessageListener {
      * The channel the consumer of the current subscription is registered on, to cancel it on shutdown.
      */
     private final AtomicReference<Channel> consumingChannel = new AtomicReference<>();
+    /**
+     * Whether the maxConcurrency of this listener is counted in the limit of the shared handler pool.
+     */
+    private final AtomicBoolean handlerPoolRoom = new AtomicBoolean();
     private volatile String consumerTag;
 
     protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
@@ -162,6 +166,10 @@ public abstract class GenericMessageListener {
                     .transform(this::consumeFaultTolerant);
         }
 
+        // the shared handler pool grows to fit every listener: one whose handlers block cannot starve the others
+        if (handlerPoolRoom.compareAndSet(false, true)) {
+            ListenerSchedulers.registerListener(messageListener.maxConcurrency());
+        }
         subscribe();
     }
 
@@ -307,6 +315,9 @@ public abstract class GenericMessageListener {
         }
         if (messageListener.subscriberRegistry() != null) {
             messageListener.subscriberRegistry().unregister(queueName);
+        }
+        if (handlerPoolRoom.compareAndSet(true, false)) {
+            ListenerSchedulers.unregisterListener(messageListener.maxConcurrency());
         }
     }
 

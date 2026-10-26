@@ -32,7 +32,7 @@ app:
       brokerType: "rabbitmq" # please don't change this value
       queueType: null # you can set to 'classic' or to 'quorum' if your RabbitMQ cluster supports it, by default it will take the virtual host default queue type
       flux:
-        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows up to 250 threads only when the handlers block (blocking I/O) and releases the idle threads after a minute
+        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows only when the handlers block (blocking I/O), up to the sum of the maxConcurrency of the listeners (at least 250 threads), and releases the idle threads after a minute
       domain:
         ignoreThisListener: false # Allows you to disable event listener for this specific domain
         events:
@@ -696,8 +696,12 @@ a delivery that waits more than a minute for a thread is also logged as a warnin
 
 ### Scheduler metrics
 
-The handler pool and the error-reporter scheduler are shared by every listener of the JVM. While at least one
-application context using them has a `MeterRegistry`, the handler pool is exported to that registry:
+The handler pool and the error-reporter scheduler are shared by every listener of the JVM. The handler pool can grow
+up to the sum of the `maxConcurrency` of the active listeners (at least 250 threads), so the handlers of a listener
+never wait for the threads taken by the blocking handlers of another one (e.g. queries behind slow event handlers).
+It only grows when its handlers block: lower the `maxConcurrency` of a listener whose handlers block to bound the
+threads it can take. While at least one application context using them has a `MeterRegistry`, the handler pool is
+exported to that registry:
 
 | Metric                                               | Type            | Meaning                                                                   |
 |------------------------------------------------------|-----------------|---------------------------------------------------------------------------|
