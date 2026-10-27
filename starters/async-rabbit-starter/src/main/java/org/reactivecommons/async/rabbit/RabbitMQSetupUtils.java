@@ -28,6 +28,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.spring.RabbitPropertiesBase;
 import org.springframework.boot.context.properties.PropertyMapper;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ChannelPool;
 import reactor.rabbitmq.ChannelPoolFactory;
 import reactor.rabbitmq.ChannelPoolOptions;
@@ -250,6 +251,9 @@ public final class RabbitMQSetupUtils {
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
                     ))
+                    // opening a connection blocks (up to the connection timeout): neither on the thread that
+                    // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
+                    .subscribeOn(Schedulers.boundedElastic())
                     .doOnError(err -> log.error(
                             "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
                             f.getHost(), err

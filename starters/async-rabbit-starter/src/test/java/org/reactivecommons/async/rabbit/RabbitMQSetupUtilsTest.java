@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
+import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import io.netty.buffer.ByteBufAllocator;
 import io.netty.handler.ssl.SslContext;
@@ -8,13 +9,48 @@ import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 
 import javax.net.ssl.SSLEngine;
+import java.io.IOException;
 import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class RabbitMQSetupUtilsTest {
+
+    /**
+     * Opening a connection blocks (TCP, TLS and AMQP handshakes, up to the connection timeout): every attempt, the
+     * retries included, runs on a thread meant for blocking calls, never on the non-blocking parallel threads the
+     * retry backoff is timed on.
+     */
+    @Test
+    void everyConnectionAttemptRunsOnAThreadMeantForBlockingCalls() throws Exception {
+        ConnectionFactory factory = mock(ConnectionFactory.class);
+        Connection connection = mock(Connection.class);
+        List<String> attempts = new CopyOnWriteArrayList<>();
+        when(factory.newConnection(anyString())).thenAnswer(invocation -> {
+            attempts.add(Thread.currentThread().getName());
+            if (attempts.size() <= 2) {
+                throw new IOException("broker unreachable");
+            }
+            return connection;
+        });
+        RabbitMQSetupUtils.retainConnections(factory);
+        try {
+            assertThat(RabbitMQSetupUtils.listenerConnectionMono(() -> factory, "test-app")
+                    .block(Duration.ofSeconds(10))).isSameAs(connection);
+        } finally {
+            RabbitMQSetupUtils.releaseConnections(factory);
+        }
+
+        assertThat(attempts).as("first attempt + 2 retries").hasSize(3)
+                .allSatisfy(thread -> assertThat(thread).startsWith("boundedElastic"));
+    }
 
     @Test
     void connectionTimeoutAndRequestedHeartbeatAreAppliedToTheConnectionFactory() {
