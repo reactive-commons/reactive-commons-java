@@ -1030,10 +1030,16 @@ public class ReactiveMessageSender implements AutoCloseable {
         @Override
         protected void published() {
             super.published();
-            completionExecutor.execute(() -> {
+            final Runnable completion = () -> {
                 onPublished.run();
                 succeed();
-            });
+            };
+            try {
+                completionExecutor.execute(completion);
+            } catch (RejectedExecutionException e) {
+                // the sender was closed while the message was being written: it was published all the same
+                completion.run();
+            }
         }
     }
 

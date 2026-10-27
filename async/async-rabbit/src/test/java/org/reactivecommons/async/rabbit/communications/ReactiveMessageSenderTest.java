@@ -32,6 +32,8 @@ import reactor.test.StepVerifier;
 import reactor.util.context.Context;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
@@ -39,6 +41,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.logging.Handler;
@@ -46,6 +50,7 @@ import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.any;
@@ -219,6 +224,75 @@ class ReactiveMessageSenderTest {
                             .isInstanceOf(SendFailureNoAckException.class)
                             .hasMessageContaining("not published"))
                     .verify(Duration.ofSeconds(5));
+        }
+    }
+
+    /**
+     * A publish without confirms that blocks (e.g. the broker blocks the connection) completes after the sender shut
+     * its completion pool down: the published message must not be reported as a failed publish.
+     */
+    @Test
+    void aMessagePublishedAfterTheSenderClosedItsPoolsIsNotAFailedPublish() throws Exception {
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch poolsShutDown = new CountDownLatch(1);
+        CountDownLatch publishedCalled = new CountDownLatch(1);
+        AtomicReference<Throwable> publishedFailure = new AtomicReference<>();
+        when(sender.send(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            argument.subscribe(message -> {
+                publishing.countDown();
+                awaitUninterruptibly(poolsShutDown); // the basicPublish blocks until the sender closed its pools
+                try {
+                    // protected: called by the Sender once basicPublish returned
+                    Method published = OutboundMessage.class.getDeclaredMethod("published");
+                    published.setAccessible(true);
+                    published.invoke(message);
+                } catch (InvocationTargetException e) {
+                    publishedFailure.set(e.getCause());
+                } catch (ReflectiveOperationException e) {
+                    publishedFailure.set(e);
+                } finally {
+                    publishedCalled.countDown();
+                }
+            });
+            return Mono.never();
+        });
+        ReactiveMessageSender closingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+        closingSender.sendNoConfirm(new SomeClass("42", "Daniel", new Date()), "exchange", "rkey", new HashMap<>(),
+                false).subscribe(null, error -> { });
+        assertThat(publishing.await(5, TimeUnit.SECONDS)).as("publishing").isTrue();
+
+        Thread closing = new Thread(closingSender::close);
+        closing.start();
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField("executorService");
+        field.setAccessible(true);
+        java.util.concurrent.ExecutorService completionPool =
+                (java.util.concurrent.ExecutorService) field.get(closingSender);
+        long deadline = System.currentTimeMillis() + 15_000;
+        while (!completionPool.isShutdown() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50);
+        }
+        poolsShutDown.countDown();
+        closing.join(15_000);
+        assertThat(publishedCalled.await(5, TimeUnit.SECONDS)).as("publish completed").isTrue();
+
+        assertThat(completionPool.isShutdown()).as("completion pool shut down before the publish completed").isTrue();
+        assertThat(publishedFailure.get()).as("failure reported for a message that was published").isNull();
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        boolean interrupted = false;
+        while (true) {
+            try {
+                latch.await();
+                break;
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 
