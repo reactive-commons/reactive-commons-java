@@ -27,7 +27,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -127,7 +126,7 @@ class RabbitMQSetupUtilsRabbitContainerTest {
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, (cf, p) -> cf);
         RabbitMQSetupUtils.retainConnections(provider.getConnectionFactory());
         Connection connection = RabbitMQSetupUtils.listenerConnectionMono(provider, "tc-release").block(TIMEOUT);
-        assertThat(brokerConnectionNames()).as("listed by the broker").anyMatch(name -> name.startsWith("tc-release-"));
+        assertThat(RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-")).as("listed by the broker").isEqualTo(1);
 
         // the broker closes it: the client recovers it after the network recovery interval (5 s by default)
         RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "release test");
@@ -139,22 +138,11 @@ class RabbitMQSetupUtilsRabbitContainerTest {
         RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
 
         Thread.sleep(8_000); // the recovery would have reconnected by now
-        List<String> connections = brokerConnectionNames();
+        int connections = RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-");
         System.out.println("[REAL BROKER] connection released while recovering: open=" + connection.isOpen()
-                + ", broker connections=" + connections);
+                + ", listed by the broker=" + connections);
         assertThat(connection.isOpen()).as("not recovered once released").isFalse();
-        assertThat(connections).noneMatch(name -> name.startsWith("tc-release-"));
-    }
-
-    /**
-     * The names the clients gave to their connections, as the broker lists them (the {@code connection_name} of the
-     * client properties: RabbitMQ 4 no longer lists {@code user_provided_name}).
-     */
-    private static List<String> brokerConnectionNames() throws Exception {
-        String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties")
-                .getStdout();
-        return Pattern.compile("\\{\"connection_name\",\"([^\"]*)\"}").matcher(listing).results()
-                .map(match -> match.group(1)).toList();
+        assertThat(connections).as("listed by the broker").isZero();
     }
 
     /**
