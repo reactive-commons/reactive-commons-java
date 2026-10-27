@@ -10,6 +10,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.Sender;
@@ -22,8 +23,10 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,6 +60,7 @@ class ReactiveMessageSenderChannelFailureTest {
      */
     private static final int CONFIRM_SUBSCRIPTIONS = 4;
     private static final Duration SHORT_SEND_TIMEOUT = Duration.ofMillis(500);
+    private static final int BATCH_LIMIT = ReactiveMessageSender.BATCH_MAX_IN_FLIGHT;
 
     private final MessageConverter converter = new RabbitJacksonMessageConverter(new JsonMapper());
 
@@ -235,6 +239,47 @@ class ReactiveMessageSenderChannelFailureTest {
                 })
                 .expectError(SendConfirmUnknownException.class)
                 .verify(Duration.ofSeconds(5));
+    }
+
+    @Test
+    void aBatchKeepsAtMostItsLimitOfMessagesWaitingForTheirConfirmation() throws Exception {
+        ReactiveMessageSender messageSender = newMessageSender(channelMono, ReactiveMessageSender.DEFAULT_SEND_TIMEOUT);
+        confirmsEnabled.set(false);
+        AtomicInteger taken = new AtomicInteger();
+
+        Disposable batch = messageSender.sendWithConfirmBatch(
+                Flux.range(0, BATCH_LIMIT * 40).doOnNext(i -> taken.incrementAndGet()), "exchange", "rkey",
+                new HashMap<>(), true).subscribe();
+        try {
+            awaitPublished(BATCH_LIMIT);
+            sleep(200); // no confirm arrives: nothing else is taken from the batch
+            assertThat(publishedWithConfirms()).isEqualTo(BATCH_LIMIT);
+            assertThat(taken).as("taken from the source of the batch").hasValue(BATCH_LIMIT);
+        } finally {
+            batch.dispose();
+        }
+    }
+
+    @Test
+    void aBatchTakesItsNextMessagesAsTheirConfirmsArriveOffTheThreadThatDeliversThem() throws Exception {
+        ReactiveMessageSender messageSender = newMessageSender(channelMono, ReactiveMessageSender.DEFAULT_SEND_TIMEOUT);
+        confirmsEnabled.set(false);
+        List<String> takenOn = new CopyOnWriteArrayList<>();
+        Flux<Integer> source = Flux.range(0, BATCH_LIMIT * 4)
+                .doOnNext(i -> takenOn.add(Thread.currentThread().getName()));
+
+        CompletableFuture<Void> done = messageSender.sendWithConfirmBatch(source, "exchange", "rkey",
+                new HashMap<>(), true).then().toFuture();
+        awaitPublished(BATCH_LIMIT);
+        confirmsEnabled.set(true); // from now on every message is confirmed as soon as it is published
+        // the confirms of the first messages, delivered on this thread as the I/O thread of the connection would
+        confirmListeners.get(channels.get(CONFIRM_SUBSCRIPTIONS + 1)).handleAck(BATCH_LIMIT, true);
+
+        done.get(5, TimeUnit.SECONDS);
+        assertThat(publishedWithConfirms()).isEqualTo(BATCH_LIMIT * 4L);
+        assertThat(takenOn.subList(BATCH_LIMIT, takenOn.size()))
+                .as("the next messages are taken and published on a worker, never on the thread of the confirms")
+                .doesNotContain(Thread.currentThread().getName());
     }
 
     private record Counters(AtomicInteger completed, AtomicInteger failed) {

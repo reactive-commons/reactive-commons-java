@@ -36,6 +36,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.SignalType;
 import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ChannelCloseHandlers;
 import reactor.rabbitmq.ExceptionHandlers;
 import reactor.rabbitmq.ExchangeSpecification;
@@ -98,6 +99,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
+    /**
+     * Messages of a batch published and not confirmed yet, at most: the next ones are taken from the batch as the
+     * confirms arrive, so a large batch, or one streamed from a query, is never held in memory at once.
+     */
+    static final int BATCH_MAX_IN_FLIGHT = 256;
     /**
      * How long closing the sender waits for the broker before forcing a blocked connection closed.
      */
@@ -765,7 +771,9 @@ public class ReactiveMessageSender implements AutoCloseable {
      * however long the whole batch takes. A failed message does not stop the batch: once every message is settled,
      * the batch fails with the exception of its first failure ({@link SendFailureNoAckException},
      * {@link SendFailureReturnedException}, {@link SendConfirmUnknownException} or
-     * {@link SendFailureMessageTooLargeException}), whose message tells which messages failed and why.
+     * {@link SendFailureMessageTooLargeException}), whose message tells which messages failed and why. At most
+     * {@value #BATCH_MAX_IN_FLIGHT} messages wait for their confirmation at the same time: the next ones are taken
+     * from the batch as the confirms arrive.
      */
     public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey,
                                                                 Map<String, Object> headers, boolean persistent) {
@@ -794,7 +802,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                         sink.next(batch.published(new OutboundMessage(exchange, routingKey, props,
                                 message.getBody())));
                     })
-                    .as(outbound -> sender.sendWithPublishConfirms(outbound, confirmSendOptions()))
+                    .as(outbound -> sender.sendWithPublishConfirms(outbound, confirmSendOptions()
+                            .maxInFlight(BATCH_MAX_IN_FLIGHT, Schedulers.boundedElastic())))
                     .doOnNext(result -> {
                         metrics.recordOutcome(outcomeOf(result), true);
                         batch.settled(result);
