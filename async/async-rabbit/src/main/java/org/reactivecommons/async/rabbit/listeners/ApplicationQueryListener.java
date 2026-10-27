@@ -76,6 +76,12 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return executor::execute;
     }
 
+    @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
+        return handler != null ? handler.path() : null;
+    }
+
     private Function<Message, Object> resolveConverter(Class<?> handlerClass) {
         if (handlerClass == CloudEvent.class) {
             return converter::readCloudEvent;

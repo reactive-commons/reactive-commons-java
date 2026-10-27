@@ -111,9 +111,10 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
   without it the series of a pod that is gone keep their last value for 5 minutes.
 - **`handler.latency` vs `handler.execution`.** `handler.latency` is end-to-end (wait for a handler thread +
   execution + every local retry with its delay). `handler.execution` is per attempt around `handler.apply`, tagged
-  `outcome` ∈ {success, error, timeout} and `handler` = the executor path of a registered handler (bounded by the
-  handler cache: the ones beyond it fall back to `unknown`; a message without a handler has no sample). Diagnosis: `wait` high and `execution` low = pool saturation; `execution`
-  high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent.
+  `outcome` ∈ {success, error, timeout} and `handler` = the path the handler was registered with (e.g. `orders.*`
+  and not the routing key it matched; `unknown` for the default command handler; a message without a handler has no
+  sample). Diagnosis: `wait` high and `execution` low = pool saturation; `execution` high = the handler itself;
+  `execution` near `handlerTimeout` = timeouts are imminent.
 - **RabbitMQ client metrics (`rabbitmq_*`).** Connections, channels, confirms and deliveries at the protocol level
   are not exported by default: enable them with a `ConnectionFactoryCustomizer` (see *RabbitMQ client metrics* in the
   RabbitMQ configuration guide). They are a cross-check of `publish.outcome` and `consumer.messages`.

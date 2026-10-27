@@ -60,7 +60,7 @@ public abstract class GenericMessageListener {
     // the delivery acknowledgement timeout of the broker by default
     static final Duration DEFAULT_CONSUMER_TIMEOUT = Duration.ofMinutes(30);
     private static final long DRAIN_POLL_MILLIS = 20;
-    private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ResolvedHandler> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
     private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
@@ -243,12 +243,10 @@ public abstract class GenericMessageListener {
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         try {
             final String executorPath = getExecutorPath(msj);
-            final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
+            final ResolvedHandler resolved = getExecutor(executorPath);
+            final Function<Message, Mono<Object>> handler = resolved.handler();
             final Message message = RabbitMessage.fromDelivery(msj, executorPath);
-            // only a resolved handler gets here (an unregistered path fails in getExecutor), and the handlers are
-            // cached up to MAX_CACHED_HANDLERS: the ones beyond the cache bucket to "unknown", bounding the cardinality
-            final String handlerTag = handlers.containsKey(executorPath)
-                    ? executorPath : ConsumerMetrics.UNKNOWN_HANDLER;
+            final String handlerTag = resolved.name();
 
             final AtomicBoolean started = new AtomicBoolean();
             final AtomicReference<Instant> attemptStart = new AtomicReference<>();
@@ -469,16 +467,16 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private Function<Message, Mono<Object>> getExecutor(String path) {
-        final Function<Message, Mono<Object>> cached = handlers.get(path);
+    private ResolvedHandler getExecutor(String path) {
+        final ResolvedHandler cached = handlers.get(path);
         if (cached != null) {
             return cached;
         }
-        final Function<Message, Mono<Object>> handler = rawMessageHandler(path);
+        final ResolvedHandler resolved = new ResolvedHandler(rawMessageHandler(path), handlerName(path));
         if (handlers.size() < MAX_CACHED_HANDLERS) {
-            handlers.putIfAbsent(path, handler);
+            handlers.putIfAbsent(path, resolved);
         }
-        return handler;
+        return resolved;
     }
 
     private void onHandlerStarted(Duration wait) {
@@ -497,6 +495,15 @@ public abstract class GenericMessageListener {
     }
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);
+
+    /**
+     * The name the executions of the handler resolved for this path are tagged with. A listener whose paths are
+     * matched by wildcards returns the path its handler was registered with: the code bounds those, while the
+     * publishers choose the routing keys a wildcard matches. Null or empty for a handler registered without a path.
+     */
+    protected String handlerName(String executorPath) {
+        return executorPath;
+    }
 
     protected abstract String getExecutorPath(AcknowledgableDelivery msj);
 
@@ -624,6 +631,7 @@ public abstract class GenericMessageListener {
     protected String consumerTag() {
         return InstanceIdentifier.getInstanceId(getKind());
     }
+
+    private record ResolvedHandler(Function<Message, Mono<Object>> handler, String name) {
+    }
 }
-
-

@@ -31,9 +31,10 @@ import java.util.logging.Logger;
  *     <li>{@code reactive_commons.consumer.handler.latency} — Timer, around the handler's Mono. End-to-end:
  *     includes handler-pool wait, every local retry and the retry delays.</li>
  *     <li>{@code reactive_commons.consumer.handler.execution} — Timer, per attempt around {@code handler.apply}.
- *     Extra tags: {@code outcome} ∈ {success, error, timeout} and {@code handler} (the executor path of a registered
- *     handler, bounded by {@link GenericMessageListener#MAX_CACHED_HANDLERS}: the handlers beyond the cache bucket to
- *     {@code unknown}; a message without a handler fails before running and has no sample). Compare
+ *     Extra tags: {@code outcome} ∈ {success, error, timeout} and {@code handler} (the path the handler was
+ *     registered with, e.g. {@code orders.*} and not the routing keys it matches, so the code bounds it;
+ *     {@code unknown} for a handler registered without a path, like the default command handler; a message without
+ *     a handler fails before running and has no sample). Compare
  *     against {@code handler.latency} to split handler-pool wait from handler duration, and against
  *     {@code handlerTimeout} to see how close attempts run to the per-attempt deadline.</li>
  *     <li>{@code reactive_commons.consumer.handler.wait} — Timer, from the delivery to the start of its handler.</li>
@@ -311,7 +312,8 @@ public final class ConsumerMetrics {
         if (registry == null) {
             return;
         }
-        final Timer timer = executionTimer(outcome, handler != null ? handler : UNKNOWN_HANDLER);
+        final Timer timer = executionTimer(outcome,
+                handler != null && !handler.isEmpty() ? handler : UNKNOWN_HANDLER);
         if (timer != null) {
             timer.record(took);
         }

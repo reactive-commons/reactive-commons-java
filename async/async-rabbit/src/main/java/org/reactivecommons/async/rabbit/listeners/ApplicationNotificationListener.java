@@ -92,6 +92,12 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     }
 
     @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredEventListener<Object, Object> eventListener = resolver.getNotificationListener(executorPath);
+        return eventListener != null ? eventListener.path() : null;
+    }
+
+    @Override
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
     }

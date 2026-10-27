@@ -46,4 +46,20 @@ class ConsumerMetricsTest {
                 .isNotNull();
         other.close();
     }
+
+    /**
+     * The default command handler is registered without a path: its executions get a named tag value, since
+     * Prometheus reads an empty one as a missing label.
+     */
+    @Test
+    void theExecutionsOfAHandlerRegisteredWithoutAPathAreTaggedUnknown() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ConsumerMetrics metrics = new ConsumerMetrics(registry, "app", "queue", new ListenerLiveness("queue"));
+
+        metrics.recordHandlerExecution("", ConsumerMetrics.EXECUTION_SUCCESS, java.time.Duration.ofMillis(1));
+
+        assertThat(registry.find("reactive_commons.consumer.handler.execution").timers())
+                .extracting(timer -> timer.getId().getTag("handler")).containsExactly(ConsumerMetrics.UNKNOWN_HANDLER);
+        metrics.close();
+    }
 }

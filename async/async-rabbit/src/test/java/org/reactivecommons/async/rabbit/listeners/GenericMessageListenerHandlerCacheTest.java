@@ -9,21 +9,28 @@ import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
+import org.reactivecommons.async.api.handlers.DomainEventHandler;
+import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
+import tools.jackson.databind.json.JsonMapper;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
@@ -62,6 +69,34 @@ class GenericMessageListenerHandlerCacheTest {
                 + resolutions.get());
 
         assertThat(cached).as("bounded cache").isLessThanOrEqualTo(1_000);
+    }
+
+    /**
+     * The handler tag of the execution metrics is the path the listener was registered with, not the routing key its
+     * wildcard matched: the code bounds the first one, the publishers the second one.
+     */
+    @Test
+    void theExecutionsOfAWildcardListenerAreTaggedWithItsRegisteredPath() throws Exception {
+        int routingKeys = 50;
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.range(0, routingKeys)
+                .map(i -> delivery(i, "event." + i, null, "{\"name\":\"event." + i + "\",\"eventId\":\"e-" + i
+                        + "\",\"data\":{}}"))
+                .concatWith(Flux.never()));
+        DomainEventHandler<Object> handler = event -> Mono.empty();
+        Map<String, RegisteredEventListener<?, ?>> events = Map.of("event.*",
+                new RegisteredEventListener<>("event.*", handler, Object.class));
+        new ApplicationEventListener(new ReactiveMessageListener(receiver, mock(TopologyCreator.class), 250, 250,
+                new SubscriberRegistry(), registry, "app", null), "test-queue", "domainEvents",
+                new HandlerResolver(Map.of(), events, events, Map.of(), Map.of(), Map.of(), Map.of()),
+                new RabbitJacksonMessageConverter(new JsonMapper()), false, false, -1, 10, Optional.empty(),
+                mock(DiscardNotifier.class), mock(CustomReporter.class), "app").startListener();
+
+        verify(channel, timeout(10_000).times(routingKeys)).basicAck(anyLong(), any(Boolean.class));
+        Collection<Timer> executions = registry.find("reactive_commons.consumer.handler.execution").timers();
+
+        assertThat(executions).extracting(timer -> timer.getId().getTag("handler")).containsOnly("event.*");
+        assertThat(executions).extracting(Timer::count).containsOnly((long) routingKeys);
     }
 
     /**
@@ -122,6 +157,10 @@ class GenericMessageListenerHandlerCacheTest {
     }
 
     private AcknowledgableDelivery delivery(long tag, String routingKey, Long deadLetterings) {
+        return delivery(tag, routingKey, deadLetterings, "{}");
+    }
+
+    private AcknowledgableDelivery delivery(long tag, String routingKey, Long deadLetterings, String body) {
         Map<String, Object> headers = new HashMap<>();
         if (deadLetterings != null) {
             HashMap<String, Object> death = new HashMap<>();
@@ -132,7 +171,7 @@ class GenericMessageListenerHandlerCacheTest {
         AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder().messageId("m-" + tag).headers(headers)
                 .build();
         Delivery delivery = new Delivery(new Envelope(tag + 1, false, "exchange", routingKey), properties,
-                "{}".getBytes());
+                body.getBytes());
         return new AcknowledgableDelivery(delivery, channel, (context, error) -> {
             throw new IllegalStateException(error);
         });

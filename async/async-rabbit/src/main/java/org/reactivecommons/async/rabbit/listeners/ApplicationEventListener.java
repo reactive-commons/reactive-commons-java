@@ -128,6 +128,12 @@ public class ApplicationEventListener extends GenericMessageListener {
     }
 
     @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
+        return handler != null ? handler.path() : null;
+    }
+
+    @Override
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
     }
