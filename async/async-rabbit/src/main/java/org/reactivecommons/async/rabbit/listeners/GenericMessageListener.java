@@ -42,7 +42,6 @@ import static java.util.function.Function.identity;
 import static reactor.core.publisher.Mono.defer;
 
 @Log
-@SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
@@ -275,6 +274,7 @@ public abstract class GenericMessageListener {
                                 handlerTag, ConsumerMetrics.EXECUTION_TIMEOUT,
                                 Duration.between(attemptStart.get(), Instant.now())));
             }
+            flow = flow.subscribeOn(ListenerSchedulers.handlers());
             if (hasLocalRetries()) {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)
                                 .doBeforeRetry(signal -> metrics.recordHandlerRetry()))
@@ -291,8 +291,7 @@ public abstract class GenericMessageListener {
             if (latency != null) {
                 flow = flow.doFinally(signal -> latency.record(Duration.between(initTime, Instant.now())));
             }
-            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
-                    .subscribeOn(ListenerSchedulers.handlers()).thenReturn(msj);
+            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true)).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
                     "Severe Warning! ", msj.getProperties().getMessageId()));

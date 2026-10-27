@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
@@ -97,6 +99,28 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(counter("reactive_commons.consumer.retry.exhausted")).isEqualTo(1.0);
         // each attempt is its own execution sample, so retry delays do not inflate the per-attempt Timer
         assertThat(executionCount("error", "test-path")).as("one sample per attempt").isEqualTo(3L);
+    }
+
+    @Test
+    void everyLocalRetryRunsItsHandlerOnTheHandlerPool() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+        List<String> threads = new CopyOnWriteArrayList<>();
+
+        new HangingListener(listener(null), 2, discardNotifier, errorReporter, message -> Mono.defer(() -> {
+            threads.add(Thread.currentThread().getName());
+            if (threads.size() <= 2) {
+                return Mono.error(new IllegalStateException("transient failure"));
+            }
+            // an imperative handler: block() is refused on the non-blocking threads the retry delay runs on
+            return Mono.just(Objects.requireNonNull(Mono.just("done").delayElement(Duration.ofMillis(10)).block()));
+        })).startListener();
+
+        verify(channel, timeout(2_000)).basicAck(DELIVERY_TAG, false);
+        verify(discardNotifier, never()).tryNotifyDiscard(any(Message.class));
+        assertThat(threads).as("first attempt + 2 local retries").hasSize(3)
+                .allSatisfy(thread -> assertThat(thread).startsWith("rc-handlers"));
     }
 
     @Test
@@ -396,7 +420,12 @@ class GenericMessageListenerRetryStrategyTest {
 
         HangingListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
                         CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
-            super(QUEUE, listener, false, false, -1, RETRY_DELAY, discardNotifier, "command", errorReporter);
+            this(listener, -1, discardNotifier, errorReporter, handler);
+        }
+
+        HangingListener(ReactiveMessageListener listener, long maxRetries, DiscardNotifier discardNotifier,
+                        CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
+            super(QUEUE, listener, false, false, maxRetries, RETRY_DELAY, discardNotifier, "command", errorReporter);
             this.handler = handler;
         }
 
