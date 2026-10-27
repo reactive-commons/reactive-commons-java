@@ -54,6 +54,8 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final ReactiveMessageSender sender;
     private final DiscardNotifier discardNotifier;
     private final ConsumerQueueDepth queueDepth;
+    private final Runnable releaseConnections;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
@@ -73,6 +75,21 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                                   CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
                                   ReactiveMessageListener receiver, ReactiveMessageSender sender,
                                   DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
+        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
+                sender, discardNotifier, queueDepth, () -> {
+                });
+    }
+
+    /**
+     * @param releaseConnections run once the provider is closed, to release the connections it used
+     */
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
+                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth,
+                                  Runnable releaseConnections) {
+        this.releaseConnections = releaseConnections;
         this.domain = domain;
         this.props = props;
         this.config = config;
@@ -299,6 +316,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
         receiver.receiver().close();
         receiver.topologyCreator().close(); // the listener declares through its own sender
         sender.close();
+        if (closed.compareAndSet(false, true)) {
+            releaseConnections.run();
+        }
     }
 
     @Override

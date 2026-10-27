@@ -40,9 +40,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -57,6 +59,11 @@ import static reactor.rabbitmq.Helpers.safelyExecute;
 public class Sender implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Sender.class);
+    private static final int CHANNEL_CLOSE_THREADS = 4;
+    /**
+     * How long closing the sender waits for the channels of its terminated flows to be closed.
+     */
+    private static final Duration CHANNEL_CLOSE_TIMEOUT = Duration.ofSeconds(5);
 
     private static final Function<Connection, Channel> CHANNEL_CREATION_FUNCTION = conn -> {
         try {
@@ -93,7 +100,13 @@ public class Sender implements AutoCloseable {
 
     private final boolean privateConnectionSubscriptionScheduler;
 
-    private final ExecutorService channelCloseThreadPool = Executors.newCachedThreadPool();
+    /**
+     * Closes the channels of the terminated flows. A close is an RPC that can wait for the broker (e.g. while it blocks
+     * the connection), so it never runs on the thread that terminated the flow; daemon threads, released when idle.
+     */
+    private final ThreadPoolExecutor channelCloseThreadPool = channelCloseThreadPool();
+
+    private final ChannelPool channelPool;
 
     private final int connectionClosingTimeout;
 
@@ -130,6 +143,7 @@ public class Sender implements AutoCloseable {
 
         this.connectionMono = cm;
         this.channelMono = options.getChannelMono();
+        this.channelPool = options.getChannelPool();
         this.channelCloseHandler = options.getChannelCloseHandler() == null
                 ? ChannelCloseHandlers.SENDER_CHANNEL_CLOSE_HANDLER_INSTANCE
                 : options.getChannelCloseHandler();
@@ -343,6 +357,12 @@ public class Sender implements AutoCloseable {
     @Override
     public void close() {
         if (closingOrClosed.compareAndSet(false, true)) {
+            // the channels first, while their connection is still open
+            if (channelPool != null) {
+                safelyExecute(LOGGER, channelPool::close, "Error while closing the channel pool");
+            }
+            safelyExecute(LOGGER, this::shutdownChannelCloseThreadPool,
+                    "Error while closing channel closing thread pool");
             if (connection.get() != null) {
                 safelyExecute(LOGGER, () -> connection.get().close(this.connectionClosingTimeout),
                         "Error while closing sender connection");
@@ -355,9 +375,30 @@ public class Sender implements AutoCloseable {
                 safelyExecute(LOGGER, this.resourceManagementScheduler::dispose,
                         "Error while disposing resource management scheduler");
             }
-            safelyExecute(LOGGER, channelCloseThreadPool::shutdown,
-                    "Error while closing channel closing thread pool");
         }
+    }
+
+    private void shutdownChannelCloseThreadPool() {
+        channelCloseThreadPool.shutdown();
+        try {
+            if (!channelCloseThreadPool.awaitTermination(CHANNEL_CLOSE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+                LOGGER.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static ThreadPoolExecutor channelCloseThreadPool() {
+        final AtomicLong threads = new AtomicLong();
+        final ThreadPoolExecutor pool = new ThreadPoolExecutor(CHANNEL_CLOSE_THREADS, CHANNEL_CLOSE_THREADS,
+                60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), runnable -> {
+            final Thread thread = new Thread(runnable, "rabbitmq-sender-channel-close-" + threads.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     // --- Inner Classes ---

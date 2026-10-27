@@ -47,6 +47,8 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
     @Override
     public BrokerProvider<AsyncProps> getProvider(String domain, AsyncProps props, DiscardProvider discardProvider) {
         ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
+        // released when the provider closes: its connections are closed once no live provider uses them
+        RabbitMQSetupUtils.retainConnections(provider.getConnectionFactory());
         ReactiveMessageSender sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter,
                 unroutableMessageNotifier, meterRegistry, domain);
         ReactiveMessageListener listener = RabbitMQSetupUtils.createMessageListener(provider, props,
@@ -73,6 +75,7 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
                         listener.subscriberRegistry()::snapshot)
                 : null;
         return new RabbitMQBrokerProvider(domain, props, config, router, converter, meterRegistry, errorReporter,
-                healthIndicator, listener, sender, discardNotifier, queueDepth);
+                healthIndicator, listener, sender, discardNotifier, queueDepth,
+                () -> RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory()));
     }
 }

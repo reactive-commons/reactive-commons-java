@@ -48,6 +48,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -71,6 +73,12 @@ public final class RabbitMQSetupUtils {
      */
     private static final ConcurrentMap<ConnectionFactory, ConnectionBlockedState> CONNECTION_BLOCKED_STATES =
             new ConcurrentHashMap<>();
+    /**
+     * The live broker providers using the connections of each factory (guarded by EVENT_LOOP_GROUP_LOCK): the
+     * connections of a factory are closed once none uses them, e.g. when its application context closes while
+     * another one keeps running in the same JVM.
+     */
+    private static final Map<ConnectionFactory, Integer> CONNECTION_USERS = new HashMap<>();
 
     /**
      * The Netty event loop group shared by every RabbitMQ connection. It is shut down when the last application
@@ -367,6 +375,43 @@ public final class RabbitMQSetupUtils {
     }
 
     /**
+     * Registers a user (a broker provider) of the connections of the factory.
+     */
+    public static void retainConnections(ConnectionFactory factory) {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            CONNECTION_USERS.merge(factory, 1, Integer::sum);
+        }
+    }
+
+    /**
+     * Unregisters a user of the connections of the factory. Once none is left, its connections are closed and the
+     * factory is forgotten: an application created later with the same properties gets new ones.
+     */
+    public static void releaseConnections(ConnectionFactory factory) {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            final Integer users = CONNECTION_USERS.get(factory);
+            if (users == null) {
+                return; // not retained
+            }
+            if (users > 1) {
+                CONNECTION_USERS.put(factory, users - 1);
+                return;
+            }
+            CONNECTION_USERS.remove(factory);
+            for (ConnectionRole role : ConnectionRole.values()) {
+                final ConnectionKey key = new ConnectionKey(factory, role);
+                CONNECTION_CACHE.remove(key);
+                final Connection connection = ESTABLISHED_CONNECTIONS.remove(key);
+                if (connection != null) {
+                    closeConnection(connection);
+                }
+            }
+            FACTORY_CACHE.values().removeIf(factory::equals);
+            CONNECTION_BLOCKED_STATES.remove(factory);
+        }
+    }
+
+    /**
      * Registers an application context that uses the shared event loop group.
      */
     public static void retainEventLoopGroup() {
@@ -390,6 +435,7 @@ public final class RabbitMQSetupUtils {
                 return;
             }
             ESTABLISHED_CONNECTIONS.values().forEach(RabbitMQSetupUtils::closeConnection);
+            CONNECTION_USERS.clear();
             FACTORY_CACHE.clear();
             CONNECTION_CACHE.clear();
             ESTABLISHED_CONNECTIONS.clear();

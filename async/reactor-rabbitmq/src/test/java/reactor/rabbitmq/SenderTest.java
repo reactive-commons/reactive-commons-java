@@ -755,4 +755,13 @@ class SenderTest {
                     .verify(Duration.ofSeconds(5));
         }
     }
+    @Test
+    void closingTheSenderClosesTheChannelPoolItWasGiven() {
+        ChannelPool channelPool = mock(ChannelPool.class);
+        when(channelPool.getChannelMono()).thenAnswer(invocation -> Mono.empty());
+
+        new Sender(new SenderOptions().channelPool(channelPool).connectionMono(Mono.never())).close();
+
+        verify(channelPool).close();
+    }
 }
