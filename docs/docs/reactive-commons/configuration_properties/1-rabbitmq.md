@@ -739,7 +739,7 @@ The listener side exposes the following metrics on the application's `MeterRegis
 |----------------------------------------------------------|---------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `reactive_commons.consumer.messages`                     | Counter             | `outcome` ∈ \{`ack`, `nack`, `discard`, `dlq`, `handler_error`\}, `queue`, `domain`                                                                                                                                                     | The final outcome of each delivery: exactly one of `ack`, `nack` (requeued), `dlq` or `discard`. `handler_error` counts in addition each delivery whose handler failed (after its local retries), whatever its final outcome.                                                                                                                                                                                                                                                                                    |
 | `reactive_commons.consumer.handler.latency`              | Timer               | `queue`, `domain`                                                                                                                                                                                                                       | End-to-end time of a delivery, from arrival to the moment it completed (ack) or failed. Includes the wait for a handler thread and every local retry (with its retry delay). Compare with `handler.execution` to split that into wait + actual execution.                                                                                                                                                                                                                                                        |
-| `reactive_commons.consumer.handler.execution`            | Timer               | `outcome` ∈ \{`success`, `error`, `timeout`\}, `handler` (the executor path of a registered handler, bounded by the handler cache: the ones beyond it bucket to `unknown`), `queue`, `domain`                                           | Per-attempt time around `handler.apply` (a handler that throws, e.g. a message that cannot be converted, is an `error`; a message without a handler has no sample), so retries do not inflate it and it can be compared against `handlerTimeout`. `handler.wait` high + `execution` low = handler-pool saturation; `execution` high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent (alert with `histogram_quantile(0.99, ...execution_seconds_bucket) > 0.8 * handlerTimeout`). |
+| `reactive_commons.consumer.handler.execution`            | Timer               | `outcome` ∈ \{`success`, `error`, `timeout`\}, `handler` (the executor path of a registered handler, bounded by the handler cache: the ones beyond it bucket to `unknown`), `queue`, `domain`                                           | Per-attempt time around `handler.apply` (a handler that throws, e.g. a message that cannot be converted, is an `error`; a message without a handler has no sample), so retries do not inflate it and it can be compared against `handlerTimeout`. `handler.wait` high + `execution` low = handler-pool saturation; `execution` high = the handler itself; `execution` near `handlerTimeout` = timeouts are imminent (alert with `histogram_quantile(0.99, ...execution_seconds_bucket) > 0.8 * handlerTimeout`, which needs its histogram: see *Percentiles and histograms*). |
 | `reactive_commons.consumer.handler.wait`                 | Timer               | `queue`, `domain`                                                                                                                                                                                                                       | Time a delivery waited for a handler thread before its handler started. A growing value means the handlers are busy (see *Handler threads and `consumer_timeout`*).                                                                                                                                                                                                                                                                                                                                              |
 | `reactive_commons.consumer.restart`                      | Counter             | `reason` ∈ \{`channel_shutdown` (the broker closed the channel), `cancel` (the broker cancelled the consumer, e.g. its queue was deleted), `error` (the subscription failed, e.g. the queue could not be declared)\}, `queue`, `domain` | One per listener restart, with the reason that triggered it. A sustained non-zero rate on a specific queue signals an orphaned consumer or diverged topology.                                                                                                                                                                                                                                                                                                                                                    |
 | `reactive_commons.consumer.active`                       | Gauge               | `queue`, `domain`                                                                                                                                                                                                                       | `1` while the broker has a consumer registered for the listener, `0` otherwise.                                                                                                                                                                                                                                                                                                                                                                                                                                  |
@@ -765,6 +765,58 @@ The `consumer.messages` outcomes, the `consumer.restart` reasons, `consumer.repl
 series (both the nine `confirm=true` outcomes and the six `confirm=false` ones) and the two
 `publish.flow.resubscribe` kinds are registered at zero when the listener or sender starts, so a failure series
 exists, and `increase()` counts its first occurrence, before the first failure happens.
+
+### Percentiles and histograms
+
+The timers and distribution summaries (`consumer.handler.latency`, `consumer.handler.wait`,
+`consumer.handler.execution`, `consumer.message.size`, `publish.latency` and `publish.message.size`) only publish
+their count, total and maximum by default: in Prometheus, `_count`, `_sum` and `_max`, enough for averages but not for
+percentiles. Their histograms are opt-in because each one adds about 70 bucket series per combination of tags, and
+`consumer.handler.execution` is already tagged by handler, outcome and queue. With Spring Boot Actuator, enable them by
+meter name (a name also applies to the meters it prefixes, so `reactive_commons` enables every one):
+
+```yaml
+management:
+  metrics:
+    distribution:
+      percentiles-histogram:
+        reactive_commons.consumer.handler.execution: true
+        reactive_commons.consumer.handler.wait: true
+        reactive_commons.publish.latency: true
+```
+
+The percentiles are then computed from the buckets, also across instances:
+
+```text
+histogram_quantile(0.99, sum by (le, queue) (rate(reactive_commons_consumer_handler_execution_seconds_bucket[5m])))
+```
+
+To bound the cost, publish only the buckets of your objectives instead of the whole histogram:
+
+```yaml
+management:
+  metrics:
+    distribution:
+      slo:
+        reactive_commons.publish.latency: 50ms,100ms,250ms,500ms,1s
+```
+
+Avoid `management.metrics.distribution.percentiles` for these meters: those percentiles are computed in each instance
+and cannot be aggregated across instances. These properties apply to the registries configured by Spring Boot. For a
+`MeterRegistry` created otherwise, register a `MeterFilter` before the application starts, as the distribution of a
+meter is set when it is registered:
+
+```java
+registry.config().meterFilter(new MeterFilter() {
+    @Override
+    public DistributionStatisticConfig configure(Meter.Id id, DistributionStatisticConfig config) {
+        if (id.getName().startsWith("reactive_commons.")) {
+            return DistributionStatisticConfig.builder().percentilesHistogram(true).build().merge(config);
+        }
+        return config;
+    }
+});
+```
 
 ### Connections in microservices with multiple replicas
 
