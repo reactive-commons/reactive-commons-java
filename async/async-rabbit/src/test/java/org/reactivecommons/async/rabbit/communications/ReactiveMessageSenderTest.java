@@ -18,6 +18,8 @@ import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscription;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Operators;
@@ -582,9 +584,24 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
-    void closeFailsSendsWaitingForAnOutcome() {
+    void closeLetsTheMessagesAlreadyWrittenGetTheirConfirm() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation ->
+                ((Flux<OutboundMessage>) invocation.getArgument(0))
+                        .delayElements(Duration.ofMillis(300)) // the broker confirms a while after the write
+                        .map(message -> new OutboundMessageResult<>(message, true)));
+        ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true))
+                .then(senderToClose::close)
+                .verifyComplete();
+    }
+
+    @Test
+    void closeReportsAMessageWrittenAndNotConfirmedAsOfUnknownOutcome() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
-            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(); // consume, never confirm
+            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(); // written, never confirmed
             return Flux.never();
         });
         ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
@@ -593,8 +610,30 @@ class ReactiveMessageSenderTest {
         StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                         "rkey", new HashMap<>(), true))
                 .then(senderToClose::close)
-                .expectError(SendFailureNoAckException.class)
-                .verify(Duration.ofSeconds(5));
+                // it may have reached the broker: reporting it as not published would be wrong
+                .expectError(SendConfirmUnknownException.class)
+                .verify(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void closeReportsAMessageNeverWrittenAsNotPublished() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(new BaseSubscriber<>() {
+                @Override
+                protected void hookOnSubscribe(Subscription subscription) {
+                    // no demand: the messages wait in the buffer of the flow, as while its channel is busy
+                }
+            });
+            return Flux.never();
+        });
+        ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true))
+                .then(senderToClose::close)
+                .expectErrorSatisfies(error -> assertThat(error).isExactlyInstanceOf(SendFailureNoAckException.class))
+                .verify(Duration.ofSeconds(10));
     }
 
     @Test

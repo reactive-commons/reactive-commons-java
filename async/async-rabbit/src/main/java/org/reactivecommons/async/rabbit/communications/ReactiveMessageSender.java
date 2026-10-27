@@ -96,6 +96,11 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     public static final int DEFAULT_MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
     private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
+    /**
+     * How long closing the sender waits at most for the outcome of the messages it already accepted.
+     */
+    private static final Duration CLOSE_DRAIN_TIMEOUT = Duration.ofSeconds(5);
+    private static final long CLOSE_DRAIN_POLL_MILLIS = 10;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
@@ -311,19 +316,22 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * Stops the publishing flows, fails the messages still waiting for an outcome and releases the sender threads.
-     * <p>
-     * A message whose hand-over races with the close may still be published after its caller was failed: delivery is
-     * at-least-once, so re-sending after a failure can produce a duplicate.
+     * Stops accepting messages and waits, up to 5 seconds and never longer than the send timeout, for the outcome of
+     * the messages already accepted: their flows keep running meanwhile, so the confirms of the messages already
+     * written still arrive. Then it fails the remaining messages, stops the publishing flows and releases the sender
+     * threads. A remaining message never written fails as not published ({@link SendFailureNoAckException}); one that
+     * may have been written, as of unknown outcome ({@link SendConfirmUnknownException}): it may have reached the
+     * broker, and re-sending it can produce a duplicate (delivery is at-least-once).
      */
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        pendingMessages.forEach(message -> message.fail(shutdownFailure(null)));
-        pendingMessages.clear();
         signalFlowRegistered(); // the messages waiting for a flow retry now, and fail as the sender is closed
+        awaitPendingMessages();
+        pendingMessages.forEach(ReactiveMessageSender::failOnShutdown);
+        pendingMessages.clear();
         // cancel the flows (and their re-subscription) before the executors: nothing must be re-subscribed
         flowSubscriptions.forEach(Disposable::dispose);
         flowSubscriptions.clear();
@@ -335,6 +343,32 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private static SendFailureNoAckException shutdownFailure(Throwable cause) {
         return new SendFailureNoAckException("Message not published: sender is shut down", cause);
+    }
+
+    /**
+     * Waits for the outcome of the messages already accepted, unless the broker blocks the connection: their confirms
+     * would not arrive meanwhile.
+     */
+    private void awaitPendingMessages() {
+        final Duration timeout = sendTimeout.compareTo(CLOSE_DRAIN_TIMEOUT) < 0 ? sendTimeout : CLOSE_DRAIN_TIMEOUT;
+        final long deadline = System.nanoTime() + timeout.toNanos();
+        while (!pendingMessages.isEmpty() && !blockedState.isBlocked() && System.nanoTime() - deadline < 0) {
+            try {
+                Thread.sleep(CLOSE_DRAIN_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static void failOnShutdown(PendingMessage message) {
+        if (message.preventWrite()) {
+            message.fail(shutdownFailure(null));
+        } else {
+            message.fail(new SendConfirmUnknownException("The sender closed before the outcome of the message was"
+                    + " known: it may or may not have reached the broker"));
+        }
     }
 
     private ThreadFactory daemonThreads(String namePrefix) {
@@ -962,6 +996,16 @@ public class ReactiveMessageSender implements AutoCloseable {
          */
         boolean mayHaveBeenWritten() {
             return bufferState.get() == CLAIMED || isPublished();
+        }
+
+        /**
+         * Keeps the message from ever being written, unless a flow already claimed it to write it: atomic with the
+         * claim, so a message is never reported as not published while a flow writes it.
+         *
+         * @return whether the message will never be written
+         */
+        boolean preventWrite() {
+            return bufferState.compareAndSet(NEW, DROPPED) || leaveBuffer(DROPPED);
         }
 
         /**
