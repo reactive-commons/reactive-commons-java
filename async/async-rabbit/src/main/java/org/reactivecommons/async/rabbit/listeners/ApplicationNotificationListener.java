@@ -58,8 +58,9 @@ public class ApplicationNotificationListener extends GenericMessageListener {
                 queue(queueName).durable(false).autoDelete(true).exclusive(true)
         );
 
+        // one at a time: they share the channel of the creator, which takes a single RPC at a time
         final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getNotificationListeners())
-                .flatMap(listener -> creator.bind(
+                .concatMap(listener -> creator.bind(
                         binding(exchangeName, listener.path(), queueName))
                 );
 

@@ -108,6 +108,32 @@ class SenderTest {
                 .verifyComplete();
     }
 
+    /**
+     * The client blocks the thread that sends an RPC while another one is in progress on the same channel, and opening
+     * the channel is an RPC too: they never run on the thread that subscribes, which may be a non-blocking one (e.g.
+     * an event loop of the HTTP server registering a dynamic listener).
+     */
+    @Test
+    void resourceManagementRpcsAreSentOnTheResourceManagementScheduler() throws Exception {
+        var command = mock(com.rabbitmq.client.Command.class);
+        when(command.getMethod()).thenReturn(mock(AMQP.Queue.DeclareOk.class), mock(AMQP.Exchange.DeclareOk.class),
+                mock(AMQP.Queue.BindOk.class), mock(AMQP.Queue.UnbindOk.class));
+        List<String> rpcThreads = new CopyOnWriteArrayList<>();
+        when(channel.asyncCompletableRpc(any())).thenAnswer(invocation -> {
+            rpcThreads.add(Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(command);
+        });
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+        sender.declare(QueueSpecification.queue("queue")).block(Duration.ofSeconds(5));
+        sender.declare(ExchangeSpecification.exchange("exch")).block(Duration.ofSeconds(5));
+        sender.bind(BindingSpecification.binding("exch", "rk", "queue")).block(Duration.ofSeconds(5));
+        sender.unbind(BindingSpecification.binding("exch", "rk", "queue")).block(Duration.ofSeconds(5));
+
+        assertThat(rpcThreads).as("declare queue, declare exchange, bind and unbind").hasSize(4)
+                .allSatisfy(thread -> assertThat(thread).startsWith("rabbitmq-sender-resource-creation"));
+    }
+
     @Test
     void declareExchangeExecutesRpc() throws Exception {
         var rpcFuture = new CompletableFuture<com.rabbitmq.client.Command>();

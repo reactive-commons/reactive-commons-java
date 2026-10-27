@@ -92,6 +92,11 @@ public class Sender implements AutoCloseable {
 
     private final Mono<? extends Channel> resourceManagementChannelMono;
 
+    /**
+     * Sends the resource management RPCs (declare, bind, unbind) and emits their outcome. Sending one can block: the
+     * client blocks the thread that sends an RPC while another one is in progress on the same channel, and opening the
+     * channel is an RPC too, so it never runs on the thread that subscribes (e.g. a non-blocking event loop).
+     */
     private final Scheduler resourceManagementScheduler;
 
     private final boolean privateResourceManagementScheduler;
@@ -289,6 +294,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.DeclareOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -311,6 +317,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Exchange.DeclareOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -330,6 +337,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.BindOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -349,6 +357,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.UnbindOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
