@@ -168,7 +168,7 @@ public class RabbitPropertiesBase {
 
     /**
      * If addresses have been set and the first address has a username it is returned.
-     * Otherwise returns the result of calling {@code getUsername()}.
+     * Otherwise, returns the result of calling {@code getUsername()}.
      *
      * @return the username
      * @see #setAddresses(String)
@@ -184,7 +184,7 @@ public class RabbitPropertiesBase {
 
     /**
      * If addresses have been set and the first address has a password it is returned.
-     * Otherwise returns the result of calling {@code getPassword()}.
+     * Otherwise, returns the result of calling {@code getPassword()}.
      *
      * @return the password or {@code null}
      * @see #setAddresses(String)
@@ -200,7 +200,7 @@ public class RabbitPropertiesBase {
 
     /**
      * If addresses have been set and the first address has a virtual host it is returned.
-     * Otherwise returns the result of calling {@code getVirtualHost()}.
+     * Otherwise, returns the result of calling {@code getVirtualHost()}.
      *
      * @return the virtual host or {@code null}
      * @see #setAddresses(String)
