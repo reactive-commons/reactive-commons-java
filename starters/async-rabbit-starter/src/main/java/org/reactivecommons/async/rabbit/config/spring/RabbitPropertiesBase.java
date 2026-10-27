@@ -161,8 +161,7 @@ public class RabbitPropertiesBase {
     }
 
     private List<Address> parseAddresses(String addresses) {
-        return Arrays.stream(
-                        StringUtils.commaDelimitedListToStringArray(addresses))
+        return Arrays.stream(StringUtils.commaDelimitedListToStringArray(addresses))
                 .map(Address::new)
                 .toList();
     }
