@@ -201,9 +201,23 @@ public class Receiver implements Closeable {
                     }
                 });
             } catch (Exception e) {
+                // error first: aborting the channel completes a consumer whose channel is closed by the application
                 emitter.error(new RabbitFluxException(e));
+                // the consumer did not start: neither its channel nor, if the broker registered it, the consumer
+                // (which would keep receiving deliveries nobody acknowledges) must outlive it
+                abortQuietly(channel);
             }
         }, emitter::error), options.getOverflowStrategy());
+    }
+
+    private static void abortQuietly(Channel channel) {
+        if (channel.isOpen()) {
+            try {
+                channel.abort();
+            } catch (IOException | RuntimeException e) {
+                LOGGER.debug("Channel of a consumer that did not start not aborted: {}", e.getMessage());
+            }
+        }
     }
 
     /**
