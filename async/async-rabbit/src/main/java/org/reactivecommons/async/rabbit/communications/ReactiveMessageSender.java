@@ -552,7 +552,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                           Map<String, Object> headers, boolean persistent) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent, null);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(true, body.length);
             return send(exchange, monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
@@ -566,9 +566,22 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey,
                                         Map<String, Object> headers, boolean persistent) {
+        return sendNoConfirm(message, exchange, routingKey, headers, persistent, null);
+    }
+
+    /**
+     * Like {@link #sendNoConfirm(Object, String, String, Map, boolean)}, for a message worthless after a while (e.g. a
+     * query, once its caller stopped waiting for the reply).
+     *
+     * @param timeToLive how long the message may wait in its queue, {@code null} for no limit: once expired, the broker
+     *                   drops it (or dead-letters it, if its queue has a dead-letter exchange) instead of delivering it
+     */
+    public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey,
+                                        Map<String, Object> headers, boolean persistent, Duration timeToLive) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent,
+                    timeToLive);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(false, body.length);
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
@@ -798,7 +811,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                             return;
                         }
                         final AMQP.BasicProperties props = buildMessageProperties(object, message, headers,
-                                persistent);
+                                persistent, null);
                         sink.next(batch.published(new OutboundMessage(exchange, routingKey, props,
                                 message.getBody())));
                     })
@@ -827,7 +840,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     private AMQP.BasicProperties buildMessageProperties(Object source, Message message, Map<String, Object> headers,
-                                                        boolean persistent) {
+                                                        boolean persistent, Duration timeToLive) {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
@@ -842,6 +855,9 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .headers(baseHeaders);
         if (headers.containsKey(DELAYED)) {
             builder.expiration((String) headers.get(DELAYED));
+        } else if (timeToLive != null) {
+            // never negative: the broker would close the channel shared with other messages
+            builder.expiration(Long.toString(Math.max(0, timeToLive.toMillis())));
         }
         return builder.build();
     }

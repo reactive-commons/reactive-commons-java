@@ -546,6 +546,30 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
+    void sendNoConfirmPublishesTheTimeToLiveAsTheExpirationOfTheMessage() throws Exception {
+        List<String> expirations = new CopyOnWriteArrayList<>();
+        when(sender.send(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            Flux.<OutboundMessage>from(invocation.getArgument(0))
+                    .subscribe(message -> expirations.add(message.getProperties().getExpiration()));
+            return Mono.never();
+        });
+        ReactiveMessageSender querySender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        querySender.sendNoConfirm("query", "exchange", "target.query", new HashMap<>(), false,
+                Duration.ofMillis(1_500)).subscribe(null, error -> { });
+        // never negative: the broker would close the channel shared with other messages
+        querySender.sendNoConfirm("query", "exchange", "target.query", new HashMap<>(), false,
+                Duration.ofMillis(-1)).subscribe(null, error -> { });
+        querySender.sendNoConfirm("event", "exchange", "rkey", new HashMap<>(), false)
+                .subscribe(null, error -> { });
+
+        await(() -> expirations.size() == 3);
+        assertThat(expirations).containsExactlyInAnyOrder("1500", "0", null);
+        querySender.close();
+    }
+
+    @Test
     void sendWithConfirmBatchFailsWithUnknownOutcomeWhenNoConfirmationArrives() {
         when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class))).thenReturn(Flux.never());
         try (ReactiveMessageSender shortTimeoutSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,

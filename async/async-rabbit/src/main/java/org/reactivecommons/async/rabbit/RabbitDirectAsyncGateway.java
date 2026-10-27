@@ -161,7 +161,10 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                     headers.put(REPLY_DEADLINE_MILLIS, System.currentTimeMillis() + replyTimeout.toMillis());
 
                     return resolveSender(domain)
-                            .sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries)
+                            // a query still waiting in its queue once its caller stopped waiting is dropped by the
+                            // broker: after an outage of its listener, a backlog of them is never handled for nothing
+                            .sendNoConfirm(query, exchange, targetName + ".query", headers, persistentQueries,
+                                    replyTimeout)
                             .then(replyHolder)
                             // released before the result reaches the caller (doFinally would run after it)
                             .doOnTerminate(() -> router.deregister(correlationID))

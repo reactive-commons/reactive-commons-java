@@ -63,7 +63,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void answeredQueryReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean())).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
 
         StepVerifier.create(query())
                 .then(() -> router.routeReply(sentCorrelationId(), converter.toMessage("answer")))
@@ -75,7 +75,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void timedOutQueryReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean())).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
 
         StepVerifier.create(query())
                 .expectError(TimeoutException.class)
@@ -86,7 +86,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void queryWhosePublicationFailsReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
                 .thenReturn(Mono.error(new SendFailureNoAckException("broker unavailable")));
 
         StepVerifier.create(query())
@@ -98,7 +98,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void queryCancelledByTheCallerReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean())).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
 
         Disposable subscription = query().subscribe(v -> {
         }, e -> {
@@ -125,7 +125,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
     private String sentCorrelationId() {
         ArgumentCaptor<Map<String, Object>> headers = ArgumentCaptor.forClass(Map.class);
         verify(sender).sendNoConfirm(any(), eq("exchange"), eq("some.target.query"), headers.capture(),
-                anyBoolean());
+                anyBoolean(), any(Duration.class));
         return headers.getValue().get(CORRELATION_ID).toString();
     }
 

@@ -132,6 +132,13 @@ moment it stops waiting with the query, in the `x-reply-deadline-millis` header.
 that header carry an AMQP `timestamp`, which is accurate to one second only, and the `x-reply-timeout-millis` header;
 the deadline is then computed from both, so it can be up to a second early.
 
+The gateway also publishes the query with its reply timeout as its AMQP `expiration`, so the broker never delivers a
+query that waited in its queue longer than its caller waits for the reply: it drops it. With `withDLQRetry: true` the
+queue dead-letters it to the retry queue instead, and the broker drops it when it comes back, as a dead-letter cycle
+without any rejection. This depends neither on the clocks of the hosts nor on `discardTimeoutQueries`. The deadline
+matters for the queries already delivered to the listener when their caller gives up (e.g. waiting for a busy handler,
+up to `prefetchCount` of them) and for the queries published by versions without the expiration.
+
 What the listener does with that deadline depends on `app.async.<domain>.direct.discardTimeoutQueries`:
 
 | Situation                                      | `discardTimeoutQueries: false` (default)                                 | `discardTimeoutQueries: true`                                                                                 |
@@ -141,9 +148,9 @@ What the listener does with that deadline depends on `app.async.<domain>.direct.
 | The handler fails after the deadline           | Discarded instead of retried                                             | Discarded instead of retried                                                                                  |
 | The handler fails before the deadline          | Retried according to the retry strategy                                  | Retried according to the retry strategy                                                                       |
 
-With `false`, a backlog of queries (e.g. after the listener was down or slow) is fully handled once it recovers, even
-the queries whose callers already gave up, while the new ones wait behind them; and the callers that retry after their
-timeout make each query run several times.
+With `false`, the queries already delivered to a slow listener, and a backlog of queries published by older versions
+(e.g. after the listener was down), are fully handled, even those whose callers already gave up, while the new ones
+wait behind them; and the callers that retry after their timeout make each query run several times.
 
 :::tip[Recommended: `discardTimeoutQueries: true`]
 Enable it when:
