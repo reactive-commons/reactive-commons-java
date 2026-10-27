@@ -10,6 +10,8 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
+import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 
@@ -34,11 +36,29 @@ public class DLQDiscardNotifier implements DiscardNotifier {
     }
 
     /**
-     * Publishes the discard notification and fails if it could not be published.
+     * Publishes the discard notification and fails if it could not be published but publishing it again may succeed
+     * (e.g. while the broker blocks the publishing connection). A notification returned by the broker was published,
+     * just not routed (no queue is bound to its {@code .dlq} routing key, e.g. nobody listens to the discards), and
+     * one too large for the broker can never be: failing for them would requeue the discarded message forever,
+     * running its handler again every time.
      */
     @Override
     public Mono<Void> tryNotifyDiscard(Message message) {
-        return Mono.defer(() -> notify(message));
+        return Mono.defer(() -> notify(message))
+                .onErrorResume(error -> causedBy(error, SendFailureReturnedException.class), error -> Mono.empty())
+                .onErrorResume(error -> causedBy(error, SendFailureMessageTooLargeException.class), this::onError);
+    }
+
+    /**
+     * Whether the error or one of its causes is of the given type: the event bus wraps the failures of the sender.
+     */
+    private static boolean causedBy(Throwable error, Class<? extends Throwable> type) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+            if (type.isInstance(cause)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Mono<Void> notify(Message message) {

@@ -136,6 +136,33 @@ class ConsumerRetryRabbitContainerTest {
     }
 
     /**
+     * With mandatory publishing, the broker returns a discard notification that no queue is bound to (nobody listens
+     * to the .dlq events, the usual case). It was published all the same: the discarded message is acknowledged
+     * instead of being requeued, and its handler run again, forever.
+     */
+    @Test
+    void aDiscardNobodyListensToIsAcknowledgedWhenPublishingIsMandatory() throws Exception {
+        release = CompletableFuture.completedFuture(null);
+        executions.set(0);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "mand",
+                false, false, Map.of("app.async.app.mandatory", "true"), FailingEventHandlers.class,
+                SendEvents.class, ListenEvents.class, NoRetries.class)) {
+            String queue = "mand-app.subsEvents";
+            RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
+
+            emit(context, "failing.event");
+
+            boolean acknowledged = await(() -> executions.get() >= 1 && messages(queue) == 0);
+            Thread.sleep(3_000); // a requeued message would have been handled again by now (retryDelay is 1 s)
+            System.out.println("[REAL BROKER] discard notification returned: queue=" + messages(queue)
+                    + " executions=" + executions.get());
+
+            assertThat(acknowledged).as("discarded and acknowledged, not requeued").isTrue();
+            assertThat(executions.get()).as("the handler is not run again").isEqualTo(1);
+        }
+    }
+
+    /**
      * The query was handled, but its reply cannot be published (the broker blocks the publishing connection):
      * running the query again cannot help its caller, it only repeats the work.
      */

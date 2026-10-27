@@ -9,6 +9,8 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
+import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -49,6 +51,25 @@ class DLQDiscardNotifierTest {
         StepVerifier.create(notifier.tryNotifyDiscard(message)).verifyErrorMessage("blocked");
         // the lenient variant keeps swallowing the failure for the callers that rely on it
         StepVerifier.create(notifier.notifyDiscard(message)).verifyComplete();
+    }
+
+    @Test
+    void tryNotifyDiscardCompletesWhenTheBrokerReturnsTheNotification() {
+        var message = cloudEventMessage();
+        // published as mandatory with no queue bound to the .dlq routing key, wrapped as the event bus does
+        when(eventBus.emit(any(CloudEvent.class))).thenReturn(Mono.error(new RuntimeException(
+                "Event send failure: test.type.dlq", new SendFailureReturnedException("Message returned"))));
+
+        StepVerifier.create(notifier.tryNotifyDiscard(message)).verifyComplete();
+    }
+
+    @Test
+    void tryNotifyDiscardCompletesWhenTheNotificationCanNeverBePublished() {
+        var message = cloudEventMessage();
+        when(eventBus.emit(any(CloudEvent.class))).thenReturn(Mono.error(new RuntimeException(
+                "Event send failure: test.type.dlq", new SendFailureMessageTooLargeException("Message too large"))));
+
+        StepVerifier.create(notifier.tryNotifyDiscard(message)).verifyComplete();
     }
 
     @Test
@@ -146,6 +167,16 @@ class DLQDiscardNotifierTest {
         // Should not throw, returns empty
         var result = notifier.notifyDiscard(message).block();
         assertThat(result).isNull();
+    }
+
+    private Message cloudEventMessage() {
+        var message = createMessage("body".getBytes(), "application/cloudevents+json");
+        when(messageConverter.readCloudEvent(message)).thenReturn(CloudEventBuilder.v1()
+                .withId("123")
+                .withType("test.type")
+                .withSource(URI.create("/test"))
+                .build());
+        return message;
     }
 
     private Message createMessage(byte[] body, String contentType) {
