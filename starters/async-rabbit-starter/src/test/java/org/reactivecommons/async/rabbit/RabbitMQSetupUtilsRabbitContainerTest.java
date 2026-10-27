@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -111,6 +112,49 @@ class RabbitMQSetupUtilsRabbitContainerTest {
 
         // 4. UP again after the automatic recovery (default network recovery interval: 5 s).
         awaitStatus(health, RCHealth.Status.UP, Duration.ofSeconds(30));
+    }
+
+    /**
+     * Releasing the connections while the client recovers one (here the broker closed it) stops the recovery: an
+     * application closed during an outage must not leave a recovery loop behind, which would reconnect, with the
+     * channels and consumers of the closed application, once the broker is back.
+     */
+    @Test
+    void releasingAConnectionBeingRecoveredStopsItsRecovery() throws Exception {
+        AsyncProps props = asyncProps(RABBIT.getHost(), RABBIT.getAmqpPort(), RABBIT.getAdminUsername(),
+                RABBIT.getAdminPassword());
+        props.setAppName("tc-release");
+        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, (cf, p) -> cf);
+        RabbitMQSetupUtils.retainConnections(provider.getConnectionFactory());
+        Connection connection = RabbitMQSetupUtils.listenerConnectionMono(provider, "tc-release").block(TIMEOUT);
+        assertThat(brokerConnectionNames()).as("listed by the broker").anyMatch(name -> name.startsWith("tc-release-"));
+
+        // the broker closes it: the client recovers it after the network recovery interval (5 s by default)
+        RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "release test");
+        long deadline = System.nanoTime() + TIMEOUT.toNanos();
+        while (connection.isOpen() && System.nanoTime() < deadline) {
+            Thread.sleep(20);
+        }
+        assertThat(connection.isOpen()).as("being recovered").isFalse();
+        RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
+
+        Thread.sleep(8_000); // the recovery would have reconnected by now
+        List<String> connections = brokerConnectionNames();
+        System.out.println("[REAL BROKER] connection released while recovering: open=" + connection.isOpen()
+                + ", broker connections=" + connections);
+        assertThat(connection.isOpen()).as("not recovered once released").isFalse();
+        assertThat(connections).noneMatch(name -> name.startsWith("tc-release-"));
+    }
+
+    /**
+     * The names the clients gave to their connections, as the broker lists them (the {@code connection_name} of the
+     * client properties: RabbitMQ 4 no longer lists {@code user_provided_name}).
+     */
+    private static List<String> brokerConnectionNames() throws Exception {
+        String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties")
+                .getStdout();
+        return Pattern.compile("\\{\"connection_name\",\"([^\"]*)\"}").matcher(listing).results()
+                .map(match -> match.group(1)).toList();
     }
 
     /**

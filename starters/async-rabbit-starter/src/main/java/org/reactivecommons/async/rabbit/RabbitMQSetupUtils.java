@@ -454,6 +454,9 @@ public final class RabbitMQSetupUtils {
      */
     private static void closeConnection(Connection connection) {
         if (!connection.isOpen()) {
+            // e.g. being recovered after a network failure: only closing or aborting it stops the recovery, which
+            // would reconnect it (with the channels and consumers of a closed application) once the broker is back
+            connection.abort(CONNECTION_CLOSE_TIMEOUT_MILLIS);
             return;
         }
         try {

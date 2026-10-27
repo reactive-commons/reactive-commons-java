@@ -10,6 +10,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -27,6 +28,7 @@ import static org.mockito.Mockito.anyMap;
 import static org.mockito.Mockito.anyString;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -248,6 +250,27 @@ class ReceiverTest {
     void aRecoverableChannelClosedByTheApplicationCompletesTheConsumer() {
         assertThat(terminationOnShutdown(new ShutdownSignalException(false, true, null, null)))
                 .isEqualTo("completed");
+    }
+
+    /**
+     * A consumer cancelled while its connection is being recovered: its channel, closed by the connection loss, is
+     * aborted, so that the client forgets it with its consumer instead of re-opening both once the connection is back,
+     * with nobody left to handle and acknowledge their deliveries.
+     */
+    @Test
+    void aConsumerCancelledWhileItsConnectionIsRecoveredForgetsItsChannel() throws Exception {
+        RecoverableChannel recoverable = mock(RecoverableChannel.class);
+        when(connection.createChannel()).thenReturn(recoverable);
+        when(recoverable.basicConsume(anyString(), eq(false), anyString(), eq(false), eq(false), anyMap(),
+                any(DeliverCallback.class), any(com.rabbitmq.client.CancelCallback.class))).thenReturn("consumer-tag");
+        receiver = new Receiver(new ReceiverOptions().connectionMono(Mono.just(connection)));
+        Disposable consumer = receiver.consumeManualAck("test-queue").subscribe();
+
+        when(recoverable.isOpen()).thenReturn(false); // closed by the connection loss, waiting for the recovery
+        consumer.dispose();
+
+        verify(recoverable).abort();
+        verify(recoverable, never()).close();
     }
 
     private Object terminationOnShutdown(ShutdownSignalException reason) {

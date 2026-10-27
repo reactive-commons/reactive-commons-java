@@ -194,6 +194,10 @@ public class Receiver implements Closeable {
                                     cancelConsumer(channel, consumerTag);
                                 }
                                 channel.close();
+                            } else if (isRecoverable(channel)) {
+                                // closed by a connection loss: forgotten, or the automatic recovery would re-open it
+                                // with its consumer, whose deliveries nobody would handle and acknowledge anymore
+                                channel.abort();
                             }
                         } catch (TimeoutException | IOException e) {
                             LOGGER.warn("Error while closing channel: {}", e.getMessage());
