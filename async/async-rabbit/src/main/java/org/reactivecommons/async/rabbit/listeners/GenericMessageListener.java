@@ -218,14 +218,27 @@ public abstract class GenericMessageListener {
             metrics.recordDeliveryStarted();
             return handle(msj, init)
                     // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
-                    .doOnSuccess(ignored -> {
-                        msj.ack();
-                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
-                    })
+                    .doOnSuccess(ignored -> acknowledgeHandled(msj))
                     .onErrorResume(err -> requeueOrAck(msj, err, init))
                     // after the ack/nack (a requeue waits retryDelay first), or cancelled when the listener stops
                     .doFinally(signal -> metrics.recordDeliveryFinished());
         }, messageListener.maxConcurrency());
+    }
+
+    /**
+     * Acknowledges a message whose handler succeeded. A failed ack (e.g. the socket broke while the connection is lost)
+     * is not a failure of the handler: retrying, dead-lettering or discarding the message would treat a processed
+     * message as a failed one. It stays unacknowledged, so the broker redelivers it once its channel closes.
+     */
+    private void acknowledgeHandled(AcknowledgableDelivery msj) {
+        try {
+            msj.ack();
+            metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, e, () -> "Unable to acknowledge message " + msj.getProperties().getMessageId()
+                    + " of queue " + queueName + " after its handler succeeded: the broker redelivers it once its "
+                    + "channel closes");
+        }
     }
 
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
