@@ -26,6 +26,13 @@ public class ConnectionManager {
     }
 
     /**
+     * Starts consuming with the listeners of every provider (see {@link BrokerProvider#start()}).
+     */
+    public void start() {
+        connections.values().forEach(BrokerProvider::start);
+    }
+
+    /**
      * Closes every provider, keeping on with the rest if one fails. Idempotent.
      */
     public void close() {

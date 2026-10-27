@@ -24,6 +24,14 @@ class BrokerProviderLifecycleManagerTest {
     }
 
     @Test
+    void shouldStartTheProvidersOnStart() {
+        // Spring starts the lifecycle beans once every bean of the context is created and initialized
+        manager.start();
+
+        verify(connectionManager).start();
+    }
+
+    @Test
     void shouldCloseTheProvidersOnStop() {
         assertFalse(manager.isRunning());
         manager.start();

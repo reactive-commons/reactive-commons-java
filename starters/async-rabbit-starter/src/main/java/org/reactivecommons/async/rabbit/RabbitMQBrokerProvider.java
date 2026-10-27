@@ -58,6 +58,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final AtomicBoolean closed = new AtomicBoolean();
 
     private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
+    private boolean started;
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean listeningReplies = new AtomicBoolean();
 
@@ -184,8 +185,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter,
                     props.getAppName());
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         }
     }
 
@@ -200,8 +200,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter
             );
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         });
     }
 
@@ -222,8 +221,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     converter,
                     discardNotifier,
                     errorReporter);
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         }
     }
 
@@ -245,8 +243,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter);
 
-            listeners.add(commandListener);
-            commandListener.startListener();
+            register(commandListener);
         }
     }
 
@@ -270,8 +267,31 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter);
 
-            listeners.add(listener);
+            register(listener);
+        }
+    }
+
+    /**
+     * Starts the listener now if the provider was started, otherwise once it is (see {@link #start()}).
+     */
+    private synchronized void register(GenericMessageListener listener) {
+        listeners.add(listener);
+        if (started) {
             listener.startListener();
+        }
+    }
+
+    /**
+     * Starts consuming with the listeners registered so far. Called once the application context has created and
+     * initialized every bean: a handler never runs while the context is being refreshed (e.g. before a bean warms up a
+     * cache, or when the startup fails afterwards). The listener of the replies is not deferred: it starts with the
+     * gateway and runs no handler, it only routes the replies to their callers.
+     */
+    @Override
+    public synchronized void start() {
+        if (!started) {
+            started = true;
+            listeners.forEach(GenericMessageListener::startListener);
         }
     }
 

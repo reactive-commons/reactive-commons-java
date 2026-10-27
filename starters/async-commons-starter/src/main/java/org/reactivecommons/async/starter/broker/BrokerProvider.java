@@ -40,6 +40,15 @@ public interface BrokerProvider<T extends GenericAsyncProps> {
     Mono<RCHealth> healthCheck();
 
     /**
+     * Starts consuming with the listeners registered by the {@code listen*} methods, which only register them. Called
+     * once the application context has created and initialized every bean, so no handler runs while it is being
+     * refreshed; a listener registered afterwards starts right away. The default implementation does nothing: the
+     * listeners of a provider that does not override it start as soon as they are registered.
+     */
+    default void start() {
+    }
+
+    /**
      * Stops the listeners and releases the resources (threads, connections) owned by this provider. Called when the
      * application context closes. The default implementation does nothing.
      */
