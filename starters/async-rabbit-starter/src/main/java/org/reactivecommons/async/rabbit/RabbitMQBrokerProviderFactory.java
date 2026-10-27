@@ -64,10 +64,14 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
             shared.useSender(sender); // the shared discard notifier publishes through the default domain sender
         }
         DiscardNotifier discardNotifier;
+        final Runnable releaseDiscardProvider;
         if (props.isUseDiscardNotifierPerDomain()) {
             discardNotifier = RabbitMQSetupUtils.createDiscardNotifier(sender, props, config, converter);
+            releaseDiscardProvider = () -> {
+            };
         } else {
             discardNotifier = discardProvider.get();
+            releaseDiscardProvider = retain(discardProvider);
         }
         final ConsumerQueueDepth queueDepth = meterRegistry != null
                 ? new ConsumerQueueDepth(meterRegistry, domain,
@@ -76,6 +80,24 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
                 : null;
         return new RabbitMQBrokerProvider(domain, props, config, router, converter, meterRegistry, errorReporter,
                 healthIndicator, listener, sender, discardNotifier, queueDepth,
-                () -> RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory()));
+                () -> {
+                    RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
+                    releaseDiscardProvider.run();
+                });
+    }
+
+    /**
+     * Registers the provider as a user of the shared discard provider, which closes the sender it may have created
+     * itself once its last user is released.
+     *
+     * @return releases the provider, when it closes
+     */
+    private static Runnable retain(DiscardProvider discardProvider) {
+        if (discardProvider instanceof RabbitMQDiscardProviderImpl shared) {
+            shared.retain();
+            return shared::release;
+        }
+        return () -> {
+        };
     }
 }

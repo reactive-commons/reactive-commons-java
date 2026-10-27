@@ -20,7 +20,8 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * <p>It does not own a sender: it publishes through the sender of the default domain (see
  * {@link #useSender(ReactiveMessageSender)}), so notifying discards does not cost extra channels and threads. Only
- * if no sender was registered (e.g. a custom wiring) it creates its own one, the first time it is needed.
+ * if no sender was registered (e.g. a custom wiring) it creates its own one, the first time it is needed, and closes
+ * it once the last broker provider publishing through it closes (see {@link #retain()} and {@link #release()}).
  */
 @RequiredArgsConstructor
 public class RabbitMQDiscardProviderImpl implements DiscardProvider {
@@ -30,6 +31,12 @@ public class RabbitMQDiscardProviderImpl implements DiscardProvider {
     private final ConnectionFactoryCustomizer cfCustomizer;
     private final AtomicReference<ReactiveMessageSender> defaultSender = new AtomicReference<>();
     private final AtomicReference<DiscardNotifier> delegate = new AtomicReference<>();
+    /**
+     * Closes the sender this provider created itself, if any, with its connections (guarded by this).
+     */
+    private Runnable closeOwnSender = () -> {
+    };
+    private int users; // guarded by this
     private final DiscardNotifier lazyNotifier = new DiscardNotifier() {
         @Override
         public Mono<Void> notifyDiscard(Message message) {
@@ -70,11 +77,37 @@ public class RabbitMQDiscardProviderImpl implements DiscardProvider {
         return current;
     }
 
+    /**
+     * Registers a broker provider that publishes its discards through this provider. Call {@link #release()} when it
+     * closes.
+     */
+    public synchronized void retain() {
+        users++;
+    }
+
+    /**
+     * Unregisters a broker provider. Once none is left, the sender this provider created itself (no sender of the
+     * default domain was registered) is closed and its connections are released: nobody publishes through it anymore.
+     */
+    public synchronized void release() {
+        if (users > 0 && --users == 0) {
+            closeOwnSender.run();
+            closeOwnSender = () -> {
+            };
+        }
+    }
+
     private DiscardNotifier buildDiscardNotifier() {
         ReactiveMessageSender sender = defaultSender.get();
         if (sender == null) {
             ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, cfCustomizer);
-            sender = RabbitMQSetupUtils.createMessageSender(provider, props, converter, null);
+            RabbitMQSetupUtils.retainConnections(provider.getConnectionFactory());
+            final ReactiveMessageSender own = RabbitMQSetupUtils.createMessageSender(provider, props, converter, null);
+            closeOwnSender = () -> {
+                own.close();
+                RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
+            };
+            sender = own;
         }
         return RabbitMQSetupUtils.createDiscardNotifier(sender, props, config, converter);
     }
