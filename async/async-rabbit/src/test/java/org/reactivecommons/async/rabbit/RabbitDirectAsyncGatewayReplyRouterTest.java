@@ -63,7 +63,8 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void answeredQueryReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(query())
                 .then(() -> router.routeReply(sentCorrelationId(), converter.toMessage("answer")))
@@ -75,7 +76,8 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void timedOutQueryReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
+                .thenReturn(Mono.empty());
 
         StepVerifier.create(query())
                 .expectError(TimeoutException.class)
