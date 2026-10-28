@@ -66,4 +66,12 @@ public class OutboundMessage {
     protected void published() {
         this.published = true;
     }
+
+    /**
+     * Records a broker confirm of the message, which proves it was written to the channel even when the broker
+     * answers before {@code basicPublish} returns and {@link #published()} runs.
+     */
+    void confirmedByBroker() {
+        this.published = true;
+    }
 }

@@ -673,19 +673,25 @@ public class Sender implements AutoCloseable {
                     while ((entry = unconfirmed.firstEntry()) != null && entry.getKey() <= deliveryTag) {
                         // remove(key, value) guarantees a single result even if a failure drains the map concurrently
                         if (unconfirmed.remove(entry.getKey(), entry.getValue())) {
-                            emit(new OutboundMessageResult<>(entry.getValue(), ack, false));
+                            emitConfirm(entry.getValue(), ack);
                         }
                     }
                 } else {
                     OMSG outboundMessage = unconfirmed.remove(deliveryTag);
                     if (outboundMessage != null) {
-                        emit(new OutboundMessageResult<>(outboundMessage, ack, false));
+                        emitConfirm(outboundMessage, ack);
                     }
                 }
             } catch (Exception e) {
                 handleError(e, null);
             }
             maybeCompleteIfNothingPending();
+        }
+
+        private void emitConfirm(OMSG message, boolean ack) {
+            // the confirmation may arrive before basicPublish returned to onNext: it is written all the same
+            message.confirmedByBroker();
+            emit(new OutboundMessageResult<>(message, ack, false));
         }
 
         private void handleShutdown(ShutdownSignalException sse) {

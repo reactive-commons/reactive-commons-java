@@ -445,6 +445,32 @@ class SenderTest {
                     .satisfies(r -> assertThat(r.ack()).isFalse());
         }
 
+        /**
+         * The broker may answer before basicPublish returns to the publishing thread (e.g. a queue at its length
+         * limit rejecting the message at once): its confirm proves the message was written all the same.
+         */
+        @Test
+        void aMessageConfirmedBeforeItsPublishReturnedIsReportedAsPublished() throws Exception {
+            AtomicReference<ConfirmListener> listenerRef = new AtomicReference<>();
+            doAnswer(inv -> {
+                listenerRef.set(inv.getArgument(0));
+                return null;
+            }).when(channel).addConfirmListener(any(ConfirmListener.class));
+            doAnswer(inv -> {
+                listenerRef.get().handleNack(1, false);
+                return null;
+            }).when(channel).basicPublish(anyString(), anyString(), anyBoolean(), any(), any(byte[].class));
+
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+            // read when the result is emitted, as its subscriber does to tell a broker nack from a failed write
+            List<Boolean> publishedOnResult = new ArrayList<>();
+            sender.sendWithPublishConfirms(Flux.just(new OutboundMessage("exch", "rk", "m1".getBytes())))
+                    .subscribe(result -> publishedOnResult.add(result.outboundMessage().isPublished()));
+
+            assertThat(publishedOnResult).as("written, since the broker nacked it").containsExactly(true);
+        }
+
         @Test
         void publishConfirmWithTrackReturned() throws Exception {
             when(channel.getNextPublishSeqNo()).thenReturn(1L);
