@@ -40,9 +40,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
@@ -57,6 +59,11 @@ import static reactor.rabbitmq.Helpers.safelyExecute;
 public class Sender implements AutoCloseable {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(Sender.class);
+    private static final int CHANNEL_CLOSE_THREADS = 4;
+    /**
+     * How long closing the sender waits for the channels of its terminated flows to be closed.
+     */
+    private static final Duration CHANNEL_CLOSE_TIMEOUT = Duration.ofSeconds(5);
 
     private static final Function<Connection, Channel> CHANNEL_CREATION_FUNCTION = conn -> {
         try {
@@ -85,6 +92,11 @@ public class Sender implements AutoCloseable {
 
     private final Mono<? extends Channel> resourceManagementChannelMono;
 
+    /**
+     * Sends the resource management RPCs (declare, bind, unbind) and emits their outcome. Sending one can block: the
+     * client blocks the thread that sends an RPC while another one is in progress on the same channel, and opening the
+     * channel is an RPC too, so it never runs on the thread that subscribes (e.g. a non-blocking event loop).
+     */
     private final Scheduler resourceManagementScheduler;
 
     private final boolean privateResourceManagementScheduler;
@@ -93,7 +105,13 @@ public class Sender implements AutoCloseable {
 
     private final boolean privateConnectionSubscriptionScheduler;
 
-    private final ExecutorService channelCloseThreadPool = Executors.newCachedThreadPool();
+    /**
+     * Closes the channels of the terminated flows. A close is an RPC that can wait for the broker (e.g. while it blocks
+     * the connection), so it never runs on the thread that terminated the flow; daemon threads, released when idle.
+     */
+    private final ThreadPoolExecutor channelCloseThreadPool = channelCloseThreadPool();
+
+    private final ChannelPool channelPool;
 
     private final int connectionClosingTimeout;
 
@@ -130,6 +148,7 @@ public class Sender implements AutoCloseable {
 
         this.connectionMono = cm;
         this.channelMono = options.getChannelMono();
+        this.channelPool = options.getChannelPool();
         this.channelCloseHandler = options.getChannelCloseHandler() == null
                 ? ChannelCloseHandlers.SENDER_CHANNEL_CLOSE_HANDLER_INSTANCE
                 : options.getChannelCloseHandler();
@@ -275,6 +294,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.DeclareOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -297,6 +317,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Exchange.DeclareOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -316,6 +337,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.BindOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -335,6 +357,7 @@ public class Sender implements AutoCloseable {
                     }
                 }).flatMap(Mono::fromCompletionStage)
                 .map(command -> (AMQP.Queue.UnbindOk) command.getMethod())
+                .subscribeOn(resourceManagementScheduler)
                 .publishOn(resourceManagementScheduler);
     }
 
@@ -343,6 +366,12 @@ public class Sender implements AutoCloseable {
     @Override
     public void close() {
         if (closingOrClosed.compareAndSet(false, true)) {
+            // the channels first, while their connection is still open
+            if (channelPool != null) {
+                safelyExecute(LOGGER, channelPool::close, "Error while closing the channel pool");
+            }
+            safelyExecute(LOGGER, this::shutdownChannelCloseThreadPool,
+                    "Error while closing channel closing thread pool");
             if (connection.get() != null) {
                 safelyExecute(LOGGER, () -> connection.get().close(this.connectionClosingTimeout),
                         "Error while closing sender connection");
@@ -355,9 +384,30 @@ public class Sender implements AutoCloseable {
                 safelyExecute(LOGGER, this.resourceManagementScheduler::dispose,
                         "Error while disposing resource management scheduler");
             }
-            safelyExecute(LOGGER, channelCloseThreadPool::shutdown,
-                    "Error while closing channel closing thread pool");
         }
+    }
+
+    private void shutdownChannelCloseThreadPool() {
+        channelCloseThreadPool.shutdown();
+        try {
+            if (!channelCloseThreadPool.awaitTermination(CHANNEL_CLOSE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
+                LOGGER.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static ThreadPoolExecutor channelCloseThreadPool() {
+        final AtomicLong threads = new AtomicLong();
+        final ThreadPoolExecutor pool = new ThreadPoolExecutor(CHANNEL_CLOSE_THREADS, CHANNEL_CLOSE_THREADS,
+                60, TimeUnit.SECONDS, new LinkedBlockingQueue<>(), runnable -> {
+            final Thread thread = new Thread(runnable, "rabbitmq-sender-channel-close-" + threads.incrementAndGet());
+            thread.setDaemon(true);
+            return thread;
+        });
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
     }
 
     // --- Inner Classes ---
@@ -623,19 +673,25 @@ public class Sender implements AutoCloseable {
                     while ((entry = unconfirmed.firstEntry()) != null && entry.getKey() <= deliveryTag) {
                         // remove(key, value) guarantees a single result even if a failure drains the map concurrently
                         if (unconfirmed.remove(entry.getKey(), entry.getValue())) {
-                            emit(new OutboundMessageResult<>(entry.getValue(), ack, false));
+                            emitConfirm(entry.getValue(), ack);
                         }
                     }
                 } else {
                     OMSG outboundMessage = unconfirmed.remove(deliveryTag);
                     if (outboundMessage != null) {
-                        emit(new OutboundMessageResult<>(outboundMessage, ack, false));
+                        emitConfirm(outboundMessage, ack);
                     }
                 }
             } catch (Exception e) {
                 handleError(e, null);
             }
             maybeCompleteIfNothingPending();
+        }
+
+        private void emitConfirm(OMSG message, boolean ack) {
+            // the confirmation may arrive before basicPublish returned to onNext: it is written all the same
+            message.confirmedByBroker();
+            emit(new OutboundMessageResult<>(message, ack, false));
         }
 
         private void handleShutdown(ShutdownSignalException sse) {
@@ -682,7 +738,7 @@ public class Sender implements AutoCloseable {
             var baseProperties = properties != null ? properties : new AMQP.BasicProperties();
             var headers = baseProperties.getHeaders() != null
                     ? new HashMap<>(baseProperties.getHeaders()) : new HashMap<String, Object>();
-            headers.putIfAbsent(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER, deliveryTag);
+            headers.put(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER, deliveryTag);
             return baseProperties.builder().headers(headers).build();
         }
 

@@ -15,6 +15,19 @@ public record ReactiveMessageListener(Receiver receiver, TopologyCreator topolog
                                       Integer prefetchCount, SubscriberRegistry subscriberRegistry,
                                       MeterRegistry meterRegistry, String domain, Duration handlerTimeout) {
 
+    public ReactiveMessageListener {
+        if (prefetchCount == null || prefetchCount < 1) {
+            // a prefetch of 0 means no limit: the broker would send every message of the queue to the listener
+            throw new IllegalArgumentException("prefetchCount must be at least 1 (250 by default), not "
+                    + prefetchCount + ": with 0 the broker sends every message of the queue without waiting for "
+                    + "their acknowledgements");
+        }
+        if (maxConcurrency == null || maxConcurrency < 1) {
+            throw new IllegalArgumentException("maxConcurrency must be at least 1 (250 by default), not "
+                    + maxConcurrency);
+        }
+    }
+
     public ReactiveMessageListener(Receiver receiver, TopologyCreator topologyCreator) {
         this(receiver, topologyCreator, 250, 250, new SubscriberRegistry(), null, null, null);
     }

@@ -1,8 +1,10 @@
 package reactor.rabbitmq;
 
+import com.rabbitmq.client.AlreadyClosedException;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.Method;
+import com.rabbitmq.client.ShutdownSignalException;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.CompletableFuture;
@@ -75,5 +77,68 @@ class ChannelProxyTest {
         assertThatThrownBy(() -> proxy.basicPublish("", "", null, new byte[0]))
                 .isInstanceOf(UnsupportedOperationException.class)
                 .hasMessageContaining("basicPublish");
+    }
+
+    @Test
+    void equalsAndHashCodeUseTheIdentityOfTheProxy() throws Exception {
+        var connection = mock(Connection.class);
+        var channel = mock(Channel.class);
+        var otherChannel = mock(Channel.class);
+        when(connection.createChannel()).thenReturn(channel, otherChannel);
+
+        Channel proxy = ChannelProxy.create(connection);
+        Channel other = ChannelProxy.create(connection);
+
+        assertThat(proxy).isNotEqualTo(other);
+        assertThat(new java.util.HashSet<>(java.util.List.of(proxy, other))).hasSize(2);
+    }
+
+    @Test
+    void isOpenAndCloseDelegateToTheCurrentChannel() throws Exception {
+        var connection = mock(Connection.class);
+        var realChannel = mock(Channel.class);
+        when(connection.createChannel()).thenReturn(realChannel);
+        when(realChannel.isOpen()).thenReturn(true);
+
+        Channel proxy = ChannelProxy.create(connection);
+        assertThat(proxy.isOpen()).isTrue();
+        proxy.close();
+
+        verify(realChannel).close();
+        assertThatThrownBy(() -> proxy.asyncCompletableRpc(mock(Method.class)))
+                .as("a closed proxy does not open a new channel")
+                .isInstanceOf(AlreadyClosedException.class);
+    }
+
+    @Test
+    void noChannelAvailableIsReportedInsteadOfANullPointer() throws Exception {
+        var connection = mock(Connection.class);
+        var closedChannel = mock(Channel.class);
+        when(connection.createChannel()).thenReturn(closedChannel, (Channel) null);
+        when(closedChannel.isOpen()).thenReturn(false);
+
+        Channel proxy = ChannelProxy.create(connection);
+
+        assertThatThrownBy(() -> proxy.asyncCompletableRpc(mock(Method.class)))
+                .isInstanceOf(java.io.IOException.class)
+                .hasMessageContaining("channel_max");
+    }
+
+    @Test
+    void aChannelClosedBetweenTheCheckAndTheRpcIsReplacedOnce() throws Exception {
+        var connection = mock(Connection.class);
+        var closingChannel = mock(Channel.class);
+        var newChannel = mock(Channel.class);
+        when(connection.createChannel()).thenReturn(closingChannel, newChannel);
+        when(closingChannel.isOpen()).thenReturn(true, false);
+        when(closingChannel.asyncCompletableRpc(any(Method.class))).thenThrow(new AlreadyClosedException(
+                new ShutdownSignalException(false, false, null, closingChannel)));
+        when(newChannel.isOpen()).thenReturn(true);
+        var command = mock(com.rabbitmq.client.Command.class);
+        when(newChannel.asyncCompletableRpc(any(Method.class))).thenReturn(CompletableFuture.completedFuture(command));
+
+        Channel proxy = ChannelProxy.create(connection);
+
+        assertThat(proxy.asyncCompletableRpc(mock(Method.class)).get()).isSameAs(command);
     }
 }

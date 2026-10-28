@@ -24,6 +24,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -33,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
@@ -53,10 +55,11 @@ class SubscriberResilienceRabbitContainerTest {
      */
     private static final Duration SLOW_REPLY = Duration.ofSeconds(8);
     private static final AtomicInteger handlersStarted = new AtomicInteger();
+    private static final AtomicInteger slowQueriesStarted = new AtomicInteger();
     private static final AtomicInteger handlersInterrupted = new AtomicInteger();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     /**
      * The requester's consuming connection drops while a query is in flight: the reply is published while its
@@ -71,9 +74,11 @@ class SubscriberResilienceRabbitContainerTest {
             DirectAsyncGateway gateway = requester.getBean(DirectAsyncGateway.class);
             for (int loss = 1; loss <= 2; loss++) {
                 awaitReplyQueue("req1-app");
+                int started = slowQueriesStarted.get();
                 CompletableFuture<String> reply = gateway.requestReply(new AsyncQuery<>("slow.query", "q"),
                         "srv1-app", String.class).toFuture();
-                Thread.sleep(500);
+                // the query is being handled: its reply is in flight
+                await().atMost(Duration.ofSeconds(10)).until(() -> slowQueriesStarted.get() > started);
                 long t0 = System.nanoTime();
                 closeConnection("req1-app-", "-listener");
                 Throwable outcome = outcomeOf(reply);
@@ -105,9 +110,11 @@ class SubscriberResilienceRabbitContainerTest {
             awaitReplyQueue("req2-extra");
             DirectAsyncGateway gateway = requester.getBean(DirectAsyncGateway.class);
 
+            int started = slowQueriesStarted.get();
             CompletableFuture<String> otherDomain = gateway.requestReply(new AsyncQuery<>("slow.query", "q"),
                     "srv2-app", String.class, RabbitScenarioSupport.EXTRA_DOMAIN).toFuture();
-            Thread.sleep(500);
+            // the query is being handled: its reply is in flight
+            await().atMost(Duration.ofSeconds(10)).until(() -> slowQueriesStarted.get() > started);
             ExecResult deleted = RABBIT.execInContainer("rabbitmqctl", "delete_queue", appReplyQueue);
             assertThat(deleted.getExitCode()).as(deleted.getStderr()).isZero();
             Throwable outcome = outcomeOf(otherDomain);
@@ -133,13 +140,10 @@ class SubscriberResilienceRabbitContainerTest {
             Mono.from(context.getBean(DomainEventBus.class).emit(new DomainEvent<>("blocking.event",
                     UUID.randomUUID().toString(), Map.of()))).block(Duration.ofSeconds(10));
 
-            Thread.sleep(8_000); // handlerTimeout 1 s + retryDelay 1 s: ~4 deliveries
-            long parked = Thread.getAllStackTraces().entrySet().stream()
-                    .filter(e -> e.getKey().getName().startsWith("rc-handlers"))
-                    .filter(e -> java.util.Arrays.stream(e.getValue())
-                            .anyMatch(f -> f.getClassName().equals(BlockingHandlers.class.getName())
-                                    || f.getMethodName().contains("lambda$handlerRegistry")))
-                    .count();
+            // handlerTimeout 1 s + retryDelay 1 s: a delivery every ~2 s, each one releasing the previous thread
+            await().atMost(Duration.ofSeconds(20))
+                    .until(() -> handlersStarted.get() >= 4 && parkedHandlerThreads() <= 1);
+            long parked = parkedHandlerThreads();
             System.out.println("[REAL BROKER] handler timeout: deliveries=" + handlersStarted.get() + ", interrupted="
                     + handlersInterrupted.get() + ", handler threads still parked in the handler=" + parked);
 
@@ -186,7 +190,19 @@ class SubscriberResilienceRabbitContainerTest {
         return health.health().block();
     }
 
-    private static AnnotationConfigApplicationContext startServer(String prefix) throws Exception {
+    /**
+     * Handler threads blocked in a handler of {@link BlockingHandlers}.
+     */
+    private static long parkedHandlerThreads() {
+        return Thread.getAllStackTraces().entrySet().stream()
+                .filter(e -> e.getKey().getName().startsWith("rc-handlers"))
+                .filter(e -> Arrays.stream(e.getValue())
+                        .anyMatch(f -> f.getClassName().equals(BlockingHandlers.class.getName())
+                                || f.getMethodName().contains("lambda$handlerRegistry")))
+                .count();
+    }
+
+    private static AnnotationConfigApplicationContext startServer(String prefix) {
         AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false,
                 false, SlowQueryHandlers.class, ListenQueries.class);
         RabbitScenarioSupport.awaitConsumers(RABBIT, prefix + "-app.query");
@@ -205,22 +221,20 @@ class SubscriberResilienceRabbitContainerTest {
     /**
      * Name of the (exclusive) reply queue of an application, once it has its consumer.
      */
-    private static String awaitReplyQueue(String appName) throws Exception {
+    private static String awaitReplyQueue(String appName) {
         // the connection recovery takes 5 s, much more on a loaded machine (e.g. the whole build in parallel)
-        long deadline = System.currentTimeMillis() + 60_000;
-        while (System.currentTimeMillis() < deadline) {
-            String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers")
-                    .getStdout();
-            Optional<String> queue = listing.lines().map(line -> line.trim().split("\\s+"))
-                    .filter(c -> c.length == 2 && c[0].startsWith(appName) && c[0].contains("replies")
-                            && !c[1].equals("0"))
-                    .map(c -> c[0]).findFirst();
-            if (queue.isPresent()) {
-                return queue.get();
-            }
-            Thread.sleep(200);
-        }
-        throw new IllegalStateException("No reply queue with a consumer for " + appName);
+        return await().alias("a reply queue with a consumer for " + appName).atMost(Duration.ofSeconds(60))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> replyQueueWithAConsumer(appName), Optional::isPresent)
+                .orElseThrow();
+    }
+
+    private static Optional<String> replyQueueWithAConsumer(String appName) throws Exception {
+        String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers").getStdout();
+        return listing.lines().map(line -> line.trim().split("\\s+"))
+                .filter(c -> c.length == 2 && c[0].startsWith(appName) && c[0].contains("replies")
+                        && !c[1].equals("0"))
+                .map(c -> c[0]).findFirst();
     }
 
     private static void closeConnection(String namePrefix, String nameSuffix) throws Exception {
@@ -247,7 +261,8 @@ class SubscriberResilienceRabbitContainerTest {
         @Bean
         HandlerRegistry handlerRegistry() {
             return HandlerRegistry.register()
-                    .serveQuery("slow.query", query -> Mono.delay(SLOW_REPLY).thenReturn("ok"), String.class);
+                    .serveQuery("slow.query", query -> Mono.delay(SLOW_REPLY).thenReturn("ok")
+                            .doOnSubscribe(subscription -> slowQueriesStarted.incrementAndGet()), String.class);
         }
     }
 

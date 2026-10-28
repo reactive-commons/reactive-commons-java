@@ -34,6 +34,7 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -50,7 +51,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
     private static volatile CompletableFuture<Void> releaseHandlers = new CompletableFuture<>();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @AfterEach
     void clearAlarm() throws Exception {
@@ -68,17 +69,17 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             raiseMemoryAlarm();
             // connection.blocked is sent to publishing connections: publish once so the broker blocks this one
             Throwable firstError = catchThrowable(() -> emit(bus));
-            await("connection.blocked from the broker", state::isBlocked);
+            awaitFor("connection.blocked from the broker", state::isBlocked);
 
             assertThat(state.blockedReason()).isNotBlank();
             Throwable error = catchThrowable(() -> emit(bus));
             assertThat(error).as("first publish after the alarm: %s", firstError)
                     .hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
-            Thread.sleep(HEALTH_GRACE.plusMillis(500).toMillis());
-            assertThat(provider.healthCheck().block().status()).isEqualTo(RCHealth.Status.DOWN);
+            awaitFor("health down once the grace elapses",
+                    () -> provider.healthCheck().block().status() == RCHealth.Status.DOWN);
 
             rabbitmqctl("set_vm_memory_high_watermark", "0.4");
-            await("connection.unblocked from the broker", () -> !state.isBlocked());
+            awaitFor("connection.unblocked from the broker", () -> !state.isBlocked());
             emit(bus);
             assertThat(provider.healthCheck().block().status()).isEqualTo(RCHealth.Status.UP);
         }
@@ -99,7 +100,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             long t0 = System.nanoTime();
             Throwable first = catchThrowable(() -> emit(bus));
             long firstMs = Duration.ofNanos(System.nanoTime() - t0).toMillis();
-            await("connection.blocked from the broker", state::isBlocked);
+            awaitFor("connection.blocked from the broker", state::isBlocked);
             long t1 = System.nanoTime();
             Throwable next = catchThrowable(() -> emit(bus));
             long nextMs = Duration.ofNanos(System.nanoTime() - t1).toMillis();
@@ -124,7 +125,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         emit(bus);
         raiseMemoryAlarm();
         catchThrowable(() -> emit(bus));
-        await("connection.blocked from the broker", state::isBlocked);
+        awaitFor("connection.blocked from the broker", state::isBlocked);
 
         List<String> aborts = new CopyOnWriteArrayList<>();
         java.util.logging.Logger senderLog = java.util.logging.Logger.getLogger(
@@ -176,17 +177,17 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
 
             raiseMemoryAlarm();
             catchThrowable(() -> emit(bus));
-            await("connection.blocked from the broker", state::isBlocked);
+            awaitFor("connection.blocked from the broker", state::isBlocked);
 
             // close the blocked connection and clear the alarm before the client recovers it (5 s by default)
             ExecResult result = RABBIT.execInContainer("sh", "-c",
                     "rabbitmqctl close_all_connections 'test' && rabbitmqctl set_vm_memory_high_watermark 0.4");
             assertThat(result.getExitCode()).as(result.getStderr()).isZero();
 
-            await("the blocked state is cleared after the recovery", () -> !state.isBlocked());
-            await("publishing works again", () -> catchThrowable(() -> emit(bus)) == null);
+            awaitFor("the blocked state is cleared after the recovery", () -> !state.isBlocked());
+            awaitFor("publishing works again", () -> catchThrowable(() -> emit(bus)) == null);
             // the flows re-subscribe after the recovery: the health may be DOWN briefly, but must converge to UP
-            await("the health is UP again", () -> provider.healthCheck().block().status() == RCHealth.Status.UP);
+            awaitFor("the health is UP again", () -> provider.healthCheck().block().status() == RCHealth.Status.UP);
         }
     }
 
@@ -204,18 +205,18 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             for (int i = 0; i < 5; i++) {
                 emit(bus); // delivered, and held unacknowledged by the handlers
             }
-            await("5 deliveries held by the handlers", () -> unacknowledged("acks-app.subsEvents") == 5);
+            awaitFor("5 deliveries held by the handlers", () -> unacknowledged("acks-app.subsEvents") == 5);
 
             raiseMemoryAlarm();
             catchThrowable(() -> emit(bus));
-            await("connection.blocked from the broker", state::isBlocked);
+            awaitFor("connection.blocked from the broker", state::isBlocked);
             // "blocking" = would be paused if it published; only "blocked" connections are paused
             Map<String, String> states = connectionStates("acks-app-");
             assertThat(states).containsEntry("sender", "blocked").containsKey("listener");
             assertThat(states.get("listener")).isNotEqualTo("blocked");
 
             releaseHandlers.complete(null); // the handlers acknowledge while the alarm is still raised
-            await("the acknowledgements reach the broker", () -> unacknowledged("acks-app.subsEvents") == 0);
+            awaitFor("the acknowledgements reach the broker", () -> unacknowledged("acks-app.subsEvents") == 0);
             rabbitmqctl("set_vm_memory_high_watermark", "0.4");
         }
     }
@@ -235,7 +236,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
 
             raiseMemoryAlarm();
             catchThrowable(() -> emit(bus));
-            await("connection.blocked from the broker", state::isBlocked);
+            awaitFor("connection.blocked from the broker", state::isBlocked);
 
             double acksBefore = acks(registry);
             String blob = "x".repeat(64 * 1024);
@@ -259,8 +260,10 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             long slowest = outcomes.stream().mapToLong(reactor.util.function.Tuple2::getT1).max().orElse(0);
 
             rabbitmqctl("set_vm_memory_high_watermark", "0.4");
-            await("publishing works again", () -> catchThrowable(() -> emit(bus)) == null);
-            Thread.sleep(5_000); // anything buffered while blocked would reach the broker now
+            awaitFor("publishing works again", () -> catchThrowable(() -> emit(bus)) == null);
+            // anything buffered while blocked would reach the broker now
+            await().during(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(7))
+                    .until(() -> acks(registry) - acksBefore <= 2);
             // besides the flood: the emit that triggered the block (unknown outcome) and the one that succeeded
             double lateAcks = acks(registry) - acksBefore;
             System.out.println("[FLOOD] " + messages + " sends in " + floodMs + " ms, slowest " + slowest
@@ -273,13 +276,12 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         }
     }
 
-    private static AnnotationConfigApplicationContext start(String prefix, Class<?>... features) throws Exception {
+    private static AnnotationConfigApplicationContext start(String prefix, Class<?>... features) {
         return startWithHandlers(prefix, RabbitScenarioSupport.Handlers.class, features);
     }
 
     private static AnnotationConfigApplicationContext startWithHandlers(String prefix, Class<?> handlers,
-                                                                        Class<?>... features)
-            throws Exception {
+                                                                        Class<?>... features) {
         Class<?>[] all = new Class<?>[features.length + 2];
         all[0] = SendEvents.class;
         all[1] = ListenEvents.class;
@@ -348,14 +350,8 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         assertThat(result.getExitCode()).as(result.getStderr()).isZero();
     }
 
-    private static void await(String description, BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 30_000;
-        while (!condition.getAsBoolean()) {
-            if (System.currentTimeMillis() > deadline) {
-                throw new AssertionError("Timed out waiting for: " + description);
-            }
-            Thread.sleep(100);
-        }
+    private static void awaitFor(String description, BooleanSupplier condition) {
+        await().alias(description).atMost(Duration.ofSeconds(30)).until(condition::getAsBoolean);
     }
 
     @Configuration

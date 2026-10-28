@@ -88,7 +88,7 @@ class RabbitDirectAsyncGatewayTest {
                 brokerConfig, router, senderMock, "ex", converter, meterRegistry
         );
         when(router.register(anyString(), any())).thenReturn(Mono.never());
-        when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+        when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
                 .thenReturn(Mono.empty());
 
         AsyncQuery<String> query = new AsyncQuery<>("some.query", "data");
@@ -176,7 +176,7 @@ class RabbitDirectAsyncGatewayTest {
 
     @Test
     void shouldHandleRequestReply() {
-        senderMock();
+        querySenderMock();
         mockReply();
 
         String queryName = "my.query";
@@ -191,7 +191,7 @@ class RabbitDirectAsyncGatewayTest {
         ArgumentCaptor<Map<String, Object>> headersCaptor = ArgumentCaptor.forClass(Map.class);
         verify(senderMock, times(1))
                 .sendNoConfirm(eq(query), eq("exchange"), eq("app-target.query"), headersCaptor.capture(),
-                        anyBoolean());
+                        anyBoolean(), eq(config.getReplyTimeout())); // it expires once its caller stops waiting
         assertThat(headersCaptor.getValue().get(REPLY_ID).toString()).hasSize(32);
         assertThat(headersCaptor.getValue().get(CORRELATION_ID).toString()).hasSize(32);
     }
@@ -303,7 +303,7 @@ class RabbitDirectAsyncGatewayTest {
 
     @Test
     void shouldRequestReplyWithCustomDomain() {
-        senderMock();
+        querySenderMock();
         mockReply();
 
         AsyncQuery<DummyMessage> query = new AsyncQuery<>("my.query", new DummyMessage());
@@ -315,12 +315,22 @@ class RabbitDirectAsyncGatewayTest {
                 .verifyComplete();
 
         verify(senderMock)
-                .sendNoConfirm(eq(query), eq("exchange"), eq("target.query"), anyMap(), anyBoolean());
+                .sendNoConfirm(eq(query), eq("exchange"), eq("target.query"), anyMap(), anyBoolean(),
+                        any(Duration.class));
     }
 
     private void senderMock() {
         init(senderMock);
         when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean()))
+                .thenReturn(Mono.empty());
+    }
+
+    /**
+     * The queries are published with a time to live, the replies without one.
+     */
+    private void querySenderMock() {
+        init(senderMock);
+        when(senderMock.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
                 .thenReturn(Mono.empty());
     }
 

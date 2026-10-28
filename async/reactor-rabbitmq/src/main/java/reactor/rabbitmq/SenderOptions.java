@@ -36,6 +36,7 @@ public class SenderOptions {
     private Mono<? extends Connection> connectionMono;
     private Mono<? extends Channel> channelMono;
     private BiConsumer<SignalType, Channel> channelCloseHandler;
+    private ChannelPool channelPool;
     private Scheduler resourceManagementScheduler;
     private Scheduler connectionSubscriptionScheduler;
     private Mono<? extends Channel> resourceManagementChannelMono;
@@ -83,7 +84,11 @@ public class SenderOptions {
         return this;
     }
 
+    /**
+     * The channels of the sender come from this pool, which the sender closes when it is closed.
+     */
     public SenderOptions channelPool(ChannelPool channelPool) {
+        this.channelPool = channelPool;
         this.channelMono = channelPool.getChannelMono();
         this.channelCloseHandler = channelPool.getChannelCloseHandler();
         return this;

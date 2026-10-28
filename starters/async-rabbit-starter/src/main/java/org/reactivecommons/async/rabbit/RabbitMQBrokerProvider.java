@@ -25,13 +25,22 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 @Log
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
+
+    /**
+     * How long closing the provider waits for the deliveries in flight to be acknowledged (the counterpart of the
+     * {@code shutdownTimeout} of the Spring AMQP listener containers). The same as the time the shared handler pool
+     * is given to finish its tasks afterward.
+     */
+    static final Duration DRAIN_TIMEOUT = Duration.ofSeconds(10);
 
     private final String domain;
     private final AsyncProps props;
@@ -45,9 +54,13 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final ReactiveMessageSender sender;
     private final DiscardNotifier discardNotifier;
     private final ConsumerQueueDepth queueDepth;
+    private final Runnable releaseConnections;
+    private final AtomicBoolean closed = new AtomicBoolean();
 
     private final List<GenericMessageListener> listeners = new CopyOnWriteArrayList<>();
+    private boolean started;
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
+    private final AtomicBoolean listeningReplies = new AtomicBoolean();
 
     public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
                                   RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
@@ -63,6 +76,21 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                                   CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
                                   ReactiveMessageListener receiver, ReactiveMessageSender sender,
                                   DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
+        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
+                sender, discardNotifier, queueDepth, () -> {
+                });
+    }
+
+    /**
+     * @param releaseConnections run once the provider is closed, to release the connections it used
+     */
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
+                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
+                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
+                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
+                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth,
+                                  Runnable releaseConnections) {
+        this.releaseConnections = releaseConnections;
         this.domain = domain;
         this.props = props;
         this.config = config;
@@ -126,7 +154,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public DomainEventBus getDomainBus() {
         final String exchangeName = props.getBrokerConfigProps().getDomainEventsExchangeName();
         if (Boolean.TRUE.equals(props.getCreateTopology())) {
-            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("topic")).subscribe();
+            sender.declareExchange(exchange(exchangeName).durable(true).type("topic"));
         }
         return new RabbitDomainEventBus(sender, exchangeName, config);
     }
@@ -135,7 +163,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public DirectAsyncGateway getDirectAsyncGateway() {
         String exchangeName = props.getBrokerConfigProps().getDirectMessagesExchangeName();
         if (Boolean.TRUE.equals(props.getCreateTopology())) {
-            sender.getTopologyCreator().declare(exchange(exchangeName).durable(true).type("direct")).subscribe();
+            sender.declareExchange(exchange(exchangeName).durable(true).type("direct"));
         }
         listenReplies();
         return new RabbitDirectAsyncGateway(config, router, sender, exchangeName, converter, meterRegistry, domain);
@@ -157,8 +185,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter,
                     props.getAppName());
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         }
     }
 
@@ -173,8 +200,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter
             );
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         });
     }
 
@@ -195,8 +221,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     converter,
                     discardNotifier,
                     errorReporter);
-            listeners.add(listener);
-            listener.startListener();
+            register(listener);
         }
     }
 
@@ -218,8 +243,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter);
 
-            listeners.add(commandListener);
-            commandListener.startListener();
+            register(commandListener);
         }
     }
 
@@ -243,14 +267,41 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
                     discardNotifier,
                     errorReporter);
 
-            listeners.add(listener);
+            register(listener);
+        }
+    }
+
+    /**
+     * Starts the listener now if the provider was started, otherwise once it is (see {@link #start()}).
+     */
+    private synchronized void register(GenericMessageListener listener) {
+        listeners.add(listener);
+        if (started) {
             listener.startListener();
         }
     }
 
+    /**
+     * Starts consuming with the listeners registered so far. Called once the application context has created and
+     * initialized every bean: a handler never runs while the context is being refreshed (e.g. before a bean warms up a
+     * cache, or when the startup fails afterwards). The listener of the replies is not deferred: it starts with the
+     * gateway and runs no handler, it only routes the replies to their callers.
+     */
+    @Override
+    public synchronized void start() {
+        if (!started) {
+            started = true;
+            listeners.forEach(GenericMessageListener::startListener);
+        }
+    }
+
+    /**
+     * Starts the listener of the replies once: every call after the first one (e.g. requesting the direct gateway
+     * again) would add another consumer to the same exclusive reply queue.
+     */
     @Override
     public void listenReplies() {
-        if (Boolean.TRUE.equals(props.getListenReplies())) {
+        if (Boolean.TRUE.equals(props.getListenReplies()) && listeningReplies.compareAndSet(false, true)) {
             final ApplicationReplyListener replyListener = new ApplicationReplyListener(router,
                     receiver,
                     props.getBrokerConfigProps().getReplyQueue(),
@@ -263,14 +314,21 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     }
 
     /**
-     * Stops the listeners and the publisher, and releases their threads. The connection shared by the sender and the
-     * listener is not closed here: it is cached per connection factory and shared by every domain.
+     * Stops the listeners and the publisher, and releases their threads. The listeners stop consuming first and their
+     * deliveries in flight are given up to {@link #DRAIN_TIMEOUT} to be handled and acknowledged, so they are not
+     * redelivered (and handled twice) after the shutdown; the publisher stays open meanwhile for the handlers. The
+     * connection shared by the sender and the listener is not closed here: it is cached per connection factory and
+     * shared by every domain.
      */
     @Override
     public void close() {
         if (queueDepth != null) {
             queueDepth.close();
         }
+        listeners.forEach(GenericMessageListener::stopConsuming);
+        final long deadline = System.nanoTime() + DRAIN_TIMEOUT.toNanos();
+        listeners.forEach(listener ->
+                listener.awaitInFlight(Duration.ofNanos(Math.max(0, deadline - System.nanoTime()))));
         listeners.forEach(GenericMessageListener::stop);
         listeners.clear();
         replyListeners.forEach(ApplicationReplyListener::stop);
@@ -278,6 +336,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
         receiver.receiver().close();
         receiver.topologyCreator().close(); // the listener declares through its own sender
         sender.close();
+        if (closed.compareAndSet(false, true)) {
+            releaseConnections.run();
+        }
     }
 
     @Override

@@ -36,6 +36,7 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.UUID;
@@ -45,6 +46,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Runs {@link ReactiveMessageSender} against a REAL RabbitMQ broker (Testcontainers) and checks that it recovers
@@ -72,7 +74,7 @@ class ReactiveMessageSenderRabbitContainerTest {
     private static final Network NETWORK = Network.newNetwork();
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine")
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine")
             .withNetwork(NETWORK)
             .withNetworkAliases("rabbit");
 
@@ -249,7 +251,13 @@ class ReactiveMessageSenderRabbitContainerTest {
             } finally {
                 docker.unpauseContainerCmd(TOXIPROXY.getContainerId()).exec();
             }
-            Thread.sleep(5_000); // whatever was written while stalled reaches the broker
+            // whatever was written while stalled reaches the broker: the queue stops growing
+            AtomicInteger lastSize = new AtomicInteger(-1);
+            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(500))
+                    .until(() -> {
+                        int size = queueSize();
+                        return size == lastSize.getAndSet(size);
+                    });
             int stored = queueSize() - before;
 
             Map<String, Long> byOutcome = outcomes.stream()
@@ -331,6 +339,7 @@ class ReactiveMessageSenderRabbitContainerTest {
         awaitSettled(healthy, 100);
         assertThat(healthy.completed.get()).as("healthy broker: confirmed messages").isEqualTo(100);
         assertThat(queueSize()).isEqualTo(100);
+        int channelsBefore = senderChannelsOnTheBroker();
 
         // 2. Poison message: unknown exchange => broker closes the channel with 404. Only one of the 4
         //    publisher-confirm flows is affected.
@@ -341,7 +350,8 @@ class ReactiveMessageSenderRabbitContainerTest {
                 .onErrorComplete()
                 .block(Duration.ofSeconds(15));
         Duration poisonDuration = Duration.ofNanos(System.nanoTime() - poisonStart);
-        Thread.sleep(1_000); // let the flow be re-subscribed with a new channel
+        // the flow is re-subscribed with a new channel
+        await().atMost(Duration.ofSeconds(10)).until(() -> senderChannelsOnTheBroker() == channelsBefore);
 
         // 3. Every later message is confirmed.
         int total = 200;
@@ -372,9 +382,10 @@ class ReactiveMessageSenderRabbitContainerTest {
         assertThat(queueSize()).isEqualTo(5);
 
         // 2. Poison message: written to the channel (so reported as sent), then the broker closes the channel.
+        int channelsBefore = senderChannelsOnTheBroker();
         messageSender.sendNoConfirm("poison", MISSING_EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
                 .block(Duration.ofSeconds(15));
-        Thread.sleep(1_000);
+        await().atMost(Duration.ofSeconds(10)).until(() -> senderChannelsOnTheBroker() < channelsBefore);
 
         // 3. The next publish hits the closed channel: it is reported as failed, without blocking the caller,
         //    and the flow is re-subscribed with a new channel.
@@ -429,14 +440,15 @@ class ReactiveMessageSenderRabbitContainerTest {
         int inFlight = 50;
         List<Throwable> inDoubtErrors = new CopyOnWriteArrayList<>();
         Counters inDoubt = sendMessages(messageSender, inFlight, EXCHANGE, inDoubtErrors);
-        Thread.sleep(1_500);
+        await().during(Duration.ofMillis(1_500)).atMost(Duration.ofSeconds(3))
+                .until(() -> inDoubt.completed.get() == 0);
         System.out.printf("[REAL BROKER] in flight: sent=%d, confirmed to caller=%d, already stored by broker=%d%n",
                 inFlight, inDoubt.completed.get(), queueSize() - 20);
         assertThat(inDoubt.completed.get()).as("no confirm can arrive while the broker is silent").isZero();
 
         // 3. Connection loss: the network is cut, the sender sees the connection die, then the network is restored.
         proxy.disable();
-        Thread.sleep(2_000);
+        await().atMost(Duration.ofSeconds(10)).until(() -> !senderConnection.isOpen());
         silence.remove();
         proxy.enable();
         awaitConnectionRecovered();
@@ -457,7 +469,8 @@ class ReactiveMessageSenderRabbitContainerTest {
         int afterTotal = 100;
         Counters afterRecovery = sendMessages(messageSender, afterTotal, EXCHANGE);
         awaitSettled(afterRecovery, afterTotal);
-        Thread.sleep(1_000);
+        await().atMost(Duration.ofSeconds(10)).until(() -> queueSize() == 20 + inFlight + afterTotal
+                && senderChannelsOnTheBroker() == channelsBefore);
 
         int brokerQueue = queueSize();
         int channelsAfter = senderChannelsOnTheBroker();
@@ -476,35 +489,30 @@ class ReactiveMessageSenderRabbitContainerTest {
         assertThat(channelsAfter).as("no orphan channels after the recovery").isEqualTo(channelsBefore);
     }
 
-    private void awaitConnectionRecovered() throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 30_000;
-        while (!senderConnection.isOpen() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-        }
-        assertThat(senderConnection.isOpen()).as("client automatic recovery restored the connection").isTrue();
+    private void awaitConnectionRecovered() {
+        await().alias("client automatic recovery restored the connection").atMost(Duration.ofSeconds(30))
+                .until(senderConnection::isOpen);
     }
 
     /**
      * Channels open on the broker for the sender connection, as reported by the broker itself.
      */
-    private int senderChannelsOnTheBroker() throws Exception {
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (true) {
-            // client_properties holds the client-provided connection name; columns are tab separated
-            ExecResult result = RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections",
-                    "client_properties", "channels");
-            for (String line : result.getStdout().split("\n")) {
-                String[] columns = line.trim().split("\t");
-                if (columns.length >= 2 && line.contains("\"" + SENDER_CONNECTION_NAME + "\"")) {
-                    return Integer.parseInt(columns[columns.length - 1].trim());
-                }
+    private int senderChannelsOnTheBroker() {
+        return await().alias("sender connection listed by the broker").atMost(Duration.ofSeconds(10))
+                .until(this::senderChannelsListed, Optional::isPresent).orElseThrow();
+    }
+
+    private Optional<Integer> senderChannelsListed() throws Exception {
+        // client_properties holds the client-provided connection name; columns are tab separated
+        ExecResult result = RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties",
+                "channels");
+        for (String line : result.getStdout().split("\n")) {
+            String[] columns = line.trim().split("\t");
+            if (columns.length >= 2 && line.contains("\"" + SENDER_CONNECTION_NAME + "\"")) {
+                return Optional.of(Integer.parseInt(columns[columns.length - 1].trim()));
             }
-            if (System.currentTimeMillis() > deadline) {
-                throw new IllegalStateException("Sender connection not found: " + result.getStdout()
-                        + result.getStderr());
-            }
-            Thread.sleep(200);
         }
+        return Optional.empty();
     }
 
     private record Counters(AtomicInteger completed, AtomicInteger failed) {
@@ -530,18 +538,12 @@ class ReactiveMessageSenderRabbitContainerTest {
         return counters;
     }
 
-    private void awaitSettled(Counters counters, int total) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline && counters.hanging(total) > 0) {
-            Thread.sleep(50);
-        }
+    private void awaitSettled(Counters counters, int total) {
+        await().atMost(Duration.ofSeconds(15)).until(() -> counters.hanging(total) <= 0);
     }
 
-    private void awaitQueueSize(int expected) throws Exception {
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (System.currentTimeMillis() < deadline && queueSize() < expected) {
-            Thread.sleep(50);
-        }
+    private void awaitQueueSize(int expected) {
+        await().atMost(Duration.ofSeconds(5)).until(() -> queueSize() >= expected);
     }
 
     private int queueSize() throws Exception {

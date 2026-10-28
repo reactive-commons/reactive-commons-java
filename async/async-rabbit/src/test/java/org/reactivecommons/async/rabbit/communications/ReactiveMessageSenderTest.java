@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.Timer;
@@ -12,35 +13,56 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
+import org.reactivestreams.Subscription;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Operators;
+import reactor.core.publisher.Sinks;
+import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.RabbitFluxException;
 import reactor.rabbitmq.SendOptions;
 import reactor.rabbitmq.Sender;
 import reactor.test.StepVerifier;
+import reactor.util.context.Context;
 import tools.jackson.databind.json.JsonMapper;
 
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.time.Duration;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+
+
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.BooleanSupplier;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -146,6 +168,171 @@ class ReactiveMessageSenderTest {
         StepVerifier.create(voidMono).verifyComplete();
     }
 
+    /**
+     * While no publishing flow is available (e.g. the connection is being recovered), the messages wait for one to be
+     * registered instead of being handed over again and again until it is.
+     */
+    @Test
+    void messagesWaitingForAPublishingFlowAreHandedOverOnceItIsRegistered() throws Exception {
+        CompletableFuture<Void> flowsReady = new CompletableFuture<>();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            // the flows get their channel (and register) only once flowsReady completes
+            return Mono.fromFuture(flowsReady).thenMany(argument
+                    .map(outboundMessage -> new OutboundMessageResult<>(outboundMessage, true)));
+        });
+        int messages = 200;
+        try (ReactiveMessageSender waitingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(10))) {
+            List<CompletableFuture<Void>> sends = new ArrayList<>();
+            for (int i = 0; i < messages; i++) {
+                sends.add(waitingSender.sendWithConfirm(new SomeClass(String.valueOf(i), "a", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true).toFuture());
+            }
+            await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(2))
+                    .until(() -> handOvers(waitingSender) <= messages);
+            long handOversWhileWaiting = handOvers(waitingSender);
+
+            long registeredAt = System.nanoTime();
+            flowsReady.complete(null);
+            CompletableFuture.allOf(sends.toArray(CompletableFuture[]::new))
+                    .get(5, TimeUnit.SECONDS);
+            long completedAfterMs = Duration.ofNanos(System.nanoTime() - registeredAt).toMillis();
+
+            System.out.printf("hand-overs of %d messages waiting 1 s for a flow: %d, completed %d ms after the flows "
+                    + "registered%n", messages, handOversWhileWaiting, completedAfterMs);
+            assertThat(handOversWhileWaiting).as("hand-overs while no flow is available").isLessThanOrEqualTo(messages);
+            assertThat(completedAfterMs).as("time to publish once a flow is registered").isLessThan(2_000);
+        }
+    }
+
+    /**
+     * The flows the message is handed to die before writing it (e.g. their channels close), and no flow gets a channel
+     * again before the send timeout: the message was never published, so its outcome is not in doubt.
+     */
+    @Test
+    void aMessageWhoseFlowsDiedBeforeWritingItIsReportedAsNotPublished() {
+        AtomicInteger subscriptions = new AtomicInteger();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            if (subscriptions.getAndIncrement() >= 4) {
+                return Flux.never(); // re-subscribed flows never get a channel again
+            }
+            // like a flow whose channel closed: the message reaching it is discarded unwritten and the flow ends
+            return argument.concatMap(message -> Mono.deferContextual(context -> {
+                Operators.onDiscard(message, Context.of(context));
+                return Mono.error(new IllegalStateException("channel closed"));
+            }));
+        });
+        try (ReactiveMessageSender dyingFlowsSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier, Duration.ofSeconds(1))) {
+            StepVerifier.create(dyingFlowsSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()),
+                            "exchange", "rkey", new HashMap<>(), true))
+                    .expectErrorSatisfies(error -> assertThat(error)
+                            .isInstanceOf(SendFailureNoAckException.class)
+                            .hasMessageContaining("not published"))
+                    .verify(Duration.ofSeconds(5));
+        }
+    }
+
+    /**
+     * A publish without confirms that blocks (e.g. the broker blocks the connection) completes after the sender shut
+     * its completion pool down: the published message must not be reported as a failed publish.
+     */
+    @Test
+    void aMessagePublishedAfterTheSenderClosedItsPoolsIsNotAFailedPublish() throws Exception {
+        CountDownLatch publishing = new CountDownLatch(1);
+        CountDownLatch poolsShutDown = new CountDownLatch(1);
+        CountDownLatch publishedCalled = new CountDownLatch(1);
+        AtomicReference<Throwable> publishedFailure = new AtomicReference<>();
+        when(sender.send(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            argument.subscribe(message -> {
+                publishing.countDown();
+                awaitUninterruptibly(poolsShutDown); // the basicPublish blocks until the sender closed its pools
+                try {
+                    // protected: called by the Sender once basicPublish returned
+                    Method published = OutboundMessage.class.getDeclaredMethod("published");
+                    published.setAccessible(true);
+                    published.invoke(message);
+                } catch (InvocationTargetException e) {
+                    publishedFailure.set(e.getCause());
+                } catch (ReflectiveOperationException e) {
+                    publishedFailure.set(e);
+                } finally {
+                    publishedCalled.countDown();
+                }
+            });
+            return Mono.never();
+        });
+        ReactiveMessageSender closingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+        closingSender.sendNoConfirm(new SomeClass("42", "Daniel", new Date()), "exchange", "rkey", new HashMap<>(),
+                false).subscribe(null, error -> {
+        });
+        assertThat(publishing.await(5, TimeUnit.SECONDS)).as("publishing").isTrue();
+
+        Thread closing = new Thread(closingSender::close);
+        closing.start();
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField("executorService");
+        field.setAccessible(true);
+        ExecutorService completionPool =
+                (ExecutorService) field.get(closingSender);
+        try {
+            await().atMost(Duration.ofSeconds(15)).until(completionPool::isShutdown);
+        } finally {
+            poolsShutDown.countDown();
+        }
+        closing.join(15_000);
+        assertThat(publishedCalled.await(5, TimeUnit.SECONDS)).as("publish completed").isTrue();
+
+        assertThat(completionPool.isShutdown()).as("completion pool shut down before the publish completed").isTrue();
+        assertThat(publishedFailure.get()).as("failure reported for a message that was published").isNull();
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        boolean interrupted = false;
+        while (true) {
+            try {
+                latch.await();
+                break;
+            } catch (InterruptedException e) {
+                interrupted = true;
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    private static long handOvers(ReactiveMessageSender sender) throws Exception {
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField("executorService2");
+        field.setAccessible(true);
+        return ((ThreadPoolExecutor) field.get(sender)).getCompletedTaskCount();
+    }
+
+    /**
+     * A sender that is never closed (e.g. used outside Spring) must not keep the JVM alive, nor keep idle threads
+     * forever.
+     */
+    @Test
+    void thePoolsOfTheSenderUseDaemonThreadsReleasedWhenIdle() throws Exception {
+        StepVerifier.create(messageSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                "rkey", new HashMap<>(), true)).verifyComplete();
+
+        List<Thread> poolThreads = Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> thread.getName().startsWith("RMessageSender"))
+                .toList();
+        assertThat(poolThreads).as("threads of the hand-over and completion pools").isNotEmpty()
+                .allSatisfy(thread -> assertThat(thread.isDaemon()).as(thread.getName()).isTrue());
+        for (String pool : List.of("executorService", "executorService2")) {
+            java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField(pool);
+            field.setAccessible(true);
+            assertThat(((ThreadPoolExecutor) field.get(messageSender)).allowsCoreThreadTimeOut())
+                    .as("idle threads of %s are released", pool).isTrue();
+        }
+    }
+
     @Test
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -170,6 +357,87 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
+    void aMessageLargerThanTheMaximumSizeIsRejectedBeforeBeingWrittenAndCountedAsTooLarge() {
+        when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation ->
+                Flux.from(invocation.<Publisher<OutboundMessage>>getArgument(0))
+                        .map(message -> new OutboundMessageResult<>(message, true)));
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender limitedSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
+                registry, "test-domain", 64)) {
+            SomeClass large = new SomeClass("42", "x".repeat(100), new Date());
+
+            StepVerifier.create(limitedSender.sendWithConfirm(large, "exchange", "rkey", new HashMap<>(), true))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendNoConfirm(large, "exchange", "rkey", new HashMap<>(), false))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendWithConfirmBatch(Flux.just(large), "exchange", "rkey",
+                            new HashMap<>(), true))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(limitedSender.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
+                            new HashMap<>(), true))
+                    .verifyComplete();
+
+            for (String confirm : List.of("true", "false")) {
+                Counter tooLarge = registry.find("reactive_commons.publish.outcome")
+                        .tags("domain", "test-domain", "confirm", confirm, "outcome", "too_large").counter();
+                assertThat(tooLarge).as("too_large outcome, confirm=%s", confirm).isNotNull();
+                assertThat(tooLarge.count()).isEqualTo("true".equals(confirm) ? 2 : 1);
+            }
+        }
+    }
+
+    @Test
+    void aPublishWaitsForTheDeclarationOfItsExchangeAndGoesOnWhenItFails() {
+        TopologyCreator topologyCreator = mock(TopologyCreator.class);
+        Sinks.One<AMQP.Exchange.DeclareOk> declared = Sinks.one();
+        when(topologyCreator.declare(any(ExchangeSpecification.class)))
+                .thenReturn(declared.asMono())
+                .thenReturn(Mono.error(new TopologyCreator.TopologyDefException(new IllegalStateException("406"))));
+        try (ReactiveMessageSender declaringSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                topologyCreator, false, unroutableMessageNotifier)) {
+            declaringSender.declareExchange(ExchangeSpecification.exchange("exchange"));
+            AtomicBoolean published = new AtomicBoolean();
+            declaringSender.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey", new HashMap<>(), true)
+                    .subscribe(ignored -> {
+                    }, error -> {
+                    }, () -> published.set(true));
+
+            // other exchanges do not wait
+            StepVerifier.create(declaringSender.sendWithConfirm(new SomeClass("2", "b", null), "other", "rkey",
+                    new HashMap<>(), true)).verifyComplete();
+            assertThat(published).as("published before its exchange is declared").isFalse();
+
+            declared.tryEmitValue(mock(AMQP.Exchange.DeclareOk.class));
+            await().atMost(Duration.ofSeconds(5)).untilTrue(published);
+
+            // a declaration that fails does not fail the publishes
+            declaringSender.declareExchange(ExchangeSpecification.exchange("exchange"));
+            StepVerifier.create(declaringSender.sendWithConfirm(new SomeClass("3", "c", null), "exchange", "rkey",
+                    new HashMap<>(), true)).verifyComplete();
+        }
+    }
+
+    /**
+     * A sender created after another one closed, with the same tags, gets gauges of its own instead of those bound to
+     * the closed sender.
+     */
+    @Test
+    void closingTheSenderRemovesItsMeters() {
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ReactiveMessageSender closed = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
+                unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(), registry,
+                "test-domain");
+        StepVerifier.create(closed.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
+                new HashMap<>(), true)).verifyComplete();
+        assertThat(registry.getMeters()).isNotEmpty();
+
+        closed.close();
+
+        assertThat(registry.getMeters()).as("meters of the closed sender").isEmpty();
+    }
+
+    @Test
     void theFlowResubscriptionCountersExistAtZeroBeforeAnyFlowIsResubscribed() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
@@ -189,7 +457,7 @@ class ReactiveMessageSenderTest {
      * publish.outcome has one outcome per message, the one its caller got.
      */
     @Test
-    void aConfirmArrivingAfterTheSendTimeoutDoesNotCountTheMessageTwice() throws Exception {
+    void aConfirmArrivingAfterTheSendTimeoutDoesNotCountTheMessageTwice() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
             Flux<OutboundMessage> argument = invocation.getArgument(0);
             return argument.delayElements(Duration.ofMillis(300)).map(msg -> new OutboundMessageResult<>(msg, true));
@@ -202,7 +470,9 @@ class ReactiveMessageSenderTest {
                             "rkey", new HashMap<>(), true))
                     .expectError(SendConfirmUnknownException.class)
                     .verify(Duration.ofSeconds(5));
-            Thread.sleep(600); // the late confirm arrives
+            // the late confirm arrives
+            await().during(Duration.ofMillis(600)).atMost(Duration.ofSeconds(2))
+                    .until(() -> outcomeCount(registry, "ack") == 0);
 
             assertThat(outcomeCount(registry, "timeout")).isEqualTo(1);
             assertThat(outcomeCount(registry, "ack")).as("the late confirm is not a second outcome").isZero();
@@ -289,6 +559,33 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
+    void sendNoConfirmPublishesTheTimeToLiveAsTheExpirationOfTheMessage() {
+        List<String> expirations = new CopyOnWriteArrayList<>();
+        when(sender.send(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            Flux.<OutboundMessage>from(invocation.getArgument(0))
+                    .subscribe(message -> expirations.add(message.getProperties().getExpiration()));
+            return Mono.never();
+        });
+        ReactiveMessageSender querySender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        querySender.sendNoConfirm("query", "exchange", "target.query", new HashMap<>(), false,
+                Duration.ofMillis(1_500)).subscribe(null, error -> {
+        });
+        // never negative: the broker would close the channel shared with other messages
+        querySender.sendNoConfirm("query", "exchange", "target.query", new HashMap<>(), false,
+                Duration.ofMillis(-1)).subscribe(null, error -> {
+        });
+        querySender.sendNoConfirm("event", "exchange", "rkey", new HashMap<>(), false)
+                .subscribe(null, error -> {
+                });
+
+        await().atMost(Duration.ofSeconds(5)).until(() -> expirations.size() == 3);
+        assertThat(expirations).containsExactlyInAnyOrder("1500", "0", null);
+        querySender.close();
+    }
+
+    @Test
     void sendWithConfirmBatchFailsWithUnknownOutcomeWhenNoConfirmationArrives() {
         when(sender.sendWithPublishConfirms(any(Publisher.class), any(SendOptions.class))).thenReturn(Flux.never());
         try (ReactiveMessageSender shortTimeoutSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
@@ -301,9 +598,24 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
-    void closeFailsSendsWaitingForAnOutcome() {
+    void closeLetsTheMessagesAlreadyWrittenGetTheirConfirm() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation ->
+                ((Flux<OutboundMessage>) invocation.getArgument(0))
+                        .delayElements(Duration.ofMillis(300)) // the broker confirms a while after the write
+                        .map(message -> new OutboundMessageResult<>(message, true)));
+        ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true))
+                .then(senderToClose::close)
+                .verifyComplete();
+    }
+
+    @Test
+    void closeReportsAMessageWrittenAndNotConfirmedAsOfUnknownOutcome() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
-            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(); // consume, never confirm
+            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(); // written, never confirmed
             return Flux.never();
         });
         ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
@@ -312,8 +624,30 @@ class ReactiveMessageSenderTest {
         StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                         "rkey", new HashMap<>(), true))
                 .then(senderToClose::close)
-                .expectError(SendFailureNoAckException.class)
-                .verify(Duration.ofSeconds(5));
+                // it may have reached the broker: reporting it as not published would be wrong
+                .expectError(SendConfirmUnknownException.class)
+                .verify(Duration.ofSeconds(10));
+    }
+
+    @Test
+    void closeReportsAMessageNeverWrittenAsNotPublished() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(new BaseSubscriber<>() {
+                @Override
+                protected void hookOnSubscribe(Subscription subscription) {
+                    // no demand: the messages wait in the buffer of the flow, as while its channel is busy
+                }
+            });
+            return Flux.never();
+        });
+        ReactiveMessageSender senderToClose = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                false, unroutableMessageNotifier);
+
+        StepVerifier.create(senderToClose.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
+                        "rkey", new HashMap<>(), true))
+                .then(senderToClose::close)
+                .expectErrorSatisfies(error -> assertThat(error).isExactlyInstanceOf(SendFailureNoAckException.class))
+                .verify(Duration.ofSeconds(10));
     }
 
     @Test
@@ -347,14 +681,14 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
-    void logsOnlyTheFirstResubscribeOfAFlowAtWarning() throws InterruptedException {
+    void logsOnlyTheFirstResubscribeOfAFlowAtWarning() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class)))
                 .thenReturn(Flux.error(new RabbitFluxException("boom")));
         List<LogRecord> records = new CopyOnWriteArrayList<>();
         Handler handler = new Handler() {
             @Override
-            public void publish(LogRecord record) {
-                records.add(record);
+            public void publish(LogRecord logRecord) {
+                records.add(logRecord);
             }
 
             @Override
@@ -371,8 +705,9 @@ class ReactiveMessageSenderTest {
         logger.addHandler(handler);
         try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
                 unroutableMessageNotifier)) {
-            await(() -> count(records, "publisher-confirms flow #0", Level.WARNING) >= 1
-                    && count(records, "publisher-confirms flow #0", Level.FINE) >= 1);
+            await().atMost(Duration.ofSeconds(5))
+                    .until(() -> count(records, "publisher-confirms flow #0", Level.WARNING) >= 1
+                            && count(records, "publisher-confirms flow #0", Level.FINE) >= 1);
 
             assertThat(count(records, "publisher-confirms flow #0", Level.WARNING)).isEqualTo(1);
             assertThat(count(records, "publisher-confirms flow #0", Level.FINE)).isGreaterThanOrEqualTo(1);
@@ -384,19 +719,9 @@ class ReactiveMessageSenderTest {
 
     private static long count(List<LogRecord> records, String flowName, Level level) {
         return records.stream()
-                .filter(record -> level.equals(record.getLevel()))
-                .filter(record -> record.getMessage() != null && record.getMessage().contains(flowName))
+                .filter(logRecord -> level.equals(logRecord.getLevel()))
+                .filter(logRecord -> logRecord.getMessage() != null && logRecord.getMessage().contains(flowName))
                 .count();
-    }
-
-    private static void await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (!condition.getAsBoolean()) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("Condition not met within 5 seconds");
-            }
-            Thread.sleep(50);
-        }
     }
 
     private record SomeClass(String id, String name, Date date) {

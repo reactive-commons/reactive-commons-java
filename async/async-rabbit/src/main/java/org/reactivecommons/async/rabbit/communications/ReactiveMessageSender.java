@@ -9,6 +9,8 @@ import io.cloudevents.CloudEvent;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
 import io.micrometer.core.instrument.FunctionCounter;
+import io.micrometer.core.instrument.Gauge;
+import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tag;
 import io.micrometer.core.instrument.Tags;
@@ -23,16 +25,21 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
 import org.reactivecommons.async.commons.exceptions.SendFailureHandOverRejectedException;
+import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import org.reactivecommons.async.rabbit.MeterUsage;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.MonoSink;
 import reactor.core.publisher.SignalType;
+import reactor.core.publisher.Sinks;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ChannelCloseHandlers;
 import reactor.rabbitmq.ExceptionHandlers;
+import reactor.rabbitmq.ExchangeSpecification;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.rabbitmq.RabbitFluxException;
@@ -55,8 +62,9 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -82,11 +90,25 @@ public class ReactiveMessageSender implements AutoCloseable {
      * must not reject messages, only a connection the broker stopped draining.
      */
     static final int DEFAULT_HAND_OVER_QUEUE_CAPACITY = 16_384;
+    private static final Duration IDLE_THREAD_KEEP_ALIVE = Duration.ofSeconds(60);
+    /**
+     * The default {@code max_message_size} of RabbitMQ 4: a larger body makes the broker close the channel.
+     */
+    public static final int DEFAULT_MAX_MESSAGE_SIZE = 16 * 1024 * 1024;
     private static final long EXECUTOR_SHUTDOWN_TIMEOUT_SECONDS = 5;
+    /**
+     * How long closing the sender waits at most for the outcome of the messages it already accepted.
+     */
+    private static final Duration CLOSE_DRAIN_TIMEOUT = Duration.ofSeconds(5);
+    private static final long CLOSE_DRAIN_POLL_MILLIS = 10;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
-    private static final Duration AVAILABILITY_POLL_INTERVAL = Duration.ofMillis(50);
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
+    /**
+     * Messages of a batch published and not confirmed yet, at most: the next ones are taken from the batch as the
+     * confirms arrive, so a large batch, or one streamed from a query, is never held in memory at once.
+     */
+    static final int BATCH_MAX_IN_FLIGHT = 256;
     /**
      * How long closing the sender waits for the broker before forcing a blocked connection closed.
      */
@@ -101,6 +123,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final String METRIC_CONNECTION_BLOCKED = "reactive_commons.publish.connection.blocked";
     private static final String METRIC_PUBLISH_LATENCY = "reactive_commons.publish.latency";
     private static final String METRIC_PUBLISH_MESSAGE_SIZE = "reactive_commons.publish.message.size";
+    // whether the message was published with confirms; the kind of a publishing flow
+    private static final String TAG_CONFIRM = "confirm";
+    private static final String TAG_KIND = "kind";
+    private static final String KIND_CONFIRM = "confirm";
+    private static final String KIND_NO_CONFIRM = "noConfirm";
     static final String OUTCOME_ACK = "ack";
     static final String OUTCOME_NACK = "nack";
     static final String OUTCOME_UNKNOWN = "unknown";
@@ -108,6 +135,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     static final String OUTCOME_REJECTED = "rejected";
     static final String OUTCOME_TIMEOUT = "timeout";
     static final String OUTCOME_BLOCKED = "blocked";
+    static final String OUTCOME_TOO_LARGE = "too_large";
     /**
      * No-confirm outcomes: the message was written to the channel (not confirmed by the broker), or it could not be.
      */
@@ -120,9 +148,9 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private static final List<String> CONFIRM_OUTCOMES = List.of(
             OUTCOME_ACK, OUTCOME_NACK, OUTCOME_UNKNOWN, OUTCOME_RETURNED,
-            OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED);
+            OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED, OUTCOME_TOO_LARGE);
     private static final List<String> NO_CONFIRM_OUTCOMES = List.of(
-            OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED);
+            OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_TOO_LARGE);
 
     @Getter
     private final Sender sender;
@@ -140,6 +168,11 @@ public class ReactiveMessageSender implements AutoCloseable {
     private final AtomicReferenceArray<FluxSink<OutboundMessage>> confirmSinks =
             new AtomicReferenceArray<>(NUMBER_OF_SENDER_SUBSCRIPTIONS);
     private final AtomicReference<FluxSink<OutboundMessage>> noConfirmSink = new AtomicReference<>();
+    /**
+     * Completes when a publishing flow is registered (or the sender is closed), waking the messages waiting for one;
+     * then replaced by a new one for the next wait.
+     */
+    private final AtomicReference<Sinks.Empty<Void>> flowRegistered = new AtomicReference<>(Sinks.empty());
     private final AtomicInteger nextConfirmSink = new AtomicInteger();
     private final AtomicLong counter = new AtomicLong();
 
@@ -151,6 +184,7 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private final AtomicInteger bufferedMessages = new AtomicInteger();
     private final int maxBufferedMessages;
+    private final int maxMessageSize;
     /**
      * The flows release their channels concurrently when the sender is closed: only the first one aborts a blocked
      * connection, the others' channels die with it.
@@ -164,12 +198,19 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private final List<Disposable> flowSubscriptions = new ArrayList<>(NUMBER_OF_SENDER_SUBSCRIPTIONS + 1);
     private final Set<PendingMessage> pendingMessages = ConcurrentHashMap.newKeySet();
+    /**
+     * Declarations started by {@link #declareExchange} that have not completed yet, by exchange name: the publishes
+     * to those exchanges wait for them.
+     */
+    private final Map<String, Mono<Void>> exchangeDeclarations = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
 
     /**
-     * Completes the callers' Monos, so their continuations never run on the broker connection threads.
+     * Completes the callers' Monos, so their continuations never run on the broker connection threads. Its queue is
+     * not bounded: a completion cannot be rejected (its caller would wait forever) nor run on the connection thread,
+     * and it only holds the outcomes of the messages the application published concurrently.
      */
-    private final ExecutorService executorService;
+    private final ThreadPoolExecutor executorService;
     /**
      * Publishes the messages (a publish can block, e.g. on a broker resource alarm). Bounded on purpose: a sustained
      * block fills this queue and surfaces as {@link SendFailureHandOverRejectedException} to the caller instead of
@@ -199,7 +240,24 @@ public class ReactiveMessageSender implements AutoCloseable {
                                  Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
                                  ConnectionBlockedState blockedState,
                                  MeterRegistry meterRegistry, String domain) {
+        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
+                sendTimeout, handOverPoolSize, handOverQueueCapacity, blockedState, meterRegistry, domain,
+                DEFAULT_MAX_MESSAGE_SIZE);
+    }
+
+    /**
+     * @param maxMessageSize the {@code max_message_size} of the broker, in bytes: a message with a larger body is
+     *                       rejected with {@link SendFailureMessageTooLargeException} before being written, instead of
+     *                       making the broker close the channel it shares with other messages
+     */
+    public ReactiveMessageSender(Sender sender, String sourceApplication,
+                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
+                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
+                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
+                                 ConnectionBlockedState blockedState,
+                                 MeterRegistry meterRegistry, String domain, int maxMessageSize) {
         this.sender = sender;
+        this.maxMessageSize = maxMessageSize;
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
@@ -208,16 +266,20 @@ public class ReactiveMessageSender implements AutoCloseable {
         this.sendTimeout = sendTimeout;
         this.blockedState = blockedState != null ? blockedState : new ConnectionBlockedState();
         this.maxBufferedMessages = Math.max(1, handOverQueueCapacity);
-        this.executorService = Executors.newFixedThreadPool(
-                handOverPoolSize,
-                r -> new Thread(r, "RMessageSender1-" + counter.getAndIncrement())
-        );
+        this.executorService = new ThreadPoolExecutor(
+                handOverPoolSize, handOverPoolSize,
+                IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(),
+                daemonThreads("RMessageSender1-"));
         this.executorService2 = new ThreadPoolExecutor(
                 handOverPoolSize, handOverPoolSize,
-                0L, TimeUnit.MILLISECONDS,
+                IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(Math.max(1, handOverQueueCapacity)),
-                r -> new Thread(r, "RMessageSender2-" + counter.getAndIncrement()),
+                daemonThreads("RMessageSender2-"),
                 new ThreadPoolExecutor.AbortPolicy());
+        // a sender that is not closed (e.g. used outside Spring) neither keeps idle threads nor the JVM alive
+        this.executorService.allowCoreThreadTimeOut(true);
+        this.executorService2.allowCoreThreadTimeOut(true);
         this.metrics = new PublishMetrics(meterRegistry, domain, this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
         initializeSenders();
@@ -259,17 +321,21 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * Stops the publishing flows, fails the messages still waiting for an outcome and releases the sender threads.
-     * <p>
-     * A message whose hand-over races with the close may still be published after its caller was failed: delivery is
-     * at-least-once, so re-sending after a failure can produce a duplicate.
+     * Stops accepting messages and waits, up to 5 seconds and never longer than the send timeout, for the outcome of
+     * the messages already accepted: their flows keep running meanwhile, so the confirms of the messages already
+     * written still arrive. Then it fails the remaining messages, stops the publishing flows and releases the sender
+     * threads. A remaining message never written fails as not published ({@link SendFailureNoAckException}); one that
+     * may have been written, as of unknown outcome ({@link SendConfirmUnknownException}): it may have reached the
+     * broker, and re-sending it can produce a duplicate (delivery is at-least-once).
      */
     @Override
     public void close() {
         if (!closed.compareAndSet(false, true)) {
             return;
         }
-        pendingMessages.forEach(message -> message.fail(shutdownFailure(null)));
+        signalFlowRegistered(); // the messages waiting for a flow retry now, and fail as the sender is closed
+        awaitPendingMessages();
+        pendingMessages.forEach(ReactiveMessageSender::failOnShutdown);
         pendingMessages.clear();
         // cancel the flows (and their re-subscription) before the executors: nothing must be re-subscribed
         flowSubscriptions.forEach(Disposable::dispose);
@@ -277,10 +343,45 @@ public class ReactiveMessageSender implements AutoCloseable {
         shutdownAndAwait(executorService2);
         shutdownAndAwait(executorService);
         sender.close();
+        metrics.close();
     }
 
     private static SendFailureNoAckException shutdownFailure(Throwable cause) {
         return new SendFailureNoAckException("Message not published: sender is shut down", cause);
+    }
+
+    /**
+     * Waits for the outcome of the messages already accepted, unless the broker blocks the connection: their confirms
+     * would not arrive meanwhile.
+     */
+    private void awaitPendingMessages() {
+        final Duration timeout = sendTimeout.compareTo(CLOSE_DRAIN_TIMEOUT) < 0 ? sendTimeout : CLOSE_DRAIN_TIMEOUT;
+        final long deadline = System.nanoTime() + timeout.toNanos();
+        while (!pendingMessages.isEmpty() && !blockedState.isBlocked() && System.nanoTime() - deadline < 0) {
+            try {
+                Thread.sleep(CLOSE_DRAIN_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private static void failOnShutdown(PendingMessage message) {
+        if (message.preventWrite()) {
+            message.fail(shutdownFailure(null));
+        } else {
+            message.fail(new SendConfirmUnknownException("The sender closed before the outcome of the message was"
+                    + " known: it may or may not have reached the broker"));
+        }
+    }
+
+    private ThreadFactory daemonThreads(String namePrefix) {
+        return runnable -> {
+            final Thread thread = new Thread(runnable, namePrefix + counter.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        };
     }
 
     private static void shutdownAndAwait(ExecutorService executor) {
@@ -299,6 +400,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         confirmSinks.set(index, sink);
         activeConfirmFlows.incrementAndGet();
         confirmFlowsDownSince.set(null);
+        signalFlowRegistered();
     }
 
     private void onConfirmFlowDisposed(int index, FluxSink<OutboundMessage> sink) {
@@ -311,6 +413,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     private void onNoConfirmFlowRegistered(FluxSink<OutboundMessage> sink) {
         noConfirmSink.set(sink);
         activeNoConfirmFlows.incrementAndGet();
+        signalFlowRegistered();
     }
 
     private void onNoConfirmFlowDisposed(FluxSink<OutboundMessage> sink) {
@@ -488,10 +591,10 @@ public class ReactiveMessageSender implements AutoCloseable {
                                           Map<String, Object> headers, boolean persistent) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent, null);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(true, body.length);
-            return send(monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
+            return send(exchange, monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
                     this::nextConfirmSink, true);
         });
     }
@@ -502,78 +605,77 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey,
                                         Map<String, Object> headers, boolean persistent) {
+        return sendNoConfirm(message, exchange, routingKey, headers, persistent, null);
+    }
+
+    /**
+     * Like {@link #sendNoConfirm(Object, String, String, Map, boolean)}, for a message worthless after a while (e.g. a
+     * query, once its caller stopped waiting for the reply).
+     *
+     * @param timeToLive how long the message may wait in its queue, {@code null} for no limit: once expired, the broker
+     *                   drops it (or dead-letters it, if its queue has a dead-letter exchange) instead of delivering it
+     */
+    public <T> Mono<Void> sendNoConfirm(T message, String exchange, String routingKey,
+                                        Map<String, Object> headers, boolean persistent, Duration timeToLive) {
         return Mono.defer(() -> {
             final Message converted = messageConverter.toMessage(message);
-            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent);
+            final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent,
+                    timeToLive);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(false, body.length);
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
-            return send(monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
+            return send(exchange, monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
                     executorService, onPublished), this::availableNoConfirmSink, false);
         });
     }
 
-    private Mono<Void> send(Function<MonoSink<Void>, PendingMessage> messageFactory,
+    /**
+     * Declares the exchange, and makes the publishes to it wait (within their {@code sendTimeout}) until the
+     * declaration completes: otherwise the first publishes after the start could reach the broker before the
+     * exchange exists, and the broker would close their channel ({@code 404 NOT_FOUND}), failing the other messages
+     * published on it. A declaration that fails (e.g. the exchange already exists with other arguments) is logged and
+     * the publishes go on, to the exchange as it is.
+     *
+     * @param exchange the exchange the publishes of this sender go to
+     */
+    public void declareExchange(ExchangeSpecification exchange) {
+        final String name = exchange.getName();
+        final Mono<Void> declaration = topologyCreator.declare(exchange)
+                .then()
+                .onErrorResume(error -> {
+                    log.log(Level.WARNING, error, () -> "Exchange " + name + " could not be declared, publishing"
+                            + " to it as it is: " + error.getMessage());
+                    return Mono.empty();
+                })
+                .cache();
+        exchangeDeclarations.put(name, declaration);
+        declaration.subscribe(null, null, () -> exchangeDeclarations.remove(name, declaration));
+    }
+
+    private Mono<Void> exchangeDeclared(String exchange) {
+        final Mono<Void> declaration = exchangeDeclarations.get(exchange);
+        return declaration != null ? declaration : Mono.empty();
+    }
+
+    private Mono<Void> send(String exchange, Function<MonoSink<Void>, PendingMessage> messageFactory,
                             Supplier<FluxSink<OutboundMessage>> sinkSelector, boolean confirmFlow) {
-        final AtomicBoolean handedToAFlow = new AtomicBoolean();
         final AtomicReference<PendingMessage> current = new AtomicReference<>();
         final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
-        return Mono.<Void>create(monoSink -> {
+        // waits for the declaration within the sendTimeout below, so a broker that never answers it fails the send
+        return exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
                     final PendingMessage pending = messageFactory.apply(monoSink);
                     current.set(pending);
-                    if (closed.get()) {
-                        pending.fail(shutdownFailure(null));
-                        return;
-                    }
-                    // the broker stopped reading the connection: waiting for sendTimeout could only end in an
-                    // ambiguous outcome, while failing now guarantees the message was not published
-                    if (blockedState.isBlocked()) {
-                        pending.fail(new SendFailureBrokerBlockedException("Message not published: broker signalled"
-                                + " connection.blocked (" + blockedState.blockedReason() + ")"));
-                        metrics.recordOutcome(OUTCOME_BLOCKED, confirmFlow);
-                        return;
-                    }
-                    pendingMessages.add(pending);
-                    pending.setOnFinished(() -> pendingMessages.remove(pending));
-                    if (closed.get()) {
-                        // close() may have collected the pending messages before this one was registered
-                        pending.fail(shutdownFailure(null));
-                        return;
-                    }
-                    try {
-                        executorService2.execute(() -> handOver(pending, sinkSelector, handedToAFlow, confirmFlow));
-                    } catch (RejectedExecutionException e) {
-                        if (closed.get() || executorService2.isShutdown()) {
-                            pending.fail(shutdownFailure(e));
-                        } else {
-                            pending.fail(new SendFailureHandOverRejectedException("Message not published: publish"
-                                    + " hand-over queue is full (capacity reached while the broker is not draining)",
-                                    e));
-                        }
-                        metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
-                    }
-                })
-                // no flow ready yet (start-up, re-subscription): wait for one
-                .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, AVAILABILITY_POLL_INTERVAL)
-                        .filter(NoFlowAvailableException.class::isInstance))
+                    submit(pending, sinkSelector, confirmFlow);
+                }))
+                // no flow ready yet (start-up, re-subscription): wait until one is registered
+                .retryWhen(Retry.from(signals -> signals.concatMap(signal ->
+                        signal.failure() instanceof NoFlowAvailableException
+                                ? flowAvailable(sinkSelector) : Mono.error(signal.failure()))))
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
                     timedOut.set(true);
-                    final PendingMessage pending = current.get();
-                    if (pending == null || pending.claimOutcome()) {
-                        metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
-                    }
-                    if (!handedToAFlow.get()) {
-                        return new SendFailureNoAckException("Message not published: no RabbitMQ publishing flow "
-                                + "available within " + sendTimeout, e);
-                    }
-                    if (pending != null && pending.wasDropped()) {
-                        return new SendFailureNoAckException("Message not published within " + sendTimeout
-                                + ": its publishing flow was busy (e.g. the broker is blocking the connection)", e);
-                    }
-                    return new SendConfirmUnknownException("No confirmation received within " + sendTimeout
-                            + ": the message may or may not have reached the broker", e);
+                    return timeoutFailure(e, current.get(), confirmFlow);
                 })
                 // recorded before the terminal signal reaches the caller; a cancelled subscription records nothing:
                 // the caller stopped waiting, but the message may still be published
@@ -585,6 +687,63 @@ public class ReactiveMessageSender implements AutoCloseable {
                         Duration.ofNanos(System.nanoTime() - startNanos)));
     }
 
+    private void submit(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
+                        boolean confirmFlow) {
+        if (closed.get()) {
+            pending.fail(shutdownFailure(null));
+            return;
+        }
+        // the broker stopped reading the connection: waiting for sendTimeout could only end in an ambiguous
+        // outcome, while failing now guarantees the message was not published
+        if (blockedState.isBlocked()) {
+            pending.fail(new SendFailureBrokerBlockedException("Message not published: broker signalled"
+                    + " connection.blocked (" + blockedState.blockedReason() + ")"));
+            metrics.recordOutcome(OUTCOME_BLOCKED, confirmFlow);
+            return;
+        }
+        // the broker would not reject it alone: it would close the channel shared with other messages
+        if (pending.getBody().length > maxMessageSize) {
+            pending.fail(tooLarge(pending.getBody().length));
+            metrics.recordOutcome(OUTCOME_TOO_LARGE, confirmFlow);
+            return;
+        }
+        pendingMessages.add(pending);
+        pending.setOnFinished(() -> pendingMessages.remove(pending));
+        if (closed.get()) {
+            // close() may have collected the pending messages before this one was registered
+            pending.fail(shutdownFailure(null));
+            return;
+        }
+        try {
+            executorService2.execute(() -> handOver(pending, sinkSelector, confirmFlow));
+        } catch (RejectedExecutionException e) {
+            if (closed.get() || executorService2.isShutdown()) {
+                pending.fail(shutdownFailure(e));
+            } else {
+                pending.fail(new SendFailureHandOverRejectedException("Message not published: publish"
+                        + " hand-over queue is full (capacity reached while the broker is not draining)", e));
+            }
+            metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
+        }
+    }
+
+    private Throwable timeoutFailure(TimeoutException e, PendingMessage pending, boolean confirmFlow) {
+        if (pending == null || pending.claimOutcome()) {
+            metrics.recordOutcome(OUTCOME_TIMEOUT, confirmFlow);
+        }
+        // the current attempt only: a previous one was retried because it was never written
+        if (pending != null && pending.mayHaveBeenWritten()) {
+            return new SendConfirmUnknownException("No confirmation received within " + sendTimeout
+                    + ": the message may or may not have reached the broker", e);
+        }
+        if (pending != null && pending.wasDropped()) {
+            return new SendFailureNoAckException("Message not published within " + sendTimeout
+                    + ": its publishing flow was busy (e.g. the broker is blocking the connection)", e);
+        }
+        return new SendFailureNoAckException("Message not published: no RabbitMQ publishing flow "
+                + "available within " + sendTimeout, e);
+    }
+
     private static String latencyOutcome(Throwable error, boolean timedOut, PendingMessage pending) {
         if (timedOut) {
             return OUTCOME_TIMEOUT;
@@ -594,6 +753,9 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
         if (error instanceof SendFailureBrokerBlockedException) {
             return OUTCOME_BLOCKED;
+        }
+        if (error instanceof SendFailureMessageTooLargeException) {
+            return OUTCOME_TOO_LARGE;
         }
         if (error instanceof SendFailureHandOverRejectedException) {
             return OUTCOME_REJECTED;
@@ -609,7 +771,7 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     private void handOver(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
-                          AtomicBoolean handedToAFlow, boolean confirmFlow) {
+                          boolean confirmFlow) {
         if (pending.isFinished()) {
             return; // cancelled (e.g. timeout) before being published
         }
@@ -624,12 +786,27 @@ public class ReactiveMessageSender implements AutoCloseable {
             metrics.recordOutcome(OUTCOME_REJECTED, confirmFlow);
             return;
         }
-        handedToAFlow.set(true);
         try {
             sink.next(pending);
         } catch (Exception e) {
             pending.fail(new SendFailureNoAckException("Message not published: " + e.getMessage(), e));
         }
+    }
+
+    /**
+     * Emits once a flow is available to retry the hand-over: right away if one already is, otherwise when the next one
+     * is registered. The signal is taken before checking the flows, so a flow registered in between is not missed.
+     */
+    private Mono<Boolean> flowAvailable(Supplier<FluxSink<OutboundMessage>> sinkSelector) {
+        return Mono.defer(() -> {
+            final Mono<Void> registration = flowRegistered.get().asMono();
+            return closed.get() || sinkSelector.get() != null
+                    ? Mono.just(true) : registration.thenReturn(true);
+        });
+    }
+
+    private void signalFlowRegistered() {
+        flowRegistered.getAndSet(Sinks.empty()).tryEmitEmpty();
     }
 
     private FluxSink<OutboundMessage> nextConfirmSink() {
@@ -648,6 +825,15 @@ public class ReactiveMessageSender implements AutoCloseable {
         return sink != null && !sink.isCancelled() ? sink : null;
     }
 
+    /**
+     * Publishes every message of the batch with confirms. Each message must be confirmed within the send timeout,
+     * however long the whole batch takes. A failed message does not stop the batch: once every message is settled,
+     * the batch fails with the exception of its first failure ({@link SendFailureNoAckException},
+     * {@link SendFailureReturnedException}, {@link SendConfirmUnknownException} or
+     * {@link SendFailureMessageTooLargeException}), whose message tells which messages failed and why. At most
+     * {@value #BATCH_MAX_IN_FLIGHT} messages wait for their confirmation at the same time: the next ones are taken
+     * from the batch as the confirms arrive.
+     */
     public <T> Flux<OutboundMessageResult> sendWithConfirmBatch(Flux<T> messages, String exchange, String routingKey,
                                                                 Map<String, Object> headers, boolean persistent) {
         return Flux.defer(() -> {
@@ -660,44 +846,47 @@ public class ReactiveMessageSender implements AutoCloseable {
                         "Batch not published: broker signalled connection.blocked ("
                                 + blockedState.blockedReason() + ")"));
             }
-            return messages.map(message -> toOutboundMessage(message, exchange, routingKey, headers, persistent))
-                    .as(outbound -> sender.sendWithPublishConfirms(outbound, new SendOptions()
-                            .trackReturned(isMandatory)
-                            .exceptionHandler(ReactiveMessageSender::onConfirmPublishFailure)))
-                    .<OutboundMessageResult>flatMap(result -> {
+            final ConfirmBatch batch = new ConfirmBatch(sendTimeout);
+            final Mono<OutboundMessageResult> published = exchangeDeclared(exchange)
+                    .thenMany(messages.doOnSubscribe(subscription -> batch.sourceSubscribed()))
+                    .<OutboundMessage>handle((object, sink) -> {
+                        final Message message = messageConverter.toMessage(object);
+                        if (message.getBody().length > maxMessageSize) {
+                            metrics.recordOutcome(OUTCOME_TOO_LARGE, true);
+                            batch.tooLarge(messageIdOf(object));
+                            return;
+                        }
+                        final AMQP.BasicProperties props = buildMessageProperties(object, message, headers,
+                                persistent, null);
+                        sink.next(batch.published(new OutboundMessage(exchange, routingKey, props,
+                                message.getBody())));
+                    })
+                    .as(outbound -> sender.sendWithPublishConfirms(outbound, confirmSendOptions()
+                            .maxInFlight(BATCH_MAX_IN_FLIGHT, Schedulers.boundedElastic())))
+                    .doOnNext(result -> {
                         metrics.recordOutcome(outcomeOf(result), true);
-                        // a returned message is also acked: it must be checked first
-                        if (result.returned()) {
-                            return Mono.error(new SendFailureReturnedException("Message returned by the broker: no "
-                                    + "queue is bound to the routing key"));
-                        }
-                        if (result.ack()) {
-                            return Mono.empty();
-                        }
-                        return Mono.error(result.unknown()
-                                ? new SendConfirmUnknownException("Event in doubt: the channel or the connection "
-                                + "failed before its confirmation")
-                                : new SendFailureNoAckException("Event no ACK in communications"));
+                        batch.settled(result);
+                    })
+                    .onErrorMap(batch::stoppedBy)
+                    .then(Mono.defer(batch::outcome));
+            final Mono<OutboundMessageResult> timedOut = Flux.interval(batch.checkPeriod())
+                    .mapNotNull(tick -> batch.expired())
+                    .next()
+                    .flatMap(failure -> {
+                        metrics.recordOutcome(OUTCOME_TIMEOUT, true);
+                        return Mono.error(failure);
                     });
-        })
-                .timeout(sendTimeout)
-                .onErrorMap(TimeoutException.class, e -> {
-                    metrics.recordOutcome(OUTCOME_TIMEOUT, true);
-                    return new SendConfirmUnknownException(
-                            "No confirmation received within " + sendTimeout + ": some messages of the batch may or "
-                                    + "may not have reached the broker", e);
-                });
+            return Mono.firstWithSignal(published, timedOut).flux();
+        });
     }
 
-    private <T> OutboundMessage toOutboundMessage(T object, String exchange, String routingKey,
-                                                  Map<String, Object> headers, boolean persistent) {
-        final Message message = messageConverter.toMessage(object);
-        final AMQP.BasicProperties props = buildMessageProperties(object, message, headers, persistent);
-        return new OutboundMessage(exchange, routingKey, props, message.getBody());
+    private SendFailureMessageTooLargeException tooLarge(int bodySize) {
+        return new SendFailureMessageTooLargeException("Message not published: its body (" + bodySize
+                + " bytes) is larger than the maximum message size of " + maxMessageSize + " bytes");
     }
 
     private AMQP.BasicProperties buildMessageProperties(Object source, Message message, Map<String, Object> headers,
-                                                        boolean persistent) {
+                                                        boolean persistent, Duration timeToLive) {
         final Message.Properties properties = message.getProperties();
         final Map<String, Object> baseHeaders = new HashMap<>(properties.getHeaders());
         baseHeaders.putAll(headers);
@@ -712,6 +901,9 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .headers(baseHeaders);
         if (headers.containsKey(DELAYED)) {
             builder.expiration((String) headers.get(DELAYED));
+        } else if (timeToLive != null) {
+            // never negative: the broker would close the channel shared with other messages
+            builder.expiration(Long.toString(Math.max(0, timeToLive.toMillis())));
         }
         return builder.build();
     }
@@ -811,6 +1003,24 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
 
         /**
+         * Whether a flow claimed the message to write it: from then on it may reach the broker, even if it is not
+         * {@linkplain #isPublished() published} yet.
+         */
+        boolean mayHaveBeenWritten() {
+            return bufferState.get() == CLAIMED || isPublished();
+        }
+
+        /**
+         * Keeps the message from ever being written, unless a flow already claimed it to write it: atomic with the
+         * claim, so a message is never reported as not published while a flow writes it.
+         *
+         * @return whether the message will never be written
+         */
+        boolean preventWrite() {
+            return bufferState.compareAndSet(NEW, DROPPED) || leaveBuffer(DROPPED);
+        }
+
+        /**
          * Claims the right to count the outcome of this message in {@code publish.outcome}: true only for the first
          * caller, so a confirm racing with the send timeout counts the message once.
          */
@@ -901,10 +1111,16 @@ public class ReactiveMessageSender implements AutoCloseable {
         @Override
         protected void published() {
             super.published();
-            completionExecutor.execute(() -> {
+            final Runnable completion = () -> {
                 onPublished.run();
                 succeed();
-            });
+            };
+            try {
+                completionExecutor.execute(completion);
+            } catch (RejectedExecutionException e) {
+                // the sender was closed while the message was being written: it was published all the same
+                completion.run();
+            }
         }
     }
 
@@ -945,18 +1161,18 @@ public class ReactiveMessageSender implements AutoCloseable {
             this.baseTags = Tags.of(Tag.of("domain", domain != null ? domain : ""));
             if (registry != null) {
                 try {
-                    registry.gauge("reactive_commons.publish.flow.live", baseTags.and("kind", "confirm"),
-                            activeConfirmFlows);
-                    registry.gauge("reactive_commons.publish.flow.live", baseTags.and("kind", "noConfirm"),
-                            activeNoConfirmFlows);
-                    registry.gauge(METRIC_CONNECTION_BLOCKED + ".state", baseTags, blockedState,
-                            s -> s.isBlocked() ? 1.0 : 0.0);
-                    registry.gauge("reactive_commons.publish.hand_over.queue.size", baseTags, handOverExecutor,
-                            e -> e.getQueue().size());
-                    FunctionCounter.builder(METRIC_CONNECTION_BLOCKED, blockedState,
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeConfirmFlows,
+                            AtomicInteger::get).tags(baseTags.and(TAG_KIND, KIND_CONFIRM)).register(registry));
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeNoConfirmFlows,
+                            AtomicInteger::get).tags(baseTags.and(TAG_KIND, KIND_NO_CONFIRM)).register(registry));
+                    track(() -> Gauge.builder(METRIC_CONNECTION_BLOCKED + ".state", blockedState,
+                            s -> s.isBlocked() ? 1.0 : 0.0).tags(baseTags).register(registry));
+                    track(() -> Gauge.builder("reactive_commons.publish.hand_over.queue.size", handOverExecutor,
+                            e -> e.getQueue().size()).tags(baseTags).register(registry));
+                    track(() -> FunctionCounter.builder(METRIC_CONNECTION_BLOCKED, blockedState,
                                     ConnectionBlockedState::blockCount)
                             .tags(baseTags)
-                            .register(registry);
+                            .register(registry));
                     // register every known outcome at 0 so increase()/rate() can see the first incident
                     CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, true));
                     NO_CONFIRM_OUTCOMES.forEach(outcome -> outcomeCounter(outcome, false));
@@ -969,6 +1185,28 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
         }
 
+        /**
+         * Registers a meter of this sender: removed from the registry when the sender closes, unless another live
+         * sender with the same tags uses it (see {@link MeterUsage}).
+         */
+        private <M extends Meter> M track(Supplier<M> registration) {
+            return MeterUsage.register(registry, this, registration);
+        }
+
+        /**
+         * Releases the meters of this sender.
+         */
+        void close() {
+            if (registry == null) {
+                return;
+            }
+            try {
+                MeterUsage.release(registry, this);
+            } catch (Exception e) {
+                log.log(Level.WARNING, e, () -> "Could not remove publish metrics");
+            }
+        }
+
         void recordOutcome(String outcome, boolean confirmFlow) {
             if (registry == null) {
                 return;
@@ -978,11 +1216,11 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         private Counter outcomeCounter(String outcome, boolean confirmFlow) {
             return (confirmFlow ? confirmOutcomes : noConfirmOutcomes).computeIfAbsent(outcome, key ->
-                    Counter.builder(METRIC_PUBLISH_OUTCOME)
+                    track(() -> Counter.builder(METRIC_PUBLISH_OUTCOME)
                             .tags(baseTags)
                             .tag("outcome", key)
-                            .tag("confirm", Boolean.toString(confirmFlow))
-                            .register(registry));
+                            .tag(TAG_CONFIRM, Boolean.toString(confirmFlow))
+                            .register(registry)));
         }
 
         void recordResubscribe(boolean confirmFlow) {
@@ -994,10 +1232,10 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         private Counter resubscribeCounter(boolean confirmFlow) {
             return resubscribes.computeIfAbsent(confirmFlow, key ->
-                    Counter.builder(METRIC_FLOW_RESUBSCRIBE)
+                    track(() -> Counter.builder(METRIC_FLOW_RESUBSCRIBE)
                             .tags(baseTags)
-                            .tag("kind", key ? "confirm" : "noConfirm")
-                            .register(registry));
+                            .tag(TAG_KIND, confirmFlow ? KIND_CONFIRM : KIND_NO_CONFIRM)
+                            .register(registry)));
         }
 
         /**
@@ -1010,27 +1248,27 @@ public class ReactiveMessageSender implements AutoCloseable {
             // recorded inside the caller's Mono: a failure here must never turn a publish into an error
             try {
                 latencyTimers.computeIfAbsent(confirmFlow + ":" + outcome, key ->
-                        Timer.builder(METRIC_PUBLISH_LATENCY)
+                        track(() -> Timer.builder(METRIC_PUBLISH_LATENCY)
                                 .tags(baseTags)
                                 .tag("outcome", outcome)
-                                .tag("confirm", Boolean.toString(confirmFlow))
-                                .register(registry)).record(elapsed);
+                                .tag(TAG_CONFIRM, Boolean.toString(confirmFlow))
+                                .register(registry))).record(elapsed);
             } catch (Exception e) {
                 log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_LATENCY);
             }
         }
 
-        void recordMessageSize(boolean confirmFlow, long bytes) {
+        void recordMessageSize(boolean confirmFlow, int bytes) {
             if (registry == null) {
                 return;
             }
             try {
                 messageSizes.computeIfAbsent(confirmFlow, key ->
-                        DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
+                        track(() -> DistributionSummary.builder(METRIC_PUBLISH_MESSAGE_SIZE)
                                 .baseUnit(BaseUnits.BYTES)
                                 .tags(baseTags)
-                                .tag("confirm", key.toString())
-                                .register(registry)).record((double) bytes);
+                                .tag(TAG_CONFIRM, key.toString())
+                                .register(registry))).record(bytes);
             } catch (Exception e) {
                 log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
             }

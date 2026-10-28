@@ -28,6 +28,7 @@ import org.reactivecommons.async.rabbit.config.props.AsyncProps;
 import org.reactivecommons.async.rabbit.config.spring.RabbitPropertiesBase;
 import org.springframework.boot.context.properties.PropertyMapper;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ChannelPool;
 import reactor.rabbitmq.ChannelPoolFactory;
 import reactor.rabbitmq.ChannelPoolOptions;
@@ -48,6 +49,8 @@ import java.security.NoSuchAlgorithmException;
 import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -57,6 +60,7 @@ import java.util.concurrent.ConcurrentMap;
 public final class RabbitMQSetupUtils {
     public static final int START_INTERVAL = 300;
     public static final int MAX_BACKOFF_INTERVAL = 3000;
+    private static final int CONNECTION_CLOSE_TIMEOUT_MILLIS = 5_000;
 
     private static final ConcurrentMap<AsyncProps, ConnectionFactory> FACTORY_CACHE = new ConcurrentHashMap<>();
     private static final ConcurrentMap<ConnectionKey, Mono<Connection>> CONNECTION_CACHE = new ConcurrentHashMap<>();
@@ -70,6 +74,12 @@ public final class RabbitMQSetupUtils {
      */
     private static final ConcurrentMap<ConnectionFactory, ConnectionBlockedState> CONNECTION_BLOCKED_STATES =
             new ConcurrentHashMap<>();
+    /**
+     * The live broker providers using the connections of each factory (guarded by EVENT_LOOP_GROUP_LOCK): the
+     * connections of a factory are closed once none uses them, e.g. when its application context closes while
+     * another one keeps running in the same JVM.
+     */
+    private static final Map<ConnectionFactory, Integer> CONNECTION_USERS = new HashMap<>();
 
     /**
      * The Netty event loop group shared by every RabbitMQ connection. It is shut down when the last application
@@ -166,7 +176,7 @@ public final class RabbitMQSetupUtils {
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
                 props.getMandatory(), unroutableMessageNotifier, sendTimeout,
                 props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
-                blockedState, meterRegistry, domain);
+                blockedState, meterRegistry, domain, props.getMaxMessageSize());
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
@@ -241,6 +251,9 @@ public final class RabbitMQSetupUtils {
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
                     ))
+                    // opening a connection blocks (up to the connection timeout): neither on the thread that
+                    // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
+                    .subscribeOn(Schedulers.boundedElastic())
                     .doOnError(err -> log.error(
                             "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
                             f.getHost(), err
@@ -366,6 +379,43 @@ public final class RabbitMQSetupUtils {
     }
 
     /**
+     * Registers a user (a broker provider) of the connections of the factory.
+     */
+    public static void retainConnections(ConnectionFactory factory) {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            CONNECTION_USERS.merge(factory, 1, Integer::sum);
+        }
+    }
+
+    /**
+     * Unregisters a user of the connections of the factory. Once none is left, its connections are closed and the
+     * factory is forgotten: an application created later with the same properties gets new ones.
+     */
+    public static void releaseConnections(ConnectionFactory factory) {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            final Integer users = CONNECTION_USERS.get(factory);
+            if (users == null) {
+                return; // not retained
+            }
+            if (users > 1) {
+                CONNECTION_USERS.put(factory, users - 1);
+                return;
+            }
+            CONNECTION_USERS.remove(factory);
+            for (ConnectionRole role : ConnectionRole.values()) {
+                final ConnectionKey key = new ConnectionKey(factory, role);
+                CONNECTION_CACHE.remove(key);
+                final Connection connection = ESTABLISHED_CONNECTIONS.remove(key);
+                if (connection != null) {
+                    closeConnection(connection);
+                }
+            }
+            FACTORY_CACHE.values().removeIf(factory::equals);
+            CONNECTION_BLOCKED_STATES.remove(factory);
+        }
+    }
+
+    /**
      * Registers an application context that uses the shared event loop group.
      */
     public static void retainEventLoopGroup() {
@@ -375,8 +425,9 @@ public final class RabbitMQSetupUtils {
     }
 
     /**
-     * Unregisters an application context. When the last one is gone, the cached factories and connections are
-     * forgotten and the shared event loop group is shut down; the next context creates new ones.
+     * Unregisters an application context. When the last one is gone, the cached connections are closed, the cached
+     * factories and connections are forgotten and the shared event loop group is shut down; the next context creates
+     * new ones.
      */
     public static void releaseEventLoopGroup() {
         synchronized (EVENT_LOOP_GROUP_LOCK) {
@@ -387,11 +438,31 @@ public final class RabbitMQSetupUtils {
                 log.info("Shared Netty EventLoopGroup still used by {} application context(s)", eventLoopGroupUsers);
                 return;
             }
+            ESTABLISHED_CONNECTIONS.values().forEach(RabbitMQSetupUtils::closeConnection);
+            CONNECTION_USERS.clear();
             FACTORY_CACHE.clear();
             CONNECTION_CACHE.clear();
             ESTABLISHED_CONNECTIONS.clear();
             CONNECTION_BLOCKED_STATES.clear();
             shutdownEventLoopGroup();
+        }
+    }
+
+    /**
+     * Closes the connection with the AMQP handshake, so the broker does not see its socket cut when the event loop
+     * group shuts down. Forced closed after {@link #CONNECTION_CLOSE_TIMEOUT_MILLIS}, e.g. if the broker blocks it.
+     */
+    private static void closeConnection(Connection connection) {
+        if (!connection.isOpen()) {
+            // e.g. being recovered after a network failure: only closing or aborting it stops the recovery, which
+            // would reconnect it (with the channels and consumers of a closed application) once the broker is back
+            connection.abort(CONNECTION_CLOSE_TIMEOUT_MILLIS);
+            return;
+        }
+        try {
+            connection.close(CONNECTION_CLOSE_TIMEOUT_MILLIS);
+        } catch (Exception e) {
+            log.warn("Error closing RabbitMQ connection {}", connection.getClientProvidedName(), e);
         }
     }
 

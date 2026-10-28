@@ -1,6 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
+import com.rabbitmq.client.Channel;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
@@ -14,6 +15,7 @@ import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.Disposable;
+import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -24,9 +26,8 @@ import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -41,7 +42,6 @@ import static java.util.function.Function.identity;
 import static reactor.core.publisher.Mono.defer;
 
 @Log
-@SuppressWarnings({"unchecked", "rawtypes"})
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
@@ -57,7 +57,10 @@ public abstract class GenericMessageListener {
      * default), requeueing every delivery of the channel.
      */
     static final Duration HANDLER_WAIT_WARNING = Duration.ofMinutes(1);
-    private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
+    // the delivery acknowledgement timeout of the broker by default
+    static final Duration DEFAULT_CONSUMER_TIMEOUT = Duration.ofMinutes(30);
+    private static final long DRAIN_POLL_MILLIS = 20;
+    private final ConcurrentHashMap<String, ResolvedHandler> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
     private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
     private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
@@ -78,6 +81,15 @@ public abstract class GenericMessageListener {
     private final Duration handlerTimeout;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
     private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
+    /**
+     * The channel the consumer of the current subscription is registered on, to cancel it on shutdown.
+     */
+    private final AtomicReference<Channel> consumingChannel = new AtomicReference<>();
+    /**
+     * Whether the maxConcurrency of this listener is counted in the limit of the shared handler pool.
+     */
+    private final AtomicBoolean handlerPoolRoom = new AtomicBoolean();
+    private volatile String consumerTag;
 
     protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                      boolean createTopology, long maxRetries, long retryDelay,
@@ -123,23 +135,28 @@ public abstract class GenericMessageListener {
         } else {
             log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
         }
+        warnIfLocalRetriesOutlastTheConsumerTimeout();
 
         final String tag = consumerTag();
+        this.consumerTag = tag;
         ConsumeOptions consumeOptions = new ConsumeOptions()
                 .qos(messageListener.prefetchCount())
                 .consumerTag(tag)
                 .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
                 // active only once the broker registered the consumer, not when its channel opens
                 .consumerRegisteredCallback(liveness::onSubscribed)
-                .channelCallback(channel -> channel.addShutdownListener(cause -> {
-                    log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
-                            + " channel open: " + channel.isOpen() +
-                            " connection open: " + channel.getConnection().isOpen());
-                    if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                        log.warning("Recovering listener for queue: " + queueName);
-                        scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
-                    }
-                }));
+                .channelCallback(channel -> {
+                    consumingChannel.set(channel);
+                    channel.addShutdownListener(cause -> {
+                        log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
+                                + " channel open: " + channel.isOpen() +
+                                " connection open: " + channel.getConnection().isOpen());
+                        if (channel.getConnection().isOpen() && !channel.isOpen()) {
+                            log.warning("Recovering listener for queue: " + queueName);
+                            scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+                        }
+                    });
+                });
 
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())
@@ -152,7 +169,33 @@ public abstract class GenericMessageListener {
                     .transform(this::consumeFaultTolerant);
         }
 
+        // the shared handler pool grows to fit every listener: one whose handlers block cannot starve the others
+        if (handlerPoolRoom.compareAndSet(false, true)) {
+            ListenerSchedulers.registerListener(messageListener.maxConcurrency());
+        }
         subscribe();
+    }
+
+    /**
+     * Local retries keep the delivery unacknowledged: beyond the consumer timeout of the broker, it stops waiting for
+     * the acknowledgement and requeues the delivery (and, depending on the queue type, every delivery of the channel).
+     */
+    private void warnIfLocalRetriesOutlastTheConsumerTimeout() {
+        if (!hasLocalRetries()) {
+            return;
+        }
+        Duration unacknowledged = retryDelay.multipliedBy(maxRetries);
+        if (handlerTimeout != null) {
+            unacknowledged = unacknowledged.plus(handlerTimeout.multipliedBy(maxRetries + 1));
+        }
+        if (unacknowledged.compareTo(DEFAULT_CONSUMER_TIMEOUT) >= 0) {
+            final String held = unacknowledged + (handlerTimeout == null ? " plus the handler attempts" : "");
+            log.warning(() -> format("The local retries of queue %s can keep a delivery unacknowledged for %s "
+                    + "(maxRetries %d, retryDelay %s, handlerTimeout %s), beyond the default consumer_timeout of the "
+                    + "broker (%s): the broker would requeue it. Lower maxRetries or retryDelay, or use withDLQRetry.",
+                    queueName, held, maxRetries, retryDelay, handlerTimeout == null ? "none" : handlerTimeout,
+                    DEFAULT_CONSUMER_TIMEOUT));
+        }
     }
 
     private String getRootCauseMessage(Throwable err) {
@@ -174,25 +217,36 @@ public abstract class GenericMessageListener {
             metrics.recordDeliveryStarted();
             return handle(msj, init)
                     // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
-                    .doOnSuccess(ignored -> {
-                        msj.ack();
-                        metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
-                    })
+                    .doOnSuccess(ignored -> acknowledgeHandled(msj))
                     .onErrorResume(err -> requeueOrAck(msj, err, init))
                     // after the ack/nack (a requeue waits retryDelay first), or cancelled when the listener stops
                     .doFinally(signal -> metrics.recordDeliveryFinished());
         }, messageListener.maxConcurrency());
     }
 
+    /**
+     * Acknowledges a message whose handler succeeded. A failed ack (e.g. the socket broke while the connection is lost)
+     * is not a failure of the handler: retrying, dead-lettering or discarding the message would treat a processed
+     * message as a failed one. It stays unacknowledged, so the broker redelivers it once its channel closes.
+     */
+    private void acknowledgeHandled(AcknowledgableDelivery msj) {
+        try {
+            msj.ack();
+            metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
+        } catch (RuntimeException e) {
+            log.log(Level.WARNING, e, () -> "Unable to acknowledge message " + msj.getProperties().getMessageId()
+                    + " of queue " + queueName + " after its handler succeeded: the broker redelivers it once its "
+                    + "channel closes");
+        }
+    }
+
     protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
         try {
             final String executorPath = getExecutorPath(msj);
-            final Function<Message, Mono<Object>> handler = getExecutor(executorPath);
+            final ResolvedHandler resolved = getExecutor(executorPath);
+            final Function<Message, Mono<Object>> handler = resolved.handler();
             final Message message = RabbitMessage.fromDelivery(msj, executorPath);
-            // only a resolved handler gets here (an unregistered path fails in getExecutor), and the handlers are
-            // cached up to MAX_CACHED_HANDLERS: the ones beyond the cache bucket to "unknown", bounding the cardinality
-            final String handlerTag = handlers.containsKey(executorPath)
-                    ? executorPath : ConsumerMetrics.UNKNOWN_HANDLER;
+            final String handlerTag = resolved.name();
 
             final AtomicBoolean started = new AtomicBoolean();
             final AtomicReference<Instant> attemptStart = new AtomicReference<>();
@@ -218,11 +272,12 @@ public abstract class GenericMessageListener {
                                 handlerTag, ConsumerMetrics.EXECUTION_TIMEOUT,
                                 Duration.between(attemptStart.get(), Instant.now())));
             }
+            flow = flow.subscribeOn(ListenerSchedulers.handlers());
             if (hasLocalRetries()) {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay)
                                 .doBeforeRetry(signal -> metrics.recordHandlerRetry()))
                         .onErrorMap(err -> {
-                            if (err.getMessage() != null && err.getMessage().contains("Retries exhausted")) {
+                            if (Exceptions.isRetryExhausted(err)) {
                                 log.warning(err.getMessage());
                                 metrics.recordRetriesExhausted();
                                 return err.getCause();
@@ -234,13 +289,55 @@ public abstract class GenericMessageListener {
             if (latency != null) {
                 flow = flow.doFinally(signal -> latency.record(Duration.between(initTime, Instant.now())));
             }
-            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
-                    .subscribeOn(ListenerSchedulers.handlers()).thenReturn(msj);
+            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true)).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
                     "Severe Warning! ", msj.getProperties().getMessageId()));
             return Mono.error(e);
         }
+    }
+
+    /**
+     * First step of a graceful shutdown: the broker stops delivering to this listener ({@code basic.cancel}), while
+     * the deliveries already received keep being handled and acknowledged on their channel. The listener is not
+     * restarted anymore. Follow with {@link #awaitInFlight(Duration)} and {@link #stop()}.
+     */
+    public void stopConsuming() {
+        stopped.set(true);
+        final Channel channel = consumingChannel.get();
+        if (channel == null || !channel.isOpen()) {
+            return;
+        }
+        try {
+            channel.basicCancel(consumerTag);
+        } catch (Exception e) {
+            // not registered (yet) or the channel is closing: stop() closes the channel anyway
+            log.log(Level.FINE, e, () -> "Consumer of queue " + queueName + " not cancelled");
+        }
+    }
+
+    /**
+     * Waits until every delivery received by this listener has been acknowledged (or nacked).
+     *
+     * @param timeout how long to wait at most
+     * @return whether no delivery is in flight anymore
+     */
+    public boolean awaitInFlight(Duration timeout) {
+        final long deadline = System.nanoTime() + timeout.toNanos();
+        while (metrics.inFlight() > 0) {
+            if (System.nanoTime() - deadline >= 0) {
+                log.warning(() -> metrics.inFlight() + " deliveries of queue " + queueName + " still in flight after "
+                        + timeout + ": the broker redelivers them");
+                return false;
+            }
+            try {
+                Thread.sleep(DRAIN_POLL_MILLIS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -255,11 +352,20 @@ public abstract class GenericMessageListener {
         if (messageListener.subscriberRegistry() != null) {
             messageListener.subscriberRegistry().unregister(queueName);
         }
+        if (handlerPoolRoom.compareAndSet(true, false)) {
+            ListenerSchedulers.unregisterListener(messageListener.maxConcurrency());
+        }
+        metrics.close();
     }
 
     private void subscribe() {
         if (stopped.get()) {
             return;
+        }
+        // the previous consumer is cancelled before the new one is registered, so they never overlap
+        final Disposable previous = activeSubscription.getAndSet(null);
+        if (previous != null) {
+            previous.dispose();
         }
         final AtomicReference<Throwable> terminationCause = new AtomicReference<>();
         final Disposable subscription = messageFlux
@@ -271,9 +377,9 @@ public abstract class GenericMessageListener {
                             ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
-        final Disposable previous = activeSubscription.getAndSet(subscription);
-        if (previous != null && previous != subscription) {
-            previous.dispose();
+        final Disposable concurrent = activeSubscription.getAndSet(subscription);
+        if (concurrent != null && concurrent != subscription) {
+            concurrent.dispose();
         }
         if (stopped.get() && activeSubscription.compareAndSet(subscription, null)) {
             // stop() ran while this subscription was being created
@@ -344,29 +450,33 @@ public abstract class GenericMessageListener {
                 objectType, executorPath, timeElapsed));
     }
 
+    /**
+     * Logs a failed message, which happens again on every retry: only the beginning of its body is written.
+     */
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
-        String messageID = msj.getProperties().getMessageId();
+        final String messageID = msj.getProperties().getMessageId();
         try {
-            log.log(Level.SEVERE, format("Error encounter while processing message %s", messageID), err);
-            log.warning(format("Message %s Headers: %s", messageID, msj.getProperties().getHeaders().toString()));
-            log.warning(format("Message %s Body: %s", messageID, new String(msj.getBody())));
+            log.log(Level.SEVERE, err, () -> format("Error encounter while processing message %s of queue %s "
+                    + "(%d bytes)", messageID, queueName, msj.getBody().length));
+            log.warning(() -> format("Message %s Headers: %s Body: %s", messageID, msj.getProperties().getHeaders(),
+                    RabbitMessage.bodyPreview(msj.getBody())));
         } catch (Exception e) {
             log.log(Level.SEVERE, "Error Login message Content!!", e);
         } finally {
-            log.warning(format(strategy.message, messageID));
+            log.warning(() -> format(strategy.message, messageID));
         }
     }
 
-    private Function<Message, Mono<Object>> getExecutor(String path) {
-        final Function<Message, Mono<Object>> cached = handlers.get(path);
+    private ResolvedHandler getExecutor(String path) {
+        final ResolvedHandler cached = handlers.get(path);
         if (cached != null) {
             return cached;
         }
-        final Function<Message, Mono<Object>> handler = rawMessageHandler(path);
+        final ResolvedHandler resolved = new ResolvedHandler(rawMessageHandler(path), handlerName(path));
         if (handlers.size() < MAX_CACHED_HANDLERS) {
-            handlers.putIfAbsent(path, handler);
+            handlers.putIfAbsent(path, resolved);
         }
-        return handler;
+        return resolved;
     }
 
     private void onHandlerStarted(Duration wait) {
@@ -385,6 +495,15 @@ public abstract class GenericMessageListener {
     }
 
     protected abstract Function<Message, Mono<Object>> rawMessageHandler(String executorPath);
+
+    /**
+     * The name the executions of the handler resolved for this path are tagged with. A listener whose paths are
+     * matched by wildcards returns the path its handler was registered with: the code bounds those, while the
+     * publishers choose the routing keys a wildcard matches. Null or empty for a handler registered without a path.
+     */
+    protected String handlerName(String executorPath) {
+        return executorPath;
+    }
 
     protected abstract String getExecutorPath(AcknowledgableDelivery msj);
 
@@ -463,14 +582,19 @@ public abstract class GenericMessageListener {
         }
     }
 
-    private Long getRetryNumber(AcknowledgableDelivery delivery) {
-        return Optional.ofNullable(delivery.getProperties())
-                .map(AMQP.BasicProperties::getHeaders)
-                .map(x -> (List<HashMap>) x.get("x-death"))
-                .filter(list -> !list.isEmpty())
-                .map(list -> list.get(0))
-                .map(hashMap -> (Long) hashMap.get("count"))
-                .orElse(0L);
+    /**
+     * The times the message was dead-lettered, from the {@code count} of the first entry of its {@code x-death}
+     * header. Read without assuming its shape: the header may come from another client (e.g. with a 32-bit
+     * {@code count}), and a failure here would terminate the whole listener and redeliver the message in a loop.
+     */
+    private static long getRetryNumber(AcknowledgableDelivery delivery) {
+        final AMQP.BasicProperties properties = delivery.getProperties();
+        final Map<String, Object> headers = properties != null ? properties.getHeaders() : null;
+        if (headers != null && headers.get("x-death") instanceof List<?> deaths && !deaths.isEmpty()
+                && deaths.get(0) instanceof Map<?, ?> lastDeath && lastDeath.get("count") instanceof Number count) {
+            return count.longValue();
+        }
+        return 0L;
     }
 
     /**
@@ -507,6 +631,7 @@ public abstract class GenericMessageListener {
     protected String consumerTag() {
         return InstanceIdentifier.getInstanceId(getKind());
     }
+
+    private record ResolvedHandler(Function<Message, Mono<Object>> handler, String name) {
+    }
 }
-
-

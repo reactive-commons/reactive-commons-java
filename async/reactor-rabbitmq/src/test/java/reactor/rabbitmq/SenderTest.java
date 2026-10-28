@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -105,6 +106,35 @@ class SenderTest {
         StepVerifier.create(sender.declare(QueueSpecification.queue("test-queue").durable(true)))
                 .expectNext(declareOk)
                 .verifyComplete();
+    }
+
+    /**
+     * The client blocks the thread that sends an RPC while another one is in progress on the same channel, and opening
+     * the channel is an RPC too: they never run on the thread that subscribes, which may be a non-blocking one (e.g.
+     * an event loop of the HTTP server registering a dynamic listener).
+     */
+    @Test
+    void resourceManagementRpcsAreSentOnTheResourceManagementScheduler() throws Exception {
+        var command = mock(com.rabbitmq.client.Command.class);
+        var queueDeclareOk = mock(AMQP.Queue.DeclareOk.class);
+        var exchangeDeclareOk = mock(AMQP.Exchange.DeclareOk.class);
+        var bindOk = mock(AMQP.Queue.BindOk.class);
+        var unbindOk = mock(AMQP.Queue.UnbindOk.class);
+        when(command.getMethod()).thenReturn(queueDeclareOk, exchangeDeclareOk, bindOk, unbindOk);
+        List<String> rpcThreads = new CopyOnWriteArrayList<>();
+        when(channel.asyncCompletableRpc(any())).thenAnswer(invocation -> {
+            rpcThreads.add(Thread.currentThread().getName());
+            return CompletableFuture.completedFuture(command);
+        });
+        sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+        sender.declare(QueueSpecification.queue("queue")).block(Duration.ofSeconds(5));
+        sender.declare(ExchangeSpecification.exchange("exch")).block(Duration.ofSeconds(5));
+        sender.bind(BindingSpecification.binding("exch", "rk", "queue")).block(Duration.ofSeconds(5));
+        sender.unbind(BindingSpecification.binding("exch", "rk", "queue")).block(Duration.ofSeconds(5));
+
+        assertThat(rpcThreads).as("declare queue, declare exchange, bind and unbind").hasSize(4)
+                .allSatisfy(thread -> assertThat(thread).startsWith("rabbitmq-sender-resource-creation"));
     }
 
     @Test
@@ -418,6 +448,32 @@ class SenderTest {
                     .satisfies(r -> assertThat(r.ack()).isFalse());
         }
 
+        /**
+         * The broker may answer before basicPublish returns to the publishing thread (e.g. a queue at its length
+         * limit rejecting the message at once): its confirm proves the message was written all the same.
+         */
+        @Test
+        void aMessageConfirmedBeforeItsPublishReturnedIsReportedAsPublished() throws Exception {
+            AtomicReference<ConfirmListener> listenerRef = new AtomicReference<>();
+            doAnswer(inv -> {
+                listenerRef.set(inv.getArgument(0));
+                return null;
+            }).when(channel).addConfirmListener(any(ConfirmListener.class));
+            doAnswer(inv -> {
+                listenerRef.get().handleNack(1, false);
+                return null;
+            }).when(channel).basicPublish(anyString(), anyString(), anyBoolean(), any(), any(byte[].class));
+
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+
+            // read when the result is emitted, as its subscriber does to tell a broker nack from a failed write
+            List<Boolean> publishedOnResult = new ArrayList<>();
+            sender.sendWithPublishConfirms(Flux.just(new OutboundMessage("exch", "rk", "m1".getBytes())))
+                    .subscribe(result -> publishedOnResult.add(result.outboundMessage().isPublished()));
+
+            assertThat(publishedOnResult).as("written, since the broker nacked it").containsExactly(true);
+        }
+
         @Test
         void publishConfirmWithTrackReturned() throws Exception {
             when(channel.getNextPublishSeqNo()).thenReturn(1L);
@@ -540,6 +596,26 @@ class SenderTest {
             if (confirmRef.get() != null) {
                 confirmRef.get().handleAck(42, false);
             }
+        }
+
+        /**
+         * A message consumed and published again carries the tag of its previous publication: the tag of this one
+         * replaces it, otherwise its basic.return would be correlated with another message.
+         */
+        @Test
+        void theDeliveryTagOfAPreviousPublicationIsReplaced() throws Exception {
+            when(channel.getNextPublishSeqNo()).thenReturn(42L);
+            sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
+            AMQP.BasicProperties relayed = new AMQP.BasicProperties.Builder()
+                    .headers(Map.of("reactor_rabbitmq_delivery_tag", 7L))
+                    .build();
+
+            sender.sendWithPublishConfirms(Flux.just(new OutboundMessage("exch", "rk", relayed, "m".getBytes())),
+                    new SendOptions().trackReturned(true)).subscribe();
+
+            ArgumentCaptor<AMQP.BasicProperties> propsCaptor = ArgumentCaptor.forClass(AMQP.BasicProperties.class);
+            verify(channel).basicPublish(eq("exch"), eq("rk"), eq(true), propsCaptor.capture(), any(byte[].class));
+            assertThat(propsCaptor.getValue().getHeaders()).containsEntry("reactor_rabbitmq_delivery_tag", 42L);
         }
     }
 
@@ -733,5 +809,14 @@ class SenderTest {
                     .expectError(RabbitFluxException.class)
                     .verify(Duration.ofSeconds(5));
         }
+    }
+    @Test
+    void closingTheSenderClosesTheChannelPoolItWasGiven() {
+        ChannelPool channelPool = mock(ChannelPool.class);
+        when(channelPool.getChannelMono()).thenAnswer(invocation -> Mono.empty());
+
+        new Sender(new SenderOptions().channelPool(channelPool).connectionMono(Mono.never())).close();
+
+        verify(channelPool).close();
     }
 }

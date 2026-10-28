@@ -29,6 +29,7 @@ import java.util.logging.Level;
 
 import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_DEADLINE_MILLIS;
 import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
@@ -73,6 +74,12 @@ public class ApplicationQueryListener extends GenericMessageListener {
         Function<Message, Object> messageConverter = resolveConverter(handler.queryClass());
         final QueryExecutor<Object, Object> executor = new QueryExecutor<>(handler.handler(), messageConverter);
         return executor::execute;
+    }
+
+    @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredQueryHandler<Object, Object> handler = handlerResolver.getQueryHandler(executorPath);
+        return handler != null ? handler.path() : null;
     }
 
     private Function<Message, Object> resolveConverter(Class<?> handlerClass) {
@@ -126,16 +133,13 @@ public class ApplicationQueryListener extends GenericMessageListener {
                     + " and " + CORRELATION_ID + " headers needed to serve it and reply to it"));
         }
 
-        boolean messageDoesNotContainTimeoutMetadata = messageProperties.getTimestamp() == null ||
-                !messageProperties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS);
-
-        if (messageDoesNotContainTimeoutMetadata || !discardTimeoutQueries) {
+        if (!hasTimeoutMetadata(messageProperties) || !discardTimeoutQueries) {
             return super.handle(msj, initTime);
         }
 
         // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
-        return Mono.defer(() -> replyTimeoutMillis(messageProperties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
-                .map(timeout -> handleWithTimeout(msj, initTime, messageProperties, timeout))
+        return Mono.defer(() -> replyDeadlineMillis(messageProperties)
+                .map(deadline -> handleWithDeadline(msj, initTime, deadline))
                 .orElseGet(() -> {
                     // counted here only: retryIsUseless parses the same header again when the query fails
                     metrics.recordInvalidTimeoutHeader();
@@ -143,28 +147,49 @@ public class ApplicationQueryListener extends GenericMessageListener {
                 }));
     }
 
+    private static boolean hasTimeoutMetadata(AMQP.BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        return headers.containsKey(REPLY_DEADLINE_MILLIS)
+                || (properties.getTimestamp() != null && headers.containsKey(REPLY_TIMEOUT_MILLIS));
+    }
+
     /**
-     * The gateway publishes the timeout as a {@code long}, which the RabbitMQ client decodes as a {@link Long};
-     * other publishers may send an {@link Integer} or a string.
+     * When the caller stops waiting for the reply, in milliseconds since the epoch. The gateway publishes it in the
+     * {@code x-reply-deadline-millis} header; for queries published without it, it is computed from the AMQP
+     * {@code timestamp} (whose resolution is one second: the deadline can be up to a second early) plus the reply
+     * timeout. Empty when the query carries no (valid) timeout metadata.
      */
-    private Optional<Long> replyTimeoutMillis(Object header) {
+    private Optional<Long> replyDeadlineMillis(AMQP.BasicProperties properties) {
+        Map<String, Object> headers = properties.getHeaders();
+        if (headers.containsKey(REPLY_DEADLINE_MILLIS)) {
+            return millisHeader(REPLY_DEADLINE_MILLIS, headers.get(REPLY_DEADLINE_MILLIS));
+        }
+        if (properties.getTimestamp() == null || !headers.containsKey(REPLY_TIMEOUT_MILLIS)) {
+            return Optional.empty();
+        }
+        return millisHeader(REPLY_TIMEOUT_MILLIS, headers.get(REPLY_TIMEOUT_MILLIS))
+                .map(timeout -> properties.getTimestamp().getTime() + timeout);
+    }
+
+    /**
+     * The gateway publishes the headers as {@code long}s, which the RabbitMQ client decodes as {@link Long}s; other
+     * publishers may send an {@link Integer} or a string.
+     */
+    private Optional<Long> millisHeader(String name, Object header) {
         if (header instanceof Number number) {
             return Optional.of(number.longValue());
         }
         try {
             return Optional.of(Long.parseLong(String.valueOf(header).trim()));
         } catch (NumberFormatException e) {
-            log.log(Level.WARNING, () -> "Ignoring invalid " + REPLY_TIMEOUT_MILLIS + " header: " + header);
+            log.log(Level.WARNING, () -> "Ignoring invalid " + name + " header: " + header);
             return Optional.empty();
         }
     }
 
-    private Mono<AcknowledgableDelivery> handleWithTimeout(AcknowledgableDelivery msj,
-                                                           Instant initTime,
-                                                           AMQP.BasicProperties messageProperties,
-                                                           long replyTimeoutMillis) {
-        long messageTimestamp = messageProperties.getTimestamp().getTime();
-        long millisUntilTimeout = (messageTimestamp + replyTimeoutMillis) - currentTimestamp().toEpochMilli();
+    private Mono<AcknowledgableDelivery> handleWithDeadline(AcknowledgableDelivery msj, Instant initTime,
+                                                            long replyDeadlineMillis) {
+        long millisUntilTimeout = replyDeadlineMillis - currentTimestamp().toEpochMilli();
         String executorPath = getExecutorPath(msj);
 
         if (millisUntilTimeout > 0) {
@@ -195,12 +220,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
         if (!canBeAnswered(properties)) {
             return true;
         }
-        if (properties.getTimestamp() == null || properties.getHeaders() == null
-                || !properties.getHeaders().containsKey(REPLY_TIMEOUT_MILLIS)) {
-            return false;
-        }
-        return replyTimeoutMillis(properties.getHeaders().get(REPLY_TIMEOUT_MILLIS))
-                .map(timeout -> properties.getTimestamp().getTime() + timeout <= currentTimestamp().toEpochMilli())
+        return replyDeadlineMillis(properties)
+                .map(deadline -> deadline <= currentTimestamp().toEpochMilli())
                 .orElse(false);
     }
 

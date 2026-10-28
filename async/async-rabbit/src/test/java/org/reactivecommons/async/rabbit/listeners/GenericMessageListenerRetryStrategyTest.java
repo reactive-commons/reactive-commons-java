@@ -25,11 +25,18 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -100,6 +107,28 @@ class GenericMessageListenerRetryStrategyTest {
     }
 
     @Test
+    void everyLocalRetryRunsItsHandlerOnTheHandlerPool() throws Exception {
+        stubCollaborators(Mono.empty());
+        when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
+                .thenReturn(Flux.just(delivery(null)).concatWith(Flux.never()));
+        List<String> threads = new CopyOnWriteArrayList<>();
+
+        new HangingListener(listener(null), 2, discardNotifier, errorReporter, message -> Mono.defer(() -> {
+            threads.add(Thread.currentThread().getName());
+            if (threads.size() <= 2) {
+                return Mono.error(new IllegalStateException("transient failure"));
+            }
+            // an imperative handler: block() is refused on the non-blocking threads the retry delay runs on
+            return Mono.just(Objects.requireNonNull(Mono.just("done").delayElement(Duration.ofMillis(10)).block()));
+        })).startListener();
+
+        verify(channel, timeout(2_000)).basicAck(DELIVERY_TAG, false);
+        verify(discardNotifier, never()).tryNotifyDiscard(any(Message.class));
+        assertThat(threads).as("first attempt + 2 local retries").hasSize(3)
+                .allSatisfy(thread -> assertThat(thread).startsWith("rc-handlers"));
+    }
+
+    @Test
     void dlqRetryRejectsTheMessageToTheDlqWhileBelowTheLimit() throws Exception {
         start(true, -1, delivery(9L)); // -1 means 10 retries with DLQ
 
@@ -139,7 +168,7 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(counter("reactive_commons.consumer.handler.timeout")).isEqualTo(1.0);
         assertThat(executionCount("timeout", "test-path")).as("execution timer tagged timeout")
                 .isEqualTo(1L);
-        assertThat(awaitInFlight(0)).as("no longer in flight once nacked").isTrue();
+        awaitInFlight(0, "no longer in flight once nacked");
     }
 
     @Test
@@ -166,7 +195,7 @@ class GenericMessageListenerRetryStrategyTest {
         new HangingListener(listener(null), discardNotifier, errorReporter, message -> Mono.never())
                 .startListener();
 
-        assertThat(awaitInFlight(1)).as("received, neither acked nor nacked").isTrue();
+        awaitInFlight(1, "received, neither acked nor nacked");
         verify(channel, after(200).never()).basicAck(anyLong(), anyBoolean());
         assertThat(outcome("ack")).as("the outcomes exist at zero before any happens").isZero();
     }
@@ -210,6 +239,65 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(outcome("nack")).isEqualTo(1.0);
     }
 
+    @Test
+    void localRetriesThatCanOutlastTheConsumerTimeoutAreReportedAtStartup() {
+        // 60 retries x 30 s = 30 minutes without acknowledging the delivery
+        assertThat(startupWarnings(false, 60, 30_000, null))
+                .singleElement().satisfies(warning -> assertThat(warning)
+                        .contains("test-queue", "PT30M plus the handler attempts", "maxRetries 60"));
+    }
+
+    @Test
+    void theHandlerTimeoutOfEachAttemptCountsTowardsTheConsumerTimeout() {
+        // 10 retries x 1 s + 11 attempts x 3 min = 33 minutes 10 seconds
+        assertThat(startupWarnings(false, 10, 1_000, Duration.ofMinutes(3)))
+                .singleElement().satisfies(warning -> assertThat(warning).contains("PT33M10S", "handlerTimeout PT3M"));
+    }
+
+    @Test
+    void shortLocalRetriesAndOtherStrategiesAreNotReported() {
+        assertThat(startupWarnings(false, 3, RETRY_DELAY, null)).as("short local retries").isEmpty();
+        assertThat(startupWarnings(false, -1, 30_000, null)).as("requeued retries").isEmpty();
+        assertThat(startupWarnings(true, 60, 30_000, null)).as("DLQ retries").isEmpty();
+    }
+
+    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, long retryDelay,
+                                         Duration handlerTimeout) {
+        lenient().when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.never());
+        Logger logger = Logger.getLogger(GenericMessageListener.class.getName());
+        List<String> warnings = new CopyOnWriteArrayList<>();
+        Handler capture = new Handler() {
+            @Override
+            public void publish(LogRecord logRecord) {
+                if (logRecord.getLevel() == Level.WARNING
+                        && logRecord.getMessage().contains("consumer_timeout")) {
+                    warnings.add(logRecord.getMessage());
+                }
+            }
+
+            @Override
+            public void flush() {
+                // nothing buffered
+            }
+
+            @Override
+            public void close() {
+                // nothing to release
+            }
+        };
+        logger.addHandler(capture);
+        FailingListener listener = new FailingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
+                new SubscriberRegistry(), registry, DOMAIN, handlerTimeout), withDLQRetry, maxRetries, retryDelay,
+                discardNotifier, errorReporter, handlerCalls);
+        try {
+            listener.startListener();
+        } finally {
+            logger.removeHandler(capture);
+            listener.stop();
+        }
+        return warnings;
+    }
+
     private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery) {
         start(withDLQRetry, maxRetries, delivery, Mono.empty());
     }
@@ -251,16 +339,10 @@ class GenericMessageListenerRetryStrategyTest {
                 DOMAIN, handlerTimeout);
     }
 
-    private boolean awaitInFlight(double expected) throws InterruptedException {
-        final long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-        while (System.nanoTime() < deadline) {
-            if (registry.find("reactive_commons.consumer.in_flight").tags("domain", DOMAIN, "queue", QUEUE)
-                    .gauge().value() == expected) {
-                return true;
-            }
-            Thread.sleep(10);
-        }
-        return false;
+    private void awaitInFlight(double expected, String description) {
+        await().alias(description).atMost(Duration.ofSeconds(2))
+                .until(() -> registry.find("reactive_commons.consumer.in_flight").tags("domain", DOMAIN, "queue", QUEUE)
+                        .gauge().value() == expected);
     }
 
     /**
@@ -298,7 +380,12 @@ class GenericMessageListenerRetryStrategyTest {
 
         FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries,
                         DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            super("test-queue", listener, useDLQRetries, false, maxRetries, RETRY_DELAY, discardNotifier,
+            this(listener, useDLQRetries, maxRetries, RETRY_DELAY, discardNotifier, errorReporter, handlerCalls);
+        }
+
+        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, long retryDelay,
+                        DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
+            super("test-queue", listener, useDLQRetries, false, maxRetries, retryDelay, discardNotifier,
                     "command", errorReporter);
             this.handlerCalls = handlerCalls;
         }
@@ -332,7 +419,12 @@ class GenericMessageListenerRetryStrategyTest {
 
         HangingListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
                         CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
-            super(QUEUE, listener, false, false, -1, RETRY_DELAY, discardNotifier, "command", errorReporter);
+            this(listener, -1, discardNotifier, errorReporter, handler);
+        }
+
+        HangingListener(ReactiveMessageListener listener, long maxRetries, DiscardNotifier discardNotifier,
+                        CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
+            super(QUEUE, listener, false, false, maxRetries, RETRY_DELAY, discardNotifier, "command", errorReporter);
             this.handler = handler;
         }
 

@@ -13,6 +13,20 @@ import static org.mockito.Mockito.verify;
 class ConnectionManagerTest {
 
     @Test
+    void startsEveryProvider() {
+        BrokerProvider first = mock(BrokerProvider.class);
+        BrokerProvider second = mock(BrokerProvider.class);
+        ConnectionManager manager = new ConnectionManager()
+                .addDomain("first", first)
+                .addDomain("second", second);
+
+        manager.start();
+
+        verify(first).start();
+        verify(second).start();
+    }
+
+    @Test
     void closesEveryProviderEvenWhenOneFails() {
         BrokerProvider failing = mock(BrokerProvider.class);
         BrokerProvider healthy = mock(BrokerProvider.class);

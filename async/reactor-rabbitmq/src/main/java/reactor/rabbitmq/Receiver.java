@@ -113,6 +113,10 @@ public class Receiver implements Closeable {
     protected void completeOnChannelShutdown(Channel channel, FluxSink<?> emitter) {
         channel.addShutdownListener(reason -> {
             if (isRecoverable(channel)) {
+                if (!reason.isHardError() && !reason.isInitiatedByApplication()) {
+                    emitter.error(reason);
+                    return;
+                }
                 // we complete only on "normal" (channels closed by application) for recoverable channels
                 // other cases includes disconnection, so the channel should recover and resume consuming
                 if (!AutorecoveringConnection.DEFAULT_CONNECTION_RECOVERY_TRIGGERING_CONDITION.test(reason)) {
@@ -187,9 +191,13 @@ public class Receiver implements Closeable {
                         try {
                             if (channel.isOpen() && channel.getConnection().isOpen()) {
                                 if (basicCancel.compareAndSet(true, false)) {
-                                    channel.basicCancel(consumerTag);
+                                    cancelConsumer(channel, consumerTag);
                                 }
                                 channel.close();
+                            } else if (isRecoverable(channel)) {
+                                // closed by a connection loss: forgotten, or the automatic recovery would re-open it
+                                // with its consumer, whose deliveries nobody would handle and acknowledge anymore
+                                channel.abort();
                             }
                         } catch (TimeoutException | IOException e) {
                             LOGGER.warn("Error while closing channel: {}", e.getMessage());
@@ -197,9 +205,35 @@ public class Receiver implements Closeable {
                     }
                 });
             } catch (Exception e) {
+                // error first: aborting the channel completes a consumer whose channel is closed by the application
                 emitter.error(new RabbitFluxException(e));
+                // the consumer did not start: neither its channel nor, if the broker registered it, the consumer
+                // (which would keep receiving deliveries nobody acknowledges) must outlive it
+                abortQuietly(channel);
             }
         }, emitter::error), options.getOverflowStrategy());
+    }
+
+    private static void abortQuietly(Channel channel) {
+        if (channel.isOpen()) {
+            try {
+                channel.abort();
+            } catch (IOException | RuntimeException e) {
+                LOGGER.debug("Channel of a consumer that did not start not aborted: {}", e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * The consumer may already be cancelled (e.g. to stop consuming before the in-flight deliveries are
+     * acknowledged): the channel must still be closed afterward.
+     */
+    private static void cancelConsumer(Channel channel, String consumerTag) {
+        try {
+            channel.basicCancel(consumerTag);
+        } catch (IOException e) {
+            LOGGER.debug("Consumer {} not cancelled: {}", consumerTag, e.getMessage());
+        }
     }
 
     protected boolean isRecoverable(Connection connection) {

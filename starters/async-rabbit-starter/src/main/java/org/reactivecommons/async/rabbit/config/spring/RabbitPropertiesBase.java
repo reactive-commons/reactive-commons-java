@@ -8,8 +8,9 @@ import org.springframework.util.StringUtils;
 
 import java.time.Duration;
 import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class RabbitPropertiesBase {
 
@@ -148,11 +149,10 @@ public class RabbitPropertiesBase {
         if (CollectionUtils.isEmpty(this.parsedAddresses)) {
             return this.host + ":" + this.port;
         }
-        List<String> addressStrings = new ArrayList<>();
-        for (Address parsedAddress : this.parsedAddresses) {
-            addressStrings.add(parsedAddress.host + ":" + parsedAddress.port);
-        }
-        return StringUtils.collectionToCommaDelimitedString(addressStrings);
+
+        return this.parsedAddresses.stream()
+                .map(address -> address.host + ":" + address.port)
+                .collect(Collectors.joining(","));
     }
 
     public void setAddresses(String addresses) {
@@ -161,16 +161,14 @@ public class RabbitPropertiesBase {
     }
 
     private List<Address> parseAddresses(String addresses) {
-        List<Address> parsedAddressesLocal = new ArrayList<>();
-        for (String address : StringUtils.commaDelimitedListToStringArray(addresses)) {
-            parsedAddressesLocal.add(new Address(address));
-        }
-        return parsedAddressesLocal;
+        return Arrays.stream(StringUtils.commaDelimitedListToStringArray(addresses))
+                .map(Address::new)
+                .toList();
     }
 
     /**
      * If addresses have been set and the first address has a username it is returned.
-     * Otherwise returns the result of calling {@code getUsername()}.
+     * Otherwise, returns the result of calling {@code getUsername()}.
      *
      * @return the username
      * @see #setAddresses(String)
@@ -186,7 +184,7 @@ public class RabbitPropertiesBase {
 
     /**
      * If addresses have been set and the first address has a password it is returned.
-     * Otherwise returns the result of calling {@code getPassword()}.
+     * Otherwise, returns the result of calling {@code getPassword()}.
      *
      * @return the password or {@code null}
      * @see #setAddresses(String)
@@ -202,7 +200,7 @@ public class RabbitPropertiesBase {
 
     /**
      * If addresses have been set and the first address has a virtual host it is returned.
-     * Otherwise returns the result of calling {@code getVirtualHost()}.
+     * Otherwise, returns the result of calling {@code getVirtualHost()}.
      *
      * @return the virtual host or {@code null}
      * @see #setAddresses(String)

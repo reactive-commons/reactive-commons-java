@@ -27,6 +27,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
@@ -58,7 +59,7 @@ class ListenerSchedulersRabbitContainerTest {
     private static final int BLOCKING_COMMANDS = 1_000;
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     private static final AtomicInteger RUNNING = new AtomicInteger();
     private static final AtomicInteger PEAK = new AtomicInteger();
@@ -142,12 +143,8 @@ class ListenerSchedulersRabbitContainerTest {
         int createdInSteadyState = whileRunning.size() - before - warmUpThreads;
 
         // the threads of the application must disappear once it is closed
-        long deadline = System.currentTimeMillis() + 10_000;
+        await().atMost(Duration.ofSeconds(10)).until(() -> handlerThreads().size() <= before);
         List<String> afterClose = handlerThreads();
-        while (afterClose.size() > before && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-            afterClose = handlerThreads();
-        }
 
         System.out.printf("[REAL BROKER] 3 listeners (events, commands, queries), handlers that do not block: handler "
                         + "threads created: cold start=%d, then %d more with sustained traffic (36 before: 12 per "

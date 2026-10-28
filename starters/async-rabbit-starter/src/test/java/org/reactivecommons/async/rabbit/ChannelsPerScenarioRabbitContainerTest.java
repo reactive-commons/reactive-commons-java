@@ -32,7 +32,7 @@ class ChannelsPerScenarioRabbitContainerTest {
     private static final Class<?>[] LISTEN_ONE = {ListenEvents.class};
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     private record Scenario(String id, String description, boolean twoDomains, boolean listenReplies,
                             Class<?>[] features, int documentedApp, int documentedExtra) {

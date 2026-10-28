@@ -213,4 +213,35 @@ class LazyChannelPoolTest {
         when(channel.getConnection()).thenReturn(connection);
         return channel;
     }
+
+    @Test
+    void closingThePoolReleasesItsPrivateScheduler() throws Exception {
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection), new ChannelPoolOptions());
+        assertThat(lazyChannelPool.getChannelMono().block(ofSeconds(5))).isSameAs(channel1);
+        var scheduler = subscriptionSchedulerOf(lazyChannelPool);
+        assertThat(scheduler.isDisposed()).as("private scheduler while the pool is in use").isFalse();
+
+        lazyChannelPool.close();
+
+        assertThat(scheduler.isDisposed()).as("private scheduler once the pool is closed").isTrue();
+    }
+
+    @Test
+    void closingThePoolKeepsTheSchedulerItWasGiven() {
+        var scheduler = Schedulers.newSingle("given-pool-scheduler");
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection),
+                new ChannelPoolOptions().subscriptionScheduler(scheduler));
+
+        lazyChannelPool.close();
+        boolean disposed = scheduler.isDisposed();
+        scheduler.dispose();
+
+        assertThat(disposed).as("scheduler given to the pool").isFalse();
+    }
+
+    private static reactor.core.scheduler.Scheduler subscriptionSchedulerOf(LazyChannelPool pool) throws Exception {
+        var field = LazyChannelPool.class.getDeclaredField("subscriptionScheduler");
+        field.setAccessible(true);
+        return (reactor.core.scheduler.Scheduler) field.get(pool);
+    }
 }

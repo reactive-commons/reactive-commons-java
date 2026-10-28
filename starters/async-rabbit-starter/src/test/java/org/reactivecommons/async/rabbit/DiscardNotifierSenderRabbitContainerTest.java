@@ -3,7 +3,6 @@ package org.reactivecommons.async.rabbit;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
-import com.rabbitmq.client.GetResponse;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
@@ -17,7 +16,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
@@ -26,10 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Starts the real wiring of the starter (every domain of the application) against a REAL RabbitMQ broker and checks
@@ -57,7 +56,7 @@ class DiscardNotifierSenderRabbitContainerTest {
     private static final String DOMAIN_EVENTS_EXCHANGE = "domainEvents";
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
@@ -78,12 +77,12 @@ class DiscardNotifierSenderRabbitContainerTest {
     private ConnectionManager manager;
 
     @Test
-    void discardNotifiersDoNotOpenExtraSendersOnTheDefaultDomainConnection() throws Exception {
+    void discardNotifiersDoNotOpenExtraSendersOnTheDefaultDomainConnection() {
         assertThat(manager.getProviders()).containsOnlyKeys("app", "second", "third");
 
-        int appChannels = settledChannels("tc-app-");
-        int secondChannels = settledChannels("tc-second-");
-        int thirdChannels = settledChannels("tc-third-");
+        int appChannels = RabbitScenarioSupport.settledChannels(RABBIT, "tc-app-");
+        int secondChannels = RabbitScenarioSupport.settledChannels(RABBIT, "tc-second-");
+        int thirdChannels = RabbitScenarioSupport.settledChannels(RABBIT, "tc-third-");
 
         System.out.printf("[REAL BROKER] channels per connection: default domain (app)=%d, second=%d, third=%d "
                         + "(one sender = %d channels)%n",
@@ -118,18 +117,20 @@ class DiscardNotifierSenderRabbitContainerTest {
                 expected++;
             }
 
-            int received = 0;
-            long deadline = System.currentTimeMillis() + 10_000;
-            while (received < expected && System.currentTimeMillis() < deadline) {
-                GetResponse response = admin.basicGet(queue, true);
-                if (response == null) {
-                    Thread.sleep(50);
-                } else {
-                    received++;
-                }
+            int notifications = expected;
+            AtomicInteger received = new AtomicInteger();
+            try {
+                await().atMost(Duration.ofSeconds(10)).pollInterval(Duration.ofMillis(50)).until(() -> {
+                    while (admin.basicGet(queue, true) != null) {
+                        received.incrementAndGet();
+                    }
+                    return received.get() >= notifications;
+                });
+            } finally {
+                admin.queueDelete(queue);
             }
-            admin.queueDelete(queue);
-            assertThat(received).as("a discard notification per domain reached the broker").isEqualTo(expected);
+            assertThat(received.get()).as("a discard notification per domain reached the broker")
+                    .isEqualTo(notifications);
         }
     }
 
@@ -141,40 +142,4 @@ class DiscardNotifierSenderRabbitContainerTest {
         return new RabbitMessage(body, properties, "");
     }
 
-    /**
-     * Channels that the broker reports for the connection of a domain, once the number stops changing: the flows
-     * of a sender obtain their channels asynchronously after the connection is established.
-     */
-    private static int settledChannels(String connectionNamePrefix) throws Exception {
-        long deadline = System.currentTimeMillis() + 30_000;
-        int last = -1;
-        long stableSince = System.currentTimeMillis();
-        while (System.currentTimeMillis() < deadline) {
-            int current = channelsOf(connectionNamePrefix).orElse(-1);
-            if (current != last) {
-                last = current;
-                stableSince = System.currentTimeMillis();
-            } else if (current > 0 && System.currentTimeMillis() - stableSince >= 3_000) {
-                return current;
-            }
-            Thread.sleep(200);
-        }
-        throw new IllegalStateException("The channels of '" + connectionNamePrefix + "' never settled, last=" + last);
-    }
-
-    private static Optional<Integer> channelsOf(String connectionNamePrefix) throws Exception {
-        // client_properties holds the client-provided connection name; columns are tab separated
-        ExecResult result = RABBIT.execInContainer("rabbitmqctl", "-q", "list_connections", "client_properties",
-                "channels");
-        // a domain has a sender and a listener connection: its channels are the sum of both
-        Optional<Integer> channels = Optional.empty();
-        for (String line : result.getStdout().split("\n")) {
-            String[] columns = line.trim().split("\t");
-            if (columns.length >= 2 && line.contains("\"" + connectionNamePrefix)) {
-                int connectionChannels = Integer.parseInt(columns[columns.length - 1].trim());
-                channels = Optional.of(channels.orElse(0) + connectionChannels);
-            }
-        }
-        return channels;
-    }
 }

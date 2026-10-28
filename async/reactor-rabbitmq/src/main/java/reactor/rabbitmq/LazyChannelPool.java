@@ -43,12 +43,14 @@ class LazyChannelPool implements ChannelPool {
     private final Mono<? extends Connection> connectionMono;
     private final BlockingQueue<Channel> channelsQueue;
     private final Scheduler subscriptionScheduler;
+    private final boolean privateSubscriptionScheduler;
 
     LazyChannelPool(Mono<? extends Connection> connectionMono, ChannelPoolOptions channelPoolOptions) {
         int channelsQueueCapacity = channelPoolOptions.getMaxCacheSize() == null ?
                 DEFAULT_CHANNEL_POOL_SIZE : channelPoolOptions.getMaxCacheSize();
         this.channelsQueue = new LinkedBlockingQueue<>(channelsQueueCapacity);
         this.connectionMono = connectionMono;
+        this.privateSubscriptionScheduler = channelPoolOptions.getSubscriptionScheduler() == null;
         this.subscriptionScheduler = channelPoolOptions.getSubscriptionScheduler() == null ?
                 Schedulers.newBoundedElastic(
                         Schedulers.DEFAULT_BOUNDED_ELASTIC_SIZE,
@@ -128,6 +130,9 @@ class LazyChannelPool implements ChannelPool {
         channels.forEach(channel ->
             SENDER_CHANNEL_CLOSE_HANDLER_INSTANCE.accept(SignalType.ON_COMPLETE, channel)
         );
+        if (privateSubscriptionScheduler) {
+            subscriptionScheduler.dispose();
+        }
     }
 
     private Channel createChannel(Connection connection) {

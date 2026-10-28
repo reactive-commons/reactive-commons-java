@@ -4,11 +4,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * Closes the broker providers (listeners, senders and the threads they own) when the application context closes.
+ * Starts the listeners of the broker providers once the application context has created and initialized every bean,
+ * as Spring AMQP does with its listener containers, and closes the providers (listeners, senders and the threads they
+ * own) when the application context closes.
  * <p>
- * It stops after the listener schedulers (phase {@code -5}) and before the connections/event loop group (phase
- * {@code -10}): handlers already running get a chance to finish, and the providers are stopped while the connections
- * are still usable.
+ * It starts after the connections/event loop group (phase {@code -10}) and the listener schedulers (phase
+ * {@code -8}) are retained.
+ * <p>
+ * It stops before the listener schedulers (phase {@code -8}) and the connections/event loop group (phase {@code -10}):
+ * the providers stop their listeners and wait for the deliveries in flight while the handler pools and the
+ * connections are still usable.
  */
 @Slf4j
 public class BrokerProviderLifecycleManager implements SmartLifecycle {
@@ -22,6 +27,7 @@ public class BrokerProviderLifecycleManager implements SmartLifecycle {
 
     @Override
     public synchronized void start() {
+        connectionManager.start();
         running = true;
     }
 
@@ -45,6 +51,6 @@ public class BrokerProviderLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        return -7; // descending stop order: after the listener schedulers (-5), before the connections (-10)
+        return -7; // descending stop order: before the listener schedulers (-8) and the connections (-10)
     }
 }

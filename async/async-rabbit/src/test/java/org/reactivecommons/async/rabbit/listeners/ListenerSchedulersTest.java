@@ -56,6 +56,37 @@ class ListenerSchedulersTest {
                 .isBetween(ListenerSchedulers.MAX_HANDLER_THREADS - 20, ListenerSchedulers.MAX_HANDLER_THREADS);
     }
 
+    /**
+     * Every listener can handle its maxConcurrency deliveries at the same time: the limit of the shared pool fits all
+     * of them, so the handlers of one listener never wait for the threads taken by another.
+     */
+    @Test
+    void theLimitFitsTheConcurrencyOfEveryListener() {
+        ListenerSchedulers.handlers();
+        assertThat(ListenerSchedulers.handlerThreadsLimit()).isEqualTo(ListenerSchedulers.MAX_HANDLER_THREADS);
+
+        ListenerSchedulers.registerListener(250);
+        ListenerSchedulers.registerListener(250);
+        ListenerSchedulers.registerListener(100);
+        assertThat(ListenerSchedulers.handlerThreadsLimit()).isEqualTo(600);
+
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger peak = new AtomicInteger();
+        Flux.range(0, 600)
+                .flatMap(i -> Mono.fromRunnable(() -> {
+                    peak.accumulateAndGet(running.incrementAndGet(), Math::max);
+                    sleep(300);
+                    running.decrementAndGet();
+                }).subscribeOn(ListenerSchedulers.handlers()), 600)
+                .blockLast(Duration.ofSeconds(30));
+        assertThat(peak.get()).as("handlers running at the same time").isGreaterThan(ListenerSchedulers.MAX_HANDLER_THREADS);
+
+        ListenerSchedulers.unregisterListener(250);
+        ListenerSchedulers.unregisterListener(250);
+        ListenerSchedulers.unregisterListener(100);
+        assertThat(ListenerSchedulers.handlerThreadsLimit()).isEqualTo(ListenerSchedulers.MAX_HANDLER_THREADS);
+    }
+
     @Test
     void shouldNotGrowWithABurstOfTasksThatFinishQuickly() {
         Set<String> threads = ConcurrentHashMap.newKeySet();

@@ -67,8 +67,9 @@ public class ApplicationEventListener extends GenericMessageListener {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic")
         );
+        // one at a time: they share the channel of the creator, which takes a single RPC at a time
         final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners())
-                .flatMap(listener -> creator.bind(
+                .concatMap(listener -> creator.bind(
                         BindingSpecification.binding(eventsExchange, listener.path(), queueName)
                 ));
         if (withDLQRetry) {
@@ -124,6 +125,12 @@ public class ApplicationEventListener extends GenericMessageListener {
 
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         return msj.getEnvelope().getRoutingKey();
+    }
+
+    @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredEventListener<Object, Object> handler = resolver.getEventListener(executorPath);
+        return handler != null ? handler.path() : null;
     }
 
     @Override

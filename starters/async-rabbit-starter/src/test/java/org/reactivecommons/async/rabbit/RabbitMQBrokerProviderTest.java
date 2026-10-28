@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -100,18 +101,16 @@ class RabbitMQBrokerProviderTest {
 
     @Test
     void shouldCreateDomainEventBus() {
-        when(sender.getTopologyCreator()).thenReturn(creator);
-        when(creator.declare(any(ExchangeSpecification.class)))
-                .thenReturn(Mono.empty());
         // Act
         DomainEventBus domainBus = brokerProvider.getDomainBus();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(RabbitDomainEventBus.class);
+        // declared through the sender, so the first events wait for the exchange
+        verify(sender).declareExchange(any(ExchangeSpecification.class));
     }
 
     @Test
     void shouldCreateDirectAsyncGateway() {
-        when(sender.getTopologyCreator()).thenReturn(creator);
         when(listener.topologyCreator()).thenReturn(creator);
         when(creator.declare(any(ExchangeSpecification.class)))
                 .thenReturn(Mono.empty());
@@ -123,8 +122,12 @@ class RabbitMQBrokerProviderTest {
         when(receiver.consumeAutoAck(any(String.class), any(ConsumeOptions.class))).thenReturn(Flux.never());
         // Act
         DirectAsyncGateway domainBus = brokerProvider.getDirectAsyncGateway();
+        brokerProvider.getDirectAsyncGateway();
         // Assert
         assertThat(domainBus).isExactlyInstanceOf(RabbitDirectAsyncGateway.class);
+        verify(sender, times(2)).declareExchange(any(ExchangeSpecification.class));
+        // a single reply listener, however many times the gateway is requested
+        verify(receiver, times(1)).consumeAutoAck(any(String.class), any(ConsumeOptions.class));
     }
 
     @Test
@@ -138,7 +141,27 @@ class RabbitMQBrokerProviderTest {
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
+        // Assert: registered only, it consumes once the application context is ready
+        verify(receiver, never()).consumeManualAck(any(String.class), any());
+        brokerProvider.start();
+        verify(receiver, times(1)).consumeManualAck(any(String.class), any());
+    }
+
+    @Test
+    void aListenerRegisteredOnceTheProviderStartedConsumesRightAway() {
+        when(listener.topologyCreator()).thenReturn(creator);
+        when(creator.declare(any(ExchangeSpecification.class)))
+                .thenReturn(Mono.empty());
+        when(creator.declareQueue(any(String.class), any())).thenReturn(Mono.just(mock(AMQP.Queue.DeclareOk.class)));
+        when(listener.receiver()).thenReturn(receiver);
+        when(listener.maxConcurrency()).thenReturn(1);
+        when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
+        brokerProvider.start();
+        // Act
+        brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
+        verify(receiver, times(1)).consumeManualAck(any(String.class), any());
+        brokerProvider.start(); // started once
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
     }
 
@@ -158,6 +181,7 @@ class RabbitMQBrokerProviderTest {
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
+        brokerProvider.start();
         // Assert
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
     }
@@ -177,6 +201,7 @@ class RabbitMQBrokerProviderTest {
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenCommands(handlerResolver);
+        brokerProvider.start();
         // Assert
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
     }
@@ -196,6 +221,7 @@ class RabbitMQBrokerProviderTest {
         when(receiver.consumeManualAck(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenQueries(handlerResolver);
+        brokerProvider.start();
         // Assert
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
     }
@@ -213,6 +239,7 @@ class RabbitMQBrokerProviderTest {
         when(handlerResolver.getQueueListeners()).thenReturn(Map.of("test.queue", queueListener));
 
         brokerProvider.listenQueues(handlerResolver);
+        brokerProvider.start();
 
         verify(receiver, times(1)).consumeManualAck(any(String.class), any());
     }
@@ -243,6 +270,7 @@ class RabbitMQBrokerProviderTest {
         );
 
         brokerProvider.listenQueues(handlerResolver);
+        brokerProvider.start();
 
         verify(receiver, times(3)).consumeManualAck(any(String.class), any());
     }
@@ -279,6 +307,7 @@ class RabbitMQBrokerProviderTest {
                 .thenReturn(Flux.<AcknowledgableDelivery>never().doOnCancel(() -> cancelled.set(true)));
 
         brokerProvider.listenCommands(handlerResolver);
+        brokerProvider.start();
         brokerProvider.close();
 
         assertThat(cancelled).isTrue();

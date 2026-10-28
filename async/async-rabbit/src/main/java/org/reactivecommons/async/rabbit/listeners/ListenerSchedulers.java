@@ -32,11 +32,13 @@ import java.util.logging.Level;
  * The schedulers shared by every listener of the application, instead of a pair of pools per listener.
  *
  * <ul>
- *     <li>{@link #handlers()} runs the handlers. It is a pool of up to {@value #MAX_HANDLER_THREADS} threads (the
- *     default {@code maxConcurrency} and {@code prefetchCount}) that starts with one thread per processor and only
+ *     <li>{@link #handlers()} runs the handlers. It is a pool that starts with one thread per processor and only
  *     grows when tasks have been starving for more than {@value #STARVATION_CHECK_MILLIS} ms, and whose idle
  *     threads are released after a minute, so handlers that do not
- *     block use a few threads and handlers that block can run at the same time up to the limit.</li>
+ *     block use a few threads and handlers that block can run at the same time up to the limit. The limit is the
+ *     sum of the {@code maxConcurrency} of the active listeners (see {@link #registerListener(int)}), and at least
+ *     {@value #MAX_HANDLER_THREADS} (the default {@code maxConcurrency} and {@code prefetchCount}): a listener whose
+ *     handlers block can never take the threads the other listeners need.</li>
  *     <li>{@link #errorReporter()} runs the custom error reporter.</li>
  * </ul>
  * They are created when first used, and disposed when the last application using them is released (see
@@ -69,6 +71,7 @@ public final class ListenerSchedulers {
     private static volatile Scheduler handlers;
     private static volatile Scheduler errorReporter;
     private static int users; // guarded by LOCK
+    private static int listenersConcurrency; // guarded by LOCK: sum of the maxConcurrency of the active listeners
     // the registries of the applications using the schedulers (with the number of applications retaining each, as
     // contexts may share one), and the meters registered on each: the pools are shared JVM-wide, so a gauge can
     // only exist while some application using them wants metrics
@@ -86,7 +89,7 @@ public final class ListenerSchedulers {
             synchronized (LOCK) {
                 current = handlers;
                 if (current == null || current.isDisposed()) {
-                    executor = new ElasticExecutor(MAX_HANDLER_THREADS, daemonThreads("rc-handlers"));
+                    executor = new ElasticExecutor(handlerThreadsLimit(), daemonThreads("rc-handlers"));
                     for (MeterRegistry registry : registries.keySet()) {
                         removeMeterIds(registry); // the stale gauges pointed to the previous pool
                         registerSchedulerMetrics(registry, executor);
@@ -97,6 +100,47 @@ public final class ListenerSchedulers {
             }
         }
         return current;
+    }
+
+    /**
+     * Makes room in the handler pool for the deliveries a listener handles at the same time: the handlers of a
+     * listener never wait for the threads taken by the handlers of another one. Call {@link #unregisterListener(int)}
+     * with the same value when the listener stops.
+     *
+     * @param maxConcurrency the deliveries the listener handles at the same time at most
+     */
+    public static void registerListener(int maxConcurrency) {
+        synchronized (LOCK) {
+            listenersConcurrency += maxConcurrency;
+            if (executor != null) {
+                executor.setThreadsLimit(handlerThreadsLimit());
+            }
+        }
+    }
+
+    /**
+     * Releases the room a stopped listener had in the handler pool.
+     *
+     * @param maxConcurrency the value given to {@link #registerListener(int)}
+     */
+    public static void unregisterListener(int maxConcurrency) {
+        synchronized (LOCK) {
+            listenersConcurrency = Math.max(0, listenersConcurrency - maxConcurrency);
+            if (executor != null) {
+                executor.setThreadsLimit(handlerThreadsLimit());
+            }
+        }
+    }
+
+    /**
+     * The most threads the handler pool may have now.
+     *
+     * @return the sum of the maxConcurrency of the active listeners, at least {@value #MAX_HANDLER_THREADS}
+     */
+    public static int handlerThreadsLimit() {
+        synchronized (LOCK) {
+            return Math.max(MAX_HANDLER_THREADS, listenersConcurrency);
+        }
     }
 
     /**
@@ -189,6 +233,7 @@ public final class ListenerSchedulers {
                 removeMeterIds(remaining);
             }
             registries.clear();
+            listenersConcurrency = 0; // the listeners of the released applications are stopped
             toStop = executor;
             reporter = errorReporter;
             executor = null;
@@ -318,22 +363,41 @@ public final class ListenerSchedulers {
             final BlockingQueue<Runnable> queue = getQueue();
             final Runnable head = queue.peek();
             if (head != null && head == headSeenInThePreviousCheck) {
-                // at most quadruples the pool on every check: it reaches the limit in a few checks when the handlers
-                // block, but a pause of the JVM (that makes the queued tasks look stuck) adds just a few threads
-                final int poolSize = getPoolSize();
-                final int step = Math.min(queue.size(), Math.max(baseThreads(getMaximumPoolSize()), poolSize * 3));
-                final int target = Math.min(getMaximumPoolSize(), poolSize + step);
-                if (target > poolSize) {
-                    // the new threads take the waiting tasks, and go away when idle for a minute
-                    growthCount.incrementAndGet();
-                    setCorePoolSize(target);
-                    prestartAllCoreThreads();
-                    setCorePoolSize(baseThreads(getMaximumPoolSize()));
-                }
+                grow(queue.size());
             }
             headSeenInThePreviousCheck = head;
             if (head != null) {
                 scheduleStarvationCheck();
+            }
+        }
+
+        /**
+         * Synchronized with {@link #setThreadsLimit(int)}: the core size is raised for a moment while growing, and the
+         * limit must never be set below it.
+         */
+        private synchronized void grow(int waitingTasks) {
+            // at most quadruples the pool on every check: it reaches the limit in a few checks when the handlers
+            // block, but a pause of the JVM (that makes the queued tasks look stuck) adds just a few threads
+            final int poolSize = getPoolSize();
+            final int step = Math.min(waitingTasks, Math.max(baseThreads(getMaximumPoolSize()), poolSize * 3));
+            final int target = Math.min(getMaximumPoolSize(), poolSize + step);
+            if (target > poolSize) {
+                // the new threads take the waiting tasks, and go away when idle for a minute
+                growthCount.incrementAndGet();
+                setCorePoolSize(target);
+                prestartAllCoreThreads();
+                setCorePoolSize(baseThreads(getMaximumPoolSize()));
+            }
+        }
+
+        /**
+         * Changes the most threads the pool may have. Lowering it does not stop running handlers: the threads above
+         * the limit go away once idle.
+         */
+        synchronized void setThreadsLimit(int maxThreads) {
+            if (maxThreads != getMaximumPoolSize()) {
+                setMaximumPoolSize(maxThreads);
+                setCorePoolSize(baseThreads(maxThreads));
             }
         }
 
@@ -353,7 +417,7 @@ public final class ListenerSchedulers {
         private transient volatile ElasticExecutor owner;
 
         @Override
-        public boolean offer(Runnable task) {
+        public boolean offer(@NonNull Runnable task) {
             final boolean queued = super.offer(task);
             final ElasticExecutor pool = owner;
             if (pool != null) {

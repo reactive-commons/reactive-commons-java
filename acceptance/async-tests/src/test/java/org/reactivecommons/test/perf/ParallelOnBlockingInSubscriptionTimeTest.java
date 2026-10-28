@@ -42,7 +42,7 @@ class ParallelOnBlockingInSubscriptionTimeTest {
 
     @Test
     @Disabled
-    void commandShouldBeHandledInParallel() throws InterruptedException {
+    void commandShouldBeHandledInParallel() {
         Sinks.Many<Command<Long>> listener = Sinks.many().unicast().onBackpressureBuffer();
         Flux.range(0, 12).flatMap(i -> {
             Command<Long> command = new Command<>(COMMAND_NAME, commandId + 1, data + 1);
@@ -64,9 +64,6 @@ class ParallelOnBlockingInSubscriptionTimeTest {
         final long total = System.currentTimeMillis() - init;
         out.println("Test duration: " + total);
         assertThat(total).isLessThan(1500);
-
-        //Give some time to finish messages ack
-        Thread.sleep(350);
     }
 
 

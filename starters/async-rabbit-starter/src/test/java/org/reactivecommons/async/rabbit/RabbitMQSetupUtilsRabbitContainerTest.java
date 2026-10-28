@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 /**
@@ -48,7 +49,7 @@ class RabbitMQSetupUtilsRabbitContainerTest {
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
     @Container
-    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-management-alpine");
+    private static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4-alpine");
 
     /**
      * A channel-level error closes the channel, and the client never recovers channels closed by channel-level
@@ -111,6 +112,36 @@ class RabbitMQSetupUtilsRabbitContainerTest {
 
         // 4. UP again after the automatic recovery (default network recovery interval: 5 s).
         awaitStatus(health, RCHealth.Status.UP, Duration.ofSeconds(30));
+    }
+
+    /**
+     * Releasing the connections while the client recovers one (here the broker closed it) stops the recovery: an
+     * application closed during an outage must not leave a recovery loop behind, which would reconnect, with the
+     * channels and consumers of the closed application, once the broker is back.
+     */
+    @Test
+    void releasingAConnectionBeingRecoveredStopsItsRecovery() throws Exception {
+        AsyncProps props = asyncProps(RABBIT.getHost(), RABBIT.getAmqpPort(), RABBIT.getAdminUsername(),
+                RABBIT.getAdminPassword());
+        props.setAppName("tc-release");
+        ConnectionFactoryProvider provider = RabbitMQSetupUtils.connectionFactoryProvider(props, (cf, p) -> cf);
+        RabbitMQSetupUtils.retainConnections(provider.getConnectionFactory());
+        Connection connection = RabbitMQSetupUtils.listenerConnectionMono(provider, "tc-release").block(TIMEOUT);
+        assertThat(RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-")).as("listed by the broker").isEqualTo(1);
+
+        // the broker closes it: the client recovers it after the network recovery interval (5 s by default)
+        RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "release test");
+        await().alias("being recovered").atMost(TIMEOUT).until(() -> !connection.isOpen());
+        RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
+
+        // the recovery would reconnect after its interval of 5 s
+        await().during(Duration.ofSeconds(8)).atMost(Duration.ofSeconds(10))
+                .until(() -> !connection.isOpen() && RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-") == 0);
+        int connections = RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-");
+        System.out.println("[REAL BROKER] connection released while recovering: open=" + connection.isOpen()
+                + ", listed by the broker=" + connections);
+        assertThat(connection.isOpen()).as("not recovered once released").isFalse();
+        assertThat(connections).as("listed by the broker").isZero();
     }
 
     /**
@@ -230,17 +261,9 @@ class RabbitMQSetupUtilsRabbitContainerTest {
     }
 
     private static RCHealth awaitStatus(RabbitReactiveHealthIndicator health, RCHealth.Status expected,
-                                        Duration timeout) throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        RCHealth last = null;
-        while (System.nanoTime() < deadline) {
-            last = health.health().block(TIMEOUT);
-            if (last != null && last.status() == expected) {
-                return last;
-            }
-            Thread.sleep(100);
-        }
-        throw new AssertionError("Health did not become " + expected + " within " + timeout + ", last: " + last);
+                                        Duration timeout) {
+        return await().alias("health " + expected).atMost(timeout).pollInterval(Duration.ofMillis(100))
+                .until(() -> health.health().block(TIMEOUT), last -> last != null && last.status() == expected);
     }
 
     private static int brokerConnections() throws Exception {

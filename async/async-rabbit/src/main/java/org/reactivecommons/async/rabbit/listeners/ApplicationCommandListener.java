@@ -124,6 +124,12 @@ public class ApplicationCommandListener extends GenericMessageListener {
         return msj -> executor.execute(msj).cast(Object.class);
     }
 
+    @Override
+    protected String handlerName(String executorPath) {
+        final RegisteredCommandHandler<Object, Object> commandHandler = resolver.getCommandHandler(executorPath);
+        return commandHandler != null ? commandHandler.path() : null;
+    }
+
     protected String getExecutorPath(AcknowledgableDelivery msj) {
         RabbitMessage rabbitMessage = RabbitMessage.fromDelivery(msj);
         String name = messageConverter.readCommandName(rabbitMessage);

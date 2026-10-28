@@ -59,6 +59,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_ID;
+import static org.reactivecommons.async.commons.Headers.REPLY_DEADLINE_MILLIS;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 import static reactor.core.publisher.Mono.empty;
@@ -320,6 +321,31 @@ class ApplicationQueryListenerTest {
         assertThat(counter("reactive_commons.consumer.query.invalid.timeout_header")).isEqualTo(1.0);
     }
 
+    /**
+     * The AMQP timestamp only has a resolution of one second: the deadline in milliseconds published by the gateway
+     * is used instead whenever it is present.
+     */
+    @Test
+    void theDeadlineHeaderIsUsedInsteadOfTheTimestamp() {
+        AcknowledgableDelivery expiredByTimestamp = queryDelivery(Date.from(Instant.now().minusSeconds(20)), 15_000L,
+                Instant.now().plusSeconds(5).toEpochMilli());
+        when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByTimestamp, Instant.now())))
+                .expectNext(expiredByTimestamp)
+                .verifyComplete();
+        assertThat(applicationQueryListener.retryIsUseless(expiredByTimestamp)).isFalse();
+
+        AcknowledgableDelivery expiredByDeadline = queryDelivery(new Date(), 15_000L,
+                Instant.now().minusMillis(1).toEpochMilli());
+
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByDeadline, Instant.now())))
+                .verifyComplete();
+        assertThat(applicationQueryListener.retryIsUseless(expiredByDeadline)).isTrue();
+        assertThat(counter("reactive_commons.consumer.query.discarded")).isEqualTo(1.0);
+    }
+
     @Test
     void aReplyThatCannotBePublishedIsCounted() {
         Message message = TestStubs.mockMessage();
@@ -353,9 +379,16 @@ class ApplicationQueryListenerTest {
     }
 
     private AcknowledgableDelivery queryDelivery(Date timestamp, Object replyTimeoutMillis) {
+        return queryDelivery(timestamp, replyTimeoutMillis, null);
+    }
+
+    private AcknowledgableDelivery queryDelivery(Date timestamp, Object replyTimeoutMillis, Long replyDeadlineMillis) {
         String data = OBJECT_MAPPER.writeValueAsString(new AsyncQuery<>("queryDirect", new DummyMessage()));
         Map<String, Object> headers = buildQueryHeaders("queryDirect", false);
         headers.put(REPLY_TIMEOUT_MILLIS, replyTimeoutMillis);
+        if (replyDeadlineMillis != null) {
+            headers.put(REPLY_DEADLINE_MILLIS, replyDeadlineMillis);
+        }
         AMQP.BasicProperties props = new AMQP.BasicProperties.Builder()
                 .timestamp(timestamp)
                 .headers(headers)
