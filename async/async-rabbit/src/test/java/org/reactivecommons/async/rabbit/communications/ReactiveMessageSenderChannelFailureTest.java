@@ -122,7 +122,7 @@ class ReactiveMessageSenderChannelFailureTest {
     }
 
     @Test
-    void messagesWaitingForTheirConfirmWhenTheirChannelIsClosedFailWithUnknownOutcome() throws Exception {
+    void messagesWaitingForTheirConfirmWhenTheirChannelIsClosedFailWithUnknownOutcome() {
         ReactiveMessageSender messageSender = newMessageSender(channelMono, ReactiveMessageSender.DEFAULT_SEND_TIMEOUT);
         confirmsEnabled.set(false); // the broker received the messages, but the confirms did not arrive yet
 
@@ -243,7 +243,7 @@ class ReactiveMessageSenderChannelFailureTest {
     }
 
     @Test
-    void aBatchKeepsAtMostItsLimitOfMessagesWaitingForTheirConfirmation() throws Exception {
+    void aBatchKeepsAtMostItsLimitOfMessagesWaitingForTheirConfirmation() {
         ReactiveMessageSender messageSender = newMessageSender(channelMono, ReactiveMessageSender.DEFAULT_SEND_TIMEOUT);
         confirmsEnabled.set(false);
         AtomicInteger taken = new AtomicInteger();

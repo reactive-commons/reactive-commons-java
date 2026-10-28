@@ -82,7 +82,7 @@ class QueryReplyTimeoutRabbitContainerTest {
     }
 
     @Test
-    void aQueryAnsweredWithinItsReplyTimeoutIsNotDiscarded() throws Exception {
+    void aQueryAnsweredWithinItsReplyTimeoutIsNotDiscarded() {
         try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qto",
                 false, true, Map.of("app.async.app.direct.discardTimeoutQueries", "true"),
                 SlowQueryHandlers.class, SendDirect.class, ListenQueries.class)) {
@@ -112,7 +112,7 @@ class QueryReplyTimeoutRabbitContainerTest {
      * the reply, the broker drops it, so the listener does not run it when it is back.
      */
     @Test
-    void aQueryWhoseCallerStoppedWaitingExpiresInItsQueue() throws Exception {
+    void aQueryWhoseCallerStoppedWaitingExpiresInItsQueue() {
         assertExpiredQueryIsNeverHandled("qexp", Map.of());
     }
 
@@ -122,7 +122,7 @@ class QueryReplyTimeoutRabbitContainerTest {
      * listener never runs them either.
      */
     @Test
-    void anExpiredQueryBackFromTheRetryQueueIsNotHandled() throws Exception {
+    void anExpiredQueryBackFromTheRetryQueueIsNotHandled() {
         assertExpiredQueryIsNeverHandled("qdlq", Map.of("app.async.app.withDLQRetry", "true"));
     }
 

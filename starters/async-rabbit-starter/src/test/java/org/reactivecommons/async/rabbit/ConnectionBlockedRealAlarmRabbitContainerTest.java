@@ -276,7 +276,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         }
     }
 
-    private static AnnotationConfigApplicationContext start(String prefix, Class<?>... features) throws Exception {
+    private static AnnotationConfigApplicationContext start(String prefix, Class<?>... features) {
         return startWithHandlers(prefix, RabbitScenarioSupport.Handlers.class, features);
     }
 
