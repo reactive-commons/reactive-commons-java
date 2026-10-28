@@ -222,7 +222,7 @@ class ReceiverChannelErrorRabbitContainerTest {
         };
     }
 
-    private void awaitConsumers(String queue, int expected) throws Exception {
+    private void awaitConsumers(String queue, int expected) {
         await().atMost(Duration.ofSeconds(10))
                 .untilAsserted(() -> assertThat(consumersOf(queue)).as("consumers of " + queue).isEqualTo(expected));
     }

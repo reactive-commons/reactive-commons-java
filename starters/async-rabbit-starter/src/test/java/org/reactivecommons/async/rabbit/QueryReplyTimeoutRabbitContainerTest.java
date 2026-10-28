@@ -126,8 +126,7 @@ class QueryReplyTimeoutRabbitContainerTest {
         assertExpiredQueryIsNeverHandled("qdlq", Map.of("app.async.app.withDLQRetry", "true"));
     }
 
-    private static void assertExpiredQueryIsNeverHandled(String prefix, Map<String, Object> listenerProperties)
-            throws Exception {
+    private static void assertExpiredQueryIsNeverHandled(String prefix, Map<String, Object> listenerProperties) {
         executions.set(0);
         String target = prefix + "-app";
         String queue = target + ".query";

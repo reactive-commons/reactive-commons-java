@@ -110,7 +110,7 @@ class ApplicationReplyListenerTest {
     }
 
     @Test
-    void shouldResubscribeIfPreviousSubscriptionCompletes() throws Exception {
+    void shouldResubscribeIfPreviousSubscriptionCompletes() {
         TestPublisher<Delivery> initialSource = TestPublisher.create();
         PublisherProbe<Delivery> newSource = PublisherProbe.of(Flux.never());
 

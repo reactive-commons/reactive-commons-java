@@ -202,7 +202,7 @@ class SubscriberResilienceRabbitContainerTest {
                 .count();
     }
 
-    private static AnnotationConfigApplicationContext startServer(String prefix) throws Exception {
+    private static AnnotationConfigApplicationContext startServer(String prefix) {
         AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false,
                 false, SlowQueryHandlers.class, ListenQueries.class);
         RabbitScenarioSupport.awaitConsumers(RABBIT, prefix + "-app.query");

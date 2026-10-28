@@ -28,7 +28,7 @@ class GenericMessageListenerRestartTest {
      * termination callback, recursing until a StackOverflowError. The restart must be scheduled instead.
      */
     @Test
-    void restartsWithoutRecursingWhenTheSubscriptionFailsSynchronously() throws Exception {
+    void restartsWithoutRecursingWhenTheSubscriptionFailsSynchronously() {
         AtomicInteger subscriptions = new AtomicInteger();
         Receiver receiver = mock(Receiver.class);
         ReactiveMessageListener messageListener = mock(ReactiveMessageListener.class);

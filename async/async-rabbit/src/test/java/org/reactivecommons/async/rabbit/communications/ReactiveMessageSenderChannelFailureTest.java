@@ -187,7 +187,7 @@ class ReactiveMessageSenderChannelFailureTest {
     }
 
     @Test
-    void sendsIssuedBeforeTheFlowsAreReadyWaitForThem() throws Exception {
+    void sendsIssuedBeforeTheFlowsAreReadyWaitForThem() {
         // The channels are obtained asynchronously (e.g. the connection is still being established).
         ReactiveMessageSender messageSender = newMessageSender(
                 channelMono.delaySubscription(Duration.ofMillis(300)), ReactiveMessageSender.DEFAULT_SEND_TIMEOUT);
@@ -316,7 +316,7 @@ class ReactiveMessageSenderChannelFailureTest {
         await().atMost(Duration.ofSeconds(5)).until(() -> channels.size() >= count);
     }
 
-    private void awaitPublished(int count) throws Exception {
+    private void awaitPublished(int count) {
         await().atMost(Duration.ofSeconds(5)).until(() -> publishedWithConfirms() >= count);
         assertThat(publishedWithConfirms()).isEqualTo(count);
     }

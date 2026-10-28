@@ -141,7 +141,7 @@ class PublishThroughputRabbitContainerTest {
      * Generates the load in 1 ms ticks. The latency of each message is measured from the instant it was due.
      */
     private static Stats[] drive(DomainEventBus bus, DiscardNotifier discards, int seconds, int eventsPerSecond,
-                                 int discardsPerSecond) throws InterruptedException {
+                                 int discardsPerSecond) {
         Collector events = new Collector("events", seconds * eventsPerSecond);
         Collector discarded = new Collector("discards", seconds * discardsPerSecond);
         long start = System.nanoTime();

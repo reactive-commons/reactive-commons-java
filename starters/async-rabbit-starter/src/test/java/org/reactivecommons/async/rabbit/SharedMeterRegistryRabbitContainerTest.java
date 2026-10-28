@@ -54,7 +54,7 @@ class SharedMeterRegistryRabbitContainerTest {
     }
 
     @Test
-    void theGaugesOfARestartedApplicationReportItAndTheMetersOfAClosedOneAreRemoved() throws Exception {
+    void theGaugesOfARestartedApplicationReportItAndTheMetersOfAClosedOneAreRemoved() {
         try (AnnotationConfigApplicationContext ignored = start()) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
         }

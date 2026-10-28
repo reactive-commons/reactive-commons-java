@@ -98,7 +98,7 @@ class ConsumerQueueDepthTest {
     }
 
     @Test
-    void anApplicationWithoutListenersNeverRequestsTheListenerConnection() throws Exception {
+    void anApplicationWithoutListenersNeverRequestsTheListenerConnection() {
         AtomicBoolean requested = new AtomicBoolean();
         Mono<Connection> connection = Mono.<Connection>never().doOnSubscribe(subscription -> requested.set(true));
 

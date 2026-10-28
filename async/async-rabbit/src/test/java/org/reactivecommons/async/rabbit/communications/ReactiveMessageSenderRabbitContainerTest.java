@@ -542,7 +542,7 @@ class ReactiveMessageSenderRabbitContainerTest {
         await().atMost(Duration.ofSeconds(15)).until(() -> counters.hanging(total) <= 0);
     }
 
-    private void awaitQueueSize(int expected) throws Exception {
+    private void awaitQueueSize(int expected) {
         await().atMost(Duration.ofSeconds(5)).until(() -> queueSize() >= expected);
     }
 

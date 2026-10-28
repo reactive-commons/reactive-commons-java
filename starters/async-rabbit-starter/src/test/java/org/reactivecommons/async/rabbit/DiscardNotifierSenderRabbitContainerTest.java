@@ -77,7 +77,7 @@ class DiscardNotifierSenderRabbitContainerTest {
     private ConnectionManager manager;
 
     @Test
-    void discardNotifiersDoNotOpenExtraSendersOnTheDefaultDomainConnection() throws Exception {
+    void discardNotifiersDoNotOpenExtraSendersOnTheDefaultDomainConnection() {
         assertThat(manager.getProviders()).containsOnlyKeys("app", "second", "third");
 
         int appChannels = RabbitScenarioSupport.settledChannels(RABBIT, "tc-app-");

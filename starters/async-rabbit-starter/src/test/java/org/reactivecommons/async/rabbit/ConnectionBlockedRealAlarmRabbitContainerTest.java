@@ -281,8 +281,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext startWithHandlers(String prefix, Class<?> handlers,
-                                                                        Class<?>... features)
-            throws Exception {
+                                                                        Class<?>... features) {
         Class<?>[] all = new Class<?>[features.length + 2];
         all[0] = SendEvents.class;
         all[1] = ListenEvents.class;

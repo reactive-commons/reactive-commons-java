@@ -143,7 +143,7 @@ class ConsumerRetryRabbitContainerTest {
      * instead of being requeued, and its handler run again, forever.
      */
     @Test
-    void aDiscardNobodyListensToIsAcknowledgedWhenPublishingIsMandatory() throws Exception {
+    void aDiscardNobodyListensToIsAcknowledgedWhenPublishingIsMandatory() {
         release = CompletableFuture.completedFuture(null);
         executions.set(0);
         try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "mand",
@@ -201,7 +201,7 @@ class ConsumerRetryRabbitContainerTest {
      * past the reply timeout.
      */
     @Test
-    void aFailingQueryIsNotRetriedOnceItsCallerTimedOut() throws Exception {
+    void aFailingQueryIsNotRetriedOnceItsCallerTimedOut() {
         executions.set(0);
         try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qexp",
                 false, true, FailingQueryHandlers.class, SendDirect.class, ListenQueries.class)) {
@@ -230,7 +230,7 @@ class ConsumerRetryRabbitContainerTest {
      * acknowledged, not left in the queue to be retried over and over.
      */
     @Test
-    void aQueryDiscardedByTimeoutIsAcknowledged() throws Exception {
+    void aQueryDiscardedByTimeoutIsAcknowledged() {
         executions.set(0);
         try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qdis",
                 false, true, SlowQueryHandlers.class, SendDirect.class, ListenQueries.class,

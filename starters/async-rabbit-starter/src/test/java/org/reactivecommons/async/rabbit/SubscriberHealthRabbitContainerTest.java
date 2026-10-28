@@ -61,7 +61,8 @@ class SubscriberHealthRabbitContainerTest {
 
             RCHealth down = awaitStatus(provider, RCHealth.Status.DOWN, Duration.ofSeconds(15));
             System.out.println("[REAL BROKER] listener whose queue cannot be declared: " + down.details());
-            assertThat(down.details().get("brokenListeners")).asInstanceOf(InstanceOfAssertFactories.STRING).contains(QUEUE);
+            assertThat(down.details().get("brokenListeners")).asInstanceOf(InstanceOfAssertFactories.LIST)
+                    .contains(QUEUE);
             assertThat(restarts(meterRegistry, "cancel")).as("the broker cancelled the consumer")
                     .isGreaterThanOrEqualTo(1);
             assertThat(restarts(meterRegistry, "error")).as("the re-subscriptions fail").isGreaterThanOrEqualTo(1);
