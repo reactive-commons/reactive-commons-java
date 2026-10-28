@@ -1,5 +1,14 @@
 # Changelog
 
+## [v7.6.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.6.0) (2026-10-28)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.5.0...v7.6.0)
+
+**Merged pull requests:**
+
+- feat\(rabbit\): harden RabbitMQ publishing, consuming and connection lifecycle [\#188](https://github.com/reactive-commons/reactive-commons-java/pull/188) ([luisgomez29](https://github.com/luisgomez29))
+- docs: escape curly braces in RabbitMQ metrics documentation [\#187](https://github.com/reactive-commons/reactive-commons-java/pull/187) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.5.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.5.0) (2026-10-22)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.4.2...v7.5.0)
