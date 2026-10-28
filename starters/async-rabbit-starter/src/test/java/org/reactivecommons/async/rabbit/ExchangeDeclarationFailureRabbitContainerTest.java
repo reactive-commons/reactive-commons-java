@@ -91,7 +91,7 @@ class ExchangeDeclarationFailureRabbitContainerTest {
             assertThat(warnings).as("failed declaration logged")
                     .anySatisfy(warning -> assertThat(warning).contains(exchange, "could not be declared",
                             "ACCESS_REFUSED"));
-            assert health != null;
+            assertThat(health).isNotNull();
             assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
             assertThat(String.valueOf(health.details().get("error"))).as("reason in the health check")
                     .contains("publishing flows keep failing", "NOT_FOUND - no exchange '" + exchange + "'");

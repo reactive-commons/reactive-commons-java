@@ -116,8 +116,11 @@ class SenderTest {
     @Test
     void resourceManagementRpcsAreSentOnTheResourceManagementScheduler() throws Exception {
         var command = mock(com.rabbitmq.client.Command.class);
-        when(command.getMethod()).thenReturn(mock(AMQP.Queue.DeclareOk.class), mock(AMQP.Exchange.DeclareOk.class),
-                mock(AMQP.Queue.BindOk.class), mock(AMQP.Queue.UnbindOk.class));
+        var queueDeclareOk = mock(AMQP.Queue.DeclareOk.class);
+        var exchangeDeclareOk = mock(AMQP.Exchange.DeclareOk.class);
+        var bindOk = mock(AMQP.Queue.BindOk.class);
+        var unbindOk = mock(AMQP.Queue.UnbindOk.class);
+        when(command.getMethod()).thenReturn(queueDeclareOk, exchangeDeclareOk, bindOk, unbindOk);
         List<String> rpcThreads = new CopyOnWriteArrayList<>();
         when(channel.asyncCompletableRpc(any())).thenAnswer(invocation -> {
             rpcThreads.add(Thread.currentThread().getName());

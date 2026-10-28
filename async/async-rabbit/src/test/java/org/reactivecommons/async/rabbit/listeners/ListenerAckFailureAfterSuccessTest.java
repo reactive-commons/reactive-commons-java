@@ -31,7 +31,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.after;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
@@ -54,7 +53,8 @@ class ListenerAckFailureAfterSuccessTest {
     @Mock
     private CustomReporter errorReporter;
 
-    private final Channel channel = mock(Channel.class);
+    @Mock
+    private Channel channel;
     private final AtomicInteger handled = new AtomicInteger();
 
     @Test

@@ -229,16 +229,14 @@ class LazyChannelPoolTest {
     @Test
     void closingThePoolKeepsTheSchedulerItWasGiven() {
         var scheduler = Schedulers.newSingle("given-pool-scheduler");
-        try {
-            lazyChannelPool = new LazyChannelPool(Mono.just(connection),
-                    new ChannelPoolOptions().subscriptionScheduler(scheduler));
+        lazyChannelPool = new LazyChannelPool(Mono.just(connection),
+                new ChannelPoolOptions().subscriptionScheduler(scheduler));
 
-            lazyChannelPool.close();
+        lazyChannelPool.close();
+        boolean disposed = scheduler.isDisposed();
+        scheduler.dispose();
 
-            assertThat(scheduler.isDisposed()).as("scheduler given to the pool").isFalse();
-        } finally {
-            scheduler.dispose();
-        }
+        assertThat(disposed).as("scheduler given to the pool").isFalse();
     }
 
     private static reactor.core.scheduler.Scheduler subscriptionSchedulerOf(LazyChannelPool pool) throws Exception {

@@ -121,8 +121,9 @@ class MessageSizeLimitRabbitContainerTest {
 
     @Test
     void anOversizedMessageWithoutConfirmIsRejectedInsteadOfBeingReportedAsPublished() throws Exception {
-        assertThatThrownBy(() -> messageSender.sendNoConfirm(OVERSIZED, EXCHANGE, ROUTING_KEY, Map.of(), false)
-                .block(Duration.ofSeconds(30)))
+        Mono<Void> oversized = messageSender.sendNoConfirm(OVERSIZED, EXCHANGE, ROUTING_KEY, Map.of(), false);
+
+        assertThatThrownBy(() -> oversized.block(Duration.ofSeconds(30)))
                 .as("an oversized message the broker drops must not be reported as published")
                 .isInstanceOf(SendFailureMessageTooLargeException.class);
 

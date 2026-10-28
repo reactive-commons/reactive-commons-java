@@ -82,7 +82,9 @@ class ChannelProxyTest {
     @Test
     void equalsAndHashCodeUseTheIdentityOfTheProxy() throws Exception {
         var connection = mock(Connection.class);
-        when(connection.createChannel()).thenReturn(mock(Channel.class), mock(Channel.class));
+        var channel = mock(Channel.class);
+        var otherChannel = mock(Channel.class);
+        when(connection.createChannel()).thenReturn(channel, otherChannel);
 
         Channel proxy = ChannelProxy.create(connection);
         Channel other = ChannelProxy.create(connection);
