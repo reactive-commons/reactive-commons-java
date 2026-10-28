@@ -1234,7 +1234,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             return resubscribes.computeIfAbsent(confirmFlow, key ->
                     track(() -> Counter.builder(METRIC_FLOW_RESUBSCRIBE)
                             .tags(baseTags)
-                            .tag(TAG_KIND, key ? KIND_CONFIRM : KIND_NO_CONFIRM)
+                            .tag(TAG_KIND, confirmFlow ? KIND_CONFIRM : KIND_NO_CONFIRM)
                             .register(registry)));
         }
 
@@ -1258,7 +1258,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
         }
 
-        void recordMessageSize(boolean confirmFlow, long bytes) {
+        void recordMessageSize(boolean confirmFlow, int bytes) {
             if (registry == null) {
                 return;
             }
