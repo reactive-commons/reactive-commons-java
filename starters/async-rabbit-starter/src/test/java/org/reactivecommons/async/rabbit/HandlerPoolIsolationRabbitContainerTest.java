@@ -22,6 +22,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
@@ -85,11 +86,9 @@ class HandlerPoolIsolationRabbitContainerTest {
                     .flatMap(i -> Mono.from(bus.emit(new DomainEvent<>("scenario.event", UUID.randomUUID().toString(),
                             Map.of("id", i)))), 100)
                     .blockLast(Duration.ofSeconds(60));
-            long deadline = System.currentTimeMillis() + 30_000;
-            while (BLOCKED.get() < 200 && System.currentTimeMillis() < deadline) {
-                Thread.sleep(50);
-            }
-            Thread.sleep(1_000); // the handler pool is saturated by the blocking handlers
+            await().atMost(Duration.ofSeconds(30)).until(() -> BLOCKED.get() >= 200);
+            // the handler pool stays saturated by the blocking handlers
+            await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(3)).until(() -> BLOCKED.get() >= 200);
 
             int answered = Flux.range(0, QUERIES)
                     .flatMap(i -> gateway.requestReply(new AsyncQuery<>("scenario.query", "q" + i), TARGET,

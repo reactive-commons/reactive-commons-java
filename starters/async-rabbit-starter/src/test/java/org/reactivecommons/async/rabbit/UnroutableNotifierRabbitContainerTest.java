@@ -24,6 +24,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -92,10 +93,7 @@ class UnroutableNotifierRabbitContainerTest {
 
             emitUnroutable(context.getBean(DomainEventBus.class));
 
-            long deadline = System.currentTimeMillis() + 10_000;
-            while (HANDLER_THREADS.isEmpty() && System.currentTimeMillis() < deadline) {
-                Thread.sleep(50);
-            }
+            await().atMost(Duration.ofSeconds(10)).until(() -> !HANDLER_THREADS.isEmpty());
             System.out.printf("[REAL BROKER] unroutable messages received by the handler listening second: %d%n",
                     HANDLER_THREADS.size());
             assertThat(HANDLER_THREADS).as("unroutable messages received by the handler listening second")
@@ -120,10 +118,8 @@ class UnroutableNotifierRabbitContainerTest {
                     .doFinally(signal -> unroutableMillis.set(
                             Duration.ofNanos(System.nanoTime() - unroutableStart).toMillis()))
                     .subscribe();
-            long deadline = System.currentTimeMillis() + 10_000;
-            while (HANDLER_THREADS.isEmpty() && System.currentTimeMillis() < deadline) {
-                Thread.sleep(5);
-            }
+            await().atMost(Duration.ofSeconds(10)).pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5))
+                    .until(() -> !HANDLER_THREADS.isEmpty());
             // the handler is now blocking: the confirms of these events must not wait for it
             long start = System.nanoTime();
             Flux.range(0, 20)
@@ -131,10 +127,8 @@ class UnroutableNotifierRabbitContainerTest {
                             Map.of("id", i)))))
                     .blockLast(Duration.ofSeconds(30));
             long confirmsMillis = Duration.ofNanos(System.nanoTime() - start).toMillis();
-            deadline = System.currentTimeMillis() + 10_000;
-            while (unroutableMillis.get() < 0 && System.currentTimeMillis() < deadline) {
-                Thread.sleep(5);
-            }
+            await().atMost(Duration.ofSeconds(10)).pollDelay(Duration.ZERO).pollInterval(Duration.ofMillis(5))
+                    .until(() -> unroutableMillis.get() >= 0);
 
             System.out.printf("[REAL BROKER] blocking unroutable handler ran on %s; returned event completed in %d "
                     + "ms; 20 events confirmed in %d ms%n", HANDLER_THREADS, unroutableMillis.get(), confirmsMillis);

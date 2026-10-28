@@ -16,6 +16,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -71,7 +72,9 @@ class TopologyBeforePublishRabbitContainerTest {
 
             provider.getDirectAsyncGateway();
 
-            Thread.sleep(3_000); // a second reply listener registers its consumer asynchronously
+            // a second reply listener would register its consumer asynchronously
+            await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5))
+                    .until(() -> consumersOf(replyQueue) <= 1);
             int consumers = consumersOf(replyQueue);
             System.out.printf("[REAL BROKER] consumers of the reply queue after requesting the gateway twice: %d%n",
                     consumers);

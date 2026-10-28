@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
@@ -23,6 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
 
 /**
@@ -113,7 +115,8 @@ class CommandBatchRabbitContainerTest {
                     .map(i -> new Command<>("scenario.command", "cmd-" + i, Map.of("i", i)));
 
             var send = gateway(context).sendCommands(commands, target).then().toFuture();
-            Thread.sleep(500); // cmd-0 and cmd-1 are confirmed before the alarm
+            // cmd-0 and cmd-1 reach the queue (and are confirmed) before the alarm
+            assertThat(messagesIn(connection, target, 2)).as("commands published before the alarm").isEqualTo(2L);
             Throwable error;
             long sinceLastMessage;
             try {
@@ -183,14 +186,13 @@ class CommandBatchRabbitContainerTest {
      * The messages in the queue once there are at least {@code expected} or 5 seconds have passed.
      */
     private static long messagesIn(Connection connection, String queue, long expected) throws Exception {
-        long deadline = System.currentTimeMillis() + 5_000;
         try (Channel channel = connection.createChannel()) {
-            long count = channel.queueDeclarePassive(queue).getMessageCount();
-            while (count < expected && System.currentTimeMillis() < deadline) {
-                Thread.sleep(100);
-                count = channel.queueDeclarePassive(queue).getMessageCount();
+            try {
+                return await().atMost(Duration.ofSeconds(5))
+                        .until(() -> channel.queueDeclarePassive(queue).getMessageCount(), count -> count >= expected);
+            } catch (ConditionTimeoutException e) {
+                return channel.queueDeclarePassive(queue).getMessageCount();
             }
-            return count;
         }
     }
 }

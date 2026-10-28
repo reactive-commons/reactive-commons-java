@@ -15,7 +15,7 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -47,20 +47,18 @@ class GenericMessageListenerRestartTest {
         awaitSubscriptions(subscriptions, 3);
 
         listener.stop();
-        Thread.sleep(300); // let an already scheduled attempt run
-        int attemptsAfterStop = subscriptions.get();
-        Thread.sleep(500);
-        assertEquals(attemptsAfterStop, subscriptions.get(), "the listener restarted after being stopped");
+        // an attempt already scheduled may still run: then the listener stops re-subscribing
+        AtomicInteger seen = new AtomicInteger(-1);
+        await().alias("the listener stopped re-subscribing").during(Duration.ofMillis(500))
+                .atMost(Duration.ofSeconds(3)).until(() -> {
+                    int attempts = subscriptions.get();
+                    return attempts == seen.getAndSet(attempts);
+                });
     }
 
-    private static void awaitSubscriptions(AtomicInteger subscriptions, int expected) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (subscriptions.get() < expected) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("The listener did not re-subscribe, attempts: " + subscriptions.get());
-            }
-            Thread.sleep(50);
-        }
+    private static void awaitSubscriptions(AtomicInteger subscriptions, int expected) {
+        await().alias("the listener re-subscribed").atMost(Duration.ofSeconds(5))
+                .until(() -> subscriptions.get() >= expected);
     }
 
     private static class TestListener extends GenericMessageListener {

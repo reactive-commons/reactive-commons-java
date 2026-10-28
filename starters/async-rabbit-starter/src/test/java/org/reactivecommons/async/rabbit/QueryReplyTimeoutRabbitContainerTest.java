@@ -1,5 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
@@ -11,6 +12,7 @@ import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -20,6 +22,7 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
 
@@ -86,16 +89,17 @@ class QueryReplyTimeoutRabbitContainerTest {
             RabbitScenarioSupport.awaitConsumers(RABBIT, TARGET + ".query");
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);
 
-            int answered = 0;
-            for (int i = 0; i < QUERIES; i++) {
-                String reply = gateway.requestReply(new AsyncQuery<>("scenario.query", "q" + i), TARGET, String.class)
-                        .onErrorResume(error -> Mono.empty())
-                        .block(Duration.ofSeconds(5));
-                if ("ok".equals(reply)) {
-                    answered++;
-                }
-                Thread.sleep(PAUSE_MILLIS);
-            }
+            // one after another, each one PAUSE_MILLIS after the reply of the previous one
+            long answered = Flux.range(0, QUERIES)
+                    .concatMap(i -> gateway.requestReply(new AsyncQuery<>("scenario.query", "q" + i), TARGET,
+                                    String.class)
+                            .timeout(Duration.ofSeconds(5))
+                            .onErrorResume(error -> Mono.empty())
+                            .defaultIfEmpty("no reply")
+                            .delayElement(Duration.ofMillis(PAUSE_MILLIS)))
+                    .filter("ok"::equals)
+                    .count()
+                    .block(Duration.ofSeconds(QUERIES * 6L));
 
             System.out.printf("[REAL BROKER] queries of %d ms with a reply timeout of %d ms: answered=%d/%d%n",
                     HANDLER_DURATION.toMillis(), REPLY_TIMEOUT.toMillis(), answered, QUERIES);
@@ -142,8 +146,9 @@ class QueryReplyTimeoutRabbitContainerTest {
 
         try (AnnotationConfigApplicationContext listener = startListener(prefix, listenerProperties)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
-            boolean settled = await(() -> messages(queue) == 0 && messages(queue + ".DLQ") <= 0);
-            Thread.sleep(1_000); // nothing is handled late
+            boolean settled = eventually(() -> messages(queue) == 0 && messages(queue + ".DLQ") <= 0);
+            // nothing is handled late
+            await().during(Duration.ofSeconds(1)).atMost(Duration.ofSeconds(3)).until(() -> executions.get() == 0);
             System.out.printf("[REAL BROKER] expired query (%s): left in the queue=%d, executions=%d%n",
                     prefix, messages(queue), executions.get());
 
@@ -172,14 +177,15 @@ class QueryReplyTimeoutRabbitContainerTest {
         }
     }
 
-    private static boolean await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 20_000;
-        while (!condition.getAsBoolean()) {
-            if (System.currentTimeMillis() > deadline) {
-                return false;
-            }
-            Thread.sleep(200);
+    /**
+     * Whether the condition holds within 20 seconds.
+     */
+    private static boolean eventually(BooleanSupplier condition) {
+        try {
+            await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(200)).until(condition::getAsBoolean);
+            return true;
+        } catch (ConditionTimeoutException e) {
+            return false;
         }
-        return true;
     }
 }

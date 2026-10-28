@@ -23,6 +23,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -76,7 +77,8 @@ class ConnectionBlockedRabbitContainerTest {
             assertThat(elapsedMs).as("fail-fast duration").isLessThan(1_000);
 
             // health reports DOWN with the blocked reason once the grace elapses
-            Thread.sleep(HEALTH_GRACE.plusMillis(500).toMillis());
+            await().atMost(HEALTH_GRACE.plusSeconds(5))
+                    .until(() -> provider.healthCheck().block().status() == RCHealth.Status.DOWN);
             RCHealth health = provider.healthCheck().block();
             assertThat(health).isNotNull();
             assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);

@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -56,12 +57,10 @@ class ListenerStartupRabbitContainerTest {
     static class LateInitialization {
         @Bean
         SmartInitializingSingleton warmUp() {
+            // a listener consuming meanwhile would handle the waiting message while it initializes
             return () -> {
-                try {
-                    Thread.sleep(2_000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                }
+                await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(3))
+                        .until(() -> !initializedWhenHandled.isDone());
                 initialized.set(true);
             };
         }

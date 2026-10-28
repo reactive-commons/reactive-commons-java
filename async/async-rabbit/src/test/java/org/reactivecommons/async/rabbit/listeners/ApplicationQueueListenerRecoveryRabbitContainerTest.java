@@ -22,6 +22,7 @@ import reactor.rabbitmq.Sender;
 import reactor.rabbitmq.SenderOptions;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -30,6 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
@@ -107,7 +109,11 @@ class ApplicationQueueListenerRecoveryRabbitContainerTest {
         // 2. The broker closes the connection (e.g. node restart): the client recovers it automatically.
         RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "recovery test");
         awaitConnectionRecovered();
-        Thread.sleep(2_000); // let the client recover channels and consumers
+        // the client recovers the channels and consumers after the connection
+        await().atMost(Duration.ofSeconds(15)).until(() -> {
+            String listing = consumers();
+            return queues.stream().allMatch(listing::contains);
+        });
         String consumersAfter = consumers();
         System.out.println("[REAL BROKER] consumers after the recovery: " + consumersAfter);
 
@@ -129,21 +135,16 @@ class ApplicationQueueListenerRecoveryRabbitContainerTest {
         });
     }
 
-    private void awaitReceived(int expected) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (System.currentTimeMillis() < deadline
-                && received.values().stream().anyMatch(count -> count.get() < expected)) {
-            Thread.sleep(100);
-        }
+    private void awaitReceived(int expected) {
+        await().atMost(Duration.ofSeconds(15))
+                .until(() -> received.values().stream().allMatch(count -> count.get() >= expected));
     }
 
-    private void awaitConnectionRecovered() throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 30_000;
-        Thread.sleep(500); // the close must be noticed first
-        while (!listenerConnection.isOpen() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-        }
-        assertThat(listenerConnection.isOpen()).as("client automatic recovery restored the connection").isTrue();
+    private void awaitConnectionRecovered() {
+        // the close must be noticed first
+        await().atMost(Duration.ofSeconds(5)).until(() -> !listenerConnection.isOpen());
+        await().alias("client automatic recovery restored the connection").atMost(Duration.ofSeconds(30))
+                .until(listenerConnection::isOpen);
     }
 
     private String consumers() throws Exception {

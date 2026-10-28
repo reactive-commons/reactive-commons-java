@@ -32,6 +32,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -252,7 +253,9 @@ class ReactiveMessageSenderChannelFailureTest {
                 new HashMap<>(), true).subscribe();
         try {
             awaitPublished(BATCH_LIMIT);
-            sleep(200); // no confirm arrives: nothing else is taken from the batch
+            // no confirm arrives: nothing else is taken from the batch
+            await().during(Duration.ofMillis(200)).atMost(Duration.ofSeconds(1))
+                    .until(() -> publishedWithConfirms() == BATCH_LIMIT);
             assertThat(publishedWithConfirms()).isEqualTo(BATCH_LIMIT);
             assertThat(taken).as("taken from the source of the batch").hasValue(BATCH_LIMIT);
         } finally {
@@ -305,25 +308,16 @@ class ReactiveMessageSenderChannelFailureTest {
         return counters;
     }
 
-    private void awaitSettled(Counters counters, int total) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (System.currentTimeMillis() < deadline && counters.hanging(total) > 0) {
-            Thread.sleep(20);
-        }
+    private void awaitSettled(Counters counters, int total) {
+        await().atMost(Duration.ofSeconds(5)).until(() -> counters.hanging(total) <= 0);
     }
 
     private void awaitChannels(int count) {
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (System.currentTimeMillis() < deadline && channels.size() < count) {
-            sleep(20);
-        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> channels.size() >= count);
     }
 
     private void awaitPublished(int count) throws Exception {
-        long deadline = System.currentTimeMillis() + 5_000;
-        while (System.currentTimeMillis() < deadline && publishedWithConfirms() < count) {
-            Thread.sleep(20);
-        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> publishedWithConfirms() >= count);
         assertThat(publishedWithConfirms()).isEqualTo(count);
     }
 
@@ -332,13 +326,6 @@ class ReactiveMessageSenderChannelFailureTest {
                 .published()).sum();
     }
 
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
 
     private static ShutdownSignalException channelError(Channel channel) {
         // soft error (channel-level), not initiated by the application

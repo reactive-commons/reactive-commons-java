@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.Mockito.mock;
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
@@ -138,7 +139,8 @@ class ReceiverChannelErrorRabbitContainerTest {
             awaitConsumers(replyQueue, 1);
             // a channel error on the consuming channel: the broker closes it (406 unknown delivery tag)
             consumingChannels.get(0).basicAck(999, false);
-            Thread.sleep(1_000);
+            await().atMost(Duration.ofSeconds(5)).until(() -> !consumingChannels.get(0).isOpen());
+            awaitConsumers(replyQueue, 1); // the listener consumes again
 
             String correlationId = UUID.randomUUID().toString();
             Mono<Message> reply = router.register(correlationId);
@@ -181,13 +183,13 @@ class ReceiverChannelErrorRabbitContainerTest {
             awaitConsumers(queue, 1);
             // a channel error on the consuming channel: the broker closes it (406 unknown delivery tag)
             consumingChannels.get(0).basicAck(999, false);
-            Thread.sleep(3_000); // a second restart, if any, would happen within its backoff
+            await().atMost(Duration.ofSeconds(5)).until(() -> !consumingChannels.get(0).isOpen());
+            // a second restart, if any, would happen within its backoff
+            await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5))
+                    .until(() -> consumingChannels.size() <= 2);
 
             publish("after the channel error");
-            long deadline = System.currentTimeMillis() + 5_000;
-            while (received.get() < 1 && System.currentTimeMillis() < deadline) {
-                Thread.sleep(100);
-            }
+            await().atMost(Duration.ofSeconds(5)).until(() -> received.get() >= 1);
             int consumers = consumersOf(queue);
             System.out.printf("[REAL BROKER] queue listener after a channel error: consuming channels=%d, "
                     + "consumers=%d, received=%d%n", consumingChannels.size(), consumers, received.get());
@@ -221,11 +223,8 @@ class ReceiverChannelErrorRabbitContainerTest {
     }
 
     private void awaitConsumers(String queue, int expected) throws Exception {
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (consumersOf(queue) != expected && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-        }
-        assertThat(consumersOf(queue)).as("consumers of " + queue).isEqualTo(expected);
+        await().atMost(Duration.ofSeconds(10))
+                .untilAsserted(() -> assertThat(consumersOf(queue)).as("consumers of " + queue).isEqualTo(expected));
     }
 
     private int consumersOf(String queue) throws Exception {

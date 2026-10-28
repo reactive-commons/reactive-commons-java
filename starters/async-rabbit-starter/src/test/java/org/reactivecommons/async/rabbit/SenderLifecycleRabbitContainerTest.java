@@ -14,13 +14,13 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -69,14 +69,9 @@ class SenderLifecycleRabbitContainerTest {
         assertThat(created).as("sender threads created by the traffic").isNotEmpty();
 
         // the threads of the application must disappear once it is closed
-        long deadline = System.currentTimeMillis() + 10_000;
+        await().atMost(Duration.ofSeconds(10)).until(() -> senderThreads().stream().noneMatch(created::contains));
         Set<String> afterClose = senderThreads();
         afterClose.retainAll(created);
-        while (!afterClose.isEmpty() && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-            afterClose = senderThreads();
-            afterClose.retainAll(created);
-        }
 
         System.out.printf("[REAL BROKER] sender threads created=%d, still alive 10 s after closing the "
                 + "application=%d%n", created.size(), afterClose.size());

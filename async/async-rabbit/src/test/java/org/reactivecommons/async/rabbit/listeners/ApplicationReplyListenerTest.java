@@ -31,6 +31,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
@@ -120,10 +121,7 @@ class ApplicationReplyListenerTest {
 
         initialSource.assertWasSubscribed();
         // the re-subscription is scheduled, never done from within the termination callback
-        long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-        while (!newSource.wasSubscribed() && System.nanoTime() < deadline) {
-            Thread.sleep(20);
-        }
+        await().atMost(Duration.ofSeconds(2)).until(newSource::wasSubscribed);
         newSource.assertWasSubscribed();
     }
 

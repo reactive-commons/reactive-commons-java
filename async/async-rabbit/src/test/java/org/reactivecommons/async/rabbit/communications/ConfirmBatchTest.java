@@ -9,8 +9,10 @@ import reactor.rabbitmq.OutboundMessageResult;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
+import java.util.Objects;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 class ConfirmBatchTest {
 
@@ -62,28 +64,29 @@ class ConfirmBatchTest {
     }
 
     @Test
-    void aMessageNotConfirmedWithinTheSendTimeoutExpiresTheBatch() throws InterruptedException {
+    void aMessageNotConfirmedWithinTheSendTimeoutExpiresTheBatch() {
         ConfirmBatch batch = new ConfirmBatch(Duration.ofMillis(50));
         batch.sourceSubscribed();
         batch.settled(new OutboundMessageResult<>(batch.published(message("m1")), true));
         batch.published(message("m2"));
         assertThat(batch.expired()).as("before the send timeout").isNull();
 
-        Thread.sleep(100);
+        // expired() records the failures of the batch: read once
+        Throwable expired = await().atMost(Duration.ofSeconds(5)).until(batch::expired, Objects::nonNull);
 
-        assertThat(batch.expired())
+        assertThat(expired)
                 .isInstanceOf(SendConfirmUnknownException.class)
                 .hasMessageContaining("1 of the 2 messages taken from the batch failed: m2 (in doubt)");
     }
 
     @Test
-    void aBatchThatCannotStartPublishingExpiresAfterTheSendTimeout() throws InterruptedException {
+    void aBatchThatCannotStartPublishingExpiresAfterTheSendTimeout() {
         ConfirmBatch batch = new ConfirmBatch(Duration.ofMillis(50));
         assertThat(batch.expired()).as("before the send timeout").isNull();
 
-        Thread.sleep(100);
+        Throwable expired = await().atMost(Duration.ofSeconds(5)).until(batch::expired, Objects::nonNull);
 
-        assertThat(batch.expired())
+        assertThat(expired)
                 .isInstanceOf(SendConfirmUnknownException.class)
                 .hasMessageContaining("could not start publishing");
     }

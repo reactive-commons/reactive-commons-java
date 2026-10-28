@@ -19,12 +19,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Handler;
 import java.util.logging.Level;
 import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
 /**
@@ -76,15 +78,19 @@ class ExchangeDeclarationFailureRabbitContainerTest {
             RabbitMQBrokerProvider provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)
                     .getProviders().get(RabbitScenarioSupport.DEFAULT_DOMAIN);
 
-            // the health reports the flows down after 3 re-subscriptions without a confirmed message
-            for (int i = 1; i <= 4; i++) {
+            // every publish fails, and the health reports the flows down after 3 re-subscriptions without a
+            // confirmed message (the flows re-subscribe with a backoff)
+            AtomicInteger published = new AtomicInteger();
+            await().atMost(Duration.ofSeconds(60)).pollInterval(Duration.ofMillis(1_500)).until(() -> {
+                int i = published.incrementAndGet();
                 Throwable root = rootCause(Mono.from(bus.emit(new DomainEvent<>("scenario.event", "e" + i, Map.of())))
                         .then(Mono.<Throwable>empty())
                         .onErrorResume(Mono::just)
                         .block(Duration.ofSeconds(10)));
                 assertThat(root).as("publish %d", i).isInstanceOf(SendConfirmUnknownException.class);
-                Thread.sleep(1_500); // the flows re-subscribe with a backoff
-            }
+                RCHealth current = provider.healthCheck().block(Duration.ofSeconds(5));
+                return current != null && current.status() == RCHealth.Status.DOWN;
+            });
             RCHealth health = provider.healthCheck().block(Duration.ofSeconds(5));
 
             System.out.printf("[REAL BROKER] declaration warnings=%s, health=%s%n", warnings, health);

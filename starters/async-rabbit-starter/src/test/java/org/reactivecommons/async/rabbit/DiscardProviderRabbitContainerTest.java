@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.config.BrokerConfig;
@@ -26,6 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * The discard provider shared by the domains, on a REAL RabbitMQ broker, when no sender of the default domain was
@@ -59,9 +61,8 @@ class DiscardProviderRabbitContainerTest {
         assertThat(awaitConnections("fb-default-", 1)).as("the sender of the discard provider").isTrue();
 
         first.close();
-        Thread.sleep(1_000);
-        assertThat(RabbitScenarioSupport.connectionsOf(RABBIT, "fb-default-")).as("still used by the second provider")
-                .isEqualTo(1);
+        await().alias("still used by the second provider").during(Duration.ofSeconds(1)).atMost(TIMEOUT)
+                .until(() -> RabbitScenarioSupport.connectionsOf(RABBIT, "fb-default-") == 1);
         second.close();
 
         boolean closed = awaitConnections("fb-default-", 0);
@@ -80,15 +81,14 @@ class DiscardProviderRabbitContainerTest {
         }
     }
 
-    private static boolean awaitConnections(String connectionNamePrefix, int expected) throws Exception {
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (RabbitScenarioSupport.connectionsOf(RABBIT, connectionNamePrefix) != expected) {
-            if (System.nanoTime() > deadline) {
-                return false;
-            }
-            Thread.sleep(200);
+    private static boolean awaitConnections(String connectionNamePrefix, int expected) {
+        try {
+            await().atMost(TIMEOUT).pollInterval(Duration.ofMillis(200))
+                    .until(() -> RabbitScenarioSupport.connectionsOf(RABBIT, connectionNamePrefix) == expected);
+            return true;
+        } catch (ConditionTimeoutException e) {
+            return false;
         }
-        return true;
     }
 
     private Message discardedEvent() {

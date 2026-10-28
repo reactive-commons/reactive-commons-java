@@ -6,6 +6,7 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.impl.AMQImpl;
 import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.rabbit.listeners.SubscriberStatus;
 import reactor.core.publisher.Mono;
@@ -18,6 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -37,7 +39,7 @@ class ConsumerQueueDepthTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
         try (ConsumerQueueDepth ignored = poller(registry, channel)) {
-            assertThat(await(() -> depth(registry) == 7.0)).as("the gauge reads the broker's count").isTrue();
+            assertThat(eventually(() -> depth(registry) == 7.0)).as("the gauge reads the broker's count").isTrue();
         }
 
         assertThat(registry.find("reactive_commons.consumer.queue.depth").gauge())
@@ -52,7 +54,7 @@ class ConsumerQueueDepthTest {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
 
         try (ConsumerQueueDepth ignored = poller(registry, channel)) {
-            assertThat(await(() -> {
+            assertThat(eventually(() -> {
                 Gauge gauge = registry.find("reactive_commons.consumer.queue.depth").gauge();
                 return gauge != null && Double.isNaN(gauge.value());
             })).as("an unknown depth reads NaN").isTrue();
@@ -72,7 +74,7 @@ class ConsumerQueueDepthTest {
 
         try (ConsumerQueueDepth ignored = new ConsumerQueueDepth(registry, DOMAIN, Mono.just(connection),
                 () -> queues, Duration.ofMillis(20))) {
-            assertThat(await(() -> depth(registry) == 7.0)).as("read on a new channel").isTrue();
+            assertThat(eventually(() -> depth(registry) == 7.0)).as("read on a new channel").isTrue();
             assertThat(registry.find("reactive_commons.consumer.queue.depth").tag("queue", "deleted-queue")
                     .gauge().value()).isNaN();
         }
@@ -88,10 +90,10 @@ class ConsumerQueueDepthTest {
 
         try (ConsumerQueueDepth ignored = new ConsumerQueueDepth(registry, DOMAIN, Mono.just(connection),
                 () -> Map.of(QUEUE, SubscriberStatus.healthy(QUEUE)), Duration.ofMillis(20))) {
-            assertThat(await(() -> depth(registry) == 7.0)).isTrue();
+            assertThat(eventually(() -> depth(registry) == 7.0)).isTrue();
             open.set(false);
 
-            assertThat(await(() -> Double.isNaN(depth(registry)))).as("a stale depth would hide a backlog").isTrue();
+            assertThat(eventually(() -> Double.isNaN(depth(registry)))).as("a stale depth would hide a backlog").isTrue();
         }
     }
 
@@ -102,7 +104,8 @@ class ConsumerQueueDepthTest {
 
         try (ConsumerQueueDepth ignored = new ConsumerQueueDepth(new SimpleMeterRegistry(), DOMAIN, connection,
                 Map::of, Duration.ofMillis(20))) {
-            Thread.sleep(200); // several polls without consumed queues
+            // several polls without consumed queues
+            await().during(Duration.ofMillis(200)).atMost(Duration.ofSeconds(1)).untilFalse(requested);
         }
 
         assertThat(requested).as("the poller must not open a connection of its own").isFalse();
@@ -148,14 +151,12 @@ class ConsumerQueueDepthTest {
         return gauge == null ? Double.NaN : gauge.value();
     }
 
-    private static boolean await(BooleanSupplier condition) throws InterruptedException {
-        final long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (System.nanoTime() < deadline) {
-            if (condition.getAsBoolean()) {
-                return true;
-            }
-            Thread.sleep(10);
+    private static boolean eventually(BooleanSupplier condition) {
+        try {
+            await().atMost(Duration.ofSeconds(5)).pollInterval(Duration.ofMillis(10)).until(condition::getAsBoolean);
+            return true;
+        } catch (ConditionTimeoutException e) {
+            return false;
         }
-        return condition.getAsBoolean();
     }
 }

@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
 import org.reactivecommons.async.api.HandlerRegistry;
-import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.impl.config.annotations.EnableCommandListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableDirectAsyncGateway;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
@@ -19,9 +18,14 @@ import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.awaitility.Awaitility.await;
 
 /**
  * Starts the starter the way an application does (the same {@code @Enable...} annotations and the same
@@ -136,45 +140,28 @@ final class RabbitScenarioSupport {
      * Channels that the broker reports for the connection named {@code <connectionNamePrefix>...}, once the number
      * stops changing: the flows of a sender and the listeners obtain their channels asynchronously.
      */
-    static int settledChannels(RabbitMQContainer rabbit, String connectionNamePrefix) throws Exception {
-        long deadline = System.currentTimeMillis() + 30_000;
-        int last = -1;
-        long stableSince = System.currentTimeMillis();
-        while (System.currentTimeMillis() < deadline) {
-            int current = channelsOf(rabbit, connectionNamePrefix).orElse(-1);
-            if (current != last) {
-                last = current;
-                stableSince = System.currentTimeMillis();
-            } else if (current > 0 && System.currentTimeMillis() - stableSince >= 3_000) {
-                return current;
-            }
-            Thread.sleep(200);
-        }
-        throw new IllegalStateException("The channels of '" + connectionNamePrefix + "' never settled, last=" + last);
+    static int settledChannels(RabbitMQContainer rabbit, String connectionNamePrefix) {
+        AtomicInteger last = new AtomicInteger(-1);
+        return await().alias("the channels of '" + connectionNamePrefix + "' settled")
+                .during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(200))
+                .until(() -> channelsOf(rabbit, connectionNamePrefix).orElse(-1),
+                        current -> current > 0 && current == last.getAndSet(current));
     }
 
     /**
      * Waits until every queue has a consumer: the listeners declare their topology and start consuming
      * asynchronously, and what is published before that has nowhere to go.
      */
-    static void awaitConsumers(RabbitMQContainer rabbit, String... queues) throws Exception {
-        long deadline = System.currentTimeMillis() + 30_000;
-        while (System.currentTimeMillis() < deadline) {
-            String listing = rabbit.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers")
-                    .getStdout();
-            boolean all = true;
-            for (String queue : queues) {
-                all &= listing.lines().anyMatch(line -> {
-                    String[] columns = line.trim().split("\\s+");
-                    return columns.length == 2 && columns[0].equals(queue) && !columns[1].equals("0");
+    static void awaitConsumers(RabbitMQContainer rabbit, String... queues) {
+        await().alias("a consumer on each of the queues " + String.join(", ", queues)).atMost(Duration.ofSeconds(30))
+                .pollInterval(Duration.ofMillis(200)).until(() -> {
+                    String listing = rabbit.execInContainer("rabbitmqctl", "-q", "list_queues", "name", "consumers")
+                            .getStdout();
+                    return Arrays.stream(queues).allMatch(queue -> listing.lines().anyMatch(line -> {
+                        String[] columns = line.trim().split("\\s+");
+                        return columns.length == 2 && columns[0].equals(queue) && !columns[1].equals("0");
+                    }));
                 });
-            }
-            if (all) {
-                return;
-            }
-            Thread.sleep(200);
-        }
-        throw new IllegalStateException("The queues never got a consumer: " + String.join(", ", queues));
     }
 
     /**

@@ -29,6 +29,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Publishes a message larger than the broker's {@code max_message_size} (16 MiB by default in RabbitMQ 4) through
@@ -122,18 +123,16 @@ class MessageSizeLimitRabbitContainerTest {
     @Test
     void anOversizedMessageWithoutConfirmIsRejectedInsteadOfBeingReportedAsPublished() throws Exception {
         Mono<Void> oversized = messageSender.sendNoConfirm(OVERSIZED, EXCHANGE, ROUTING_KEY, Map.of(), false);
+        Duration timeout = Duration.ofSeconds(30);
 
-        assertThatThrownBy(() -> oversized.block(Duration.ofSeconds(30)))
+        assertThatThrownBy(() -> oversized.block(timeout))
                 .as("an oversized message the broker drops must not be reported as published")
                 .isInstanceOf(SendFailureMessageTooLargeException.class);
 
         // the no-confirm flow keeps its channel: the next message is published
         messageSender.sendNoConfirm(Map.of("id", 1), EXCHANGE, ROUTING_KEY, Map.of(), false)
                 .block(Duration.ofSeconds(30));
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (messagesInQueue() < 1 && System.currentTimeMillis() < deadline) {
-            Thread.sleep(50);
-        }
+        await().atMost(Duration.ofSeconds(10)).until(() -> messagesInQueue() >= 1);
         assertThat(messagesInQueue()).as("messages that reached the queue").isEqualTo(1);
     }
 

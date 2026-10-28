@@ -28,6 +28,7 @@ import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendEvents;
 
@@ -121,11 +122,8 @@ class MessageContentLoggingRabbitContainerTest {
                     .onErrorResume(error -> Mono.empty()) // returned by the broker: only its log matters here
                     .block(Duration.ofSeconds(30));
 
-            long deadline = System.currentTimeMillis() + 30_000;
-            while ((FAILURES.get() < 3 || logs.stream().noneMatch(line -> line.contains(unroutableId)))
-                    && System.currentTimeMillis() < deadline) {
-                Thread.sleep(100);
-            }
+            await().atMost(Duration.ofSeconds(30))
+                    .until(() -> FAILURES.get() >= 3 && logs.stream().anyMatch(line -> line.contains(unroutableId)));
 
             List<String> withWholeBody = logs.stream().filter(line -> line.contains(END_OF_BODY)).toList();
             System.out.printf("[REAL BROKER] handler failures=%d, log records=%d, records with the whole body=%d, "

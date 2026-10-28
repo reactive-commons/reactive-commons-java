@@ -17,6 +17,7 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -28,6 +29,7 @@ import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 
 /**
@@ -117,10 +119,7 @@ class MalformedDeathHeaderRabbitContainerTest {
                 publish(channel, FAILING, intCount);
             }
 
-            long deadline = System.currentTimeMillis() + 15_000;
-            while ((HANDLED.size() < 5 || FAILURES.get() < 5) && System.currentTimeMillis() < deadline) {
-                Thread.sleep(100);
-            }
+            await().atMost(Duration.ofSeconds(15)).until(() -> HANDLED.size() >= 5 && FAILURES.get() >= 5);
             System.out.printf("[REAL BROKER] events handled: %s, attempts of the failing one=%d, listener "
                     + "restarts=%d%n", HANDLED, FAILURES.get(), restarts.get());
 

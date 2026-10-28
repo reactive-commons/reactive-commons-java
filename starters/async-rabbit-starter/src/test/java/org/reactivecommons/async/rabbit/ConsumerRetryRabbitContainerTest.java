@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.ConnectionFactory;
+import org.awaitility.core.ConditionTimeoutException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
@@ -32,6 +33,7 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
@@ -75,7 +77,7 @@ class ConsumerRetryRabbitContainerTest {
 
             emit(context, "stale.event");
 
-            boolean discarded = await(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
+            boolean discarded = eventually(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
             System.out.println("[REAL BROKER] event without handler: queue=" + messages(queue) + " dlq notifications="
                     + messageCount(channel, probe));
             assertThat(discarded).as("discarded and notified, not requeued forever").isTrue();
@@ -95,7 +97,7 @@ class ConsumerRetryRabbitContainerTest {
             context.getBean(DirectAsyncGateway.class).sendCommand(new Command<>("unknown.command",
                     UUID.randomUUID().toString(), Map.of()), queue).block(Duration.ofSeconds(10));
 
-            boolean discarded = await(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
+            boolean discarded = eventually(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
             System.out.println("[REAL BROKER] command without handler: queue=" + messages(queue)
                     + " dlq notifications=" + messageCount(channel, probe));
             assertThat(discarded).as("discarded and notified, not requeued forever").isTrue();
@@ -117,16 +119,16 @@ class ConsumerRetryRabbitContainerTest {
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
             Channel channel = admin.createChannel();
             emit(context, "failing.event");
-            assertThat(await(() -> executions.get() == 1)).isTrue();
+            assertThat(eventually(() -> executions.get() == 1)).isTrue();
 
             channel.exchangeDelete(EVENTS_EXCHANGE); // the discard notification can no longer be published
             release.complete(null);
-            Thread.sleep(4_000);
+            await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(6)).until(() -> messages(queue) == 1);
             int whileUnnotified = messages(queue);
 
             channel.exchangeDeclare(EVENTS_EXCHANGE, "topic", true);
             String probe = probeQueue(channel, "failing.event.dlq");
-            boolean notified = await(() -> messages(queue) == 0 && messageCount(channel, probe) >= 1);
+            boolean notified = eventually(() -> messages(queue) == 0 && messageCount(channel, probe) >= 1);
             System.out.println("[REAL BROKER] discard notification failing: message kept in the queue="
                     + whileUnnotified + ", then notified=" + notified + " after " + executions.get() + " executions");
 
@@ -152,8 +154,9 @@ class ConsumerRetryRabbitContainerTest {
 
             emit(context, "failing.event");
 
-            boolean acknowledged = await(() -> executions.get() >= 1 && messages(queue) == 0);
-            Thread.sleep(3_000); // a requeued message would have been handled again by now (retryDelay is 1 s)
+            boolean acknowledged = eventually(() -> executions.get() >= 1 && messages(queue) == 0);
+            // a requeued message would be handled again (retryDelay is 1 s)
+            await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> executions.get() <= 1);
             System.out.println("[REAL BROKER] discard notification returned: queue=" + messages(queue)
                     + " executions=" + executions.get());
 
@@ -177,15 +180,15 @@ class ConsumerRetryRabbitContainerTest {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "rsrv-app.query");
             requester.getBean(DirectAsyncGateway.class).requestReply(new AsyncQuery<>("held.query", "q"),
                     "rsrv-app", String.class).subscribe(r -> { }, e -> { });
-            assertThat(await(() -> executions.get() == 1)).isTrue();
+            assertThat(eventually(() -> executions.get() == 1)).isTrue();
 
             RABBIT.execInContainer("rabbitmqctl", "set_vm_memory_high_watermark", "0.0000001");
             ConnectionBlockedState state = ((RabbitMQBrokerProvider) server.getBean(ConnectionManager.class)
                     .getProviders().get(RabbitScenarioSupport.DEFAULT_DOMAIN)).sender().blockedState();
             catchThrowable(() -> emit(server, "any.event")); // makes the broker block the publishing connection
-            assertThat(await(state::isBlocked)).isTrue();
+            assertThat(eventually(state::isBlocked)).isTrue();
             release.complete(null); // the reply is published now, while blocked: it fails
-            Thread.sleep(5_000);
+            await().during(Duration.ofSeconds(5)).atMost(Duration.ofSeconds(7)).until(() -> executions.get() == 1);
             System.out.println("[REAL BROKER] query whose reply could not be published: executions="
                     + executions.get());
 
@@ -207,9 +210,13 @@ class ConsumerRetryRabbitContainerTest {
                     .requestReply(new AsyncQuery<>("failing.query", "q"), "qexp-app", String.class)
                     .block(Duration.ofSeconds(10)));
 
-            Thread.sleep(4_000); // reply timeout 2 s + retries of 1 s
+            // the executions stop once the caller timed out (reply timeout 2 s, retries every 1 s)
+            AtomicInteger seen = new AtomicInteger(-1);
+            await().during(Duration.ofSeconds(4)).atMost(Duration.ofSeconds(20)).until(() -> {
+                int executed = executions.get();
+                return executed == seen.getAndSet(executed);
+            });
             int afterTimeout = executions.get();
-            Thread.sleep(4_000);
             System.out.println("[REAL BROKER] failing query: caller got " + callerOutcome + "; executions "
                     + afterTimeout + " -> " + executions.get() + ", left in the queue " + messages("qexp-app.query"));
 
@@ -233,8 +240,8 @@ class ConsumerRetryRabbitContainerTest {
                     .requestReply(new AsyncQuery<>("slow.query", "q"), "qdis-app", String.class)
                     .block(Duration.ofSeconds(10)));
 
-            boolean acknowledged = await(() -> messages("qdis-app.query") == 0);
-            Thread.sleep(3_000);
+            boolean acknowledged = eventually(() -> messages("qdis-app.query") == 0);
+            await().during(Duration.ofSeconds(3)).atMost(Duration.ofSeconds(5)).until(() -> executions.get() <= 1);
             System.out.println("[REAL BROKER] query discarded by timeout: acknowledged=" + acknowledged
                     + ", left in the queue " + messages("qdis-app.query") + ", executions " + executions.get());
 
@@ -267,8 +274,8 @@ class ConsumerRetryRabbitContainerTest {
                     .headers(Map.of("x-serveQuery-id", "held.query")) // no reply-id nor correlation-id
                     .build(), "{\"resource\":\"held.query\",\"queryData\":\"q\"}".getBytes());
 
-            boolean discarded = await(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
-            Thread.sleep(2_000);
+            boolean discarded = eventually(() -> messages(queue) == 0 && messageCount(channel, probe) == 1);
+            await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(4)).until(() -> executions.get() == 0);
             System.out.println("[REAL BROKER] query without reply headers: discarded=" + discarded
                     + ", executions=" + executions.get() + ", left in the queue " + messages(queue));
 
@@ -322,15 +329,16 @@ class ConsumerRetryRabbitContainerTest {
         return factory.newConnection("retry-admin");
     }
 
-    private static boolean await(BooleanSupplier condition) throws InterruptedException {
-        long deadline = System.currentTimeMillis() + 20_000;
-        while (!condition.getAsBoolean()) {
-            if (System.currentTimeMillis() > deadline) {
-                return false;
-            }
-            Thread.sleep(200);
+    /**
+     * Whether the condition holds within 20 seconds.
+     */
+    private static boolean eventually(BooleanSupplier condition) {
+        try {
+            await().atMost(Duration.ofSeconds(20)).pollInterval(Duration.ofMillis(200)).until(condition::getAsBoolean);
+            return true;
+        } catch (ConditionTimeoutException e) {
+            return false;
         }
-        return true;
     }
 
     @Configuration

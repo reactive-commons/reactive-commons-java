@@ -6,6 +6,7 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
+import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -13,6 +14,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 class UnroutableMessageNotifierConcurrencyTest {
 
@@ -59,10 +61,7 @@ class UnroutableMessageNotifierConcurrencyTest {
                 .count()).as("no notification rejected for being concurrent").isZero();
         assertThat(registry.find("reactive_commons.publish.unroutable.messages").tag("domain", "").counter()
                 .count()).isEqualTo(THREADS * MESSAGES_PER_THREAD);
-        final long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (processed.get() < THREADS * MESSAGES_PER_THREAD && System.nanoTime() < deadline) {
-            Thread.sleep(10);
-        }
+        await().atMost(Duration.ofSeconds(5)).until(() -> processed.get() >= THREADS * MESSAGES_PER_THREAD);
         assertThat(processed.get()).as("every notification reached the handler")
                 .isEqualTo(THREADS * MESSAGES_PER_THREAD);
     }

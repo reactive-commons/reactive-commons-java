@@ -18,6 +18,7 @@ import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 
 /**
  * Starts consuming with the {@link Receiver} from a REAL RabbitMQ broker when a callback of the consumer fails: the
@@ -89,7 +90,8 @@ class ReceiverConsumeFailureRabbitContainerTest {
                 .onErrorResume(Mono::just)
                 .block(Duration.ofSeconds(10));
         assertThat(error).as("the consumer fails").isNotNull();
-        Thread.sleep(1_000); // the broker reports the channels of a connection with a short delay
+        // the broker reports the channels of a connection with a short delay
+        await().atMost(Duration.ofSeconds(5)).until(() -> "0".equals(channelsOfTheConnection()));
         return "channels=" + channelsOfTheConnection() + ", consumers=" + consumersOfTheQueue();
     }
 

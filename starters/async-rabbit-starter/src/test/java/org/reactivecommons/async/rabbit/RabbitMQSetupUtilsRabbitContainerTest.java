@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
 /**
@@ -130,14 +131,12 @@ class RabbitMQSetupUtilsRabbitContainerTest {
 
         // the broker closes it: the client recovers it after the network recovery interval (5 s by default)
         RABBIT.execInContainer("rabbitmqctl", "close_all_connections", "release test");
-        long deadline = System.nanoTime() + TIMEOUT.toNanos();
-        while (connection.isOpen() && System.nanoTime() < deadline) {
-            Thread.sleep(20);
-        }
-        assertThat(connection.isOpen()).as("being recovered").isFalse();
+        await().alias("being recovered").atMost(TIMEOUT).until(() -> !connection.isOpen());
         RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
 
-        Thread.sleep(8_000); // the recovery would have reconnected by now
+        // the recovery would reconnect after its interval of 5 s
+        await().during(Duration.ofSeconds(8)).atMost(Duration.ofSeconds(10))
+                .until(() -> !connection.isOpen() && RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-") == 0);
         int connections = RabbitScenarioSupport.connectionsOf(RABBIT, "tc-release-");
         System.out.println("[REAL BROKER] connection released while recovering: open=" + connection.isOpen()
                 + ", listed by the broker=" + connections);
@@ -262,17 +261,9 @@ class RabbitMQSetupUtilsRabbitContainerTest {
     }
 
     private static RCHealth awaitStatus(RabbitReactiveHealthIndicator health, RCHealth.Status expected,
-                                        Duration timeout) throws InterruptedException {
-        long deadline = System.nanoTime() + timeout.toNanos();
-        RCHealth last = null;
-        while (System.nanoTime() < deadline) {
-            last = health.health().block(TIMEOUT);
-            if (last != null && last.status() == expected) {
-                return last;
-            }
-            Thread.sleep(100);
-        }
-        throw new AssertionError("Health did not become " + expected + " within " + timeout + ", last: " + last);
+                                        Duration timeout) {
+        return await().alias("health " + expected).atMost(timeout).pollInterval(Duration.ofMillis(100))
+                .until(() -> health.health().block(TIMEOUT), last -> last != null && last.status() == expected);
     }
 
     private static int brokerConnections() throws Exception {

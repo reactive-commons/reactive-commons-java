@@ -16,10 +16,13 @@ import org.testcontainers.rabbitmq.RabbitMQContainer;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 
 /**
@@ -90,7 +93,12 @@ class ListenerPrefetchRabbitContainerTest {
                 RabbitMQBrokerProvider provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)
                         .getProviders().get(RabbitScenarioSupport.DEFAULT_DOMAIN);
                 assertThat(provider.props().getBrokerConfigProps().getCommandsQueue()).isEqualTo(queue);
-                Thread.sleep(5_000);
+                // the broker delivers the waiting commands up to the prefetch: their count stops growing
+                AtomicReference<String> delivered = new AtomicReference<>("");
+                await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofSeconds(1)).until(() -> {
+                    String unacknowledged = column(queue, "messages_unacknowledged");
+                    return !"0".equals(unacknowledged) && unacknowledged.equals(delivered.getAndSet(unacknowledged));
+                });
                 outcome = "unacknowledged=" + column(queue, "messages_unacknowledged")
                         + ", consumers=" + column(queue, "consumers");
             } catch (Exception e) {

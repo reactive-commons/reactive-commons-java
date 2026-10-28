@@ -22,6 +22,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
@@ -109,16 +110,10 @@ class TopologyRecoveryRabbitContainerTest {
         }
     }
 
-    private static void awaitDeleted(String queue) throws Exception {
-        long deadline = System.currentTimeMillis() + 10_000;
-        while (System.currentTimeMillis() < deadline) {
-            String listing = RABBIT.execInContainer("rabbitmqctl", "-q", "list_queues", "name").getStdout();
-            if (listing.lines().map(String::trim).noneMatch(queue::equals)) {
-                return;
-            }
-            Thread.sleep(100);
-        }
-        throw new IllegalStateException("The queue " + queue + " was not deleted with its connection");
+    private static void awaitDeleted(String queue) {
+        await().alias("the queue " + queue + " deleted with its connection").atMost(Duration.ofSeconds(10))
+                .until(() -> RABBIT.execInContainer("rabbitmqctl", "-q", "list_queues", "name").getStdout()
+                        .lines().map(String::trim).noneMatch(queue::equals));
     }
 
     private static String query(DirectAsyncGateway gateway, String appName) {

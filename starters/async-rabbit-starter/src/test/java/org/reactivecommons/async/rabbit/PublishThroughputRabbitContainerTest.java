@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
+import org.awaitility.core.ConditionTimeoutException;
 import org.jspecify.annotations.NonNull;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
@@ -26,6 +27,7 @@ import java.util.concurrent.atomic.AtomicLongArray;
 import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
@@ -165,9 +167,11 @@ class PublishThroughputRabbitContainerTest {
                 }, discarded::fail, () -> discarded.confirm(index, due));
             }
         }
-        long deadline = System.currentTimeMillis() + 30_000;
-        while (System.currentTimeMillis() < deadline && (events.pending() > 0 || discarded.pending() > 0)) {
-            Thread.sleep(50);
+        try {
+            await().atMost(Duration.ofSeconds(30)).pollInterval(Duration.ofMillis(50))
+                    .until(() -> events.pending() <= 0 && discarded.pending() <= 0);
+        } catch (ConditionTimeoutException e) {
+            // the stats report the messages still pending
         }
         return new Stats[]{events.stats(start), discarded.stats(start)};
     }
@@ -257,13 +261,12 @@ class PublishThroughputRabbitContainerTest {
      * The messages in the queue once they stop arriving (or all the expected ones are there).
      */
     private static int settledCount(Channel admin, String queue, int expected) throws Exception {
-        long deadline = System.currentTimeMillis() + 15_000;
-        int count = admin.queueDeclarePassive(queue).getMessageCount();
-        while (count < expected && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-            count = admin.queueDeclarePassive(queue).getMessageCount();
+        try {
+            return await().atMost(Duration.ofSeconds(15))
+                    .until(() -> admin.queueDeclarePassive(queue).getMessageCount(), count -> count >= expected);
+        } catch (ConditionTimeoutException e) {
+            return admin.queueDeclarePassive(queue).getMessageCount();
         }
-        return count;
     }
 
     private static Connection adminConnection() throws Exception {

@@ -21,6 +21,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.SendDirect;
 
@@ -79,10 +80,8 @@ class GracefulShutdownRabbitContainerTest {
             context.close();
         }
 
-        long deadline = System.currentTimeMillis() + 15_000;
-        while (RabbitScenarioSupport.connectionsOf(RABBIT, "gsd-") > 0 && System.currentTimeMillis() < deadline) {
-            Thread.sleep(100);
-        }
+        await().alias("connections closed").atMost(Duration.ofSeconds(15))
+                .until(() -> RabbitScenarioSupport.connectionsOf(RABBIT, "gsd-") == 0);
         long messagesLeft = messagesIn(QUEUE);
         boolean socketCut = RABBIT.getLogs().contains("client unexpectedly closed TCP connection");
         System.out.printf("[REAL BROKER] handlers finished=%d/%d, messages left in the queue=%d, connection socket "

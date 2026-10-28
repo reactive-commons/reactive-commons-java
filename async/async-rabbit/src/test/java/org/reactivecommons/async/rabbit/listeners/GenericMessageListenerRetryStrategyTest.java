@@ -30,8 +30,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -163,7 +168,7 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(counter("reactive_commons.consumer.handler.timeout")).isEqualTo(1.0);
         assertThat(executionCount("timeout", "test-path")).as("execution timer tagged timeout")
                 .isEqualTo(1L);
-        assertThat(awaitInFlight(0)).as("no longer in flight once nacked").isTrue();
+        awaitInFlight(0, "no longer in flight once nacked");
     }
 
     @Test
@@ -190,7 +195,7 @@ class GenericMessageListenerRetryStrategyTest {
         new HangingListener(listener(null), discardNotifier, errorReporter, message -> Mono.never())
                 .startListener();
 
-        assertThat(awaitInFlight(1)).as("received, neither acked nor nacked").isTrue();
+        awaitInFlight(1, "received, neither acked nor nacked");
         verify(channel, after(200).never()).basicAck(anyLong(), anyBoolean());
         assertThat(outcome("ack")).as("the outcomes exist at zero before any happens").isZero();
     }
@@ -259,12 +264,12 @@ class GenericMessageListenerRetryStrategyTest {
     private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, long retryDelay,
                                          Duration handlerTimeout) {
         lenient().when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.never());
-        java.util.logging.Logger logger = java.util.logging.Logger.getLogger(GenericMessageListener.class.getName());
-        List<String> warnings = new java.util.concurrent.CopyOnWriteArrayList<>();
-        java.util.logging.Handler capture = new java.util.logging.Handler() {
+        Logger logger = Logger.getLogger(GenericMessageListener.class.getName());
+        List<String> warnings = new CopyOnWriteArrayList<>();
+        Handler capture = new Handler() {
             @Override
-            public void publish(java.util.logging.LogRecord logRecord) {
-                if (logRecord.getLevel() == java.util.logging.Level.WARNING
+            public void publish(LogRecord logRecord) {
+                if (logRecord.getLevel() == Level.WARNING
                         && logRecord.getMessage().contains("consumer_timeout")) {
                     warnings.add(logRecord.getMessage());
                 }
@@ -334,16 +339,10 @@ class GenericMessageListenerRetryStrategyTest {
                 DOMAIN, handlerTimeout);
     }
 
-    private boolean awaitInFlight(double expected) throws InterruptedException {
-        final long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
-        while (System.nanoTime() < deadline) {
-            if (registry.find("reactive_commons.consumer.in_flight").tags("domain", DOMAIN, "queue", QUEUE)
-                    .gauge().value() == expected) {
-                return true;
-            }
-            Thread.sleep(10);
-        }
-        return false;
+    private void awaitInFlight(double expected, String description) {
+        await().alias(description).atMost(Duration.ofSeconds(2))
+                .until(() -> registry.find("reactive_commons.consumer.in_flight").tags("domain", DOMAIN, "queue", QUEUE)
+                        .gauge().value() == expected);
     }
 
     /**

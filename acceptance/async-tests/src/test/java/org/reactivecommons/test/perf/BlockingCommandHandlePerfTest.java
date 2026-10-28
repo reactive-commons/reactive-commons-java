@@ -40,7 +40,7 @@ class BlockingCommandHandlePerfTest {
     private final Long data = ThreadLocalRandom.current().nextLong();
 
     @Test
-    void commandShouldBeHandledInParallel() throws InterruptedException {
+    void commandShouldBeHandledInParallel() {
         Sinks.Many<Command<Long>> listener = Sinks.many().unicast().onBackpressureBuffer();
 
         Flux.range(0, 12).flatMap(i -> {
@@ -63,9 +63,6 @@ class BlockingCommandHandlePerfTest {
         final long total = System.currentTimeMillis() - init;
         out.println("Test duration: " + total);
         assertThat(total).isLessThan(2500L);
-
-        //Give some time to finish messages ack
-        Thread.sleep(350);
     }
 
 

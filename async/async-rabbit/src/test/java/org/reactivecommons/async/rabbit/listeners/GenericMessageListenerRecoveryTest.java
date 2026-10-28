@@ -29,6 +29,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
@@ -103,14 +104,9 @@ class GenericMessageListenerRecoveryTest {
         }
     }
 
-    private void awaitSubscriptions(int expected) throws InterruptedException {
-        long deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos();
-        while (totalSubscriptions.get() < expected) {
-            if (System.nanoTime() > deadline) {
-                throw new AssertionError("The listener was not restarted, subscriptions: " + totalSubscriptions.get());
-            }
-            Thread.sleep(20);
-        }
+    private void awaitSubscriptions(int expected) {
+        await().alias("the listener restarted").atMost(Duration.ofSeconds(5))
+                .until(() -> totalSubscriptions.get() >= expected);
     }
 
     private ShutdownListener captureShutdownListener() throws Exception {

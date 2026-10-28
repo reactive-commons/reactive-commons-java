@@ -9,12 +9,14 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenCommands;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenEvents;
 import static org.reactivecommons.async.rabbit.RabbitScenarioSupport.ListenQueries;
@@ -45,12 +47,10 @@ class ClosedContextResourcesRabbitContainerTest {
                         Map.of()))).block();
                 RabbitScenarioSupport.awaitConsumers(RABBIT, "ccc-app");
             }
-            Thread.sleep(3_000);
+            await().atMost(Duration.ofSeconds(15)).until(() -> RabbitScenarioSupport.connectionsOf(RABBIT, "ccc-") == 0
+                    && !threadsStartedAfter(before).containsKey("sender-channel-pool-#"));
 
-            Map<String, Long> leftThreads = Thread.getAllStackTraces().keySet().stream()
-                    .filter(thread -> !before.contains(thread) && thread.isAlive())
-                    .collect(Collectors.groupingBy(thread -> thread.getName().replaceAll("\\d+", "#")
-                                    + (thread.isDaemon() ? " (daemon)" : ""), TreeMap::new, Collectors.counting()));
+            Map<String, Long> leftThreads = threadsStartedAfter(before);
             int connections = RabbitScenarioSupport.connectionsOf(RABBIT, "ccc-");
             System.out.printf("[REAL BROKER] closed context: connections=%d, channels=%s, threads left=%s%n",
                     connections, RabbitScenarioSupport.channelsOf(RABBIT, "ccc-"), leftThreads);
@@ -89,5 +89,15 @@ class ClosedContextResourcesRabbitContainerTest {
         return RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false, true,
                 RabbitScenarioSupport.Handlers.class, SendEvents.class, SendDirect.class, ListenEvents.class,
                 ListenCommands.class, ListenQueries.class);
+    }
+
+    /**
+     * The live threads started after {@code before}, counted by name (without its numbers).
+     */
+    private static Map<String, Long> threadsStartedAfter(Set<Thread> before) {
+        return Thread.getAllStackTraces().keySet().stream()
+                .filter(thread -> !before.contains(thread) && thread.isAlive())
+                .collect(Collectors.groupingBy(thread -> thread.getName().replaceAll("\\d+", "#")
+                        + (thread.isDaemon() ? " (daemon)" : ""), TreeMap::new, Collectors.counting()));
     }
 }
