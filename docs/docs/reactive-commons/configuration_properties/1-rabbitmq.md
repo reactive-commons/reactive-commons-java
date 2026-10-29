@@ -604,6 +604,22 @@ existing catch-blocks keep working.
 | `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached).                                                                                                                                                                       | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces.                                             |
 | `SendFailureMessageTooLargeException`  | The body of the message is larger than `maxMessageSize`: it is rejected before being written, instead of making the broker close the channel it shares with other messages.                                                                                    | Message was NOT published. Retrying it unchanged fails again: reduce the payload (or raise the limit of the broker and `maxMessageSize` together).                            |
 
+The events emitted with the `DomainEventBus` fail with these exceptions as they are, as the commands and the queries
+do: handle them by their type.
+
+:::tip[Retrying a failed send]
+`SendConfirmUnknownException` and `SendFailureMessageTooLargeException` also extend `SendFailureNoAckException`: a
+retry filtered with `instanceof SendFailureNoAckException` sends again the messages whose outcome is unknown (they may
+be duplicated) and the messages that fail again anyway. To retry only the messages that were not published:
+
+```java
+Retry.backoff(3, Duration.ofSeconds(1))
+        .filter(e -> e instanceof SendFailureNoAckException
+                && !(e instanceof SendConfirmUnknownException)
+                && !(e instanceof SendFailureMessageTooLargeException))
+```
+:::
+
 :::caution[`requestReply` is at-least-once]
 The query request and its reply are both published with `sendNoConfirm`. On a `SendFailureNoAckException` after
 `sendTimeout`, the request **may still have reached the broker** — callers must either be idempotent or use a

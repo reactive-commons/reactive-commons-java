@@ -5,6 +5,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivestreams.Publisher;
 import reactor.core.publisher.Mono;
@@ -32,7 +33,8 @@ public class RabbitDomainEventBus implements DomainEventBus {
     @Override
     public <T> Mono<Void> emit(DomainEvent<T> event) {
         return sender.sendWithConfirm(event, exchange, event.getName(), Collections.emptyMap(), persistentEvents)
-                .onErrorMap(err -> new RuntimeException(EVENT_SEND_FAILURE + event.getName(), err));
+                .onErrorMap(RabbitDomainEventBus::isUntyped,
+                        err -> new RuntimeException(EVENT_SEND_FAILURE + event.getName(), err));
     }
 
     @Override
@@ -44,7 +46,8 @@ public class RabbitDomainEventBus implements DomainEventBus {
     public Publisher<Void> emit(CloudEvent cloudEvent) {
         return sender.sendWithConfirm(cloudEvent, exchange, cloudEvent.getType(),
                         Collections.emptyMap(), persistentEvents)
-                .onErrorMap(err -> new RuntimeException(EVENT_SEND_FAILURE + cloudEvent.getType(), err));
+                .onErrorMap(RabbitDomainEventBus::isUntyped,
+                        err -> new RuntimeException(EVENT_SEND_FAILURE + cloudEvent.getType(), err));
     }
 
     @Override
@@ -56,11 +59,20 @@ public class RabbitDomainEventBus implements DomainEventBus {
     public Publisher<Void> emit(RawMessage rawEvent) {
         return sender.sendWithConfirm(rawEvent, exchange, rawEvent.getType(),
                         Collections.emptyMap(), persistentEvents)
-                .onErrorMap(err -> new RuntimeException(EVENT_SEND_FAILURE + rawEvent.getType(), err));
+                .onErrorMap(RabbitDomainEventBus::isUntyped,
+                        err -> new RuntimeException(EVENT_SEND_FAILURE + rawEvent.getType(), err));
     }
 
     @Override
     public Publisher<Void> emit(String domain, RawMessage event) {
         throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+    }
+
+    /**
+     * The typed outcomes of a publish (every {@link SendFailureNoAckException}) reach the emitter as they are: they
+     * tell an event that was not published, safe to emit again, from one that may have been.
+     */
+    private static boolean isUntyped(Throwable error) {
+        return !(error instanceof SendFailureNoAckException);
     }
 }

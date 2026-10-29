@@ -74,7 +74,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             assertThat(state.blockedReason()).isNotBlank();
             Throwable error = catchThrowable(() -> emit(bus));
             assertThat(error).as("first publish after the alarm: %s", firstError)
-                    .hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
+                    .isInstanceOf(SendFailureBrokerBlockedException.class);
             awaitFor("health down once the grace elapses",
                     () -> provider.healthCheck().block().status() == RCHealth.Status.DOWN);
 
@@ -105,9 +105,9 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             Throwable next = catchThrowable(() -> emit(bus));
             long nextMs = Duration.ofNanos(System.nanoTime() - t1).toMillis();
 
-            assertThat(first).hasCauseInstanceOf(SendConfirmUnknownException.class);
+            assertThat(first).isInstanceOf(SendConfirmUnknownException.class);
             assertThat(firstMs).isLessThan(SEND_TIMEOUT.plusSeconds(2).toMillis());
-            assertThat(next).hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
+            assertThat(next).isInstanceOf(SendFailureBrokerBlockedException.class);
             assertThat(nextMs).as("fail-fast duration").isLessThan(1_000);
             rabbitmqctl("set_vm_memory_high_watermark", "0.4");
         }
@@ -246,9 +246,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
                     .flatMap(i -> Mono.from(bus.emit(new DomainEvent<>("scenario.event",
                                     UUID.randomUUID().toString(), Map.of("blob", blob))))
                             .thenReturn("ok")
-                            // the event bus wraps the failure of the sender
-                            .onErrorResume(e -> Mono.just((e.getCause() != null ? e.getCause() : e).getClass()
-                                    .getSimpleName()))
+                            .onErrorResume(e -> Mono.just(e.getClass().getSimpleName()))
                             .elapsed(), messages)
                     .collectList()
                     .block(Duration.ofSeconds(60));

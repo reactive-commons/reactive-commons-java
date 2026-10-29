@@ -200,9 +200,7 @@ class PublishThroughputRabbitContainerTest {
         }
 
         void fail(Throwable error) {
-            // the event bus wraps the failure of the sender
-            Throwable cause = error.getCause() != null ? error.getCause() : error;
-            failures.computeIfAbsent(cause.getClass().getSimpleName() + ": " + cause.getMessage(),
+            failures.computeIfAbsent(error.getClass().getSimpleName() + ": " + error.getMessage(),
                     key -> new AtomicInteger()).incrementAndGet();
             failed.incrementAndGet();
         }

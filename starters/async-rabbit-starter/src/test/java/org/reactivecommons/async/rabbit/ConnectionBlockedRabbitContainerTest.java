@@ -72,7 +72,7 @@ class ConnectionBlockedRabbitContainerTest {
             long t0 = System.nanoTime();
             assertThatThrownBy(() -> Mono.from(bus.emit(new DomainEvent<>("scenario.event",
                     UUID.randomUUID().toString(), Map.of("i", 1)))).block(Duration.ofSeconds(5)))
-                    .hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
+                    .isInstanceOf(SendFailureBrokerBlockedException.class);
             long elapsedMs = Duration.ofNanos(System.nanoTime() - t0).toMillis();
             assertThat(elapsedMs).as("fail-fast duration").isLessThan(1_000);
 
