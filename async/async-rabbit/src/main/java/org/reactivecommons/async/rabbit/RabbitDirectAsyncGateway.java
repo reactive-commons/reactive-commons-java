@@ -11,6 +11,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import reactor.rabbitmq.OutboundMessageResult;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.listeners.ListenerSchedulers;
 import reactor.core.observability.micrometer.Micrometer;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -150,6 +151,9 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
                     final Mono<R> replyHolder = router.register(correlationID,
                             this.domain != null ? this.domain : domain)
                             .timeout(replyTimeout)
+                            // routed on the thread that dispatches, one after another, every reply of the
+                            // application: converting it and the code of its caller run on the handler pool instead
+                            .publishOn(ListenerSchedulers.handlers())
                             .map(s -> converter.readValue(s, type));
 
                     Map<String, Object> headers = new HashMap<>();
