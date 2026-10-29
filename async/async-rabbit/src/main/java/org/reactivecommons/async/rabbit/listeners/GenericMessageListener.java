@@ -446,8 +446,10 @@ public abstract class GenericMessageListener {
     }
 
     private void doLogExecution(String executorPath, long timeElapsed) {
-        log.log(Level.FINE, String.format("%s with path %s handled, took %d ms",
-                objectType, executorPath, timeElapsed));
+        // once per handled message: nothing is built while the level is disabled
+        if (log.isLoggable(Level.FINE)) {
+            log.fine(String.format("%s with path %s handled, took %d ms", objectType, executorPath, timeElapsed));
+        }
     }
 
     /**

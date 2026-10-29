@@ -228,7 +228,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
         return Mono.fromRunnable(() -> {
             metrics.recordQueryDiscardedByTimeout();
-            log.log(Level.WARNING, String.format("query with path %s discarded by timeout", executorPath));
+            log.log(Level.WARNING, () -> String.format("query with path %s discarded by timeout", executorPath));
         });
     }
 
