@@ -11,6 +11,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import tools.jackson.core.JsonParser;
 import tools.jackson.core.JsonToken;
+import tools.jackson.databind.JavaType;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,23 +29,20 @@ public abstract class JacksonMessageConverter implements MessageConverter {
 
     @Override
     public <T> AsyncQuery<T> readAsyncQuery(Message message, Class<T> bodyClass) {
-        final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
-        final T value = jsonMapper.treeToValue(asyncQueryJson.getQueryData(), bodyClass);
-        return new AsyncQuery<>(asyncQueryJson.getResource(), value);
+        final AsyncQueryJson<T> asyncQueryJson = readEnvelope(message, AsyncQueryJson.class, bodyClass);
+        return new AsyncQuery<>(asyncQueryJson.getResource(), asyncQueryJson.getQueryData());
     }
 
     @Override
     public <T> DomainEvent<T> readDomainEvent(Message message, Class<T> bodyClass) {
-        final DomainEventJson domainEventJson = readValue(message, DomainEventJson.class);
-        final T value = jsonMapper.treeToValue(domainEventJson.getData(), bodyClass);
-        return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), value);
+        final DomainEventJson<T> domainEventJson = readEnvelope(message, DomainEventJson.class, bodyClass);
+        return new DomainEvent<>(domainEventJson.getName(), domainEventJson.getEventId(), domainEventJson.getData());
     }
 
     @Override
     public <T> Command<T> readCommand(Message message, Class<T> bodyClass) {
-        final CommandJson commandJson = readValue(message, CommandJson.class);
-        final T value = jsonMapper.treeToValue(commandJson.getData(), bodyClass);
-        return new Command<>(commandJson.getName(), commandJson.getCommandId(), value);
+        final CommandJson<T> commandJson = readEnvelope(message, CommandJson.class, bodyClass);
+        return new Command<>(commandJson.getName(), commandJson.getCommandId(), commandJson.getData());
     }
 
     @Override
@@ -54,8 +52,20 @@ public abstract class JacksonMessageConverter implements MessageConverter {
 
     @Override
     public <T> T readValue(Message message, Class<T> valueClass) {
+        return read(message, jsonMapper.constructType(valueClass));
+    }
+
+    /**
+     * Reads the envelope of a message (event, command or query) with its data bound straight to {@code dataClass},
+     * instead of building the JSON tree of the data and converting the tree afterward.
+     */
+    private <E> E readEnvelope(Message message, Class<?> envelopeClass, Class<?> dataClass) {
+        return read(message, jsonMapper.getTypeFactory().constructParametricType(envelopeClass, dataClass));
+    }
+
+    private <T> T read(Message message, JavaType type) {
         try {
-            return jsonMapper.readValue(message.getBody(), valueClass);
+            return jsonMapper.readValue(message.getBody(), type);
         } catch (Exception e) {
             throw new MessageConversionException(FAILED_TO_CONVERT_MESSAGE_CONTENT, e);
         }
@@ -113,41 +123,41 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     @Override
     @SuppressWarnings("unchecked")
     public <T> Command<T> readCommandStructure(Message message) {
-        final CommandJson commandJson = readValue(message, CommandJson.class);
+        final CommandJson<JsonNode> commandJson = readEnvelope(message, CommandJson.class, JsonNode.class);
         return new Command<>(commandJson.getName(), commandJson.getCommandId(), (T) commandJson.getData());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> DomainEvent<T> readDomainEventStructure(Message message) {
-        final DomainEventJson eventJson = readValue(message, DomainEventJson.class);
+        final DomainEventJson<JsonNode> eventJson = readEnvelope(message, DomainEventJson.class, JsonNode.class);
         return new DomainEvent<>(eventJson.getName(), eventJson.getEventId(), (T) eventJson.getData());
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public <T> AsyncQuery<T> readAsyncQueryStructure(Message message) {
-        final AsyncQueryJson asyncQueryJson = readValue(message, AsyncQueryJson.class);
+        final AsyncQueryJson<JsonNode> asyncQueryJson = readEnvelope(message, AsyncQueryJson.class, JsonNode.class);
         return new AsyncQuery<>(asyncQueryJson.getResource(), (T) asyncQueryJson.getQueryData());
     }
 
     @Data
-    private static class AsyncQueryJson {
+    private static class AsyncQueryJson<T> {
         private String resource;
-        private JsonNode queryData;
+        private T queryData;
     }
 
     @Data
-    private static class DomainEventJson {
+    private static class DomainEventJson<T> {
         private String name;
         private String eventId;
-        private JsonNode data;
+        private T data;
     }
 
     @Data
-    private static class CommandJson {
+    private static class CommandJson<T> {
         private String name;
         private String commandId;
-        private JsonNode data;
+        private T data;
     }
 }
