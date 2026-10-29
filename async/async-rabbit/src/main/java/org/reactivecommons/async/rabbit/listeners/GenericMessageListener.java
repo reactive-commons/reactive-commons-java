@@ -25,7 +25,6 @@ import reactor.rabbitmq.Receiver;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -213,7 +212,7 @@ public abstract class GenericMessageListener {
             if (isRedelivered(msj)) {
                 metrics.recordRedelivered();
             }
-            final Instant init = Instant.now();
+            final long init = System.nanoTime();
             metrics.recordDeliveryStarted();
             return handle(msj, init)
                     // handle may complete empty (e.g. a query discarded by timeout): acknowledge the delivery itself
@@ -240,7 +239,13 @@ public abstract class GenericMessageListener {
         }
     }
 
-    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
+    /**
+     * Handles a delivery.
+     *
+     * @param initNanos when the delivery arrived, as a {@link System#nanoTime()}: the durations measured from it do not
+     *                  follow the adjustments of the system clock
+     */
+    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, long initNanos) {
         try {
             final String executorPath = getExecutorPath(msj);
             final ResolvedHandler resolved = getExecutor(executorPath);
@@ -249,11 +254,11 @@ public abstract class GenericMessageListener {
             final String handlerTag = resolved.name();
 
             final AtomicBoolean started = new AtomicBoolean();
-            final AtomicReference<Instant> attemptStart = new AtomicReference<>();
+            final AtomicLong attemptStart = new AtomicLong();
             Mono<Object> flow = defer(() -> {
-                attemptStart.set(Instant.now()); // each local retry re-runs the defer: fresh per-attempt timing
+                attemptStart.set(System.nanoTime()); // each local retry re-runs the defer: fresh per-attempt timing
                 if (started.compareAndSet(false, true)) { // runs on the handler thread; local retries run it again
-                    onHandlerStarted(Duration.between(initTime, Instant.now()));
+                    onHandlerStarted(elapsedSince(initNanos));
                 }
                 return handler.apply(message);
             })
@@ -261,16 +266,16 @@ public abstract class GenericMessageListener {
                     // the message cannot be converted) is an error too. A handlerTimeout cancels this upstream, so
                     // neither fires then: the timeout is recorded below
                     .doOnSuccess(ignored -> metrics.recordHandlerExecution(handlerTag,
-                            ConsumerMetrics.EXECUTION_SUCCESS, Duration.between(attemptStart.get(), Instant.now())))
+                            ConsumerMetrics.EXECUTION_SUCCESS, elapsedSince(attemptStart.get())))
                     .doOnError(err -> metrics.recordHandlerExecution(handlerTag,
-                            ConsumerMetrics.EXECUTION_ERROR, Duration.between(attemptStart.get(), Instant.now())))
+                            ConsumerMetrics.EXECUTION_ERROR, elapsedSince(attemptStart.get())))
                     .transform(enrichPostProcess(message));
             if (handlerTimeout != null) {
                 // a dedicated type, so a TimeoutException thrown by the handler itself is not counted as one
                 flow = flow.timeout(handlerTimeout, Mono.error(() -> new HandlerTimeoutException(handlerTimeout)))
                         .doOnError(HandlerTimeoutException.class, err -> metrics.recordHandlerExecution(
                                 handlerTag, ConsumerMetrics.EXECUTION_TIMEOUT,
-                                Duration.between(attemptStart.get(), Instant.now())));
+                                elapsedSince(attemptStart.get())));
             }
             flow = flow.subscribeOn(ListenerSchedulers.handlers());
             if (hasLocalRetries()) {
@@ -287,9 +292,9 @@ public abstract class GenericMessageListener {
             }
             final Timer latency = metrics.handlerLatency();
             if (latency != null) {
-                flow = flow.doFinally(signal -> latency.record(Duration.between(initTime, Instant.now())));
+                flow = flow.doFinally(signal -> latency.record(elapsedSince(initNanos)));
             }
-            return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true)).thenReturn(msj);
+            return flow.doOnSuccess(o -> logExecution(executorPath, initNanos, true)).thenReturn(msj);
         } catch (Exception e) {
             log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
                     "Severe Warning! ", msj.getProperties().getMessageId()));
@@ -423,10 +428,9 @@ public abstract class GenericMessageListener {
         return Math.min(millis, RESTART_MAX_BACKOFF.toMillis());
     }
 
-    private void logExecution(String executorPath, Instant initTime, boolean success) {
+    private void logExecution(String executorPath, long initNanos, boolean success) {
         try {
-            final Instant afterExecutionTime = Instant.now();
-            final long timeElapsed = Duration.between(initTime, afterExecutionTime).toMillis();
+            final long timeElapsed = elapsedSince(initNanos).toMillis();
             doLogExecution(executorPath, timeElapsed);
             customReporter.reportMetric(objectType, executorPath, timeElapsed, success);
         } catch (Exception e) {
@@ -435,14 +439,22 @@ public abstract class GenericMessageListener {
 
     }
 
-    private void reportErrorMetric(AcknowledgableDelivery msj, Instant initTime) {
+    private void reportErrorMetric(AcknowledgableDelivery msj, long initNanos) {
         String executorPath;
         try {
             executorPath = getExecutorPath(msj);
         } catch (Exception e) {
             executorPath = "unknown";
         }
-        logExecution(executorPath, initTime, false);
+        logExecution(executorPath, initNanos, false);
+    }
+
+    /**
+     * Time elapsed since {@code startNanos}, a {@link System#nanoTime()}: unlike the system clock, it does not jump
+     * when the clock is adjusted (e.g. by NTP).
+     */
+    private static Duration elapsedSince(long startNanos) {
+        return Duration.ofNanos(System.nanoTime() - startNanos);
     }
 
     private void doLogExecution(String executorPath, long timeElapsed) {
@@ -521,7 +533,7 @@ public abstract class GenericMessageListener {
         return false;
     }
 
-    private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, Instant init) {
+    private Mono<AcknowledgableDelivery> requeueOrAck(AcknowledgableDelivery msj, Throwable err, long init) {
         if (err instanceof HandlerTimeoutException) {
             metrics.recordHandlerTimeout();
         }

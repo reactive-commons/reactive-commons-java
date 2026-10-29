@@ -125,7 +125,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     }
 
     @Override
-    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
+    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, long initNanos) {
         AMQP.BasicProperties messageProperties = msj.getProperties();
         if (!canBeAnswered(messageProperties)) {
             // e.g. published by another client: running the handler is pointless, nobody can get its reply
@@ -134,16 +134,16 @@ public class ApplicationQueryListener extends GenericMessageListener {
         }
 
         if (!hasTimeoutMetadata(messageProperties) || !discardTimeoutQueries) {
-            return super.handle(msj, initTime);
+            return super.handle(msj, initNanos);
         }
 
         // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
         return Mono.defer(() -> replyDeadlineMillis(messageProperties)
-                .map(deadline -> handleWithDeadline(msj, initTime, deadline))
+                .map(deadline -> handleWithDeadline(msj, initNanos, deadline))
                 .orElseGet(() -> {
                     // counted here only: retryIsUseless parses the same header again when the query fails
                     metrics.recordInvalidTimeoutHeader();
-                    return super.handle(msj, initTime);
+                    return super.handle(msj, initNanos);
                 }));
     }
 
@@ -187,13 +187,13 @@ public class ApplicationQueryListener extends GenericMessageListener {
         }
     }
 
-    private Mono<AcknowledgableDelivery> handleWithDeadline(AcknowledgableDelivery msj, Instant initTime,
+    private Mono<AcknowledgableDelivery> handleWithDeadline(AcknowledgableDelivery msj, long initNanos,
                                                             long replyDeadlineMillis) {
         long millisUntilTimeout = replyDeadlineMillis - currentTimestamp().toEpochMilli();
         String executorPath = getExecutorPath(msj);
 
         if (millisUntilTimeout > 0) {
-            return super.handle(msj, initTime)
+            return super.handle(msj, initNanos)
                     .timeout(Duration.ofMillis(millisUntilTimeout), buildTimeOutFallback(executorPath));
         }
 

@@ -200,7 +200,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, Instant.now()))
+        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, System.nanoTime()))
                 .expectNext(acknowledgableDelivery)
                 .verifyComplete();
     }
@@ -228,7 +228,7 @@ class ApplicationQueryListenerTest {
 
         verifyNoInteractions(sender);
 
-        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, Instant.now()))
+        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, System.nanoTime()))
                 .verifyComplete();
 
         assertThat(counter("reactive_commons.consumer.query.discarded")).isEqualTo(1.0);
@@ -254,7 +254,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, Instant.now()))
+        StepVerifier.create(applicationQueryListener.handle(acknowledgableDelivery, System.nanoTime()))
                 .expectNext(acknowledgableDelivery)
                 .verifyComplete();
     }
@@ -281,7 +281,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, System.nanoTime())))
                 .expectNext(delivery)
                 .verifyComplete();
     }
@@ -290,7 +290,7 @@ class ApplicationQueryListenerTest {
     void shouldDiscardExpiredQueryWhoseTimeoutHeaderIsALong() {
         AcknowledgableDelivery delivery = queryDelivery(Date.from(Instant.now().minusSeconds(20)), 15_000L);
 
-        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, System.nanoTime())))
                 .verifyComplete();
 
         verifyNoInteractions(sender);
@@ -303,7 +303,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, Instant.now())))
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(delivery, System.nanoTime())))
                 .expectNext(delivery)
                 .verifyComplete();
 
@@ -313,7 +313,7 @@ class ApplicationQueryListenerTest {
     @Test
     void anInvalidTimeoutHeaderIsCountedOnceEvenWhenTheQueryFails() {
         AcknowledgableDelivery delivery = queryDelivery(Date.from(Instant.now().minusSeconds(20)), "not-a-number");
-        applicationQueryListener.handle(delivery, Instant.now()).subscribe(ignored -> { }, ignored -> { });
+        applicationQueryListener.handle(delivery, System.nanoTime()).subscribe(ignored -> { }, ignored -> { });
 
         // on a failure the listener also checks whether retrying is useless, which reads the same header
         assertThat(applicationQueryListener.retryIsUseless(delivery)).isFalse();
@@ -332,7 +332,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByTimestamp, Instant.now())))
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByTimestamp, System.nanoTime())))
                 .expectNext(expiredByTimestamp)
                 .verifyComplete();
         assertThat(applicationQueryListener.retryIsUseless(expiredByTimestamp)).isFalse();
@@ -340,7 +340,7 @@ class ApplicationQueryListenerTest {
         AcknowledgableDelivery expiredByDeadline = queryDelivery(new Date(), 15_000L,
                 Instant.now().minusMillis(1).toEpochMilli());
 
-        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByDeadline, Instant.now())))
+        StepVerifier.create(Mono.defer(() -> applicationQueryListener.handle(expiredByDeadline, System.nanoTime())))
                 .verifyComplete();
         assertThat(applicationQueryListener.retryIsUseless(expiredByDeadline)).isTrue();
         assertThat(counter("reactive_commons.consumer.query.discarded")).isEqualTo(1.0);
@@ -373,7 +373,7 @@ class ApplicationQueryListenerTest {
         when(sender.sendNoConfirm(eq("OK"), eq("replyExchange"), eq("asdf1234"), any(), eq(false)))
                 .thenReturn(Mono.empty());
 
-        Mono<AcknowledgableDelivery> result = applicationQueryListener.handle(delivery, Instant.now());
+        Mono<AcknowledgableDelivery> result = applicationQueryListener.handle(delivery, System.nanoTime());
 
         StepVerifier.create(result).expectNext(delivery).verifyComplete();
     }
