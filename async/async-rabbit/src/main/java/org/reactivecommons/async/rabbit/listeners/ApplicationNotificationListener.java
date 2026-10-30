@@ -1,8 +1,6 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import org.reactivecommons.async.api.handlers.CloudEventHandler;
-import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
@@ -77,8 +75,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
             throw new MissingHandlerException("notification", executorPath);
         }
 
-        Function<Message, Object> converter = resolveConverter(eventListener);
-        final EventExecutor<Object> executor = new EventExecutor<>(eventListener.handler(), converter);
+        final EventExecutor<Object> executor = EventExecutor.of(eventListener, messageConverter);
 
         return message -> executor.execute(message).cast(Object.class);
     }
@@ -97,17 +94,6 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     @Override
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
-    }
-
-    private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
-        if (registeredEventListener.handler() instanceof DomainEventHandler) {
-            final Class<T> eventClass = registeredEventListener.inputClass();
-            return msj -> messageConverter.readDomainEvent(msj, eventClass);
-        }
-        if (registeredEventListener.handler() instanceof CloudEventHandler) {
-            return messageConverter::readCloudEvent;
-        }
-        throw new RuntimeException("Unknown handler type");
     }
 
     @Override
