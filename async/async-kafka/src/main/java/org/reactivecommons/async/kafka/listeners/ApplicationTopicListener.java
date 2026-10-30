@@ -1,9 +1,8 @@
 package org.reactivecommons.async.kafka.listeners;
 
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import reactor.core.publisher.Mono;
@@ -20,17 +19,9 @@ public class ApplicationTopicListener extends GenericMessageListener {
     private final RegisteredQueueListener registeredListener;
     private final String topic;
 
-    public ApplicationTopicListener(ReactiveMessageListener listener,
-                                    boolean withDLQRetry,
-                                    boolean createTopology,
-                                    long maxRetries,
-                                    int retryDelay,
-                                    RegisteredQueueListener registeredListener,
-                                    DiscardNotifier discardNotifier,
-                                    CustomReporter errorReporter,
-                                    String groupId) {
-        super(listener, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier, "topic", errorReporter,
-                groupId, List.of(registeredListener.queueName()));
+    public ApplicationTopicListener(ListenerContext<ReactiveMessageListener> context,
+                                    RegisteredQueueListener registeredListener, String groupId) {
+        super(context, "topic", groupId, List.of(registeredListener.queueName()));
         this.registeredListener = registeredListener;
         this.topic = registeredListener.queueName();
     }

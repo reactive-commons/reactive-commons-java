@@ -7,6 +7,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -124,11 +126,11 @@ class GenericMessageListenerTest {
         private final Function<Message, Mono<Object>> handler;
 
         public SampleListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology, long maxRetries,
-                              long retryDelay, DiscardNotifier discardNotifier, String objectType,
+                              int retryDelay, DiscardNotifier discardNotifier, String objectType,
                               CustomReporter customReporter, String groupId, List<String> topics,
                               Function<Message, Mono<Object>> handler) {
-            super(listener, useDLQ, createTopology, maxRetries, retryDelay, discardNotifier, objectType, customReporter,
-                    groupId, topics);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQ, maxRetries, retryDelay),
+                    createTopology, discardNotifier, customReporter), objectType, groupId, topics);
             this.handler = handler;
         }
 

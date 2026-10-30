@@ -8,6 +8,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import reactor.core.publisher.Mono;
 
 import java.net.URI;
@@ -79,8 +81,9 @@ class ApplicationEventListenerTest extends ListenerReporterTestSuperClass {
 
     class StubGenericMessageListener extends ApplicationEventListener {
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", "domainEvents", handlerResolver, messageConverter, true, true,
-                    10, 10, Optional.empty(), discardNotifier, errorReporter, "");
+            super(new ListenerContext<>(reactiveMessageListener, handlerResolver, messageConverter,
+                    new RetryPolicy(true, 10, 10), true, discardNotifier, errorReporter), "queueName", "domainEvents",
+                    Optional.empty(), "");
         }
     }
 }

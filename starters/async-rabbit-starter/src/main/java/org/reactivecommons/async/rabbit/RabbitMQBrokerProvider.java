@@ -7,6 +7,8 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
@@ -132,18 +134,10 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public void listenDomainEvents(HandlerResolver resolver) {
         if (!props.getDomain().isIgnoreThisListener()) {
-            final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+            final ApplicationEventListener listener = new ApplicationEventListener(listenerContext(resolver),
                     props.getBrokerConfigProps().getEventsQueue(),
                     props.getBrokerConfigProps().getDomainEventsExchangeName(),
-                    resolver,
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
                     props.getDomain().getEvents().getMaxLengthBytes(),
-                    discardNotifier,
-                    errorReporter,
                     props.getAppName());
             register(listener);
         }
@@ -152,14 +146,8 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public void listenQueues(HandlerResolver resolver) {
         resolver.getQueueListeners().values().forEach(registeredQueueListener -> {
-            final ApplicationQueueListener listener = new ApplicationQueueListener(receiver,
-                    props.getWithDLQRetry(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    registeredQueueListener,
-                    discardNotifier,
-                    errorReporter
-            );
+            final ApplicationQueueListener listener = new ApplicationQueueListener(listenerContext(resolver),
+                    registeredQueueListener);
             register(listener);
         });
     }
@@ -173,14 +161,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenNotificationEvents(HandlerResolver resolver) {
         if (resolver.hasNotificationListeners()) {
             final ApplicationNotificationListener listener = new ApplicationNotificationListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getDomainEventsExchangeName(),
-                    props.getBrokerConfigProps().getNotificationsQueue(),
-                    props.getCreateTopology(),
-                    resolver,
-                    converter,
-                    discardNotifier,
-                    errorReporter);
+                    props.getBrokerConfigProps().getNotificationsQueue());
             register(listener);
         }
     }
@@ -189,19 +172,11 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenCommands(HandlerResolver resolver) {
         if (resolver.hasCommandHandlers()) {
             ApplicationCommandListener commandListener = new ApplicationCommandListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getCommandsQueue(),
-                    resolver,
                     props.getDirect().getExchange(),
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
                     props.getDelayedCommands(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    props.getDirect().getMaxLengthBytes(),
-                    discardNotifier,
-                    errorReporter);
+                    props.getDirect().getMaxLengthBytes());
 
             register(commandListener);
         }
@@ -211,24 +186,25 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenQueries(HandlerResolver resolver) {
         if (resolver.hasQueryHandlers()) {
             final ApplicationQueryListener listener = new ApplicationQueryListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getQueriesQueue(),
-                    resolver,
                     sender,
                     props.getBrokerConfigProps().getDirectMessagesExchangeName(),
-                    converter,
                     props.getBrokerConfigProps().getGlobalReplyExchangeName(),
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
                     props.getGlobal().getMaxLengthBytes(),
-                    props.getDirect().isDiscardTimeoutQueries(),
-                    discardNotifier,
-                    errorReporter);
+                    props.getDirect().isDiscardTimeoutQueries());
 
             register(listener);
         }
+    }
+
+    /**
+     * What the listeners of this domain share, with the retry policy and the topology setting of its properties.
+     */
+    private ListenerContext<ReactiveMessageListener> listenerContext(HandlerResolver resolver) {
+        return new ListenerContext<>(receiver, resolver, converter,
+                new RetryPolicy(props.getWithDLQRetry(), props.getMaxRetries(), props.getRetryDelay()),
+                props.getCreateTopology(), discardNotifier, errorReporter);
     }
 
     /**

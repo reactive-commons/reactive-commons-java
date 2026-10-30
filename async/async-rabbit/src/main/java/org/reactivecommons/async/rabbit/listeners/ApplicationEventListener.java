@@ -1,17 +1,17 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
+import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
@@ -31,31 +31,18 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final MessageConverter messageConverter;
     private final HandlerResolver resolver;
     private final String eventsExchange;
-    private final boolean withDLQRetry;
-    private final int retryDelay;
+    private final RetryPolicy retryPolicy;
     private final Optional<Integer> maxLengthBytes;
     private final String appName;
 
 
-    public ApplicationEventListener(ReactiveMessageListener receiver,
-                                    String queueName,
-                                    String eventsExchange,
-                                    HandlerResolver resolver,
-                                    MessageConverter messageConverter,
-                                    boolean withDLQRetry,
-                                    boolean createTopology,
-                                    long maxRetries, int retryDelay,
-                                    Optional<Integer> maxLengthBytes,
-                                    DiscardNotifier discardNotifier,
-                                    CustomReporter errorReporter,
-                                    String appName) {
-        super(queueName, receiver, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "event", errorReporter);
-        this.retryDelay = retryDelay;
-        this.withDLQRetry = withDLQRetry;
-        this.resolver = resolver;
+    public ApplicationEventListener(ListenerContext<ReactiveMessageListener> context, String queueName,
+                                    String eventsExchange, Optional<Integer> maxLengthBytes, String appName) {
+        super(context, queueName, "event");
+        this.retryPolicy = context.retryPolicy();
+        this.resolver = context.resolver();
         this.eventsExchange = eventsExchange;
-        this.messageConverter = messageConverter;
+        this.messageConverter = context.converter();
         this.maxLengthBytes = maxLengthBytes;
         this.appName = appName;
     }
@@ -71,7 +58,7 @@ public class ApplicationEventListener extends GenericMessageListener {
                 .concatMap(listener -> creator.bind(
                         BindingSpecification.binding(eventsExchange, listener.path(), queueName)
                 ));
-        if (withDLQRetry) {
+        if (retryPolicy.withDLQRetry()) {
             final String eventsDLQExchangeName = format("%s.%s.DLQ", appName, eventsExchange);
             final String retryExchangeName = format("%s.%s", appName, eventsExchange);
             final Mono<AMQP.Exchange.DeclareOk> retryExchange = creator.declare(
@@ -81,7 +68,7 @@ public class ApplicationEventListener extends GenericMessageListener {
                     ExchangeSpecification.exchange(eventsDLQExchangeName).durable(true).type("topic")
             );
             final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
-                    queueName, retryExchangeName, retryDelay, maxLengthBytes
+                    queueName, retryExchangeName, retryPolicy.retryDelay(), maxLengthBytes
             );
             final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(
                     queueName, eventsDLQExchangeName, maxLengthBytes

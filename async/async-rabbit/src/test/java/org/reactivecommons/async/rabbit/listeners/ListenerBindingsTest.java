@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -61,9 +63,10 @@ class ListenerBindingsTest {
 
     @Test
     void theEventBindingsAreDeclaredOneAfterTheOther() {
-        ApplicationEventListener listener = new ApplicationEventListener(messageListener(), "app.subsEvents",
-                "domainEvents", resolver(), mock(MessageConverter.class), false, true, -1, 1000, Optional.empty(),
-                mock(DiscardNotifier.class), mock(CustomReporter.class), "app");
+        ApplicationEventListener listener = new ApplicationEventListener(new ListenerContext<>(messageListener(),
+                resolver(), mock(MessageConverter.class), new RetryPolicy(false, -1, 1000), true,
+                mock(DiscardNotifier.class), mock(CustomReporter.class)), "app.subsEvents", "domainEvents",
+                Optional.empty(), "app");
 
         StepVerifier.create(listener.setUpBindings(creator)).verifyComplete();
 
@@ -73,9 +76,9 @@ class ListenerBindingsTest {
 
     @Test
     void theNotificationBindingsAreDeclaredOneAfterTheOther() {
-        ApplicationNotificationListener listener = new ApplicationNotificationListener(messageListener(),
-                "domainEvents", "app.notification", true, resolver(), mock(MessageConverter.class),
-                mock(DiscardNotifier.class), mock(CustomReporter.class));
+        ApplicationNotificationListener listener = new ApplicationNotificationListener(new ListenerContext<>(
+                messageListener(), resolver(), mock(MessageConverter.class), null, true, mock(DiscardNotifier.class),
+                mock(CustomReporter.class)), "domainEvents", "app.notification");
 
         StepVerifier.create(listener.setUpBindings(creator)).verifyComplete();
 

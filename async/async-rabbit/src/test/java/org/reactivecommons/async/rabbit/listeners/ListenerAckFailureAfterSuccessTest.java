@@ -9,6 +9,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -99,8 +101,8 @@ class ListenerAckFailureAfterSuccessTest {
 
         SucceedingListener(ReactiveMessageListener listener, boolean withDLQRetry, long maxRetries,
                            DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handled) {
-            super("test-queue", listener, withDLQRetry, false, maxRetries, 50, discardNotifier, "command",
-                    errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(withDLQRetry, maxRetries, 50), false,
+                    discardNotifier, errorReporter), "test-queue", "command");
             this.handled = handled;
         }
 

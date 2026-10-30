@@ -4,12 +4,11 @@ import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
@@ -22,20 +21,10 @@ public class ApplicationEventListener extends GenericMessageListener {
     private final HandlerResolver resolver;
 
 
-    public ApplicationEventListener(ReactiveMessageListener receiver,
-                                    HandlerResolver resolver,
-                                    MessageConverter messageConverter,
-                                    boolean withDLQRetry,
-                                    boolean createTopology,
-                                    long maxRetries,
-                                    int retryDelay,
-                                    DiscardNotifier discardNotifier,
-                                    CustomReporter errorReporter,
-                                    String groupId) {
-        super(receiver, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "event", errorReporter, groupId, resolver.getEventNames());
-        this.resolver = resolver;
-        this.messageConverter = messageConverter;
+    public ApplicationEventListener(ListenerContext<ReactiveMessageListener> context, String groupId) {
+        super(context, "event", groupId, context.resolver().getEventNames());
+        this.resolver = context.resolver();
+        this.messageConverter = context.converter();
     }
 
     @Override

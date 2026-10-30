@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -262,7 +264,7 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(startupWarnings(true, 60, 30_000, null)).as("DLQ retries").isEmpty();
     }
 
-    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, long retryDelay,
+    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, int retryDelay,
                                          Duration handlerTimeout) {
         lenient().when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.never());
         Logger logger = (Logger) LoggerFactory.getLogger(GenericMessageListener.class);
@@ -370,10 +372,10 @@ class GenericMessageListenerRetryStrategyTest {
             this(listener, useDLQRetries, maxRetries, RETRY_DELAY, discardNotifier, errorReporter, handlerCalls);
         }
 
-        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, long retryDelay,
+        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, int retryDelay,
                         DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            super("test-queue", listener, useDLQRetries, false, maxRetries, retryDelay, discardNotifier,
-                    "command", errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, retryDelay),
+                    false, discardNotifier, errorReporter), "test-queue", "command");
             this.handlerCalls = handlerCalls;
         }
 
@@ -411,7 +413,8 @@ class GenericMessageListenerRetryStrategyTest {
 
         HangingListener(ReactiveMessageListener listener, long maxRetries, DiscardNotifier discardNotifier,
                         CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
-            super(QUEUE, listener, false, false, maxRetries, RETRY_DELAY, discardNotifier, "command", errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(false, maxRetries, RETRY_DELAY), false,
+                    discardNotifier, errorReporter), QUEUE, "command");
             this.handler = handler;
         }
 

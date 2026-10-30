@@ -4,6 +4,8 @@ import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -84,20 +86,20 @@ public abstract class GenericMessageListener {
     private final AtomicBoolean handlerPoolRoom = new AtomicBoolean();
     private volatile String consumerTag;
 
-    protected GenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                     boolean createTopology, long maxRetries, long retryDelay,
-                                     DiscardNotifier discardNotifier, String objectType,
-                                     CustomReporter customReporter) {
+    protected GenericMessageListener(ListenerContext<ReactiveMessageListener> context, String queueName,
+                                     String objectType) {
+        final ReactiveMessageListener listener = context.listener();
+        final RetryPolicy retryPolicy = context.retryPolicy();
         this.receiver = listener.receiver();
         this.queueName = queueName;
         this.messageListener = listener;
-        this.createTopology = createTopology;
-        this.maxRetries = resolveRetries(useDLQRetries, maxRetries);
-        this.retryDelay = Duration.ofMillis(retryDelay);
-        this.useDLQRetries = useDLQRetries;
-        this.discardNotifier = discardNotifier;
+        this.createTopology = context.createTopology();
+        this.maxRetries = resolveRetries(retryPolicy.withDLQRetry(), retryPolicy.maxRetries());
+        this.retryDelay = Duration.ofMillis(retryPolicy.retryDelay());
+        this.useDLQRetries = retryPolicy.withDLQRetry();
+        this.discardNotifier = context.discardNotifier();
         this.objectType = objectType;
-        this.customReporter = customReporter;
+        this.customReporter = context.errorReporter();
         this.liveness = listener.subscriberRegistry() != null
                 ? listener.subscriberRegistry().register(queueName)
                 : new ListenerLiveness(queueName);

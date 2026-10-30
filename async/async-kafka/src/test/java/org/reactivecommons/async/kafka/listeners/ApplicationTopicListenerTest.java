@@ -8,6 +8,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -199,16 +201,7 @@ class ApplicationTopicListenerTest {
 
     private ApplicationTopicListener buildListener(RegisteredQueueListener registeredListener, boolean createTopology,
                                                    String groupId) {
-        return new ApplicationTopicListener(
-                receiver,
-                true,
-                createTopology,
-                10L,
-                10,
-                registeredListener,
-                discardNotifier,
-                errorReporter,
-                groupId
-        );
+        return new ApplicationTopicListener(new ListenerContext<>(receiver, null, null, new RetryPolicy(true, 10L, 10),
+                createTopology, discardNotifier, errorReporter), registeredListener, groupId);
     }
 }

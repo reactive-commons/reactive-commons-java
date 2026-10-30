@@ -13,6 +13,8 @@ import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -43,18 +45,8 @@ class ApplicationNotificationsListenerTest {
 
     @BeforeEach
     void setup() {
-        applicationNotificationsListener = new ApplicationNotificationsListener(
-                receiver,
-                resolver,
-                messageConverter,
-                true,
-                true,
-                3,
-                1000,
-                null,
-                null,
-                "testApp"
-        );
+        applicationNotificationsListener = new ApplicationNotificationsListener(new ListenerContext<>(receiver,
+                resolver, messageConverter, new RetryPolicy(true, 3, 1000), true, null, null), "testApp");
     }
 
     @Test

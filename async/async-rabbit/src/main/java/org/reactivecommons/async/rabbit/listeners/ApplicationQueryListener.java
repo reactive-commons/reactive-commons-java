@@ -3,14 +3,14 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
 import lombok.extern.slf4j.Slf4j;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.QueryExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -40,23 +40,18 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private final ReactiveMessageSender sender;
     private final String replyExchange;
     private final String directExchange;
-    private final boolean withDLQRetry;
-    private final int retryDelay;
+    private final RetryPolicy retryPolicy;
     private final Optional<Integer> maxLengthBytes;
     private final boolean discardTimeoutQueries;
 
 
-    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
-                                    ReactiveMessageSender sender, String directExchange, MessageConverter converter,
-                                    String replyExchange, boolean withDLQRetry, boolean createTopology, long maxRetries,
-                                    int retryDelay, Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries,
-                                    DiscardNotifier discardNotifier, CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "query", errorReporter);
-        this.retryDelay = retryDelay;
-        this.withDLQRetry = withDLQRetry;
-        this.converter = converter;
-        this.handlerResolver = resolver;
+    public ApplicationQueryListener(ListenerContext<ReactiveMessageListener> context, String queueName,
+                                    ReactiveMessageSender sender, String directExchange, String replyExchange,
+                                    Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries) {
+        super(context, queueName, "query");
+        this.retryPolicy = context.retryPolicy();
+        this.converter = context.converter();
+        this.handlerResolver = context.resolver();
         this.sender = sender;
         this.replyExchange = replyExchange;
         this.directExchange = directExchange;
@@ -88,11 +83,12 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(directExchange).durable(true).type("direct")
         );
-        if (withDLQRetry) {
+        if (retryPolicy.withDLQRetry()) {
             final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(
                     ExchangeSpecification.exchange(directExchange + ".DLQ").durable(true).type("direct")
             );
@@ -100,7 +96,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
                     queueName, directExchange + ".DLQ", maxLengthBytes
             );
             final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
-                    queueName, directExchange, retryDelay, maxLengthBytes
+                    queueName, directExchange, retryPolicy.retryDelay(), maxLengthBytes
             );
             final Mono<AMQP.Queue.BindOk> binding = creator.bind(
                     BindingSpecification.binding(directExchange, queueName, queueName)

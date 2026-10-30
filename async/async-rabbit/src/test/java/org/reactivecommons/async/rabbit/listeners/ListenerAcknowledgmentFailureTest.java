@@ -13,6 +13,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
@@ -137,8 +139,8 @@ class ListenerAcknowledgmentFailureTest {
 
     private static class TestListener extends GenericMessageListener {
         TestListener(ReactiveMessageListener listener) {
-            super("test-queue", listener, false, false, -1, 1000, mock(DiscardNotifier.class), "command",
-                    mock(CustomReporter.class));
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(false, -1, 1000), false,
+                    mock(DiscardNotifier.class), mock(CustomReporter.class)), "test-queue", "command");
         }
 
         @Override

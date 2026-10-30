@@ -8,6 +8,8 @@ import com.rabbitmq.client.ShutdownSignalException;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.rabbitmq.RabbitMQContainer;
@@ -130,11 +132,10 @@ class ReceiverChannelErrorRabbitContainerTest {
         Sender sender = new Sender(new SenderOptions().connectionMono(Mono.just(connection)));
         ReactiveReplyRouter router = new ReactiveReplyRouter();
         String replyQueue = "replies." + UUID.randomUUID();
-        String routingKey = replyQueue;
         ApplicationReplyListener listener = new ApplicationReplyListener(router,
                 new ReactiveMessageListener(capturingReceiver, new TopologyCreator(sender, "classic")), replyQueue,
                 "globalReply", true);
-        listener.startListening(routingKey);
+        listener.startListening(replyQueue);
         try {
             awaitConsumers(replyQueue, 1);
             // a channel error on the consuming channel: the broker closes it (406 unknown delivery tag)
@@ -145,7 +146,7 @@ class ReceiverChannelErrorRabbitContainerTest {
             String correlationId = UUID.randomUUID().toString();
             Mono<Message> reply = router.register(correlationId);
             try (Channel channel = connection.createChannel()) {
-                channel.basicPublish("globalReply", routingKey, new com.rabbitmq.client.AMQP.BasicProperties.Builder()
+                channel.basicPublish("globalReply", replyQueue, new com.rabbitmq.client.AMQP.BasicProperties.Builder()
                         .headers(Map.of(CORRELATION_ID, correlationId)).build(), "\"ok\"".getBytes());
             }
             String outcome = reply.map(message -> "received")
@@ -176,8 +177,9 @@ class ReceiverChannelErrorRabbitContainerTest {
         RegisteredQueueListener registered = HandlerRegistry.register()
                 .listenQueue(queue, message -> Mono.fromRunnable(received::incrementAndGet))
                 .getQueueHandlers().get(DEFAULT_DOMAIN).get(0);
-        ApplicationQueueListener listener = new ApplicationQueueListener(messageListener, false, -1, 1000, registered,
-                mock(DiscardNotifier.class), mock(CustomReporter.class));
+        ApplicationQueueListener listener = new ApplicationQueueListener(new ListenerContext<>(messageListener, null,
+                null, new RetryPolicy(false, -1, 1000), true, mock(DiscardNotifier.class), mock(CustomReporter.class)),
+                registered);
         listener.startListener();
         try {
             awaitConsumers(queue, 1);

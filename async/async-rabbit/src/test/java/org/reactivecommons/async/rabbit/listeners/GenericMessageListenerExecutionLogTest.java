@@ -6,6 +6,8 @@ import com.sun.management.ThreadMXBean;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -65,9 +67,10 @@ class GenericMessageListenerExecutionLogTest {
     private static class TestListener extends GenericMessageListener {
 
         TestListener() {
-            super("test-queue", new ReactiveMessageListener(mock(Receiver.class), mock(TopologyCreator.class), 250,
-                            250, new SubscriberRegistry(), new SimpleMeterRegistry(), "app", null), false, false, -1,
-                    10, mock(DiscardNotifier.class), "event", mock(CustomReporter.class));
+            super(new ListenerContext<>(new ReactiveMessageListener(mock(Receiver.class), mock(TopologyCreator.class),
+                    250, 250, new SubscriberRegistry(), new SimpleMeterRegistry(), "app", null), null, null,
+                    new RetryPolicy(false, -1, 10), false, mock(DiscardNotifier.class), mock(CustomReporter.class)),
+                    "test-queue", "event");
         }
 
         @Override

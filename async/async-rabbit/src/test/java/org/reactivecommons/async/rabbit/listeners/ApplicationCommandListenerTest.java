@@ -6,6 +6,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import reactor.core.publisher.Mono;
 
 import java.util.Optional;
@@ -68,8 +70,9 @@ class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass {
     class StubGenericMessageListener extends ApplicationCommandListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, "directExchange", messageConverter, true,
-                    false, false, 10, 10, Optional.empty(), discardNotifier, errorReporter);
+            super(new ListenerContext<>(reactiveMessageListener, handlerResolver, messageConverter,
+                    new RetryPolicy(true, 10, 10), false, discardNotifier, errorReporter), "queueName",
+                    "directExchange", false, Optional.empty());
         }
     }
 }

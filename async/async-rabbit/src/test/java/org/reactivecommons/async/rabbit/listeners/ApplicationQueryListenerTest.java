@@ -16,6 +16,8 @@ import org.reactivecommons.async.api.handlers.QueryHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.commons.converters.MessageConverter;
@@ -100,9 +102,9 @@ class ApplicationQueryListenerTest {
         when(reactiveMessageListener.meterRegistry()).thenReturn(registry);
         Optional<Integer> maxLengthBytes = Optional.of(Integer.MAX_VALUE);
         HandlerResolver resolver = getHandlerResolver();
-        applicationQueryListener = new ApplicationQueryListener(reactiveMessageListener, "queue", resolver, sender,
-                "directExchange", messageConverter, "replyExchange", false,
-                true, 1, 100, maxLengthBytes, true, discardNotifier, errorReporter);
+        applicationQueryListener = new ApplicationQueryListener(new ListenerContext<>(reactiveMessageListener, resolver,
+                messageConverter, new RetryPolicy(false, 1, 100), true, discardNotifier, errorReporter), "queue",
+                sender, "directExchange", "replyExchange", maxLengthBytes, true);
     }
 
     private static HandlerResolver getHandlerResolver() {
@@ -413,8 +415,3 @@ class ApplicationQueryListenerTest {
     }
 
 }
-
-
-
-
-

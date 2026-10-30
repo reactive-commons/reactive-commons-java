@@ -12,6 +12,8 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -146,8 +148,8 @@ class GenericMessageListenerRecoveryTest {
         public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
                                           boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
                                           String objectType, CustomReporter errorReporter) {
-            super(queueName, listener, useDLQRetries, createTopology, maxRetries, 200, discardNotifier,
-                    objectType, errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, 200),
+                    createTopology, discardNotifier, errorReporter), queueName, objectType);
         }
 
         @Override

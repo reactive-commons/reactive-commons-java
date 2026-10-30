@@ -3,6 +3,8 @@ package org.reactivecommons.async.kafka.listeners;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
@@ -46,20 +48,19 @@ public abstract class GenericMessageListener {
     private final CustomReporter customReporter;
     private volatile Flux<ReceiverRecord<String, byte[]>> messageFlux;
 
-    protected GenericMessageListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology,
-                                     long maxRetries, long retryDelay, DiscardNotifier discardNotifier,
-                                     String objectType, CustomReporter customReporter, String groupId,
-                                     List<String> topics) {
+    protected GenericMessageListener(ListenerContext<ReactiveMessageListener> context, String objectType,
+                                     String groupId, List<String> topics) {
+        final RetryPolicy retryPolicy = context.retryPolicy();
         this.groupId = groupId;
         this.topics = topics;
-        this.messageListener = listener;
-        this.createTopology = createTopology;
-        this.maxRetries = maxRetries;
-        this.retryDelay = Duration.ofMillis(retryDelay);
-        this.useDLQ = useDLQ;
-        this.discardNotifier = discardNotifier;
+        this.messageListener = context.listener();
+        this.createTopology = context.createTopology();
+        this.maxRetries = retryPolicy.maxRetries();
+        this.retryDelay = Duration.ofMillis(retryPolicy.retryDelay());
+        this.useDLQ = retryPolicy.withDLQRetry();
+        this.discardNotifier = context.discardNotifier();
         this.objectType = objectType;
-        this.customReporter = customReporter;
+        this.customReporter = context.errorReporter();
     }
 
     private boolean hasRetries() {
@@ -214,7 +215,7 @@ public abstract class GenericMessageListener {
         } catch (Exception e) {
             log.error("Error Login message Content!!", e);
         } finally {
-            log.warn(format(strategy.message, messageID));
+            log.warn("{}", format(strategy.message, messageID));
         }
     }
 

@@ -6,6 +6,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
@@ -140,23 +142,16 @@ class ApplicationQueueListenerTest extends ListenerReporterTestSuperClass {
     }
 
     private ApplicationQueueListener queueListener(String queueName) {
-        return new ApplicationQueueListener(reactiveMessageListener, false, -1, 1000,
-                new RegisteredQueueListener(queueName, m -> Mono.empty(), creator -> Mono.empty()),
-                discardNotifier, errorReporter);
+        return new ApplicationQueueListener(new ListenerContext<>(reactiveMessageListener, null, null,
+                new RetryPolicy(false, -1, 1000), true, discardNotifier, errorReporter),
+                new RegisteredQueueListener(queueName, m -> Mono.empty(), creator -> Mono.empty()));
     }
 
     @Override
     protected GenericMessageListener createMessageListener(HandlerResolver handlerResolver) {
         RegisteredQueueListener registeredListener = handlerResolver.getQueueListeners().get("test.queue");
-        return new ApplicationQueueListener(
-                reactiveMessageListener,
-                true,
-                10L,
-                10,
-                registeredListener,
-                discardNotifier,
-                errorReporter
-        );
+        return new ApplicationQueueListener(new ListenerContext<>(reactiveMessageListener, null, null,
+                new RetryPolicy(true, 10L, 10), true, discardNotifier, errorReporter), registeredListener);
     }
 
     record TestRawMessage(String queueName) {
