@@ -84,14 +84,11 @@ public class TopologyCreator implements AutoCloseable {
     }
 
     public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, Optional<Integer> maxLengthBytesOpt) {
+        final Map<String, Object> args = new HashMap<>();
+        maxLengthBytesOpt.ifPresent(maxLengthBytes -> args.put("x-max-length-bytes", maxLengthBytes));
         QueueSpecification specification = QueueSpecification.queue(name)
-                .durable(true);
-        if (maxLengthBytesOpt.isPresent()) {
-            final Map<String, Object> args = new HashMap<>();
-            args.put("x-max-length-bytes", maxLengthBytesOpt.orElse(0));
-            specification = specification.arguments(args);
-        }
-
+                .durable(true)
+                .arguments(args);
         return declare(specification);
     }
 
