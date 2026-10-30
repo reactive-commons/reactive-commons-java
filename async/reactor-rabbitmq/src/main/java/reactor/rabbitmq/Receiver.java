@@ -146,64 +146,7 @@ public class Receiver implements Closeable {
     public Flux<AcknowledgableDelivery> consumeManualAck(final String queue, ConsumeOptions options) {
         return Flux.create(emitter -> connectionMono.map(CHANNEL_CREATION_FUNCTION).subscribe(channel -> {
             try {
-                if (options.getChannelCallback() != null) {
-                    options.getChannelCallback().accept(channel);
-                }
-                if (options.getQos() != 0) {
-                    channel.basicQos(options.getQos());
-                }
-
-                DeliverCallback deliverCallback = (consumerTag, message) -> {
-                    AcknowledgableDelivery delivery = new AcknowledgableDelivery(message, channel, options.getExceptionHandler());
-                    if (options.getHookBeforeEmitBiFunction().test(emitter.requestedFromDownstream(), delivery)) {
-                        emitter.next(delivery);
-                    }
-                    if (options.getStopConsumingBiFunction().test(emitter.requestedFromDownstream(), message)) {
-                        emitter.complete();
-                    }
-                };
-
-                AtomicBoolean basicCancel = new AtomicBoolean(true);
-                CancelCallback cancelCallback = consumerTag -> {
-                    LOGGER.info("Flux consumer {} has been cancelled", consumerTag);
-                    basicCancel.set(false);
-                    emitter.complete();
-                };
-
-                completeOnChannelShutdown(channel, emitter);
-
-                final String consumerTag = channel.basicConsume(
-                        queue,
-                        false, // no auto-ack
-                        options.getConsumerTag(),
-                        false, // noLocal (not supported by RabbitMQ)
-                        false, // not exclusive
-                        options.getArguments(),
-                        deliverCallback,
-                        cancelCallback);
-                AtomicBoolean cancelled = new AtomicBoolean(false);
-                LOGGER.info("Consumer {} consuming from {} has been registered", consumerTag, queue);
-                // basicConsume returns once the broker answered consume-ok
-                options.getConsumerRegisteredCallback().accept(consumerTag);
-                emitter.onDispose(() -> {
-                    LOGGER.info("Cancelling consumer {} consuming from {}", consumerTag, queue);
-                    if (cancelled.compareAndSet(false, true)) {
-                        try {
-                            if (channel.isOpen() && channel.getConnection().isOpen()) {
-                                if (basicCancel.compareAndSet(true, false)) {
-                                    cancelConsumer(channel, consumerTag);
-                                }
-                                channel.close();
-                            } else if (isRecoverable(channel)) {
-                                // closed by a connection loss: forgotten, or the automatic recovery would re-open it
-                                // with its consumer, whose deliveries nobody would handle and acknowledge anymore
-                                channel.abort();
-                            }
-                        } catch (TimeoutException | IOException e) {
-                            LOGGER.warn("Error while closing channel: {}", e.getMessage());
-                        }
-                    }
-                });
+                startConsumer(queue, options, emitter, channel);
             } catch (Exception e) {
                 // error first: aborting the channel completes a consumer whose channel is closed by the application
                 emitter.error(new RabbitFluxException(e));
@@ -212,6 +155,83 @@ public class Receiver implements Closeable {
                 abortQuietly(channel);
             }
         }, emitter::error), options.getOverflowStrategy());
+    }
+
+    /**
+     * Registers on the channel the consumer of the queue that emits its deliveries, and cancels it, closing its
+     * channel, once the flux is disposed.
+     */
+    private void startConsumer(String queue, ConsumeOptions options, FluxSink<AcknowledgableDelivery> emitter,
+                               Channel channel) throws IOException {
+        if (options.getChannelCallback() != null) {
+            options.getChannelCallback().accept(channel);
+        }
+        if (options.getQos() != 0) {
+            channel.basicQos(options.getQos());
+        }
+
+        AtomicBoolean basicCancel = new AtomicBoolean(true);
+        CancelCallback cancelCallback = consumerTag -> {
+            LOGGER.info("Flux consumer {} has been cancelled", consumerTag);
+            basicCancel.set(false);
+            emitter.complete();
+        };
+
+        completeOnChannelShutdown(channel, emitter);
+
+        final String consumerTag = channel.basicConsume(
+                queue,
+                false, // no auto-ack
+                options.getConsumerTag(),
+                false, // noLocal (not supported by RabbitMQ)
+                false, // not exclusive
+                options.getArguments(),
+                deliverCallback(options, emitter, channel),
+                cancelCallback);
+        AtomicBoolean cancelled = new AtomicBoolean(false);
+        LOGGER.info("Consumer {} consuming from {} has been registered", consumerTag, queue);
+        // basicConsume returns once the broker answered consume-ok
+        options.getConsumerRegisteredCallback().accept(consumerTag);
+        emitter.onDispose(() -> {
+            LOGGER.info("Cancelling consumer {} consuming from {}", consumerTag, queue);
+            if (cancelled.compareAndSet(false, true)) {
+                stopConsumer(channel, consumerTag, basicCancel);
+            }
+        });
+    }
+
+    private static DeliverCallback deliverCallback(ConsumeOptions options, FluxSink<AcknowledgableDelivery> emitter,
+                                                   Channel channel) {
+        return (consumerTag, message) -> {
+            AcknowledgableDelivery delivery = new AcknowledgableDelivery(message, channel,
+                    options.getExceptionHandler());
+            if (options.getHookBeforeEmitBiFunction().test(emitter.requestedFromDownstream(), delivery)) {
+                emitter.next(delivery);
+            }
+            if (options.getStopConsumingBiFunction().test(emitter.requestedFromDownstream(), message)) {
+                emitter.complete();
+            }
+        };
+    }
+
+    /**
+     * Cancels the consumer, unless the broker already did, and closes its channel. A channel closed by a connection
+     * loss is aborted instead: forgotten, or the automatic recovery would re-open it with its consumer, whose
+     * deliveries nobody would handle and acknowledge anymore.
+     */
+    private void stopConsumer(Channel channel, String consumerTag, AtomicBoolean basicCancel) {
+        try {
+            if (channel.isOpen() && channel.getConnection().isOpen()) {
+                if (basicCancel.compareAndSet(true, false)) {
+                    cancelConsumer(channel, consumerTag);
+                }
+                channel.close();
+            } else if (isRecoverable(channel)) {
+                channel.abort();
+            }
+        } catch (TimeoutException | IOException e) {
+            LOGGER.warn("Error while closing channel: {}", e.getMessage());
+        }
     }
 
     private static void abortQuietly(Channel channel) {

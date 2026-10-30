@@ -146,49 +146,68 @@ public final class ConsumerMetrics {
         this.queue = queue != null ? queue : "";
         this.baseTags = Tags.of("domain", this.domain, "queue", this.queue);
         final boolean deliveries = registry != null && handlesDeliveries;
-        this.handlerLatency = deliveries ? safeRegisterTimer(M_LATENCY) : null;
-        this.handlerWait = deliveries ? safeRegisterTimer(M_WAIT) : null;
-        this.retryAttempts = deliveries ? safeRegisterCounter(M_RETRY_ATTEMPTS) : null;
-        this.retriesExhausted = deliveries ? safeRegisterCounter(M_RETRY_EXHAUSTED) : null;
-        this.redelivered = deliveries ? safeRegisterCounter(M_REDELIVERED) : null;
-        this.handlerTimeout = deliveries ? safeRegisterCounter(M_HANDLER_TIMEOUT) : null;
-        this.queryDiscardedTimeout = deliveries
-                ? safeRegisterCounter(M_QUERY_DISCARDED, Tags.of("reason", REASON_TIMEOUT)) : null;
-        this.queryReplyFailed = deliveries ? safeRegisterCounter(M_QUERY_REPLY_FAILED) : null;
-        this.discardNotifyFailed = deliveries ? safeRegisterCounter(M_DISCARD_NOTIFY_FAILED) : null;
-        this.invalidTimeoutHeader = deliveries ? safeRegisterCounter(M_INVALID_TIMEOUT_HEADER) : null;
-        this.messageSize = deliveries ? safeRegisterSummary(M_MESSAGE_SIZE) : null;
+        this.handlerLatency = registerIf(deliveries, () -> safeRegisterTimer(M_LATENCY));
+        this.handlerWait = registerIf(deliveries, () -> safeRegisterTimer(M_WAIT));
+        this.retryAttempts = registerIf(deliveries, () -> safeRegisterCounter(M_RETRY_ATTEMPTS));
+        this.retriesExhausted = registerIf(deliveries, () -> safeRegisterCounter(M_RETRY_EXHAUSTED));
+        this.redelivered = registerIf(deliveries, () -> safeRegisterCounter(M_REDELIVERED));
+        this.handlerTimeout = registerIf(deliveries, () -> safeRegisterCounter(M_HANDLER_TIMEOUT));
+        this.queryDiscardedTimeout = registerIf(deliveries,
+                () -> safeRegisterCounter(M_QUERY_DISCARDED, Tags.of("reason", REASON_TIMEOUT)));
+        this.queryReplyFailed = registerIf(deliveries, () -> safeRegisterCounter(M_QUERY_REPLY_FAILED));
+        this.discardNotifyFailed = registerIf(deliveries, () -> safeRegisterCounter(M_DISCARD_NOTIFY_FAILED));
+        this.invalidTimeoutHeader = registerIf(deliveries, () -> safeRegisterCounter(M_INVALID_TIMEOUT_HEADER));
+        this.messageSize = registerIf(deliveries, () -> safeRegisterSummary(M_MESSAGE_SIZE));
         if (registry != null) {
-            RESTART_REASONS.forEach(this::restartCounter);
-            if (!handlesDeliveries) {
-                // the counter of the domain: the reply listener releases it when it stops
-                try {
-                    track(() -> repliesLostCounter(registry, this.domain));
-                } catch (Exception e) {
-                    log.warn("Could not register consumer replies.lost counter", e);
-                }
-            }
+            registerRestartMeters(handlesDeliveries);
         }
         if (deliveries) {
-            OUTCOMES.forEach(this::outcomeCounter);
-            try {
-                track(() -> Gauge.builder(M_IN_FLIGHT, inFlight, AtomicInteger::get).tags(baseTags).register(registry));
-            } catch (Exception e) {
-                log.warn("Could not register consumer in-flight gauge", e);
-            }
+            registerDeliveryMeters();
         }
         if (registry != null && liveness != null) {
+            registerLivenessGauges(liveness);
+        }
+    }
+
+    private static <M extends Meter> M registerIf(boolean register, Supplier<M> registration) {
+        return register ? registration.get() : null;
+    }
+
+    private void registerRestartMeters(boolean handlesDeliveries) {
+        RESTART_REASONS.forEach(this::restartCounter);
+        if (!handlesDeliveries) {
+            // the counter of the domain: the reply listener releases it when it stops
             try {
-                track(() -> Gauge.builder(M_ACTIVE, liveness, l -> l.isActive() ? 1.0 : 0.0).tags(baseTags)
-                        .register(registry));
-                track(() -> Gauge.builder(M_LAST_AGE, liveness, l -> {
-                    Instant last = l.snapshot().lastDeliveryAt();
-                    return last == null ? Double.NaN : Duration.between(last, Instant.now()).toMillis() / 1000.0;
-                }).tags(baseTags).register(registry));
+                track(() -> repliesLostCounter(registry, this.domain));
             } catch (Exception e) {
-                log.warn("Could not register consumer gauges", e);
+                log.warn("Could not register consumer replies.lost counter", e);
             }
         }
+    }
+
+    private void registerDeliveryMeters() {
+        OUTCOMES.forEach(this::outcomeCounter);
+        try {
+            track(() -> Gauge.builder(M_IN_FLIGHT, inFlight, AtomicInteger::get).tags(baseTags).register(registry));
+        } catch (Exception e) {
+            log.warn("Could not register consumer in-flight gauge", e);
+        }
+    }
+
+    private void registerLivenessGauges(ListenerLiveness liveness) {
+        try {
+            track(() -> Gauge.builder(M_ACTIVE, liveness, l -> l.isActive() ? 1.0 : 0.0).tags(baseTags)
+                    .register(registry));
+            track(() -> Gauge.builder(M_LAST_AGE, liveness, ConsumerMetrics::secondsSinceLastDelivery)
+                    .tags(baseTags).register(registry));
+        } catch (Exception e) {
+            log.warn("Could not register consumer gauges", e);
+        }
+    }
+
+    private static double secondsSinceLastDelivery(ListenerLiveness liveness) {
+        Instant last = liveness.snapshot().lastDeliveryAt();
+        return last == null ? Double.NaN : Duration.between(last, Instant.now()).toMillis() / 1000.0;
     }
 
     private Timer safeRegisterTimer(String name) {
@@ -375,18 +394,6 @@ public final class ConsumerMetrics {
         if (counter != null) {
             counter.increment();
         }
-    }
-
-    /**
-     * Registers (idempotently) the counter {@code reactive_commons.consumer.replies.lost} of the given domain at 0.
-     * Called when the reply listener is created, so the series exists, and {@code increase()} counts the first lost
-     * replies, before any is lost.
-     */
-    public static void registerRepliesLost(MeterRegistry registry, String domain) {
-        if (registry == null) {
-            return;
-        }
-        repliesLostCounter(registry, domain);
     }
 
     /**

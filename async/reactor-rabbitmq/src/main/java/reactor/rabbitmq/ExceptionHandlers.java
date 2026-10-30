@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
@@ -58,52 +59,59 @@ public class ExceptionHandlers {
 
         public SimpleRetryTemplate(Duration timeout, Duration waitingTime, Predicate<Throwable> predicate,
                 boolean failOnTimeout) {
-            if (timeout == null || timeout.isNegative() || timeout.isZero()) {
-                throw new IllegalArgumentException("Timeout must be greater than 0");
-            }
-            if (waitingTime == null || waitingTime.isNegative() || waitingTime.isZero()) {
-                throw new IllegalArgumentException("Waiting time must be greater than 0");
-            }
+            requirePositive(timeout, "Timeout must be greater than 0");
+            requirePositive(waitingTime, "Waiting time must be greater than 0");
             if (timeout.compareTo(waitingTime) <= 0) {
                 throw new IllegalArgumentException("Timeout must be greater than waiting time");
             }
-            if (predicate == null) {
-                throw new NullPointerException("Predicate cannot be null");
-            }
+            this.predicate = Objects.requireNonNull(predicate, "Predicate cannot be null");
             this.timeout = timeout.toMillis();
             this.waitingTime = waitingTime.toMillis();
-            this.predicate = predicate;
             this.failOnTimeout = failOnTimeout;
         }
 
+        private static void requirePositive(Duration duration, String message) {
+            if (duration == null || duration.isNegative() || duration.isZero()) {
+                throw new IllegalArgumentException(message);
+            }
+        }
+
         public void retry(Callable<Void> operation, Exception e) {
-            if (predicate.test(e)) {
-                long elapsedTime = 0;
-                boolean callSucceeded = false;
-                while (elapsedTime < timeout) {
-                    try {
-                        Thread.sleep(waitingTime);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                        throw new RabbitFluxException("Thread interrupted while retry on sending", ie);
-                    }
-                    elapsedTime += waitingTime;
-                    try {
-                        operation.call();
-                        callSucceeded = true;
-                        break;
-                    } catch (Exception sendingException) {
-                        if (!predicate.test(sendingException)) {
-                            throw new RabbitFluxException("Not retryable exception thrown during retry",
-                                    sendingException);
-                        }
-                    }
-                }
-                if (!callSucceeded && failOnTimeout) {
-                    throw new RabbitFluxRetryTimeoutException("Retry timed out after " + this.timeout + " ms", e);
-                }
-            } else {
+            if (!predicate.test(e)) {
                 throw new RabbitFluxException("Not retryable exception, cannot retry", e);
+            }
+            for (long elapsedTime = 0; elapsedTime < timeout; elapsedTime += waitingTime) {
+                waitBeforeRetrying();
+                if (attempt(operation)) {
+                    return;
+                }
+            }
+            if (failOnTimeout) {
+                throw new RabbitFluxRetryTimeoutException("Retry timed out after " + this.timeout + " ms", e);
+            }
+        }
+
+        private void waitBeforeRetrying() {
+            try {
+                Thread.sleep(waitingTime);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new RabbitFluxException("Thread interrupted while retry on sending", ie);
+            }
+        }
+
+        /**
+         * @return whether the operation succeeded: {@code false} when it failed with an exception that is retried
+         */
+        private boolean attempt(Callable<Void> operation) {
+            try {
+                operation.call();
+                return true;
+            } catch (Exception sendingException) {
+                if (!predicate.test(sendingException)) {
+                    throw new RabbitFluxException("Not retryable exception thrown during retry", sendingException);
+                }
+                return false;
             }
         }
     }

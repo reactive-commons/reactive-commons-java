@@ -36,10 +36,10 @@ public class KeyMatcher implements Matcher {
         if (first[idx].equals(second[idx])) {
             return compare(current, first, second, idx + 1);
         }
-        if (!first[idx].equals(SINGLE_WORD_WILDCARD) && !first[idx].equals(MULTIPLE_WORD_WILDCARD)) {
+        if (!isWildcard(first[idx])) {
             return -1;
         }
-        if (!second[idx].equals(SINGLE_WORD_WILDCARD) && !second[idx].equals(MULTIPLE_WORD_WILDCARD)) {
+        if (!isWildcard(second[idx])) {
             return 1;
         }
         if (first[idx].equals(MULTIPLE_WORD_WILDCARD) && second[idx].equals(SINGLE_WORD_WILDCARD)) {
@@ -49,6 +49,10 @@ public class KeyMatcher implements Matcher {
             return compare(-1, first, second, idx + 1);
         }
         return second.length - first.length;
+    }
+
+    private static boolean isWildcard(String word) {
+        return word.equals(SINGLE_WORD_WILDCARD) || word.equals(MULTIPLE_WORD_WILDCARD);
     }
 
     private static boolean matches(String routingKey, String pattern) {
