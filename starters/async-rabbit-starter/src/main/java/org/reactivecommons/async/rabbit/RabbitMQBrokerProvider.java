@@ -1,6 +1,8 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -31,6 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
+@Accessors(fluent = true)
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     /**
@@ -41,6 +44,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     static final Duration DRAIN_TIMEOUT = Duration.ofSeconds(10);
 
     private final String domain;
+    @Getter
     private final AsyncProps props;
     private final BrokerConfig config;
     private final ReactiveReplyRouter router;
@@ -48,8 +52,11 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final MeterRegistry meterRegistry;
     private final CustomReporter errorReporter;
     private final RabbitReactiveHealthIndicator healthIndicator;
+    @Getter
     private final ReactiveMessageListener receiver;
+    @Getter
     private final ReactiveMessageSender sender;
+    @Getter
     private final DiscardNotifier discardNotifier;
     private final ConsumerQueueDepth queueDepth;
     private final Runnable releaseConnections;
@@ -101,51 +108,6 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
         this.sender = sender;
         this.discardNotifier = discardNotifier;
         this.queueDepth = queueDepth;
-    }
-
-    public String domain() {
-        return domain;
-    }
-
-    @Override
-    public AsyncProps props() {
-        return props;
-    }
-
-    public BrokerConfig config() {
-        return config;
-    }
-
-    public ReactiveReplyRouter router() {
-        return router;
-    }
-
-    public RabbitJacksonMessageConverter converter() {
-        return converter;
-    }
-
-    public MeterRegistry meterRegistry() {
-        return meterRegistry;
-    }
-
-    public CustomReporter errorReporter() {
-        return errorReporter;
-    }
-
-    public RabbitReactiveHealthIndicator healthIndicator() {
-        return healthIndicator;
-    }
-
-    public ReactiveMessageListener receiver() {
-        return receiver;
-    }
-
-    public ReactiveMessageSender sender() {
-        return sender;
-    }
-
-    public DiscardNotifier discardNotifier() {
-        return discardNotifier;
     }
 
     @Override
