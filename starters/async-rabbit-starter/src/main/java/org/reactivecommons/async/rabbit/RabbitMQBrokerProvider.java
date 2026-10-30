@@ -69,47 +69,41 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean listeningReplies = new AtomicBoolean();
 
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier) {
-        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
-                sender, discardNotifier, null);
+    /**
+     * What the provider uses to publish, consume and report on the connections of its domain.
+     *
+     * @param queueDepth reports the depth of the queues the listeners consume from; none when {@code null}
+     */
+    public record Components(ReactiveReplyRouter router, RabbitJacksonMessageConverter converter,
+                             MeterRegistry meterRegistry, CustomReporter errorReporter,
+                             RabbitReactiveHealthIndicator healthIndicator, ReactiveMessageListener receiver,
+                             ReactiveMessageSender sender, DiscardNotifier discardNotifier,
+                             ConsumerQueueDepth queueDepth) {
     }
 
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
-        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
-                sender, discardNotifier, queueDepth, () -> {
-                });
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, Components components) {
+        this(domain, props, config, components, () -> {
+        });
     }
 
     /**
      * @param releaseConnections run once the provider is closed, to release the connections it used
      */
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth,
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, Components components,
                                   Runnable releaseConnections) {
         this.releaseConnections = releaseConnections;
         this.domain = domain;
         this.props = props;
         this.config = config;
-        this.router = router;
-        this.converter = converter;
-        this.meterRegistry = meterRegistry;
-        this.errorReporter = errorReporter;
-        this.healthIndicator = healthIndicator;
-        this.receiver = receiver;
-        this.sender = sender;
-        this.discardNotifier = discardNotifier;
-        this.queueDepth = queueDepth;
+        this.router = components.router();
+        this.converter = components.converter();
+        this.meterRegistry = components.meterRegistry();
+        this.errorReporter = components.errorReporter();
+        this.healthIndicator = components.healthIndicator();
+        this.receiver = components.receiver();
+        this.sender = components.sender();
+        this.discardNotifier = components.discardNotifier();
+        this.queueDepth = components.queueDepth();
     }
 
     @Override
