@@ -229,42 +229,26 @@ public class ReactiveMessageSender implements AutoCloseable {
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
                                  boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
                                  Duration sendTimeout) {
-        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
-                sendTimeout, DEFAULT_HAND_OVER_POOL_SIZE, DEFAULT_HAND_OVER_QUEUE_CAPACITY,
-                new ConnectionBlockedState(), null, null);
+        this(sender, sourceApplication, messageConverter, topologyCreator, unroutableMessageNotifier,
+                new SenderSettings(isMandatory, sendTimeout, DEFAULT_HAND_OVER_POOL_SIZE,
+                        DEFAULT_HAND_OVER_QUEUE_CAPACITY, DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null,
+                        null));
     }
 
     public ReactiveMessageSender(Sender sender, String sourceApplication,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
-                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
-                                 ConnectionBlockedState blockedState,
-                                 MeterRegistry meterRegistry, String domain) {
-        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
-                sendTimeout, handOverPoolSize, handOverQueueCapacity, blockedState, meterRegistry, domain,
-                DEFAULT_MAX_MESSAGE_SIZE);
-    }
-
-    /**
-     * @param maxMessageSize the {@code max_message_size} of the broker, in bytes: a message with a larger body is
-     *                       rejected with {@link SendFailureMessageTooLargeException} before being written, instead of
-     *                       making the broker close the channel it shares with other messages
-     */
-    public ReactiveMessageSender(Sender sender, String sourceApplication,
-                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
-                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
-                                 ConnectionBlockedState blockedState,
-                                 MeterRegistry meterRegistry, String domain, int maxMessageSize) {
+                                 UnroutableMessageNotifier unroutableMessageNotifier, SenderSettings settings) {
+        final int handOverPoolSize = settings.handOverPoolSize();
+        final int handOverQueueCapacity = settings.handOverQueueCapacity();
         this.sender = sender;
-        this.maxMessageSize = maxMessageSize;
+        this.maxMessageSize = settings.maxMessageSize();
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
-        this.isMandatory = isMandatory;
+        this.isMandatory = settings.mandatory();
         this.unroutableMessageNotifier = unroutableMessageNotifier;
-        this.sendTimeout = sendTimeout;
-        this.blockedState = blockedState != null ? blockedState : new ConnectionBlockedState();
+        this.sendTimeout = settings.sendTimeout();
+        this.blockedState = settings.blockedState() != null ? settings.blockedState() : new ConnectionBlockedState();
         this.maxBufferedMessages = Math.max(1, handOverQueueCapacity);
         this.executorService = new ThreadPoolExecutor(
                 handOverPoolSize, handOverPoolSize,
@@ -280,7 +264,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         // a sender that is not closed (e.g. used outside Spring) neither keeps idle threads nor the JVM alive
         this.executorService.allowCoreThreadTimeOut(true);
         this.executorService2.allowCoreThreadTimeOut(true);
-        this.metrics = new PublishMetrics(meterRegistry, domain, this.blockedState,
+        this.metrics = new PublishMetrics(settings.meterRegistry(), settings.domain(), this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
         initializeSenders();
     }

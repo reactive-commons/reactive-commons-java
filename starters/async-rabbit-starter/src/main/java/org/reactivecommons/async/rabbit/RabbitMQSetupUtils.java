@@ -20,6 +20,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.SenderSettings;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
@@ -176,13 +177,9 @@ public final class RabbitMQSetupUtils {
                 : Duration.ofSeconds(10);
         final ConnectionBlockedState blockedState = blockedState(provider.getConnectionFactory());
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
-                props.getMandatory(), unroutableMessageNotifier, sendTimeout,
-                props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
-                blockedState, meterRegistry, domain, props.getMaxMessageSize());
-    }
-
-    public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
-        return createMessageListener(provider, props, null, null);
+                unroutableMessageNotifier, new SenderSettings(props.getMandatory(), sendTimeout,
+                props.getHandOverPoolSize(), props.getHandOverQueueCapacity(), props.getMaxMessageSize(),
+                blockedState, meterRegistry, domain));
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props,
