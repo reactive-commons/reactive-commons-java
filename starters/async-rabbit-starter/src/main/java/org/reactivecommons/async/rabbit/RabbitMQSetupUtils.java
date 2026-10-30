@@ -55,6 +55,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -249,19 +250,22 @@ public final class RabbitMQSetupUtils {
         return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role), key -> {
             final ConnectionFactory f = key.factory();
             log.info("Creating {} connection mono to RabbitMQ Broker in host '{}'", role.kind, f.getHost());
+            final AtomicInteger failedAttempts = new AtomicInteger();
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
                     ))
                     // opening a connection blocks (up to the connection timeout): neither on the thread that
                     // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
                     .subscribeOn(Schedulers.boundedElastic())
-                    .doOnError(err -> log.error(
-                            "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
-                            f.getHost(), err
-                    ))
+                    .doOnError(err -> logConnectionFailure(f, role, failedAttempts.incrementAndGet(), err))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
                     .doOnNext(connection -> {
+                        final int failed = failedAttempts.getAndSet(0);
+                        if (failed > 0) {
+                            log.info("{} connection to RabbitMQ Broker in host '{}' established after {} failed "
+                                    + "attempts", role.kind, f.getHost(), failed);
+                        }
                         ESTABLISHED_CONNECTIONS.put(key, connection);
                         if (role == ConnectionRole.SENDER) {
                             final ConnectionBlockedState blockedState = blockedState(f);
@@ -276,6 +280,21 @@ public final class RabbitMQSetupUtils {
                     .cacheInvalidateIf(connection -> CONNECTION_CACHE.containsKey(key)
                             && closedForGood(connection, role));
         });
+    }
+
+    /**
+     * The attempts are retried every few seconds for as long as the broker refuses the connection: only the first
+     * failure is logged as an error, with its stack trace, the next ones at debug level.
+     */
+    private static void logConnectionFailure(ConnectionFactory factory, ConnectionRole role, int attempt,
+                                             Throwable error) {
+        if (attempt == 1) {
+            log.error("Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
+                    factory.getHost(), error);
+        } else {
+            log.debug("Error creating {} connection to RabbitMQ Broker in host '{}' (attempt {}), retrying: {}",
+                    role.kind, factory.getHost(), attempt, error.toString());
+        }
     }
 
     /**
