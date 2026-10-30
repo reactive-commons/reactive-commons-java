@@ -65,7 +65,7 @@ class JacksonMessageConverterTest {
         var msg = createMessage("not-json".getBytes(StandardCharsets.UTF_8), "application/json");
         assertThatThrownBy(() -> converter.readValue(msg, SampleClass.class))
                 .isInstanceOf(MessageConversionException.class)
-                .hasMessageContaining("Failed to convert Message content");
+                .hasMessageContaining(JacksonMessageConverter.FAILED_TO_CONVERT_MESSAGE_CONTENT);
     }
 
     @Test

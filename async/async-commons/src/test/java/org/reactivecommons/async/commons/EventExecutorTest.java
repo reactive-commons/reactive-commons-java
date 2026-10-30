@@ -44,7 +44,7 @@ class EventExecutorTest {
         DomainEvent<String> event = new DomainEvent<>("event.name", "id", "data");
         when(converter.readDomainEvent(message, String.class)).thenReturn(event);
         List<Object> handled = new ArrayList<>();
-        DomainEventHandler<String> handler = received -> record(handled, received);
+        DomainEventHandler<String> handler = received -> collect(handled, received);
 
         StepVerifier.create(EventExecutor.of(listener(handler, String.class), converter).execute(message))
                 .verifyComplete();
@@ -59,7 +59,7 @@ class EventExecutorTest {
         CloudEvent cloudEvent = mock(CloudEvent.class);
         when(converter.readCloudEvent(message)).thenReturn(cloudEvent);
         List<Object> handled = new ArrayList<>();
-        CloudEventHandler handler = received -> record(handled, received);
+        CloudEventHandler handler = received -> collect(handled, received);
 
         StepVerifier.create(EventExecutor.of(listener(handler, CloudEvent.class), converter).execute(message))
                 .verifyComplete();
@@ -72,7 +72,7 @@ class EventExecutorTest {
         MessageConverter converter = mock(MessageConverter.class);
         Message message = createMessage();
         List<Object> handled = new ArrayList<>();
-        RawEventHandler<Message> handler = received -> record(handled, received);
+        RawEventHandler<Message> handler = received -> collect(handled, received);
 
         StepVerifier.create(EventExecutor.of(listener(handler, Message.class), converter).execute(message))
                 .verifyComplete();
@@ -98,7 +98,7 @@ class EventExecutorTest {
                 new RegisteredEventListener<>("event.name", (EventHandler<Object>) handler, (Class<Object>) inputClass);
     }
 
-    private static Mono<Void> record(List<Object> handled, Object received) {
+    private static Mono<Void> collect(List<Object> handled, Object received) {
         handled.add(received);
         return Mono.empty();
     }

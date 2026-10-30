@@ -81,7 +81,8 @@ class ReplyDispatchRabbitContainerTest {
         public void setValue(String value) {
             MOST_CONVERTING.accumulateAndGet(CONVERTING.incrementAndGet(), Math::max);
             try {
-                Thread.sleep(CONVERSION_TIME.toMillis());
+                // simulates the work of a slow conversion on the converting thread: it waits for nothing
+                Thread.sleep(CONVERSION_TIME.toMillis()); // NOSONAR
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {

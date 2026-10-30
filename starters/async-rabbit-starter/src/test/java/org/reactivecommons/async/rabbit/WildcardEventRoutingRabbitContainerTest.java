@@ -42,12 +42,12 @@ class WildcardEventRoutingRabbitContainerTest {
         @Bean
         HandlerRegistry handlerRegistry() {
             return HandlerRegistry.register()
-                    .listenEvent("wcr.order.created", event -> record(event, "exact"), Map.class)
-                    .listenEvent("wcr.*.created", event -> record(event, "single word"), Map.class)
-                    .listenEvent("wcr.#", event -> record(event, "multiple words"), Map.class);
+                    .listenEvent("wcr.order.created", event -> handledBy(event, "exact"), Map.class)
+                    .listenEvent("wcr.*.created", event -> handledBy(event, "single word"), Map.class)
+                    .listenEvent("wcr.#", event -> handledBy(event, "multiple words"), Map.class);
         }
 
-        private static Mono<Void> record(DomainEvent<?> event, String handler) {
+        private static Mono<Void> handledBy(DomainEvent<?> event, String handler) {
             HANDLED.computeIfAbsent(event.getName(), name -> new CopyOnWriteArrayList<>()).add(handler);
             return Mono.empty();
         }

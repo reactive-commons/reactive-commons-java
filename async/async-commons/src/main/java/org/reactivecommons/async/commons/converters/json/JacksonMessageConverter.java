@@ -20,7 +20,7 @@ public abstract class JacksonMessageConverter implements MessageConverter {
     private static final String COMMAND_ID_FIELD = "commandId";
     private static final String NAME_FIELD = "name";
     private static final String TYPE_FIELD = "type";
-    public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert Message content";
+    public static final String FAILED_TO_CONVERT_MESSAGE_CONTENT = "Failed to convert message content";
     public static final String CONTENT_TYPE = "content-type";
     public static final String APPLICATION_CLOUD_EVENT_JSON = "application/cloudevents+json";
     public static final String APPLICATION_JSON = "application/json";
