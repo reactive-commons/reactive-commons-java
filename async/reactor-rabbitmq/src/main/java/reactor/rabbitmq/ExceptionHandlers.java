@@ -20,6 +20,8 @@ import com.rabbitmq.client.ShutdownSignalException;
 import com.rabbitmq.client.impl.recovery.AutorecoveringConnection;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.concurrent.Callable;
@@ -30,6 +32,8 @@ import java.util.function.Predicate;
 public class ExceptionHandlers {
 
     public static final Predicate<Throwable> CONNECTION_RECOVERY_PREDICATE = new ConnectionRecoveryTriggeringPredicate();
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(ExceptionHandlers.class);
 
     public static class ConnectionRecoveryTriggeringPredicate implements Predicate<Throwable> {
         @Override
@@ -104,6 +108,65 @@ public class ExceptionHandlers {
         }
     }
 
+    /**
+     * The default handler of the acknowledgments (see {@link ConsumeOptions}), which never blocks the thread that
+     * acknowledges:
+     * <ul>
+     *     <li>The channel of the delivery is closed (e.g. its connection is being recovered): the acknowledgment is
+     *     skipped with a warning. The broker redelivers the message, and retrying the acknowledgment on the recovered
+     *     channel would not send it either: its delivery tag belongs to the closed channel.</li>
+     *     <li>Any other failure: a {@link RabbitFluxException}.</li>
+     * </ul>
+     */
+    public static class FailFastAcknowledgmentExceptionHandler
+            implements BiConsumer<Receiver.AcknowledgmentContext, Exception> {
+
+        @Override
+        public void accept(Receiver.AcknowledgmentContext acknowledgmentContext, Exception e) {
+            if (isChannelClosed(e)) {
+                LOGGER.warn("Acknowledgment not sent, the channel is closed (the broker redelivers the message): {}",
+                        e.getMessage());
+                return;
+            }
+            throw new RabbitFluxException("Unable to acknowledge the message", e);
+        }
+
+        private static boolean isChannelClosed(Throwable error) {
+            for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+                if (cause instanceof ShutdownSignalException) {
+                    return true;
+                }
+                if (cause.getCause() == cause) {
+                    break;
+                }
+            }
+            return false;
+        }
+    }
+
+    /**
+     * The default handler of the publications (see {@link SendOptions}), which never blocks the thread that publishes:
+     * a publication on a connection being recovered fails right away with a {@link RabbitFluxRetryTimeoutException} (a
+     * publisher-confirms flow reports the message as not published and goes on), any other failure with a
+     * {@link RabbitFluxException}. To publish again once the connection is recovered, retry the publication (e.g. with
+     * {@code retryWhen}), or use a {@link RetrySendingExceptionHandler}, which blocks the thread while it retries.
+     */
+    public static class FailFastSendingExceptionHandler implements BiConsumer<Sender.SendContext, Exception> {
+
+        @Override
+        public void accept(Sender.SendContext sendContext, Exception e) {
+            if (CONNECTION_RECOVERY_PREDICATE.test(e)) {
+                throw new RabbitFluxRetryTimeoutException("Connection is being recovered, message not published", e);
+            }
+            throw new RabbitFluxException("Unable to publish the message", e);
+        }
+    }
+
+    /**
+     * Retries the acknowledgment while the connection is being recovered, sleeping on the thread that acknowledges, and
+     * gives up silently once the timeout elapses. An acknowledgment retried on the recovered channel is not sent: its
+     * delivery tag belongs to the closed channel, and the broker redelivers the message.
+     */
     public static class RetryAcknowledgmentExceptionHandler
             implements BiConsumer<Receiver.AcknowledgmentContext, Exception> {
 
@@ -123,6 +186,9 @@ public class ExceptionHandlers {
         }
     }
 
+    /**
+     * Retries the publication while the connection is being recovered, sleeping on the thread that publishes.
+     */
     public static class RetrySendingExceptionHandler implements BiConsumer<Sender.SendContext, Exception> {
 
         private final SimpleRetryTemplate retryTemplate;
