@@ -26,6 +26,7 @@ import reactor.core.publisher.Mono;
 
 import java.io.IOException;
 import java.time.Duration;
+import java.util.Optional;
 
 public abstract class Utils {
 
@@ -66,11 +67,8 @@ public abstract class Utils {
      * {@link NullPointerException}.
      */
     static Channel createChannel(Connection connection) throws IOException {
-        final Channel channel = connection.createChannel();
-        if (channel == null) {
-            throw new IOException("No channel available: the connection reached its channel_max");
-        }
-        return channel;
+        return Optional.ofNullable(connection.createChannel())
+                .orElseThrow(() -> new IOException("No channel available: the connection reached its channel_max"));
     }
 
     @FunctionalInterface

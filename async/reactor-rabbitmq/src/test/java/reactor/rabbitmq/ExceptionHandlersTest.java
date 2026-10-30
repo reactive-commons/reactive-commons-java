@@ -134,7 +134,8 @@ class ExceptionHandlersTest {
         var handler = new ExceptionHandlers.FailFastAcknowledgmentExceptionHandler();
         var context = new Receiver.AcknowledgmentContext(null, delivery -> {
         });
-        assertThatThrownBy(() -> handler.accept(context, new IllegalStateException("broken")))
+        var error = new IllegalStateException("broken");
+        assertThatThrownBy(() -> handler.accept(context, error))
                 .isInstanceOf(RabbitFluxException.class)
                 .hasCauseInstanceOf(IllegalStateException.class);
     }
@@ -142,16 +143,20 @@ class ExceptionHandlersTest {
     @Test
     void failFastSendingHandlerReportsAPublicationDuringARecoveryAsNotPublished() {
         var handler = new ExceptionHandlers.FailFastSendingExceptionHandler();
-        assertThatThrownBy(() -> handler.accept(sendContext(() -> {
+        var context = sendContext(() -> {
             throw new AssertionError("not retried");
-        }), new ShutdownSignalException(true, false, null, null)))
+        });
+        var recovery = new ShutdownSignalException(true, false, null, null);
+        assertThatThrownBy(() -> handler.accept(context, recovery))
                 .isInstanceOf(RabbitFluxRetryTimeoutException.class);
     }
 
     @Test
     void failFastSendingHandlerFailsOnAnyOtherError() {
         var handler = new ExceptionHandlers.FailFastSendingExceptionHandler();
-        assertThatThrownBy(() -> handler.accept(sendContext(() -> null), new IllegalStateException("broken")))
+        var context = sendContext(() -> null);
+        var error = new IllegalStateException("broken");
+        assertThatThrownBy(() -> handler.accept(context, error))
                 .isInstanceOf(RabbitFluxException.class)
                 .isNotInstanceOf(RabbitFluxRetryTimeoutException.class);
     }
