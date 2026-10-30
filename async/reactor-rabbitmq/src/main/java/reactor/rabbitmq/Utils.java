@@ -24,6 +24,7 @@ import com.rabbitmq.client.RecoverableConnection;
 import com.rabbitmq.client.ShutdownSignalException;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
 import java.time.Duration;
 
 public abstract class Utils {
@@ -57,6 +58,19 @@ public abstract class Utils {
 
     static boolean isRecoverable(Channel channel) {
         return channel instanceof RecoverableChannel;
+    }
+
+    /**
+     * Opens a channel on the connection. The client opens none (it returns {@code null}) once the connection has every
+     * channel it may open, its {@code channel_max}: that fails here, saying why, instead of further on with a
+     * {@link NullPointerException}.
+     */
+    static Channel createChannel(Connection connection) throws IOException {
+        final Channel channel = connection.createChannel();
+        if (channel == null) {
+            throw new IOException("No channel available: the connection reached its channel_max");
+        }
+        return channel;
     }
 
     @FunctionalInterface

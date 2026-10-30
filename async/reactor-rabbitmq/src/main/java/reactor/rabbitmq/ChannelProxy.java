@@ -28,7 +28,6 @@ import lombok.NoArgsConstructor;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
@@ -125,9 +124,7 @@ public final class ChannelProxy {
         }
 
         private Channel newChannel() throws IOException {
-            // null when the connection reached its channel_max
-            return Optional.ofNullable(connection.createChannel()).orElseThrow(
-                    () -> new IOException("No channel available: the connection reached its channel_max"));
+            return Utils.createChannel(connection);
         }
     }
 }

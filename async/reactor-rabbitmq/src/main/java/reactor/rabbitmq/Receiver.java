@@ -46,7 +46,7 @@ public class Receiver implements Closeable {
 
     private static final Function<Connection, Channel> CHANNEL_CREATION_FUNCTION = conn -> {
         try {
-            return conn.createChannel();
+            return Utils.createChannel(conn);
         } catch (IOException e) {
             throw new RabbitFluxException("Error while creating channel", e);
         }

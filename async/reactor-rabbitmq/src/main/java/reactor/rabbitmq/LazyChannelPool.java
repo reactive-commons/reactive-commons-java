@@ -137,7 +137,7 @@ class LazyChannelPool implements ChannelPool {
 
     private Channel createChannel(Connection connection) {
         try {
-            return connection.createChannel();
+            return Utils.createChannel(connection);
         } catch (IOException e) {
             throw new RabbitFluxException("Error while creating channel", e);
         }
