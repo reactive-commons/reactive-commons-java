@@ -1,6 +1,8 @@
 package org.reactivecommons.async.commons.utils.matcher;
 
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 public class KeyMatcher implements Matcher {
@@ -8,6 +10,12 @@ public class KeyMatcher implements Matcher {
     public static final String SEPARATOR_REGEX = "\\.";
     public static final String SINGLE_WORD_WILDCARD = "*";
     public static final String MULTIPLE_WORD_WILDCARD = "#";
+
+    /**
+     * The regular expressions of the patterns with wildcards, compiled once: the patterns are the names of the
+     * registered handlers, which every lookup without an exact match tries.
+     */
+    private static final Map<String, Pattern> PATTERNS = new ConcurrentHashMap<>();
 
     @Override
     public String match(Set<String> sources, String target) {
@@ -59,18 +67,18 @@ public class KeyMatcher implements Matcher {
         if (!pattern.contains(SINGLE_WORD_WILDCARD) && !pattern.contains(MULTIPLE_WORD_WILDCARD)) {
             return false;
         }
-        // Convert RabbitMQ wildcard pattern to regex pattern
+        return PATTERNS.computeIfAbsent(pattern, KeyMatcher::compile).matcher(routingKey).matches();
+    }
+
+    /**
+     * The RabbitMQ wildcards of the pattern as a regular expression: {@code *} is exactly one word, {@code #} any
+     * number of words.
+     */
+    private static Pattern compile(String pattern) {
         String regexPattern = pattern.replace(".", "\\.")
                 .replace("*", "[^.]+")
                 .replace("#", ".*");
-
-        // Compile regex pattern
-        Pattern p = Pattern.compile("^" + regexPattern + "$");
-
-        // Match routing key against regex pattern
-        java.util.regex.Matcher m = p.matcher(routingKey);
-
-        return m.matches();
+        return Pattern.compile("^" + regexPattern + "$");
     }
 
     private static String[] getSeparated(String expression) {
