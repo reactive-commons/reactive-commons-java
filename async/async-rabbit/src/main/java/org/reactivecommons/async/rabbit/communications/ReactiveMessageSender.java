@@ -17,7 +17,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import lombok.Getter;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
@@ -29,6 +29,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeEx
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import org.reactivecommons.async.rabbit.MeterUsage;
+import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -76,12 +77,11 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 
 import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
-@Log
+@Slf4j
 public class ReactiveMessageSender implements AutoCloseable {
     static final Duration DEFAULT_SEND_TIMEOUT = Duration.ofSeconds(10);
     static final int DEFAULT_HAND_OVER_POOL_SIZE = 13;
@@ -298,7 +298,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                     .doOnNext(this::onConfirmResult)
                     .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
                     .retryWhen(resubscribe(flowName, true))
-                    .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ " + flowName + " stopped")));
+                    .subscribe(null, error -> log.error("RabbitMQ {} stopped", flowName, error)));
         }
 
         flowSubscriptions.add(Flux.defer(() -> sender.send(
@@ -309,7 +309,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                         noConfirmSendOptions()))
                 .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
                 .retryWhen(resubscribe("no-confirm flow", false))
-                .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ no-confirm flow stopped")));
+                .subscribe(null, error -> log.error("RabbitMQ no-confirm flow stopped", error)));
     }
 
     /**
@@ -445,15 +445,15 @@ public class ReactiveMessageSender implements AutoCloseable {
                         lastConfirmFailureMessage.set(String.valueOf(signal.failure()));
                     }
                     metrics.recordResubscribe(confirmFlow);
-                    log.log(resubscribeLogLevel(flowName), () -> "RabbitMQ " + flowName
-                            + " terminated, re-subscribing with a new channel (attempt "
-                            + (signal.totalRetriesInARow() + 1) + "): " + signal.failure());
+                    log.atLevel(resubscribeLogLevel(flowName)).log("RabbitMQ {} terminated, re-subscribing with a new "
+                            + "channel (attempt {}): {}", flowName, signal.totalRetriesInARow() + 1,
+                            String.valueOf(signal.failure()));
                 });
     }
 
     private Level resubscribeLogLevel(String flowName) {
         return firstResubscribeWarning.computeIfAbsent(flowName, key -> new AtomicBoolean())
-                .compareAndSet(false, true) ? Level.WARNING : Level.FINE;
+                .compareAndSet(false, true) ? Level.WARN : Level.DEBUG;
     }
 
     /**
@@ -509,7 +509,7 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private static void abortBlockedConnection(Connection connection) {
         if (connection.isOpen()) {
-            log.warning(() -> "Closing the sender while the broker blocks its connection: aborting the connection");
+            log.warn("Closing the sender while the broker blocks its connection: aborting the connection");
             connection.abort(BLOCKED_CONNECTION_ABORT_TIMEOUT_MILLIS);
         }
     }
@@ -568,7 +568,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
         } catch (Exception e) {
             // never let an error here terminate the publishing flow
-            log.log(Level.WARNING, e, () -> "Error while notifying the result of a published message");
+            log.warn("Error while notifying the result of a published message", e);
         }
     }
 
@@ -643,8 +643,8 @@ public class ReactiveMessageSender implements AutoCloseable {
         final Mono<Void> declaration = topologyCreator.declare(exchange)
                 .then()
                 .onErrorResume(error -> {
-                    log.log(Level.WARNING, error, () -> "Exchange " + name + " could not be declared, publishing"
-                            + " to it as it is: " + error.getMessage());
+                    log.warn("Exchange {} could not be declared, publishing to it as it is: {}", name,
+                            error.getMessage(), error);
                     return Mono.empty();
                 })
                 .cache();
@@ -1180,7 +1180,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                     resubscribeCounter(false);
                 } catch (Exception e) {
                     // never let a mis-wired registry break the sender; metrics are best-effort
-                    log.log(Level.WARNING, e, () -> "Could not register publish metrics");
+                    log.warn("Could not register publish metrics", e);
                 }
             }
         }
@@ -1203,7 +1203,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             try {
                 MeterUsage.release(registry, this);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not remove publish metrics");
+                log.warn("Could not remove publish metrics", e);
             }
         }
 
@@ -1254,7 +1254,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                 .tag(TAG_CONFIRM, Boolean.toString(confirmFlow))
                                 .register(registry))).record(elapsed);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_LATENCY);
+                log.warn("Could not record {}", METRIC_PUBLISH_LATENCY, e);
             }
         }
 
@@ -1270,7 +1270,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                 .tag(TAG_CONFIRM, key.toString())
                                 .register(registry))).record(bytes);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
+                log.warn("Could not record {}", METRIC_PUBLISH_MESSAGE_SIZE, e);
             }
         }
     }

@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
@@ -12,7 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-@Log
 /*
  Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0
  .0.RC2

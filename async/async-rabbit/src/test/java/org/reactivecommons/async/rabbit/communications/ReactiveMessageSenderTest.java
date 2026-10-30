@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -19,6 +23,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -53,10 +58,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -684,43 +685,36 @@ class ReactiveMessageSenderTest {
     void logsOnlyTheFirstResubscribeOfAFlowAtWarning() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class)))
                 .thenReturn(Flux.error(new RabbitFluxException("boom")));
-        List<LogRecord> records = new CopyOnWriteArrayList<>();
-        Handler handler = new Handler() {
+        List<ILoggingEvent> records = new CopyOnWriteArrayList<>();
+        AppenderBase<ILoggingEvent> appender = new AppenderBase<>() {
             @Override
-            public void publish(LogRecord logRecord) {
-                records.add(logRecord);
-            }
-
-            @Override
-            public void flush() {
-            }
-
-            @Override
-            public void close() {
+            protected void append(ILoggingEvent event) {
+                records.add(event);
             }
         };
-        Logger logger = Logger.getLogger(ReactiveMessageSender.class.getName());
+        appender.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveMessageSender.class);
         Level previousLevel = logger.getLevel();
-        logger.setLevel(Level.ALL);
-        logger.addHandler(handler);
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(appender);
         try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
                 unroutableMessageNotifier)) {
             await().atMost(Duration.ofSeconds(5))
-                    .until(() -> count(records, "publisher-confirms flow #0", Level.WARNING) >= 1
-                            && count(records, "publisher-confirms flow #0", Level.FINE) >= 1);
+                    .until(() -> count(records, "publisher-confirms flow #0", Level.WARN) >= 1
+                            && count(records, "publisher-confirms flow #0", Level.DEBUG) >= 1);
 
-            assertThat(count(records, "publisher-confirms flow #0", Level.WARNING)).isEqualTo(1);
-            assertThat(count(records, "publisher-confirms flow #0", Level.FINE)).isGreaterThanOrEqualTo(1);
+            assertThat(count(records, "publisher-confirms flow #0", Level.WARN)).isEqualTo(1);
+            assertThat(count(records, "publisher-confirms flow #0", Level.DEBUG)).isGreaterThanOrEqualTo(1);
         } finally {
-            logger.removeHandler(handler);
+            logger.detachAppender(appender);
             logger.setLevel(previousLevel);
         }
     }
 
-    private static long count(List<LogRecord> records, String flowName, Level level) {
+    private static long count(List<ILoggingEvent> records, String flowName, Level level) {
         return records.stream()
-                .filter(logRecord -> level.equals(logRecord.getLevel()))
-                .filter(logRecord -> logRecord.getMessage() != null && logRecord.getMessage().contains(flowName))
+                .filter(event -> level.equals(event.getLevel()))
+                .filter(event -> event.getFormattedMessage().contains(flowName))
                 .count();
     }
 

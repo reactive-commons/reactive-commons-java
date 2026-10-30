@@ -12,6 +12,7 @@ dependencies {
     api 'tools.jackson.core:jackson-databind'
     implementation 'commons-io:commons-io:2.22.0'
     implementation 'io.cloudevents:cloudevents-core:5.1.0'
+    implementation 'org.slf4j:slf4j-api'
 
     testImplementation 'io.projectreactor:reactor-test'
 }

@@ -3,7 +3,6 @@ package org.reactivecommons.async.starter.config;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
@@ -29,7 +28,6 @@ import java.util.Map;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
-@Log
 @Configuration
 @RequiredArgsConstructor
 @Import(ReactiveCommonsHealthConfig.class)

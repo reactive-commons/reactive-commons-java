@@ -2,7 +2,6 @@ package org.reactivecommons.async.commons.utils.resolver;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
@@ -17,7 +16,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
 
-@Log
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class HandlerResolverBuilder {
 

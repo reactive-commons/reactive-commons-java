@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.extern.java.Log;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -32,7 +31,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
-@Log
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     /**

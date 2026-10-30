@@ -6,7 +6,7 @@ import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 
 /**
  * The schedulers shared by every listener of the application, instead of a pair of pools per listener.
@@ -50,7 +49,7 @@ import java.util.logging.Level;
  * and {@code ...growth} (the times the pool grew because its tasks were starving). The pools are shared by the JVM,
  * so these meters have no domain tag; the meters of an application's registry are removed when it releases them.
  */
-@Log
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public final class ListenerSchedulers {
 
@@ -269,7 +268,7 @@ public final class ListenerSchedulers {
         try {
             ids.add(registration.get());
         } catch (Exception e) {
-            log.log(Level.WARNING, e, () -> "Could not register a scheduler metric");
+            log.warn("Could not register a scheduler metric", e);
         }
     }
 
@@ -281,7 +280,7 @@ public final class ListenerSchedulers {
         try {
             ids.forEach(registry::remove);
         } catch (Exception e) {
-            log.log(Level.WARNING, e, () -> "Could not remove the scheduler metrics");
+            log.warn("Could not remove the scheduler metrics", e);
         }
     }
 
@@ -289,8 +288,7 @@ public final class ListenerSchedulers {
         toStop.shutdown();
         try {
             if (!toStop.awaitTermination(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                log.log(Level.WARNING, "Handlers still running after {0} seconds, interrupting them",
-                        SHUTDOWN_TIMEOUT_SECONDS);
+                log.warn("Handlers still running after {} seconds, interrupting them", SHUTDOWN_TIMEOUT_SECONDS);
                 toStop.shutdownNow();
             }
         } catch (InterruptedException e) {

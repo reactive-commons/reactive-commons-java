@@ -2,7 +2,7 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
@@ -34,7 +33,7 @@ import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
-@Log
+@Slf4j
 public class ApplicationQueryListener extends GenericMessageListener {
     private final MessageConverter converter;
     private final HandlerResolver handlerResolver;
@@ -182,7 +181,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
         try {
             return Optional.of(Long.parseLong(String.valueOf(header).trim()));
         } catch (NumberFormatException e) {
-            log.log(Level.WARNING, () -> "Ignoring invalid " + name + " header: " + header);
+            log.warn("Ignoring invalid {} header: {}", name, header);
             return Optional.empty();
         }
     }
@@ -228,7 +227,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
         return Mono.fromRunnable(() -> {
             metrics.recordQueryDiscardedByTimeout();
-            log.log(Level.WARNING, () -> String.format("query with path %s discarded by timeout", executorPath));
+            log.warn("query with path {} discarded by timeout", executorPath);
         });
     }
 
@@ -256,8 +255,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
             return sender.sendNoConfirm(response, replyExchange, replyID, headers, false)
                     .onErrorResume(replyError -> {
                         metrics.recordQueryReplyFailed();
-                        log.log(Level.WARNING, replyError, () -> "Reply to query " + correlationID
-                                + " could not be published, its caller will not receive it");
+                        log.warn("Reply to query {} could not be published, its caller will not receive it",
+                                correlationID, replyError);
                         return Mono.empty();
                     });
         });

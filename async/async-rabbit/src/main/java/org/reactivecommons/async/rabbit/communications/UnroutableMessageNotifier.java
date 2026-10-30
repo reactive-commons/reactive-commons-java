@@ -3,7 +3,7 @@ package org.reactivecommons.async.rabbit.communications;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.MeterUsage;
 import reactor.core.Disposable;
 import reactor.core.publisher.Mono;
@@ -13,9 +13,8 @@ import reactor.util.concurrent.Queues;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
-import java.util.logging.Level;
 
-@Log
+@Slf4j
 public class UnroutableMessageNotifier {
     private static final String M_UNROUTABLE = "reactive_commons.publish.unroutable.messages";
     private static final String M_EMIT_FAILED = "reactive_commons.publish.unroutable.emit.failed";
@@ -56,7 +55,7 @@ public class UnroutableMessageNotifier {
         }
         if (!emitted) {
             metrics.recordEmitFailure();
-            log.warning("Failed to emit unroutable message: " + message);
+            log.warn("Failed to emit unroutable message: {}", message);
         }
     }
 
@@ -74,7 +73,7 @@ public class UnroutableMessageNotifier {
                 .flatMap(message -> Mono.defer(() -> handler.processMessage(message))
                         .onErrorResume(throwable -> {
                             metrics.recordProcessingError();
-                            log.severe("Error processing unroutable message: " + throwable.getMessage());
+                            log.error("Error processing unroutable message: {}", throwable.getMessage());
                             return Mono.empty();
                         }))
                 .subscribe();
@@ -122,7 +121,7 @@ public class UnroutableMessageNotifier {
                 return MeterUsage.register(registry, this, () -> Counter.builder(name).tags(tags).register(registry));
             } catch (Exception e) {
                 // never let a mis-wired registry break the publishing path; metrics are best-effort
-                log.log(Level.WARNING, e, () -> "Could not register " + name);
+                log.warn("Could not register {}", name, e);
                 return null;
             }
         }
@@ -138,7 +137,7 @@ public class UnroutableMessageNotifier {
             try {
                 MeterUsage.release(registry, this);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not remove the unroutable counters");
+                log.warn("Could not remove the unroutable counters", e);
             }
         }
 

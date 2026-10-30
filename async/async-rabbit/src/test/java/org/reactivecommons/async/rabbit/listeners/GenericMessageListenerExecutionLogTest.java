@@ -1,5 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
 import com.sun.management.ThreadMXBean;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
@@ -8,6 +10,7 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.Receiver;
@@ -15,14 +18,12 @@ import reactor.rabbitmq.Receiver;
 import java.lang.management.ManagementFactory;
 import java.lang.reflect.Method;
 import java.util.function.Function;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 
 /**
- * Every handled message logs its execution at {@code FINE}, a level disabled by default: building that line for
+ * Every handled message logs its execution at {@code DEBUG}, a level usually disabled: building that line for
  * nothing costs CPU and garbage on every message. It is measured on the thread that logs, since the line is not
  * observable when its level is disabled.
  */
@@ -32,7 +33,7 @@ class GenericMessageListenerExecutionLogTest {
 
     @Test
     void theExecutionOfAMessageIsNotFormattedWhileItsLogLevelIsDisabled() throws Exception {
-        Logger logger = Logger.getLogger(GenericMessageListener.class.getName());
+        Logger logger = (Logger) LoggerFactory.getLogger(GenericMessageListener.class);
         Level previous = logger.getLevel();
         logger.setLevel(Level.INFO);
         try {
@@ -52,7 +53,7 @@ class GenericMessageListenerExecutionLogTest {
             }
             long bytesPerMessage = (threads.getCurrentThreadAllocatedBytes() - before) / MESSAGES;
 
-            System.out.printf("execution of a message logged at FINE while disabled: %d bytes allocated per "
+            System.out.printf("execution of a message logged at DEBUG while disabled: %d bytes allocated per "
                     + "message%n", bytesPerMessage);
             assertThat(bytesPerMessage).as("bytes allocated per message to log its execution at a disabled level")
                     .isLessThan(16);

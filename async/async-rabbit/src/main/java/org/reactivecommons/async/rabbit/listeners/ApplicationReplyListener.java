@@ -1,7 +1,7 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.Delivery;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.exceptions.ReplyLostOnReconnectException;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
@@ -9,6 +9,7 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -20,7 +21,6 @@ import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Level;
 
 import static org.reactivecommons.async.commons.Headers.COMPLETION_ONLY_SIGNAL;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
@@ -29,7 +29,7 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 import static reactor.rabbitmq.QueueSpecification.queue;
 
 
-@Log
+@Slf4j
 public class ApplicationReplyListener {
 
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
@@ -95,7 +95,7 @@ public class ApplicationReplyListener {
                             router.routeReply(correlationID, RabbitMessage.fromDelivery(delivery));
                         }
                     } catch (Exception e) {
-                        log.log(Level.SEVERE, "Error in reply reception", e);
+                        log.error("Error in reply reception", e);
                     }
                 }));
 
@@ -172,8 +172,7 @@ public class ApplicationReplyListener {
         int lost = router.failAll(domain, new ReplyLostOnReconnectException("Reply lost: the reply listener of "
                 + queueName + " is not consuming, " + reason));
         if (lost > 0) {
-            log.log(Level.WARNING, () -> "Failed " + lost + " pending reply correlation(s) of reply queue "
-                    + queueName + ": " + reason);
+            log.warn("Failed {} pending reply correlation(s) of reply queue {}: {}", lost, queueName, reason);
             ConsumerMetrics.recordRepliesLost(meterRegistry, domain, lost);
         }
     }
@@ -192,9 +191,9 @@ public class ApplicationReplyListener {
         long consecutive = liveness.consecutiveRestartFailures();
         long delayMs = backoffMillis(consecutive);
         Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)
-                ? Level.WARNING : Level.FINE;
-        log.log(level, () -> "Re-subscribing reply listener for queue " + queueName + " in " + delayMs
-                + " ms (attempt " + Math.max(1, consecutive) + ")");
+                ? Level.WARN : Level.DEBUG;
+        log.atLevel(level).log("Re-subscribing reply listener for queue {} in {} ms (attempt {})", queueName,
+                delayMs, Math.max(1, consecutive));
         Schedulers.boundedElastic().schedule(() -> {
             restartScheduled.set(false);
             subscribe();

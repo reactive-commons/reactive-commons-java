@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -7,6 +11,7 @@ import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.testcontainers.containers.Container.ExecResult;
 import org.testcontainers.junit.jupiter.Container;
@@ -20,10 +25,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -50,26 +51,17 @@ class ExchangeDeclarationFailureRabbitContainerTest {
         rabbitmqctl("set_permissions", "-p", "/", "limited", "^$", ".*", ".*");
         String exchange = "edf.events." + UUID.randomUUID();
         List<String> warnings = new CopyOnWriteArrayList<>();
-        Logger logger = Logger.getLogger(ReactiveMessageSender.class.getName());
-        Handler capture = new Handler() {
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveMessageSender.class);
+        AppenderBase<ILoggingEvent> capture = new AppenderBase<>() {
             @Override
-            public void publish(LogRecord logRecord) {
-                if (logRecord.getLevel() == Level.WARNING) {
-                    warnings.add(logRecord.getMessage());
+            protected void append(ILoggingEvent event) {
+                if (event.getLevel() == Level.WARN) {
+                    warnings.add(event.getFormattedMessage());
                 }
             }
-
-            @Override
-            public void flush() {
-                // nothing buffered
-            }
-
-            @Override
-            public void close() {
-                // nothing to release
-            }
         };
-        logger.addHandler(capture);
+        capture.start();
+        logger.addAppender(capture);
         try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "edf",
                 false, false, Map.of("spring.rabbitmq.username", "limited", "spring.rabbitmq.password", "limited",
                         "app.async.app.domain.events.exchange", exchange, "app.async.app.sendTimeout", "2s"),
@@ -102,7 +94,7 @@ class ExchangeDeclarationFailureRabbitContainerTest {
             assertThat(String.valueOf(health.details().get("error"))).as("reason in the health check")
                     .contains("publishing flows keep failing", "NOT_FOUND - no exchange '" + exchange + "'");
         } finally {
-            logger.removeHandler(capture);
+            logger.detachAppender(capture);
         }
     }
 

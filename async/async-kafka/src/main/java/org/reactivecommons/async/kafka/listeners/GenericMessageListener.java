@@ -1,6 +1,6 @@
 package org.reactivecommons.async.kafka.listeners;
 
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.commons.communications.Message;
@@ -23,12 +23,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 import static java.lang.String.format;
 import static java.util.function.Function.identity;
 
-@Log
+@Slf4j
 public abstract class GenericMessageListener {
     private final ConcurrentHashMap<String, Function<Message, Mono<Object>>> handlers = new ConcurrentHashMap<>();
     private final ReactiveMessageListener messageListener;
@@ -83,24 +82,22 @@ public abstract class GenericMessageListener {
     }
 
     public void startListener(TopologyCreator creator) {
-        log.log(Level.INFO, "Using max concurrency {0}, in receiver for topics: {1}",
-                new Object[]{messageListener.getMaxConcurrency(), topics});
+        log.info("Using max concurrency {}, in receiver for topics: {}", messageListener.getMaxConcurrency(), topics);
 
         if (useDLQ) {
-            log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!",
-                    new Object[]{maxRetries});
+            log.info("ATTENTION! Using DLQ Strategy for retries with {} + 1 Max Retries configured!", maxRetries);
         } else {
-            log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
+            log.info("ATTENTION! Using infinite fast retries as Retry Strategy");
         }
 
         if (createTopology) {
             this.messageFlux = setUpBindings(creator)
                     .thenMany(this.messageListener.listen(groupId, topics)
-                            .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
+                            .doOnError(err -> log.error("Error listening queue", err))
                             .transform(this::consumeFaultTolerant));
         } else {
             this.messageFlux = this.messageListener.listen(groupId, topics)
-                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue", err))
+                    .doOnError(err -> log.error("Error listening queue", err))
                     .transform(this::consumeFaultTolerant);
         }
 
@@ -134,7 +131,7 @@ public abstract class GenericMessageListener {
                 flow = flow.retryWhen(Retry.fixedDelay(maxRetries, retryDelay))
                         .onErrorMap(err -> {
                             if (err.getMessage() != null && err.getMessage().contains("Retries exhausted")) {
-                                log.warning(err.getMessage());
+                                log.warn(err.getMessage());
                                 return err.getCause();
                             }
                             return err;
@@ -148,8 +145,8 @@ public abstract class GenericMessageListener {
             // itself.
             return Mono.error(e);
         } catch (Exception e) {
-            log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
-                    "Severe Warning! ", msj.key()));
+            log.error("ATTENTION !! Outer error protection reached for {}, in Async Consumer!! Severe Warning! ",
+                    msj.key());
             return Mono.error(e);
         }
     }
@@ -188,7 +185,7 @@ public abstract class GenericMessageListener {
             doLogExecution(executorPath, timeElapsed);
             customReporter.reportMetric(objectType, executorPath, timeElapsed, success);
         } catch (Exception e) {
-            log.log(Level.WARNING, "Unable to send execution metrics!", e);
+            log.warn("Unable to send execution metrics!", e);
         }
 
     }
@@ -204,21 +201,20 @@ public abstract class GenericMessageListener {
     }
 
     private void doLogExecution(String executorPath, long timeElapsed) {
-        log.fine(() -> String.format("%s with path %s handled, took %d ms",
-                objectType, executorPath, timeElapsed));
+        log.debug("{} with path {} handled, took {} ms", objectType, executorPath, timeElapsed);
     }
 
 
     protected void logError(Throwable err, ReceiverRecord<String, byte[]> msj, FallbackStrategy strategy) {
         String messageID = msj.key();
         try {
-            log.log(Level.SEVERE, err, () -> format("Error encounter while processing message %s", messageID));
-            log.warning(() -> format("Message %s Headers: %s", messageID, msj.headers().toString()));
-            log.warning(() -> format("Message %s Body: %s", messageID, new String(msj.value())));
+            log.error("Error encounter while processing message {}", messageID, err);
+            log.warn("Message {} Headers: {}", messageID, msj.headers());
+            log.warn("Message {} Body: {}", messageID, new String(msj.value()));
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Error Login message Content!!", e);
+            log.error("Error Login message Content!!", e);
         } finally {
-            log.warning(format(strategy.message, messageID));
+            log.warn(format(strategy.message, messageID));
         }
     }
 
@@ -245,10 +241,10 @@ public abstract class GenericMessageListener {
         try {
             customReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
                     .subscribeOn(errorReporterScheduler)
-                    .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
+                    .doOnError(t -> log.warn("Error sending error to external reporter", t))
                     .subscribe();
         } catch (Throwable t) {
-            log.log(Level.WARNING, "Error in scheduler when sending error to external reporter", t);
+            log.warn("Error in scheduler when sending error to external reporter", t);
         }
     }
 

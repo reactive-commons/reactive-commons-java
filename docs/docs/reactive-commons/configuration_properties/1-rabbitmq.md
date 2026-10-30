@@ -680,7 +680,7 @@ app:
 
 When the subscription terminates (channel closed, consumer cancelled, upstream error), the listener re-subscribes
 with the same **200 ms → 5 s exponential backoff** used by the sender's publisher-confirms flows. The first restart
-per listener is logged at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when
+per listener is logged at WARN so an outage is visible; subsequent attempts log at DEBUG to avoid flooding when
 the broker is continuously unavailable. A listener is active once the broker has registered its consumer
 (`basic.consume-ok`), not when its channel opens. The failure counter is cleared when a message is delivered, or
 once the consumer has stayed registered for 5 seconds, so a recovered listener on a queue without traffic is healthy

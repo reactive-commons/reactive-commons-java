@@ -2,7 +2,6 @@ package org.reactivecommons.async.starter.impl.common.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.rabbit.ConnectionFactoryCustomizer;
 import org.reactivecommons.async.rabbit.RabbitMQBrokerProviderFactory;
@@ -22,7 +21,6 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
-@Log
 @Configuration
 @RequiredArgsConstructor
 @EnableConfigurationProperties({RabbitPropertiesAutoConfig.class, AsyncRabbitPropsDomainProperties.class})

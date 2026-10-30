@@ -1,6 +1,5 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
@@ -15,7 +14,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.function.Function;
 
-@Log
 public class ApplicationQueueListener extends GenericMessageListener {
 
     static final int MAX_CONSUMER_TAG_BYTES = 255;

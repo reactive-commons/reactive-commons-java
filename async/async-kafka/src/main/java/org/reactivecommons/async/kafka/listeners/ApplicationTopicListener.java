@@ -1,6 +1,5 @@
 package org.reactivecommons.async.kafka.listeners;
 
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.communications.Message;
@@ -16,7 +15,6 @@ import java.util.function.Function;
 /**
  * Listens to a Kafka topic directly, so the handler receives the {@link Message} exactly as it travels in the topic.
  */
-@Log
 public class ApplicationTopicListener extends GenericMessageListener {
 
     private final RegisteredQueueListener registeredListener;

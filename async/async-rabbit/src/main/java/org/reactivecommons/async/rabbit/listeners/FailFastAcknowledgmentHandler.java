@@ -3,12 +3,11 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.ShutdownSignalException;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import reactor.rabbitmq.RabbitFluxException;
 import reactor.rabbitmq.Receiver;
 
 import java.util.function.BiConsumer;
-import java.util.logging.Level;
 
 /**
  * Handles a failed ack/nack without blocking the thread.
@@ -23,7 +22,7 @@ import java.util.logging.Level;
  * @see <a href="https://www.rabbitmq.com/client-libraries/java-api-guide#recovery-and-acknowledgements">Manual
  * Acknowledgements and Automatic Recovery</a>
  */
-@Log
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class FailFastAcknowledgmentHandler implements BiConsumer<Receiver.AcknowledgmentContext, Exception> {
 
@@ -32,8 +31,8 @@ final class FailFastAcknowledgmentHandler implements BiConsumer<Receiver.Acknowl
     @Override
     public void accept(Receiver.AcknowledgmentContext context, Exception error) {
         if (isChannelClosed(error)) {
-            log.log(Level.WARNING, () -> "Acknowledgment skipped, the channel is closed (the broker redelivers "
-                    + "the message): " + error.getMessage());
+            log.warn("Acknowledgment skipped, the channel is closed (the broker redelivers the message): {}",
+                    error.getMessage());
             return;
         }
         throw new RabbitFluxException("Unable to acknowledge the message", error);

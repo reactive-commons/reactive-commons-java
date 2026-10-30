@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.CloudEventHandler;
 import org.reactivecommons.async.api.handlers.DomainEventHandler;
@@ -25,7 +24,6 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 import static reactor.rabbitmq.QueueSpecification.queue;
 import static reactor.core.publisher.Flux.fromIterable;
 
-@Log
 public class ApplicationNotificationListener extends GenericMessageListener {
 
     private final MessageConverter messageConverter;

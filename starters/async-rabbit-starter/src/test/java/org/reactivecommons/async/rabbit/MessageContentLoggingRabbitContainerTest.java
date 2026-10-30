@@ -1,11 +1,16 @@
 package org.reactivecommons.async.rabbit;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.ThrowableProxyUtil;
+import ch.qos.logback.core.AppenderBase;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,11 +26,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
-import java.util.logging.SimpleFormatter;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -64,22 +64,12 @@ class MessageContentLoggingRabbitContainerTest {
     private static final AtomicInteger FAILURES = new AtomicInteger();
 
     private final List<String> logs = new CopyOnWriteArrayList<>();
-    private final Handler capture = new Handler() {
-        private final SimpleFormatter formatter = new SimpleFormatter();
-
+    private final AppenderBase<ILoggingEvent> capture = new AppenderBase<>() {
         @Override
-        public void publish(LogRecord logRecord) {
-            logs.add(formatter.format(logRecord));
-        }
-
-        @Override
-        public void flush() {
-            // nothing buffered
-        }
-
-        @Override
-        public void close() {
-            // nothing to release
+        protected void append(ILoggingEvent event) {
+            // the message and the stack trace, as an appender writes them
+            logs.add(event.getThrowableProxy() == null ? event.getFormattedMessage()
+                    : event.getFormattedMessage() + ThrowableProxyUtil.asString(event.getThrowableProxy()));
         }
     };
 
@@ -97,13 +87,17 @@ class MessageContentLoggingRabbitContainerTest {
 
     @BeforeEach
     void captureLogs() {
-        capture.setLevel(Level.ALL);
-        Logger.getLogger("").addHandler(capture);
+        capture.start();
+        rootLogger().addAppender(capture);
     }
 
     @AfterEach
     void stopCapturing() {
-        Logger.getLogger("").removeHandler(capture);
+        rootLogger().detachAppender(capture);
+    }
+
+    private static Logger rootLogger() {
+        return (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     }
 
     @Test

@@ -1,21 +1,19 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 import reactor.test.StepVerifier;
 
 import java.nio.charset.StandardCharsets;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -59,33 +57,17 @@ class UnroutableMessageProcessorTest {
         when(messageResult.outboundMessage()).thenReturn(outboundMessage);
         when(outboundMessage.getBody())
                 .thenReturn(("a".repeat(2_000) + "END-OF-BODY").getBytes(StandardCharsets.UTF_8));
-        Logger logger = Logger.getLogger(UnroutableMessageProcessor.class.getName());
-        List<String> logged = new CopyOnWriteArrayList<>();
-        Handler capture = new Handler() {
-            @Override
-            public void publish(LogRecord logRecord) {
-                logged.add(logRecord.getMessage());
-            }
-
-            @Override
-            public void flush() {
-                // nothing buffered
-            }
-
-            @Override
-            public void close() {
-                // nothing to release
-            }
-        };
-        capture.setLevel(Level.ALL);
-        logger.addHandler(capture);
+        Logger logger = (Logger) LoggerFactory.getLogger(UnroutableMessageProcessor.class);
+        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        logged.start();
+        logger.addAppender(logged);
         try {
             unroutableMessageProcessor.processMessage(messageResult).block();
         } finally {
-            logger.removeHandler(capture);
+            logger.detachAppender(logged);
         }
 
-        assertThat(logged).singleElement().satisfies(line -> assertThat(line)
+        assertThat(logged.list).singleElement().satisfies(event -> assertThat(event.getFormattedMessage())
                 .contains("a".repeat(1_024))
                 .contains("truncated, 2011 bytes")
                 .doesNotContain("END-OF-BODY"));

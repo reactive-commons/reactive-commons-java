@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.CloudCommandHandler;
 import org.reactivecommons.async.api.handlers.DomainCommandHandler;
@@ -24,7 +23,6 @@ import reactor.rabbitmq.ExchangeSpecification;
 import java.util.Optional;
 import java.util.function.Function;
 
-@Log
 public class ApplicationCommandListener extends GenericMessageListener {
 
     private static final String DQL = ".DLQ";

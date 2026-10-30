@@ -1,5 +1,8 @@
 package org.reactivecommons.async.rabbit;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -23,10 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -52,23 +52,12 @@ class MalformedDeathHeaderRabbitContainerTest {
     private static final AtomicInteger FAILURES = new AtomicInteger();
 
     private final AtomicInteger restarts = new AtomicInteger();
-    private final Handler restartCounter = new Handler() {
+    private final AppenderBase<ILoggingEvent> restartCounter = new AppenderBase<>() {
         @Override
-        public void publish(LogRecord logRecord) {
-            String message = logRecord.getMessage();
-            if (message != null && message.startsWith("Re-subscribing listener for queue " + QUEUE)) {
+        protected void append(ILoggingEvent event) {
+            if (event.getFormattedMessage().startsWith("Re-subscribing listener for queue " + QUEUE)) {
                 restarts.incrementAndGet();
             }
-        }
-
-        @Override
-        public void flush() {
-            // nothing buffered
-        }
-
-        @Override
-        public void close() {
-            // nothing to release
         }
     };
 
@@ -90,13 +79,13 @@ class MalformedDeathHeaderRabbitContainerTest {
 
     @BeforeEach
     void countRestarts() {
-        restartCounter.setLevel(Level.ALL);
-        Logger.getLogger("").addHandler(restartCounter);
+        restartCounter.start();
+        rootLogger().addAppender(restartCounter);
     }
 
     @AfterEach
     void stopCounting() {
-        Logger.getLogger("").removeHandler(restartCounter);
+        rootLogger().detachAppender(restartCounter);
     }
 
     @Test
@@ -130,6 +119,10 @@ class MalformedDeathHeaderRabbitContainerTest {
                     .isGreaterThanOrEqualTo(5);
             assertThat(restarts.get()).as("listener restarts caused by the x-death headers").isZero();
         }
+    }
+
+    private static Logger rootLogger() {
+        return (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
     }
 
     private static void publish(Channel channel, String eventId, Object deathHeader) throws Exception {

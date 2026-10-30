@@ -3,7 +3,7 @@ package org.reactivecommons.async.rabbit.listeners;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import io.micrometer.core.instrument.Timer;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
@@ -14,6 +14,7 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
@@ -34,13 +35,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 import static java.lang.String.format;
 import static java.util.function.Function.identity;
 import static reactor.core.publisher.Mono.defer;
 
-@Log
+@Slf4j
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
@@ -124,15 +124,11 @@ public abstract class GenericMessageListener {
     }
 
     public void startListener() {
-        log.log(Level.INFO, "Using max concurrency {0}, in queue: {1}",
-                new Object[]{messageListener.maxConcurrency(), queueName}
-        );
+        log.info("Using max concurrency {}, in queue: {}", messageListener.maxConcurrency(), queueName);
         if (useDLQRetries) {
-            log.log(Level.INFO, "ATTENTION! Using DLQ Strategy for retries with {0} + 1 Max Retries configured!",
-                    new Object[]{maxRetries}
-            );
+            log.info("ATTENTION! Using DLQ Strategy for retries with {} + 1 Max Retries configured!", maxRetries);
         } else {
-            log.log(Level.INFO, "ATTENTION! Using infinite fast retries as Retry Strategy");
+            log.info("ATTENTION! Using infinite fast retries as Retry Strategy");
         }
         warnIfLocalRetriesOutlastTheConsumerTimeout();
 
@@ -147,11 +143,10 @@ public abstract class GenericMessageListener {
                 .channelCallback(channel -> {
                     consumingChannel.set(channel);
                     channel.addShutdownListener(cause -> {
-                        log.log(Level.WARNING, cause, () -> "Channel shutdown detected in queue " + queueName
-                                + " channel open: " + channel.isOpen() +
-                                " connection open: " + channel.getConnection().isOpen());
+                        log.warn("Channel shutdown detected in queue {} channel open: {} connection open: {}",
+                                queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
                         if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                            log.warning("Recovering listener for queue: " + queueName);
+                            log.warn("Recovering listener for queue: {}", queueName);
                             scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
                         }
                     });
@@ -160,11 +155,11 @@ public abstract class GenericMessageListener {
         if (createTopology) {
             this.messageFlux = setUpBindings(messageListener.topologyCreator())
                     .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
-                            .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
+                            .doOnError(err -> log.error("Error listening queue {}", getRootCauseMessage(err), err))
                             .transform(this::consumeFaultTolerant));
         } else {
             this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
-                    .doOnError(err -> log.log(Level.SEVERE, "Error listening queue " + getRootCauseMessage(err), err))
+                    .doOnError(err -> log.error("Error listening queue {}", getRootCauseMessage(err), err))
                     .transform(this::consumeFaultTolerant);
         }
 
@@ -189,11 +184,10 @@ public abstract class GenericMessageListener {
         }
         if (unacknowledged.compareTo(DEFAULT_CONSUMER_TIMEOUT) >= 0) {
             final String held = unacknowledged + (handlerTimeout == null ? " plus the handler attempts" : "");
-            log.warning(() -> format("The local retries of queue %s can keep a delivery unacknowledged for %s "
-                    + "(maxRetries %d, retryDelay %s, handlerTimeout %s), beyond the default consumer_timeout of the "
-                    + "broker (%s): the broker would requeue it. Lower maxRetries or retryDelay, or use withDLQRetry.",
-                    queueName, held, maxRetries, retryDelay, handlerTimeout == null ? "none" : handlerTimeout,
-                    DEFAULT_CONSUMER_TIMEOUT));
+            log.warn("The local retries of queue {} can keep a delivery unacknowledged for {} (maxRetries {}, "
+                    + "retryDelay {}, handlerTimeout {}), beyond the default consumer_timeout of the broker ({}): the "
+                    + "broker would requeue it. Lower maxRetries or retryDelay, or use withDLQRetry.", queueName, held,
+                    maxRetries, retryDelay, handlerTimeout == null ? "none" : handlerTimeout, DEFAULT_CONSUMER_TIMEOUT);
         }
     }
 
@@ -233,9 +227,8 @@ public abstract class GenericMessageListener {
             msj.ack();
             metrics.recordOutcome(ConsumerMetrics.OUTCOME_ACK);
         } catch (RuntimeException e) {
-            log.log(Level.WARNING, e, () -> "Unable to acknowledge message " + msj.getProperties().getMessageId()
-                    + " of queue " + queueName + " after its handler succeeded: the broker redelivers it once its "
-                    + "channel closes");
+            log.warn("Unable to acknowledge message {} of queue {} after its handler succeeded: the broker "
+                    + "redelivers it once its channel closes", msj.getProperties().getMessageId(), queueName, e);
         }
     }
 
@@ -283,7 +276,7 @@ public abstract class GenericMessageListener {
                                 .doBeforeRetry(signal -> metrics.recordHandlerRetry()))
                         .onErrorMap(err -> {
                             if (Exceptions.isRetryExhausted(err)) {
-                                log.warning(err.getMessage());
+                                log.warn(err.getMessage());
                                 metrics.recordRetriesExhausted();
                                 return err.getCause();
                             }
@@ -296,8 +289,8 @@ public abstract class GenericMessageListener {
             }
             return flow.doOnSuccess(o -> logExecution(executorPath, initNanos, true)).thenReturn(msj);
         } catch (Exception e) {
-            log.log(Level.SEVERE, format("ATTENTION !! Outer error protection reached for %s, in Async Consumer!! " +
-                    "Severe Warning! ", msj.getProperties().getMessageId()));
+            log.error("ATTENTION !! Outer error protection reached for {}, in Async Consumer!! Severe Warning! ",
+                    msj.getProperties().getMessageId());
             return Mono.error(e);
         }
     }
@@ -317,7 +310,7 @@ public abstract class GenericMessageListener {
             channel.basicCancel(consumerTag);
         } catch (Exception e) {
             // not registered (yet) or the channel is closing: stop() closes the channel anyway
-            log.log(Level.FINE, e, () -> "Consumer of queue " + queueName + " not cancelled");
+            log.debug("Consumer of queue {} not cancelled", queueName, e);
         }
     }
 
@@ -331,8 +324,8 @@ public abstract class GenericMessageListener {
         final long deadline = System.nanoTime() + timeout.toNanos();
         while (metrics.inFlight() > 0) {
             if (System.nanoTime() - deadline >= 0) {
-                log.warning(() -> metrics.inFlight() + " deliveries of queue " + queueName + " still in flight after "
-                        + timeout + ": the broker redelivers them");
+                log.warn("{} deliveries of queue {} still in flight after {}: the broker redelivers them",
+                        metrics.inFlight(), queueName, timeout);
                 return false;
             }
             try {
@@ -407,9 +400,9 @@ public abstract class GenericMessageListener {
         long consecutive = liveness.consecutiveRestartFailures();
         long delayMs = backoffMillis(consecutive);
         Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)
-                ? Level.WARNING : Level.FINE;
-        log.log(level, () -> "Re-subscribing listener for queue " + queueName + " in " + delayMs
-                + " ms (attempt " + Math.max(1, consecutive) + ")");
+                ? Level.WARN : Level.DEBUG;
+        log.atLevel(level).log("Re-subscribing listener for queue {} in {} ms (attempt {})", queueName, delayMs,
+                Math.max(1, consecutive));
         Schedulers.boundedElastic().schedule(() -> {
             restartScheduled.set(false);
             subscribe();
@@ -434,7 +427,7 @@ public abstract class GenericMessageListener {
             doLogExecution(executorPath, timeElapsed);
             customReporter.reportMetric(objectType, executorPath, timeElapsed, success);
         } catch (Exception e) {
-            log.log(Level.WARNING, "Unable to send execution metrics!", e);
+            log.warn("Unable to send execution metrics!", e);
         }
 
     }
@@ -459,8 +452,8 @@ public abstract class GenericMessageListener {
 
     private void doLogExecution(String executorPath, long timeElapsed) {
         // once per handled message: nothing is built while the level is disabled
-        if (log.isLoggable(Level.FINE)) {
-            log.fine(String.format("%s with path %s handled, took %d ms", objectType, executorPath, timeElapsed));
+        if (log.isDebugEnabled()) {
+            log.debug("{} with path {} handled, took {} ms", objectType, executorPath, timeElapsed);
         }
     }
 
@@ -470,14 +463,14 @@ public abstract class GenericMessageListener {
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         final String messageID = msj.getProperties().getMessageId();
         try {
-            log.log(Level.SEVERE, err, () -> format("Error encounter while processing message %s of queue %s "
-                    + "(%d bytes)", messageID, queueName, msj.getBody().length));
-            log.warning(() -> format("Message %s Headers: %s Body: %s", messageID, msj.getProperties().getHeaders(),
-                    RabbitMessage.bodyPreview(msj.getBody())));
+            log.error("Error encounter while processing message {} of queue {} ({} bytes)", messageID, queueName,
+                    msj.getBody().length, err);
+            log.warn("Message {} Headers: {} Body: {}", messageID, msj.getProperties().getHeaders(),
+                    RabbitMessage.bodyPreview(msj.getBody()));
         } catch (Exception e) {
-            log.log(Level.SEVERE, "Error Login message Content!!", e);
+            log.error("Error Login message Content!!", e);
         } finally {
-            log.warning(() -> format(strategy.message, messageID));
+            log.warn(format(strategy.message, messageID));
         }
     }
 
@@ -501,10 +494,11 @@ public abstract class GenericMessageListener {
         final long now = System.currentTimeMillis();
         final long last = lastHandlerWaitWarning.get();
         if (now - last >= HANDLER_WAIT_WARNING.toMillis() && lastHandlerWaitWarning.compareAndSet(last, now)) {
-            log.warning(() -> "A delivery of queue " + queueName + " waited " + wait.toSeconds() + " s for a handler"
-                    + " thread: the handlers are busy. A delivery not acknowledged within the broker's"
-                    + " consumer_timeout gets its channel closed and every delivery of the channel requeued;"
-                    + " lower prefetchCount, or set handlerTimeout below consumer_timeout.");
+            log.warn("A delivery of queue {} waited {} s for a handler thread: the handlers are busy. A delivery "
+                    + "not acknowledged within the broker's consumer_timeout gets its channel closed and every "
+                    + "delivery of the channel requeued; lower prefetchCount, or set handlerTimeout below "
+                    + "consumer_timeout.",
+                    queueName, wait.toSeconds());
         }
     }
 
@@ -575,9 +569,8 @@ public abstract class GenericMessageListener {
                 }))
                 .onErrorResume(notificationError -> {
                     metrics.recordDiscardNotificationFailed();
-                    log.log(Level.WARNING, notificationError, () -> "Discard of message "
-                            + msj.getProperties().getMessageId() + " in queue " + queueName
-                            + " could not be notified: requeued to discard it again");
+                    log.warn("Discard of message {} in queue {} could not be notified: requeued to discard it again",
+                            msj.getProperties().getMessageId(), queueName, notificationError);
                     return Mono.just(msj).delayElement(retryDelay).doOnNext(m -> {
                         m.nack(true);
                         metrics.recordOutcome(ConsumerMetrics.OUTCOME_NACK);
@@ -589,10 +582,10 @@ public abstract class GenericMessageListener {
         try {
             customReporter.reportError(err, message, parseMessageForReporter(message), redelivered)
                     .subscribeOn(ListenerSchedulers.errorReporter())
-                    .doOnError(t -> log.log(Level.WARNING, "Error sending error to external reporter", t))
+                    .doOnError(t -> log.warn("Error sending error to external reporter", t))
                     .subscribe();
         } catch (Throwable t) {
-            log.log(Level.WARNING, "Error in scheduler when sending error to external reporter", t);
+            log.warn("Error in scheduler when sending error to external reporter", t);
         }
     }
 

@@ -1,6 +1,6 @@
 package org.reactivecommons.async.starter.config;
 
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.starter.config.disabled.DisabledDirectAsyncGateway;
@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentMap;
  * Use {@code @EnableReactiveCommonsDynamic} (or {@code @Import(ReactiveCommonsDynamicConfig.class)})
  * together with a {@code @Bean} of type {@link ReactiveCommonsFeatures} in your application.
  */
-@Log4j2
+@Slf4j
 @Configuration
 @Import({ReactiveCommonsConfig.class, ReactiveCommonsListenersConfig.class})
 public class ReactiveCommonsDynamicConfig {

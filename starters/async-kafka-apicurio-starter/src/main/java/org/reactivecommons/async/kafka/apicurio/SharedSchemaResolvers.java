@@ -2,14 +2,13 @@ package org.reactivecommons.async.kafka.apicurio;
 
 import com.networknt.schema.JsonSchema;
 import io.apicurio.registry.resolver.SchemaResolver;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.Closeable;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 /**
  * Hands out one Apicurio resolver, and therefore one registry connection and one schema cache, per distinct
@@ -22,7 +21,7 @@ import java.util.logging.Level;
  * <p>
  * The resolvers are owned by this class, which is what makes it responsible for releasing them.
  */
-@Log
+@Slf4j
 public class SharedSchemaResolvers implements Closeable {
 
     private final Function<Map<String, Object>, SchemaResolver<JsonSchema, Object>> factory;
@@ -53,7 +52,7 @@ public class SharedSchemaResolvers implements Closeable {
             try {
                 resolver.close();
             } catch (Exception e) {
-                log.log(Level.WARNING, "Unable to release an Apicurio Registry client", e);
+                log.warn("Unable to release an Apicurio Registry client", e);
             }
         });
     }

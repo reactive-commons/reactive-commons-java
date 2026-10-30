@@ -1,7 +1,7 @@
 package sample;
 
 import io.cloudevents.CloudEvent;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Primary;
 import reactor.core.publisher.Mono;
 import sample.model.Constants;
 
-@Log4j2
+@Slf4j
 @Configuration
 @EnableEventListeners
 public class ListenerConfig {
