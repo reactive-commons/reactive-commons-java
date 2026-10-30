@@ -67,8 +67,9 @@ public class ApplicationEventListener extends GenericMessageListener {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic")
         );
-        // one at a time: they share the channel of the creator, which takes a single RPC at a time
-        final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners())
+        // one at a time: they share the channel of the creator, which takes a single RPC at a time. Read on every
+        // subscription (e.g. a restart of the listener): the events whose listening was stopped are not bound again
+        final Flux<AMQP.Queue.BindOk> bindings = Flux.defer(() -> fromIterable(resolver.getEventListeners()))
                 .concatMap(listener -> creator.bind(
                         BindingSpecification.binding(eventsExchange, listener.path(), queueName)
                 ));

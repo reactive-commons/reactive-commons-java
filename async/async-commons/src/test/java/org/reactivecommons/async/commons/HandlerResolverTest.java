@@ -135,6 +135,20 @@ class HandlerResolverTest {
     }
 
     @Test
+    void anEventWhoseListeningIsStoppedIsNotBoundUntilItIsStartedAgain() {
+        var stopped = new RegisteredEventListener<>("bind.stopped", mock(), Object.class);
+        var kept = new RegisteredEventListener<>("bind.kept", mock(), Object.class);
+        eventsToBind.put("bind.stopped", stopped);
+        eventsToBind.put("bind.kept", kept);
+
+        resolver.stopListeningEvent("bind.stopped");
+        assertThat(resolver.getEventListeners()).containsExactly(kept);
+
+        resolver.startListeningEvent("bind.stopped");
+        assertThat(resolver.getEventListeners()).containsExactlyInAnyOrder(stopped, kept);
+    }
+
+    @Test
     void getEventNames() {
         eventListeners.put("event.a", new RegisteredEventListener<>("event.a", mock(), Object.class));
         eventListeners.put("event.b", new RegisteredEventListener<>("event.b", mock(), Object.class));

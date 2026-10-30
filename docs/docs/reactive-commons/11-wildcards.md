@@ -70,6 +70,9 @@ public class HandlerRegistryConfiguration {
 registry.startListeningEvent("purchase.cancelled");
 ```
 
+`stopListeningEvent` unbinds the event, and it stays unbound when the listener declares its bindings again (e.g. when it
+restarts because the broker cancelled its consumer) until `startListeningEvent` is called for it.
+
 You also can listen with * wildcard or # wildcard, the * wildcard is for a single word and # wildcard is for multiple
 words, for example:
 
