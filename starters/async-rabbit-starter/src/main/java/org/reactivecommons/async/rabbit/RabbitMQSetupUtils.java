@@ -36,6 +36,7 @@ import reactor.rabbitmq.Receiver;
 import reactor.rabbitmq.ReceiverOptions;
 import reactor.rabbitmq.Sender;
 import reactor.rabbitmq.SenderOptions;
+import reactor.rabbitmq.Utils;
 import reactor.util.retry.Retry;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -269,8 +270,26 @@ public final class RabbitMQSetupUtils {
                             connection.addShutdownListener(cause -> blockedState.onConnectionShutdown());
                         }
                     })
-                    .cache();
+                    // a connection the client will not re-open is replaced by a new one the next time it is used (e.g.
+                    // when a listener restarts or a publishing flow is re-subscribed), unless the application released
+                    // its connections meanwhile
+                    .cacheInvalidateIf(connection -> CONNECTION_CACHE.containsKey(key)
+                            && closedForGood(connection, role));
         });
+    }
+
+    /**
+     * Whether the connection is closed and the client will not re-open it (see {@link Utils#isClosedForGood}), e.g.
+     * because a {@link ConnectionFactoryCustomizer} disabled its automatic recovery.
+     */
+    private static boolean closedForGood(Connection connection, ConnectionRole role) {
+        final boolean closedForGood = Utils.isClosedForGood(connection);
+        if (closedForGood) {
+            log.warn("The {} connection to RabbitMQ is closed and will not be recovered ({}): opening a new one",
+                    role.kind, connection.getCloseReason() != null ? connection.getCloseReason().getMessage()
+                            : "unknown reason");
+        }
+        return closedForGood;
     }
 
     /**

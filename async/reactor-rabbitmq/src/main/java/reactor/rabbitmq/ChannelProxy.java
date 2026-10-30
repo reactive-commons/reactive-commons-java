@@ -43,7 +43,8 @@ public final class ChannelProxy {
     /**
      * Creates a dynamic proxy implementing {@link Channel} where {@code asyncCompletableRpc} runs on the current
      * channel, opening a new one when it is closed. {@code isOpen} and {@code close} act on the current channel,
-     * {@code equals} and {@code hashCode} use the identity of the proxy, and every other method throws
+     * {@code getConnection} returns the connection the channels are opened on, {@code equals} and {@code hashCode} use
+     * the identity of the proxy, and every other method throws
      * {@link UnsupportedOperationException}.
      */
     public static Channel create(Connection connection) throws IOException {
@@ -68,6 +69,7 @@ public final class ChannelProxy {
             return switch (method.getName()) {
                 case "asyncCompletableRpc" -> asyncCompletableRpc((Method) args[0]);
                 case "isOpen" -> isOpen();
+                case "getConnection" -> connection;
                 case "close" -> {
                     close();
                     yield null;

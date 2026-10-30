@@ -157,7 +157,10 @@ public class Sender implements AutoCloseable {
                 ? createScheduler("rabbitmq-sender-resource-creation")
                 : options.getResourceManagementScheduler();
         this.resourceManagementChannelMono = options.getResourceManagementChannelMono() == null
-                ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION).transform(this::cache)
+                // replaced by a proxy on the connection the Mono then gives once the client will not re-open the
+                // connection of the current one
+                ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION)
+                        .cacheInvalidateIf(proxy -> Utils.isClosedForGood(proxy.getConnection()))
                 : options.getResourceManagementChannelMono();
         if (options.getConnectionClosingTimeout() != null && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
             this.connectionClosingTimeout = (int) options.getConnectionClosingTimeout().toMillis();
