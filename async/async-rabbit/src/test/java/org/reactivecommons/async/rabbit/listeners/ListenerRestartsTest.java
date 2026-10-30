@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -22,14 +23,17 @@ import static org.awaitility.Awaitility.await;
 
 class ListenerRestartsTest {
 
-    private static final String QUEUE = "app.subsEvents";
+    // unique: the logger of ListenerRestarts also logs the restarts of the listeners of other tests
+    private static final String QUEUE = "restarts." + UUID.randomUUID();
 
     private final Logger log = (Logger) LoggerFactory.getLogger(ListenerRestarts.class);
     private final List<ILoggingEvent> logged = new CopyOnWriteArrayList<>();
     private final AppenderBase<ILoggingEvent> appender = new AppenderBase<>() {
         @Override
         protected void append(ILoggingEvent event) {
-            logged.add(event);
+            if (event.getFormattedMessage().contains(QUEUE)) {
+                logged.add(event);
+            }
         }
     };
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
