@@ -14,12 +14,10 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.AcknowledgableDelivery;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
@@ -29,7 +27,6 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -43,8 +40,6 @@ import static reactor.core.publisher.Mono.defer;
 @Slf4j
 public abstract class GenericMessageListener {
     public static final int DEFAULT_RETRIES_DLQ = 10;
-    static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
-    static final Duration RESTART_MAX_BACKOFF = Duration.ofSeconds(5);
     /**
      * The handlers are resolved per routing key, which wildcard subscriptions do not bound: only this many are cached,
      * the others are resolved on each message.
@@ -61,8 +56,6 @@ public abstract class GenericMessageListener {
     private static final long DRAIN_POLL_MILLIS = 20;
     private final ConcurrentHashMap<String, ResolvedHandler> handlers = new ConcurrentHashMap<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
-    private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
-    private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
     private final AtomicLong lastHandlerWaitWarning = new AtomicLong();
     private final Receiver receiver;
     private final ReactiveMessageListener messageListener;
@@ -76,6 +69,7 @@ public abstract class GenericMessageListener {
     private final String objectType;
     private final CustomReporter customReporter;
     private final ListenerLiveness liveness;
+    private final ListenerRestarts restarts;
     protected final ConsumerMetrics metrics;
     private final Duration handlerTimeout;
     private volatile Flux<AcknowledgableDelivery> messageFlux;
@@ -108,6 +102,8 @@ public abstract class GenericMessageListener {
                 ? listener.subscriberRegistry().register(queueName)
                 : new ListenerLiveness(queueName);
         this.metrics = new ConsumerMetrics(listener.meterRegistry(), listener.domain(), queueName, liveness);
+        this.restarts = new ListenerRestarts("listener for queue " + queueName, liveness, metrics, stopped::get,
+                this::subscribe);
         this.handlerTimeout = listener.handlerTimeout();
     }
 
@@ -147,7 +143,7 @@ public abstract class GenericMessageListener {
                                 queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
                         if (channel.getConnection().isOpen() && !channel.isOpen()) {
                             log.warn("Recovering listener for queue: {}", queueName);
-                            scheduleRestart(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+                            restarts.schedule(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
                         }
                     });
                 });
@@ -371,7 +367,7 @@ public abstract class GenericMessageListener {
                 .doOnTerminate(() -> {
                     liveness.onTerminated(terminationCause.get());
                     // completed without error: the broker cancelled the consumer (e.g. its queue was deleted)
-                    scheduleRestart(terminationCause.get() != null
+                    restarts.schedule(terminationCause.get() != null
                             ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
@@ -383,42 +379,6 @@ public abstract class GenericMessageListener {
             // stop() ran while this subscription was being created
             subscription.dispose();
         }
-    }
-
-    /**
-     * Schedules a new subscription after the current one terminated. Uses an exponential backoff with the same
-     * bounds as the sender's confirm-flow re-subscription (200 ms → 5 s). The first restart per listener is logged
-     * at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when the broker is
-     * continuously unavailable. The restart runs on a separate scheduler so it never recurses from the termination
-     * callback and overflows the stack if the new subscription fails synchronously.
-     */
-    private void scheduleRestart(String reason) {
-        if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
-            return; // the restart already scheduled covers this trigger too: counted once, with the first reason
-        }
-        metrics.recordRestart(reason);
-        long consecutive = liveness.consecutiveRestartFailures();
-        long delayMs = backoffMillis(consecutive);
-        Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)
-                ? Level.WARN : Level.DEBUG;
-        log.atLevel(level).log("Re-subscribing listener for queue {} in {} ms (attempt {})", queueName, delayMs,
-                Math.max(1, consecutive));
-        Schedulers.boundedElastic().schedule(() -> {
-            restartScheduled.set(false);
-            subscribe();
-        }, delayMs, TimeUnit.MILLISECONDS);
-    }
-
-    private static long backoffMillis(long consecutive) {
-        if (consecutive <= 0) {
-            return RESTART_MIN_BACKOFF.toMillis();
-        }
-        long shift = Math.min(consecutive - 1, 30);
-        long millis = RESTART_MIN_BACKOFF.toMillis() << shift;
-        if (millis < 0) {
-            return RESTART_MAX_BACKOFF.toMillis();
-        }
-        return Math.min(millis, RESTART_MAX_BACKOFF.toMillis());
     }
 
     private void logExecution(String executorPath, long initNanos, boolean success) {

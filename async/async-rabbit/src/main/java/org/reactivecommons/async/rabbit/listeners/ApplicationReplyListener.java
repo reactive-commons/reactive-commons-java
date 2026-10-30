@@ -9,16 +9,12 @@ import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
-import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.scheduler.Schedulers;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
-import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -32,9 +28,6 @@ import static reactor.rabbitmq.QueueSpecification.queue;
 @Slf4j
 public class ApplicationReplyListener {
 
-    static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
-    static final Duration RESTART_MAX_BACKOFF = Duration.ofSeconds(5);
-
     private final ReactiveReplyRouter router;
     private final Receiver receiver;
     private final TopologyCreator creator;
@@ -45,9 +38,8 @@ public class ApplicationReplyListener {
     private volatile Flux<Delivery> deliveryFlux;
     private final AtomicReference<Disposable> activeSubscription = new AtomicReference<>();
     private final AtomicBoolean stopped = new AtomicBoolean(false);
-    private final AtomicBoolean restartScheduled = new AtomicBoolean(false);
-    private final AtomicBoolean firstRestartWarning = new AtomicBoolean();
     private final ListenerLiveness liveness;
+    private final ListenerRestarts restarts;
     private final io.micrometer.core.instrument.MeterRegistry meterRegistry;
     private final ConsumerMetrics metrics;
     private final SubscriberRegistry subscriberRegistry;
@@ -66,6 +58,8 @@ public class ApplicationReplyListener {
                 : new ListenerLiveness(queueName);
         this.meterRegistry = listener.meterRegistry();
         this.metrics = ConsumerMetrics.forReplyListener(meterRegistry, listener.domain(), queueName, liveness);
+        this.restarts = new ListenerRestarts("reply listener for queue " + queueName, liveness, metrics,
+                stopped::get, this::subscribe);
         this.subscriberRegistry = listener.subscriberRegistry();
         this.domain = listener.domain();
     }
@@ -147,7 +141,7 @@ public class ApplicationReplyListener {
                 .doOnTerminate(() -> {
                     liveness.onTerminated(terminationCause.get());
                     failPendingReplies("its subscription terminated and the reply queue is being recreated");
-                    scheduleRestart(terminationCause.get() != null
+                    restarts.schedule(terminationCause.get() != null
                             ? ConsumerMetrics.REASON_ERROR : ConsumerMetrics.REASON_CANCEL);
                 })
                 .subscribeWith(new LoggerSubscriber<>(getClass().getName()));
@@ -175,40 +169,5 @@ public class ApplicationReplyListener {
             log.warn("Failed {} pending reply correlation(s) of reply queue {}: {}", lost, queueName, reason);
             ConsumerMetrics.recordRepliesLost(meterRegistry, domain, lost);
         }
-    }
-
-    /**
-     * Schedules a new subscription after the current one terminated. Uses an exponential backoff with the same
-     * bounds as the sender's confirm-flow re-subscription (200 ms → 5 s). The first restart is logged at WARNING
-     * so an outage is visible; subsequent attempts log at FINE to avoid flooding when the broker is continuously
-     * unavailable. The restart runs on a separate scheduler so it never recurses from the termination callback.
-     */
-    private void scheduleRestart(String reason) {
-        if (stopped.get() || !restartScheduled.compareAndSet(false, true)) {
-            return;
-        }
-        metrics.recordRestart(reason);
-        long consecutive = liveness.consecutiveRestartFailures();
-        long delayMs = backoffMillis(consecutive);
-        Level level = consecutive <= 1 && firstRestartWarning.compareAndSet(false, true)
-                ? Level.WARN : Level.DEBUG;
-        log.atLevel(level).log("Re-subscribing reply listener for queue {} in {} ms (attempt {})", queueName,
-                delayMs, Math.max(1, consecutive));
-        Schedulers.boundedElastic().schedule(() -> {
-            restartScheduled.set(false);
-            subscribe();
-        }, delayMs, TimeUnit.MILLISECONDS);
-    }
-
-    private static long backoffMillis(long consecutive) {
-        if (consecutive <= 0) {
-            return RESTART_MIN_BACKOFF.toMillis();
-        }
-        long shift = Math.min(consecutive - 1, 30);
-        long millis = RESTART_MIN_BACKOFF.toMillis() << shift;
-        if (millis < 0) {
-            return RESTART_MAX_BACKOFF.toMillis();
-        }
-        return Math.min(millis, RESTART_MAX_BACKOFF.toMillis());
     }
 }
