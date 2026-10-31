@@ -415,8 +415,8 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * Re-subscribes a terminated flow with backoff. The first failure of each flow is logged at WARNING so an outage
-     * is visible; later attempts are logged at FINE, otherwise a sustained outage would flood the log.
+     * Re-subscribes a terminated flow with backoff. The first failure of each flow is logged at WARN so an outage
+     * is visible; later attempts are logged at DEBUG, otherwise a sustained outage would flood the log.
      */
     private Retry resubscribe(String flowName, boolean confirmFlow) {
         return Retry.backoff(Long.MAX_VALUE, RESUBSCRIBE_MIN_BACKOFF)
@@ -647,15 +647,12 @@ public class ReactiveMessageSender implements AutoCloseable {
         final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
         // waits for the declaration within the sendTimeout below, so a broker that never answers it fails the send
-        return exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
-                    final PendingMessage pending = messageFactory.apply(monoSink);
-                    current.set(pending);
-                    submit(pending, sinkSelector, confirmFlow);
-                }))
-                // no flow ready yet (start-up, re-subscription): wait until one is registered
-                .retryWhen(Retry.from(signals -> signals.concatMap(signal ->
-                        signal.failure() instanceof NoFlowAvailableException
-                                ? flowAvailable(sinkSelector) : Mono.error(signal.failure()))))
+        final Mono<Void> attempt = exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
+            final PendingMessage pending = messageFactory.apply(monoSink);
+            current.set(pending);
+            submit(pending, sinkSelector, confirmFlow);
+        }));
+        return retryWhileNoFlow(attempt, sinkSelector)
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
                     timedOut.set(true);
@@ -669,6 +666,18 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .doOnError(error -> metrics.recordPublishLatency(confirmFlow,
                         latencyOutcome(error, timedOut.get(), current.get()),
                         Duration.ofNanos(System.nanoTime() - startNanos)));
+    }
+
+    /**
+     * The attempt, made again once a flow is registered each time no flow could take the message (start-up, a flow
+     * being re-subscribed, a flow that terminated before writing it). Unlike {@code retryWhen}, nothing is built for
+     * the messages handed over at the first attempt, which are almost all of them. The failure that triggers a retry
+     * always comes from another thread (the hand-over pool or a terminating flow), so the retries never pile up on the
+     * stack.
+     */
+    private Mono<Void> retryWhileNoFlow(Mono<Void> attempt, Supplier<FluxSink<OutboundMessage>> sinkSelector) {
+        return attempt.onErrorResume(NoFlowAvailableException.class, noFlow -> flowAvailable(sinkSelector)
+                .then(Mono.defer(() -> retryWhileNoFlow(attempt, sinkSelector))));
     }
 
     private void submit(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,

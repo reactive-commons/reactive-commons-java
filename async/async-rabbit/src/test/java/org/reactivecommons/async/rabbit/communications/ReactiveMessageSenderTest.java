@@ -208,6 +208,40 @@ class ReactiveMessageSenderTest {
     }
 
     /**
+     * The flows the message is handed to die before writing it, one after another, until a flow keeps working: the
+     * message is retried on each new flow and written once.
+     */
+    @Test
+    void aMessageRetriedOnManyFlowsInARowIsPublishedOnce() {
+        int dyingFlows = 12; // each of the 4 publisher-confirms flows dies three times before one keeps working
+        AtomicInteger subscriptions = new AtomicInteger();
+        AtomicInteger written = new AtomicInteger();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            if (subscriptions.getAndIncrement() >= dyingFlows) {
+                return argument.map(message -> {
+                    written.incrementAndGet();
+                    return new OutboundMessageResult<>(message, true);
+                });
+            }
+            // like a flow whose channel closed: the message reaching it is discarded unwritten and the flow ends
+            return argument.concatMap(message -> Mono.deferContextual(context -> {
+                Operators.onDiscard(message, Context.of(context));
+                return Mono.error(new IllegalStateException("channel closed"));
+            }));
+        });
+        try (ReactiveMessageSender retryingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier, Duration.ofSeconds(20))) {
+            StepVerifier.create(retryingSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()),
+                            "exchange", "rkey", new HashMap<>(), true))
+                    .verifyComplete();
+
+            assertThat(subscriptions.get()).as("flows the message was handed to").isGreaterThan(dyingFlows);
+            assertThat(written.get()).as("times the message was written").isEqualTo(1);
+        }
+    }
+
+    /**
      * The flows the message is handed to die before writing it (e.g. their channels close), and no flow gets a channel
      * again before the send timeout: the message was never published, so its outcome is not in doubt.
      */
