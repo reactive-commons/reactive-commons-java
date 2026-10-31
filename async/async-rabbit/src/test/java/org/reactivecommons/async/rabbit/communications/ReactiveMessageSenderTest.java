@@ -369,6 +369,31 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
+    void theHandOverPoolFollowsTheProcessorsAndTheCompletionPoolKeepsItsThreadsUnlessTheirSizeIsConfigured()
+            throws Exception {
+        assertThat(ReactiveMessageSender.defaultHandOverThreads()).as("hand-over threads when not configured")
+                .isEqualTo(Math.min(13, Math.max(2, Runtime.getRuntime().availableProcessors())));
+        assertThat(pool(messageSender, "executorService2").getMaximumPoolSize()).as("hand-over pool")
+                .isEqualTo(ReactiveMessageSender.defaultHandOverThreads());
+        assertThat(pool(messageSender, "executorService").getMaximumPoolSize()).as("completion pool")
+                .isEqualTo(13);
+
+        try (ReactiveMessageSender configuredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 4, 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null, null))) {
+            // a configured size applies to both pools, as it always did
+            assertThat(pool(configuredSender, "executorService2").getMaximumPoolSize()).isEqualTo(4);
+            assertThat(pool(configuredSender, "executorService").getMaximumPoolSize()).isEqualTo(4);
+        }
+    }
+
+    private static ThreadPoolExecutor pool(ReactiveMessageSender sender, String name) throws Exception {
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return (ThreadPoolExecutor) field.get(sender);
+    }
+
+    @Test
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
