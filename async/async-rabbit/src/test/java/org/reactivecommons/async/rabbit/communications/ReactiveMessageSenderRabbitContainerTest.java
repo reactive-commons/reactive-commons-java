@@ -158,7 +158,7 @@ class ReactiveMessageSenderRabbitContainerTest {
         Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
                 Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
         try (ReactiveMessageSender metered = new ReactiveMessageSender(sender, "TestApp", converter, null,
-                new UnroutableMessageNotifier(), new SenderSettings(false, Duration.ofSeconds(10), 2, 16,
+                new UnroutableMessageNotifier(), new SenderSettings(false, Duration.ofSeconds(10), 16,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, "app"))) {
             for (int i = 0; i < 20; i++) {
                 metered.sendWithConfirm("confirmed-" + i, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
@@ -201,7 +201,7 @@ class ReactiveMessageSenderRabbitContainerTest {
         Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
                 Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
         try (ReactiveMessageSender metered = new ReactiveMessageSender(sender, "TestApp", converter, null,
-                new UnroutableMessageNotifier(), new SenderSettings(false, Duration.ofSeconds(10), 2, 16,
+                new UnroutableMessageNotifier(), new SenderSettings(false, Duration.ofSeconds(10), 16,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, "app"))) {
             Mono<Void> send = metered.sendWithConfirm("rejected", EXCHANGE, fullRoutingKey, new HashMap<>(), true);
 
@@ -231,7 +231,7 @@ class ReactiveMessageSenderRabbitContainerTest {
         Sender sender = new Sender(new SenderOptions().channelPool(ChannelPoolFactory.createChannelPool(
                 Mono.just(senderConnection), new ChannelPoolOptions().maxCacheSize(5))));
         try (ReactiveMessageSender stalled = new ReactiveMessageSender(sender, "TestApp", converter, null,
-                new UnroutableMessageNotifier(), new SenderSettings(false, sendTimeout, 4, capacity,
+                new UnroutableMessageNotifier(), new SenderSettings(false, sendTimeout, capacity,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null, null))) {
             stalled.sendWithConfirm("warm-up", EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
                     .block(Duration.ofSeconds(10));

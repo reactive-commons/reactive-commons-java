@@ -178,8 +178,7 @@ public final class RabbitMQSetupUtils {
         final ConnectionBlockedState blockedState = blockedState(provider.getConnectionFactory());
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
                 unroutableMessageNotifier, new SenderSettings(props.getMandatory(), sendTimeout,
-                props.getHandOverPoolSize(), props.getHandOverQueueCapacity(), props.getMaxMessageSize(),
-                blockedState, meterRegistry, domain));
+                props.getHandOverQueueCapacity(), props.getMaxMessageSize(), blockedState, meterRegistry, domain));
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props,

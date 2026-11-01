@@ -369,22 +369,13 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
-    void theHandOverPoolFollowsTheProcessorsAndTheCompletionPoolKeepsItsThreadsUnlessTheirSizeIsConfigured()
-            throws Exception {
-        assertThat(ReactiveMessageSender.defaultHandOverThreads()).as("hand-over threads when not configured")
+    void theHandOverPoolFollowsTheProcessorsAndTheCompletionPoolKeepsItsThreads() throws Exception {
+        assertThat(ReactiveMessageSender.handOverThreads()).as("hand-over threads")
                 .isEqualTo(Math.min(13, Math.max(2, Runtime.getRuntime().availableProcessors())));
         assertThat(pool(messageSender, "executorService2").getMaximumPoolSize()).as("hand-over pool")
-                .isEqualTo(ReactiveMessageSender.defaultHandOverThreads());
+                .isEqualTo(ReactiveMessageSender.handOverThreads());
         assertThat(pool(messageSender, "executorService").getMaximumPoolSize()).as("completion pool")
                 .isEqualTo(13);
-
-        try (ReactiveMessageSender configuredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
-                null, unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 4, 1024,
-                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null, null))) {
-            // a configured size applies to both pools, as it always did
-            assertThat(pool(configuredSender, "executorService2").getMaximumPoolSize()).isEqualTo(4);
-            assertThat(pool(configuredSender, "executorService").getMaximumPoolSize()).isEqualTo(4);
-        }
     }
 
     private static ThreadPoolExecutor pool(ReactiveMessageSender sender, String name) throws Exception {
@@ -397,7 +388,7 @@ class ReactiveMessageSenderTest {
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
                 "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
@@ -424,7 +415,7 @@ class ReactiveMessageSenderTest {
                         .map(message -> new OutboundMessageResult<>(message, true)));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender limitedSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024, 64,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024, 64,
                 new ConnectionBlockedState(), registry, "test-domain"))) {
             SomeClass large = new SomeClass("42", "x".repeat(100), new Date());
 
@@ -487,7 +478,7 @@ class ReactiveMessageSenderTest {
     void closingTheSenderRemovesItsMeters() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         ReactiveMessageSender closed = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, "test-domain"));
         StepVerifier.create(closed.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
                 new HashMap<>(), true)).verifyComplete();
@@ -502,7 +493,7 @@ class ReactiveMessageSenderTest {
     void theFlowResubscriptionCountersExistAtZeroBeforeAnyFlowIsResubscribed() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
                 "test-domain"))) {
             for (String kind : List.of("confirm", "noConfirm")) {
@@ -526,7 +517,7 @@ class ReactiveMessageSenderTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofMillis(100), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofMillis(100), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
                 "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
@@ -546,7 +537,7 @@ class ReactiveMessageSenderTest {
     void thePublishMetersAreTaggedWithAnEmptyDomainWhenTheSenderHasNone() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, null))) {
             assertThat(registry.find("reactive_commons.publish.outcome").tags("domain", "", "outcome", "ack")
                     .counter()).as("same tag keys as the senders of a domain, as Prometheus requires").isNotNull();
@@ -570,7 +561,7 @@ class ReactiveMessageSenderTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 13, 1024,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
                 ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
                 "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",

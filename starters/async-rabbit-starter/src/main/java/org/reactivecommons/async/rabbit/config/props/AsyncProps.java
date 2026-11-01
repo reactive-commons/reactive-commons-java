@@ -65,16 +65,6 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
     private Duration sendTimeout = Duration.ofSeconds(10);
 
     /**
-     * Size of the publish hand-over thread pool: these threads hand each message to a publishing flow and can block
-     * inside {@code basicPublish} when the broker raises a resource alarm. Keep it small; back-pressure is
-     * surfaced through {@link #handOverQueueCapacity}. When set, it is also the size of the pool that completes the
-     * publishers, where the code that follows a publish runs. When not set, the hand-over pool has one thread per
-     * processor (at least 2, at most 13), as the messages of a connection are written by a single I/O thread, and the
-     * completion pool has 13 threads.
-     */
-    private Integer handOverPoolSize;
-
-    /**
      * Maximum number of messages waiting to be written to a channel: queued in front of the publish hand-over pool,
      * and handed to a publishing flow but not written yet (e.g. while the broker blocks the connection). When reached,
      * new publishes fail fast with {@code SendFailureHandOverRejectedException} instead of queueing in memory while

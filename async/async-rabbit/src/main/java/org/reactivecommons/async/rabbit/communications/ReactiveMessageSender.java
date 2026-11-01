@@ -85,10 +85,9 @@ import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 public class ReactiveMessageSender implements AutoCloseable {
     static final Duration DEFAULT_SEND_TIMEOUT = Duration.ofSeconds(10);
     /**
-     * The threads of the pool that completes the callers, and the most threads of the hand-over pool, when the size of
-     * the pools is not configured.
+     * The threads of the pool that completes the callers, and the most threads of the hand-over pool.
      */
-    static final int DEFAULT_HAND_OVER_POOL_SIZE = 13;
+    static final int POOL_SIZE = 13;
     /**
      * About a second of a 15000 messages per second peak: a short pause (GC, scheduling, the broker flushing to disk)
      * must not reject messages, only a connection the broker stopped draining.
@@ -234,18 +233,16 @@ public class ReactiveMessageSender implements AutoCloseable {
                                  boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
                                  Duration sendTimeout) {
         this(sender, sourceApplication, messageConverter, topologyCreator, unroutableMessageNotifier,
-                new SenderSettings(isMandatory, sendTimeout, null, DEFAULT_HAND_OVER_QUEUE_CAPACITY,
+                new SenderSettings(isMandatory, sendTimeout, DEFAULT_HAND_OVER_QUEUE_CAPACITY,
                         DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null, null));
     }
 
     public ReactiveMessageSender(Sender sender, String sourceApplication,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
                                  UnroutableMessageNotifier unroutableMessageNotifier, SenderSettings settings) {
-        // a configured size applies to both pools; otherwise the hand-over pool follows the processors, and the
-        // completion pool keeps its threads for the callers whose code blocks after publishing
-        final Integer configuredPoolSize = settings.handOverPoolSize();
-        final int handOverThreads = configuredPoolSize != null ? configuredPoolSize : defaultHandOverThreads();
-        final int completionThreads = configuredPoolSize != null ? configuredPoolSize : DEFAULT_HAND_OVER_POOL_SIZE;
+        // the hand-over pool follows the processors, and the completion pool keeps its threads for the callers whose
+        // code blocks after publishing
+        final int handOverThreads = handOverThreads();
         final int handOverQueueCapacity = settings.handOverQueueCapacity();
         this.sender = sender;
         this.maxMessageSize = settings.maxMessageSize();
@@ -258,7 +255,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         this.blockedState = settings.blockedState() != null ? settings.blockedState() : new ConnectionBlockedState();
         this.maxBufferedMessages = Math.max(1, handOverQueueCapacity);
         this.executorService = new ThreadPoolExecutor(
-                completionThreads, completionThreads,
+                POOL_SIZE, POOL_SIZE,
                 IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(),
                 daemonThreads("RMessageSender1-"));
@@ -277,13 +274,12 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * The threads of the hand-over pool when its size is not configured: one per processor, at least 2 and at most
-     * {@value #DEFAULT_HAND_OVER_POOL_SIZE}. The messages of a connection are written by its single I/O thread, so
-     * hand-over threads beyond the processors do not publish faster: they only compete for the CPU (e.g. in a container
-     * limited to half a processor).
+     * The threads of the hand-over pool: one per processor, at least 2 and at most {@value #POOL_SIZE}. The messages
+     * of a connection are written by its single I/O thread, so hand-over threads beyond the processors do not publish
+     * faster: they only compete for the CPU (e.g. in a container limited to half a processor).
      */
-    static int defaultHandOverThreads() {
-        return Math.min(DEFAULT_HAND_OVER_POOL_SIZE, Math.max(2, Runtime.getRuntime().availableProcessors()));
+    static int handOverThreads() {
+        return Math.min(POOL_SIZE, Math.max(2, Runtime.getRuntime().availableProcessors()));
     }
 
     private void initializeSenders() {
