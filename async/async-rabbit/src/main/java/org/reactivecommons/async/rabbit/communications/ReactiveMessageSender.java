@@ -28,6 +28,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureHandOverRejectedE
 import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import org.reactivecommons.async.commons.utils.RandomUuids;
 import org.reactivecommons.async.rabbit.MeterUsage;
 import org.slf4j.event.Level;
 import reactor.core.Disposable;
@@ -58,7 +59,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executor;
@@ -1005,7 +1005,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             id = cloudEvent.getId();
         }
         if (id == null || id.isBlank() || id.getBytes(StandardCharsets.UTF_8).length > MAX_MESSAGE_ID_BYTES) {
-            return UUID.randomUUID().toString();
+            return RandomUuids.next().toString();
         }
         return id;
     }
