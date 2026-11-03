@@ -416,7 +416,7 @@ public final class ListenerSchedulers {
                 thread.released = false;
                 workers.live.incrementAndGet();
             }
-            final int floor = base;
+            final int floor = Math.max(base, getCorePoolSize());
             if (workers.live.get() <= floor || !getQueue().isEmpty()) {
                 return false;
             }
@@ -545,6 +545,13 @@ public final class ListenerSchedulers {
 
         long growthCount() {
             return growthCount.get();
+        }
+
+        /**
+         * The threads the pool started since it was created.
+         */
+        long startedThreads() {
+            return workers.counter.get();
         }
     }
 

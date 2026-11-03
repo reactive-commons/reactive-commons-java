@@ -383,6 +383,52 @@ class ListenerSchedulersTest {
         }
     }
 
+    /**
+     * The pool grows by starting the threads the starving tasks need. The first new threads drain the queue, and the
+     * rest find it empty: they must not be released as surplus while the pool grows, or it never reaches the size it
+     * grows to and keeps starting threads that leave right away (hundreds per second, in the 7.8.0-1-HC benchmark).
+     */
+    @Test
+    void growingThePoolDoesNotStartThreadsThatLeaveRightAway() throws InterruptedException {
+        ListenerSchedulers.ElasticExecutor pool = new ListenerSchedulers.ElasticExecutor(
+                ListenerSchedulers.MAX_HANDLER_THREADS, "growing", KEEP_ALIVE, System::nanoTime);
+        ScheduledExecutorService replies = Executors.newSingleThreadScheduledExecutor();
+        try {
+            for (int round = 0; round < 5; round++) {
+                // every thread of the pool waits for its own result, then short tasks queue up: the pool grows
+                CountDownLatch blocked = new CountDownLatch(baseThreads());
+                for (int i = 0; i < baseThreads(); i++) {
+                    pool.execute(() -> {
+                        CompletableFuture<Void> reply = new CompletableFuture<>();
+                        replies.schedule(() -> reply.complete(null), 100, TimeUnit.MILLISECONDS);
+                        reply.join();
+                        blocked.countDown();
+                    });
+                }
+                runShortTasksAtOnce(pool, 200);
+                assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
+            }
+            long startedBefore = pool.startedThreads();
+            Thread.sleep(500);
+            long startedMeanwhile = pool.startedThreads() - startedBefore;
+
+            assertThat(startedMeanwhile).as("threads started in 500 ms once no task is waiting").isZero();
+            assertThat(pool.getCorePoolSize()).as("core size once the pool grew").isEqualTo(baseThreads());
+        } finally {
+            replies.shutdownNow();
+            pool.shutdownNow();
+        }
+    }
+
+    private static void runShortTasksAtOnce(ListenerSchedulers.ElasticExecutor pool, int tasks)
+            throws InterruptedException {
+        CountDownLatch done = new CountDownLatch(tasks);
+        for (int i = 0; i < tasks; i++) {
+            pool.execute(done::countDown);
+        }
+        assertThat(done.await(5, TimeUnit.SECONDS)).as("every short task ran").isTrue();
+    }
+
     private static final Duration KEEP_ALIVE = Duration.ofSeconds(15);
 
     /**
