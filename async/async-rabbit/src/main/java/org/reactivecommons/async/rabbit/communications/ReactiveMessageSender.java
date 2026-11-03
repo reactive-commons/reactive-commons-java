@@ -65,6 +65,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -104,6 +105,12 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private static final Duration CLOSE_DRAIN_TIMEOUT = Duration.ofSeconds(5);
     private static final long CLOSE_DRAIN_POLL_MILLIS = 10;
+    /**
+     * How often the messages waiting for their outcome are checked against the send timeout, at most: a message
+     * fails at most this late.
+     */
+    private static final long MAX_TIMEOUT_CHECK_MILLIS = 100;
+    private static final long MIN_TIMEOUT_CHECK_MILLIS = 10;
     private static final Duration RESUBSCRIBE_MIN_BACKOFF = Duration.ofMillis(200);
     private static final Duration RESUBSCRIBE_MAX_BACKOFF = Duration.ofSeconds(5);
     private static final int NUMBER_OF_SENDER_SUBSCRIPTIONS = 4;
@@ -207,6 +214,14 @@ public class ReactiveMessageSender implements AutoCloseable {
      */
     private final Map<String, Mono<Void>> exchangeDeclarations = new ConcurrentHashMap<>();
     private final AtomicBoolean closed = new AtomicBoolean();
+    /**
+     * Fails the {@link #pendingMessages} whose send timeout is over (see {@link #expireOverdueMessages()}): one check
+     * for all of them, instead of a timer per message. Scheduled only while messages are pending, so an idle sender
+     * keeps no thread.
+     */
+    private final ScheduledThreadPoolExecutor timeoutChecker;
+    private final long timeoutCheckMillis;
+    private final AtomicBoolean timeoutCheckScheduled = new AtomicBoolean();
 
     /**
      * Completes the callers' Monos, so their continuations never run on the broker connection threads. Its queue is
@@ -265,9 +280,14 @@ public class ReactiveMessageSender implements AutoCloseable {
                 new ArrayBlockingQueue<>(Math.max(1, handOverQueueCapacity)),
                 daemonThreads("RMessageSender2-"),
                 new ThreadPoolExecutor.AbortPolicy());
+        this.timeoutChecker = new ScheduledThreadPoolExecutor(1, daemonThreads("RMessageSender-timeouts-"));
+        this.timeoutChecker.setKeepAliveTime(IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS);
+        this.timeoutCheckMillis = Math.max(MIN_TIMEOUT_CHECK_MILLIS,
+                Math.min(MAX_TIMEOUT_CHECK_MILLIS, sendTimeout.toMillis() / 20));
         // a sender that is not closed (e.g. used outside Spring) neither keeps idle threads nor the JVM alive
         this.executorService.allowCoreThreadTimeOut(true);
         this.executorService2.allowCoreThreadTimeOut(true);
+        this.timeoutChecker.allowCoreThreadTimeOut(true);
         this.metrics = new PublishMetrics(settings.meterRegistry(), settings.domain(), this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
         initializeSenders();
@@ -337,6 +357,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         // cancel the flows (and their re-subscription) before the executors: nothing must be re-subscribed
         flowSubscriptions.forEach(Disposable::dispose);
         flowSubscriptions.clear();
+        timeoutChecker.shutdownNow();
         shutdownAndAwait(executorService2);
         shutdownAndAwait(executorService);
         sender.close();
@@ -591,8 +612,8 @@ public class ReactiveMessageSender implements AutoCloseable {
             final AMQP.BasicProperties props = buildMessageProperties(message, converted, headers, persistent, null);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(true, body.length);
-            return send(exchange, monoSink -> new ConfirmableMessage(exchange, routingKey, props, body, monoSink),
-                    this::nextConfirmSink, true);
+            return send(exchange, (monoSink, startNanos) -> new ConfirmableMessage(exchange, routingKey, props, body,
+                    monoSink, startNanos, metrics), this::nextConfirmSink, true);
         });
     }
 
@@ -621,8 +642,8 @@ public class ReactiveMessageSender implements AutoCloseable {
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(false, body.length);
             final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
-            return send(exchange, monoSink -> new NoConfirmMessage(exchange, routingKey, props, body, monoSink,
-                    executorService, onPublished), this::availableNoConfirmSink, false);
+            return send(exchange, (monoSink, startNanos) -> new NoConfirmMessage(exchange, routingKey, props, body,
+                    monoSink, startNanos, metrics, executorService, onPublished), this::availableNoConfirmSink, false);
         });
     }
 
@@ -654,31 +675,23 @@ public class ReactiveMessageSender implements AutoCloseable {
         return declaration != null ? declaration : Mono.empty();
     }
 
-    private Mono<Void> send(String exchange, Function<MonoSink<Void>, PendingMessage> messageFactory,
+    /**
+     * Publishes a message within the send timeout. Its common path, an exchange already declared and a publishing flow
+     * available, has no timer: the message waits for its outcome among the {@link #pendingMessages}, which are checked
+     * against the send timeout all at once (see {@link #expireOverdueMessages()}), and the latency is recorded when
+     * the message is settled. Only the waits without a pending message (an exchange declaration in progress, no
+     * publishing flow available) are bounded here.
+     */
+    private Mono<Void> send(String exchange, PendingMessageFactory messageFactory,
                             Supplier<FluxSink<OutboundMessage>> sinkSelector, boolean confirmFlow) {
-        final AtomicReference<PendingMessage> current = new AtomicReference<>();
-        final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
-        // waits for the declaration within the sendTimeout below, so a broker that never answers it fails the send
-        final Mono<Void> attempt = exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
-            final PendingMessage pending = messageFactory.apply(monoSink);
-            current.set(pending);
-            submit(pending, sinkSelector, confirmFlow);
-        }));
-        return retryWhileNoFlow(attempt, sinkSelector)
-                .timeout(sendTimeout)
-                .onErrorMap(TimeoutException.class, e -> {
-                    timedOut.set(true);
-                    return timeoutFailure(e, current.get(), confirmFlow);
-                })
-                // recorded before the terminal signal reaches the caller; a cancelled subscription records nothing:
-                // the caller stopped waiting, but the message may still be published
-                .doOnSuccess(ignored -> metrics.recordPublishLatency(confirmFlow,
-                        confirmFlow ? OUTCOME_ACK : OUTCOME_PUBLISHED,
-                        Duration.ofNanos(System.nanoTime() - startNanos)))
-                .doOnError(error -> metrics.recordPublishLatency(confirmFlow,
-                        latencyOutcome(error, timedOut.get(), current.get()),
-                        Duration.ofNanos(System.nanoTime() - startNanos)));
+        final Mono<Void> attempt = Mono.create(monoSink ->
+                submit(messageFactory.create(monoSink, startNanos), sinkSelector, confirmFlow));
+        final Mono<Void> published = retryWhileNoFlow(attempt, sinkSelector, startNanos, confirmFlow);
+        // a broker that never answers the declaration fails the send within its timeout
+        final Mono<Void> declaration = exchangeDeclarations.get(exchange);
+        return declaration == null ? published
+                : withinSendTimeout(declaration, startNanos, confirmFlow).then(published);
     }
 
     /**
@@ -686,11 +699,27 @@ public class ReactiveMessageSender implements AutoCloseable {
      * being re-subscribed, a flow that terminated before writing it). Unlike {@code retryWhen}, nothing is built for
      * the messages handed over at the first attempt, which are almost all of them. The failure that triggers a retry
      * always comes from another thread (the hand-over pool or a terminating flow), so the retries never pile up on the
-     * stack.
+     * stack. Every attempt keeps the start of the first one, so the send timeout bounds them all.
      */
-    private Mono<Void> retryWhileNoFlow(Mono<Void> attempt, Supplier<FluxSink<OutboundMessage>> sinkSelector) {
-        return attempt.onErrorResume(NoFlowAvailableException.class, noFlow -> flowAvailable(sinkSelector)
-                .then(Mono.defer(() -> retryWhileNoFlow(attempt, sinkSelector))));
+    private Mono<Void> retryWhileNoFlow(Mono<Void> attempt, Supplier<FluxSink<OutboundMessage>> sinkSelector,
+                                        long startNanos, boolean confirmFlow) {
+        return attempt.onErrorResume(NoFlowAvailableException.class, noFlow ->
+                withinSendTimeout(flowAvailable(sinkSelector), startNanos, confirmFlow)
+                        .then(Mono.defer(() -> retryWhileNoFlow(attempt, sinkSelector, startNanos, confirmFlow))));
+    }
+
+    /**
+     * A wait of a publish while it has no pending message to time out: bounded by what is left of its send timeout.
+     */
+    private Mono<Void> withinSendTimeout(Mono<?> wait, long startNanos, boolean confirmFlow) {
+        final long leftNanos = sendTimeout.toNanos() - (System.nanoTime() - startNanos);
+        return wait.then()
+                .timeout(Duration.ofNanos(Math.max(0, leftNanos)))
+                .onErrorMap(TimeoutException.class, e -> {
+                    metrics.recordPublishLatency(confirmFlow, OUTCOME_TIMEOUT,
+                            Duration.ofNanos(System.nanoTime() - startNanos));
+                    return timeoutFailure(e, null, confirmFlow);
+                });
     }
 
     private void submit(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
@@ -715,6 +744,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
         pendingMessages.add(pending);
         pending.setOnFinished(() -> pendingMessages.remove(pending));
+        scheduleTimeoutCheck();
         if (closed.get()) {
             // close() may have collected the pending messages before this one was registered
             pending.fail(shutdownFailure(null));
@@ -750,10 +780,56 @@ public class ReactiveMessageSender implements AutoCloseable {
                 + "available within " + sendTimeout, e);
     }
 
-    private static String latencyOutcome(Throwable error, boolean timedOut, PendingMessage pending) {
-        if (timedOut) {
-            return OUTCOME_TIMEOUT;
+    /**
+     * Schedules the next check of the pending messages, unless one is already scheduled. The check schedules the
+     * next one while messages are still pending: registering a message before reading the flag, and clearing the
+     * flag before reading the messages, guarantees that a message registered meanwhile is checked.
+     */
+    private void scheduleTimeoutCheck() {
+        if (timeoutCheckScheduled.get() || !timeoutCheckScheduled.compareAndSet(false, true)) {
+            return;
         }
+        try {
+            timeoutChecker.schedule(this::checkTimeouts, timeoutCheckMillis, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            // closed: close() fails the pending messages
+            timeoutCheckScheduled.set(false);
+        }
+    }
+
+    private void checkTimeouts() {
+        try {
+            expireOverdueMessages();
+        } catch (RuntimeException e) {
+            log.warn("Error while checking the send timeout of the pending messages", e);
+        } finally {
+            timeoutCheckScheduled.set(false);
+            if (!pendingMessages.isEmpty()) {
+                scheduleTimeoutCheck();
+            }
+        }
+    }
+
+    /**
+     * Fails the messages still waiting for their outcome once their send timeout is over, as the caller stops
+     * waiting: one still buffered in its flow is dropped, so it is never published late.
+     */
+    private void expireOverdueMessages() {
+        final long now = System.nanoTime();
+        final long timeoutNanos = sendTimeout.toNanos();
+        for (PendingMessage pending : pendingMessages) {
+            if (now - pending.startNanos - timeoutNanos >= 0) {
+                pending.expire(this::timeoutFailure, executorService);
+            }
+        }
+    }
+
+    private Throwable timeoutFailure(PendingMessage pending) {
+        return timeoutFailure(new TimeoutException("No outcome of the message within " + sendTimeout), pending,
+                pending.confirmFlow());
+    }
+
+    private static String latencyOutcome(Throwable error, PendingMessage pending) {
         if (error instanceof SendFailureReturnedException) {
             return OUTCOME_RETURNED;
         }
@@ -770,7 +846,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             return OUTCOME_UNKNOWN;
         }
         // the same exception reports a broker nack and a message that was never written (e.g. no channel, shut down)
-        if (error instanceof SendFailureNoAckException && pending != null && pending.isPublished()) {
+        if (error instanceof SendFailureNoAckException && pending.isPublished()) {
             return OUTCOME_NACK;
         }
         return OUTCOME_FAILED;
@@ -935,7 +1011,17 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * A message whose caller is waiting for its outcome. It is completed at most once.
+     * Creates the pending message of an attempt to publish, for a publish started at {@code startNanos}.
+     */
+    @FunctionalInterface
+    private interface PendingMessageFactory {
+        PendingMessage create(MonoSink<Void> monoSink, long startNanos);
+    }
+
+    /**
+     * A message whose caller is waiting for its outcome. It is completed at most once, and its latency is recorded
+     * then, before its caller gets the outcome. A cancelled message records nothing: its caller stopped waiting, but
+     * it may still be published.
      */
     private abstract static class PendingMessage extends OutboundMessage {
         private static final int NEW = 0;
@@ -944,6 +1030,12 @@ public class ReactiveMessageSender implements AutoCloseable {
         private static final int DROPPED = 3;
 
         private final MonoSink<Void> monoSink;
+        /**
+         * When the publish started, as {@link System#nanoTime()}: kept by every attempt, so the send timeout bounds
+         * them all.
+         */
+        final long startNanos;
+        private final PublishMetrics metrics;
         private final AtomicBoolean finished = new AtomicBoolean();
         private final AtomicBoolean outcomeCounted = new AtomicBoolean();
         private volatile Runnable onFinished = () -> { };
@@ -955,11 +1047,18 @@ public class ReactiveMessageSender implements AutoCloseable {
         private volatile AtomicInteger bufferCounter;
 
         PendingMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                       MonoSink<Void> monoSink) {
+                       MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics) {
             super(exchange, routingKey, properties, body);
             this.monoSink = monoSink;
+            this.startNanos = startNanos;
+            this.metrics = metrics;
             monoSink.onCancel(this::discard);
         }
+
+        /**
+         * Whether the message is published with confirms.
+         */
+        abstract boolean confirmFlow();
 
         /**
          * Registers a callback invoked exactly once when the message is finished (completed, failed or cancelled).
@@ -1044,14 +1143,42 @@ public class ReactiveMessageSender implements AutoCloseable {
 
         void succeed() {
             if (markFinished()) {
+                recordLatency(confirmFlow() ? OUTCOME_ACK : OUTCOME_PUBLISHED);
                 monoSink.success();
             }
         }
 
         void fail(Throwable error) {
             if (markFinished()) {
+                // a message no flow could take is retried: its publish is not over
+                if (error != NoFlowAvailableException.INSTANCE) {
+                    recordLatency(latencyOutcome(error, this));
+                }
                 monoSink.error(error);
             }
+        }
+
+        /**
+         * Fails the message because its send timeout is over. It is finished first, which drops it from the buffer of
+         * its flow if it is still there, so the failure tells how far it got. The caller gets it on the
+         * {@code completionExecutor}, like the other outcomes, and not on the thread that checks the timeouts.
+         */
+        void expire(Function<PendingMessage, Throwable> failure, Executor completionExecutor) {
+            if (markFinished()) {
+                Throwable error;
+                try {
+                    error = failure.apply(this);
+                } catch (RuntimeException e) {
+                    error = e; // the caller must get an outcome all the same
+                }
+                recordLatency(OUTCOME_TIMEOUT);
+                final Throwable outcome = error;
+                runOn(completionExecutor, () -> monoSink.error(outcome));
+            }
+        }
+
+        private void recordLatency(String outcome) {
+            metrics.recordPublishLatency(confirmFlow(), outcome, Duration.ofNanos(System.nanoTime() - startNanos));
         }
 
         private void discard() {
@@ -1081,8 +1208,13 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final class ConfirmableMessage extends PendingMessage {
 
         ConfirmableMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                           MonoSink<Void> monoSink) {
-            super(exchange, routingKey, properties, body, monoSink);
+                           MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics) {
+            super(exchange, routingKey, properties, body, monoSink, startNanos, metrics);
+        }
+
+        @Override
+        boolean confirmFlow() {
+            return true;
         }
 
         void complete(OutboundMessageResult<OutboundMessage> result) {
@@ -1108,25 +1240,37 @@ public class ReactiveMessageSender implements AutoCloseable {
         private final Runnable onPublished;
 
         NoConfirmMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                         MonoSink<Void> monoSink, Executor completionExecutor, Runnable onPublished) {
-            super(exchange, routingKey, properties, body, monoSink);
+                         MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics,
+                         Executor completionExecutor, Runnable onPublished) {
+            super(exchange, routingKey, properties, body, monoSink, startNanos, metrics);
             this.completionExecutor = completionExecutor;
             this.onPublished = onPublished;
         }
 
         @Override
+        boolean confirmFlow() {
+            return false;
+        }
+
+        @Override
         protected void published() {
             super.published();
-            final Runnable completion = () -> {
+            runOn(completionExecutor, () -> {
                 onPublished.run();
                 succeed();
-            };
-            try {
-                completionExecutor.execute(completion);
-            } catch (RejectedExecutionException e) {
-                // the sender was closed while the message was being written: it was published all the same
-                completion.run();
-            }
+            });
+        }
+    }
+
+    /**
+     * Runs a completion on the executor, or here if the sender was closed meanwhile: the outcome must still reach its
+     * caller.
+     */
+    private static void runOn(Executor executor, Runnable completion) {
+        try {
+            executor.execute(completion);
+        } catch (RejectedExecutionException e) {
+            completion.run();
         }
     }
 
