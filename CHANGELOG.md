@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.7.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.7.0) (2026-11-03)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.6.0...v7.7.0)
+
+**Merged pull requests:**
+
+- feat\(rabbit\): lower the per-message cost of RabbitMQ publishing and consuming, and log through SLF4J [\#189](https://github.com/reactive-commons/reactive-commons-java/pull/189) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.6.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.6.0) (2026-10-28)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.5.0...v7.6.0)
