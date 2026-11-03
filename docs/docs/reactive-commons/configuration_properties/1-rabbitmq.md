@@ -32,7 +32,7 @@ app:
       brokerType: "rabbitmq" # please don't change this value
       queueType: null # you can set to 'classic' or to 'quorum' if your RabbitMQ cluster supports it, by default it will take the virtual host default queue type
       flux:
-        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows only when the handlers wait for their own I/O (not for a lock they share, such as a synchronous log appender), up to the sum of the maxConcurrency of the listeners (at least 250 threads), and releases the idle threads after 15 seconds
+        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows only when the handlers wait for their own I/O (not for a lock they share, such as a synchronous log appender), up to the sum of the maxConcurrency of the listeners (at least 250 threads), and releases the threads it did not need in the last 15 seconds, even while deliveries keep coming
       domain:
         ignoreThisListener: false # Allows you to disable event listener for this specific domain
         events:
@@ -721,7 +721,9 @@ never wait for the threads taken by the blocking handlers of another one (e.g. q
 It only grows when its queued tasks wait more than 5 ms while its busy threads wait for their own work (blocking I/O,
 their own future): when at least half of them are blocked on a monitor or wait for the same lock, e.g. a synchronous
 log appender, it does not grow, since more threads would only queue behind it, hold more deliveries in memory and
-lengthen the GC pauses. Its idle threads are released after 15 seconds. Lower the `maxConcurrency` of a listener whose
+lengthen the GC pauses. Nor does it grow after a pause of the process (a GC pause, the CPU quota of the container used
+up), when the tasks only look stuck. It keeps the threads its handlers needed during the last 15 seconds, plus a
+quarter, and releases the others even while deliveries keep coming. Lower the `maxConcurrency` of a listener whose
 handlers block to bound the threads it can take. While at least one application context using them has a
 `MeterRegistry`, the handler pool is exported to that registry:
 

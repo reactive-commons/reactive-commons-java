@@ -11,6 +11,7 @@ import org.jspecify.annotations.NonNull;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -28,6 +29,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
+import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -37,8 +39,9 @@ import java.util.function.Supplier;
  *     <li>{@link #handlers()} runs the handlers. It is a pool that starts with one thread per processor and only
  *     grows when tasks have been starving for more than {@value #STARVATION_CHECK_MILLIS} ms while its busy threads
  *     wait for their own work (I/O), not for a resource they share (a lock, a monitor: more threads would only queue
- *     up behind it). Its idle threads are released after {@value #HANDLER_KEEP_ALIVE_SECONDS} seconds, so handlers
- *     that do not block use a few threads and handlers that block can run at the same time up to the limit. The
+ *     up behind it). The threads it did not need during the last {@value #HANDLER_KEEP_ALIVE_SECONDS} seconds are
+ *     released, even while tasks keep coming, so handlers that do not block use a few threads and handlers that block
+ *     can run at the same time up to the limit. The
  *     limit is the sum of the {@code maxConcurrency} of the active listeners (see {@link #registerListener(int)}),
  *     and at least {@value #MAX_HANDLER_THREADS} (the default {@code maxConcurrency} and {@code prefetchCount}): a
  *     listener whose handlers block can never take the threads the other listeners need.</li>
@@ -326,23 +329,54 @@ public final class ListenerSchedulers {
      * threads that wait for a resource they share do not: more threads would only queue up behind it, hold more
      * deliveries in memory and lengthen the GC pauses. A synchronous log appender is the usual case: under load,
      * every handler waits for its lock while one thread writes.</p>
+     *
+     * <p>A check that runs late does not count either: the process was paused (a GC pause, the CPU quota of its
+     * container used up, a host that took the CPU away), so the queued tasks only look stuck. Every thread was frozen
+     * with them, and more threads would not have run any sooner.</p>
+     *
+     * <p>The pool shrinks to what its handlers used lately, even under a steady flow of tasks: the idle threads take
+     * the queued tasks in turn, so under load none of them stays idle for the keep-alive time. A thread asking for its
+     * next task leaves while the queue is empty and the pool has more threads than the most handlers that ran at the
+     * same time during the last keep-alive period (plus a quarter).</p>
      */
-    private static final class ElasticExecutor extends ThreadPoolExecutor {
+    static final class ElasticExecutor extends ThreadPoolExecutor {
 
         private final ScheduledThreadPoolExecutor monitor;
         private final Workers workers;
+        private final LongSupplier clock;
+        private final long windowNanos;
         private final AtomicBoolean checkScheduled = new AtomicBoolean();
         private final AtomicLong growthCount = new AtomicLong();
+        private final AtomicInteger busyThreads = new AtomicInteger();
+        // the most handlers that ran at the same time in the current period of windowNanos, and in the previous one
+        private final AtomicInteger windowPeak = new AtomicInteger();
+        private final AtomicLong windowEndsAt;
+        private volatile int previousWindowPeak;
+        private volatile int base;
+        private volatile long checkDueAt;
         private Runnable headSeenInThePreviousCheck; // only used by the monitor thread
 
         ElasticExecutor(int maxThreads, String threadPrefix) {
-            this(maxThreads, new Workers(threadPrefix));
+            this(maxThreads, threadPrefix, Duration.ofSeconds(HANDLER_KEEP_ALIVE_SECONDS), System::nanoTime);
         }
 
-        private ElasticExecutor(int maxThreads, Workers workers) {
-            super(baseThreads(maxThreads), maxThreads, HANDLER_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+        /**
+         * @param keepAlive how long the threads not needed are kept: idle, or above the most handlers that ran at the
+         *                  same time during that period
+         * @param clock     the {@link System#nanoTime()} the starvation checks and the periods are measured with
+         */
+        ElasticExecutor(int maxThreads, String threadPrefix, Duration keepAlive, LongSupplier clock) {
+            this(maxThreads, new Workers(threadPrefix), keepAlive, clock);
+        }
+
+        private ElasticExecutor(int maxThreads, Workers workers, Duration keepAlive, LongSupplier clock) {
+            super(baseThreads(maxThreads), maxThreads, keepAlive.toNanos(), TimeUnit.NANOSECONDS,
                     new GrowingQueue(), workers, new AbortPolicy());
             this.workers = workers;
+            this.clock = clock;
+            this.windowNanos = keepAlive.toNanos();
+            this.windowEndsAt = new AtomicLong(clock.getAsLong() + windowNanos);
+            this.base = baseThreads(maxThreads);
             ((GrowingQueue) getQueue()).owner = this;
             allowCoreThreadTimeOut(true);
             monitor = new ScheduledThreadPoolExecutor(1, daemonThreads("rc-handlers-monitor"));
@@ -355,13 +389,51 @@ public final class ListenerSchedulers {
             if (thread instanceof HandlerThread handler) {
                 handler.busy = true;
             }
+            final int busy = busyThreads.incrementAndGet();
+            if (busy > windowPeak.get()) {
+                windowPeak.accumulateAndGet(busy, Math::max);
+            }
         }
 
         @Override
         protected void afterExecute(Runnable task, Throwable error) {
+            busyThreads.decrementAndGet();
             if (Thread.currentThread() instanceof HandlerThread handler) {
                 handler.busy = false;
             }
+        }
+
+        /**
+         * Whether the thread asking for its next task should leave instead: no task is waiting, and the pool has more
+         * threads than its handlers needed lately. Called by the threads of the pool before they wait for a task.
+         */
+        boolean releaseIfSurplus() {
+            if (!(Thread.currentThread() instanceof HandlerThread thread)) {
+                return false;
+            }
+            if (thread.released) {
+                // the pool kept it after the release (it was its last thread and a task came in): it stays
+                thread.released = false;
+                workers.live.incrementAndGet();
+            }
+            final int floor = base;
+            if (workers.live.get() <= floor || !getQueue().isEmpty()) {
+                return false;
+            }
+            final long now = clock.getAsLong();
+            final long end = windowEndsAt.get();
+            if (now - end >= 0 && windowEndsAt.compareAndSet(end, now + windowNanos)) {
+                previousWindowPeak = windowPeak.getAndSet(busyThreads.get());
+            }
+            final int recentPeak = Math.max(previousWindowPeak, windowPeak.get());
+            final int needed = Math.max(floor, recentPeak + recentPeak / 4);
+            for (int live = workers.live.get(); live > needed; live = workers.live.get()) {
+                if (workers.live.compareAndSet(live, live - 1)) {
+                    thread.released = true;
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override
@@ -378,6 +450,7 @@ public final class ListenerSchedulers {
 
         void scheduleStarvationCheck() {
             if (!checkScheduled.get() && checkScheduled.compareAndSet(false, true)) {
+                checkDueAt = clock.getAsLong() + TimeUnit.MILLISECONDS.toNanos(STARVATION_CHECK_MILLIS);
                 try {
                     monitor.schedule(this::growIfStarving, STARVATION_CHECK_MILLIS, TimeUnit.MILLISECONDS);
                 } catch (RejectedExecutionException e) {
@@ -388,9 +461,11 @@ public final class ListenerSchedulers {
 
         private void growIfStarving() {
             checkScheduled.set(false);
+            // late by more than the period between two checks: the process was paused, the head only looks stuck
+            final boolean late = clock.getAsLong() - checkDueAt > TimeUnit.MILLISECONDS.toNanos(STARVATION_CHECK_MILLIS);
             final BlockingQueue<Runnable> queue = getQueue();
             final Runnable head = queue.peek();
-            if (head != null && head == headSeenInThePreviousCheck && !busyThreadsWaitTogether()) {
+            if (head != null && head == headSeenInThePreviousCheck && !late && !busyThreadsWaitTogether()) {
                 grow(queue.size());
             }
             headSeenInThePreviousCheck = head;
@@ -441,14 +516,14 @@ public final class ListenerSchedulers {
             // at most quadruples the pool on every check: it reaches the limit in a few checks when the handlers
             // block, but a pause of the JVM (that makes the queued tasks look stuck) adds just a few threads
             final int poolSize = getPoolSize();
-            final int step = Math.min(waitingTasks, Math.max(baseThreads(getMaximumPoolSize()), poolSize * 3));
+            final int step = Math.min(waitingTasks, Math.max(base, poolSize * 3));
             final int target = Math.min(getMaximumPoolSize(), poolSize + step);
             if (target > poolSize) {
-                // the new threads take the waiting tasks, and go away once idle for HANDLER_KEEP_ALIVE_SECONDS
+                // the new threads take the waiting tasks, and go away once not needed for the keep-alive period
                 growthCount.incrementAndGet();
                 setCorePoolSize(target);
                 prestartAllCoreThreads();
-                setCorePoolSize(baseThreads(getMaximumPoolSize()));
+                setCorePoolSize(base);
             }
         }
 
@@ -459,7 +534,8 @@ public final class ListenerSchedulers {
         synchronized void setThreadsLimit(int maxThreads) {
             if (maxThreads != getMaximumPoolSize()) {
                 setMaximumPoolSize(maxThreads);
-                setCorePoolSize(baseThreads(maxThreads));
+                base = baseThreads(maxThreads);
+                setCorePoolSize(base);
             }
         }
 
@@ -473,10 +549,23 @@ public final class ListenerSchedulers {
     }
 
     /**
-     * An unbounded lock-free queue that asks the pool to watch for starving tasks every time one is queued.
+     * An unbounded lock-free queue that asks the pool to watch for starving tasks every time one is queued, and lets a
+     * thread of the pool leave when it asks for a task the pool does not need it for.
      */
     private static final class GrowingQueue extends LinkedTransferQueue<Runnable> {
         private transient volatile ElasticExecutor owner;
+
+        /**
+         * Called by a thread of the pool waiting for its next task: no task (null) makes it leave the pool.
+         */
+        @Override
+        public Runnable poll(long timeout, @NonNull TimeUnit unit) throws InterruptedException {
+            final ElasticExecutor pool = owner;
+            if (pool != null && pool.releaseIfSurplus()) {
+                return null;
+            }
+            return super.poll(timeout, unit);
+        }
 
         @Override
         public boolean offer(@NonNull Runnable task) {
@@ -497,6 +586,7 @@ public final class ListenerSchedulers {
         private final String prefix;
         private final AtomicInteger counter = new AtomicInteger();
         private final Set<HandlerThread> threads = ConcurrentHashMap.newKeySet();
+        private final AtomicInteger live = new AtomicInteger(); // the threads not released yet
 
         Workers(String prefix) {
             this.prefix = prefix;
@@ -504,23 +594,25 @@ public final class ListenerSchedulers {
 
         @Override
         public Thread newThread(@NonNull Runnable runnable) {
-            final HandlerThread thread = new HandlerThread(runnable, prefix + "-" + counter.incrementAndGet(), threads);
+            final HandlerThread thread = new HandlerThread(runnable, prefix + "-" + counter.incrementAndGet(), this);
             threads.add(thread);
+            live.incrementAndGet();
             return thread;
         }
     }
 
     /**
-     * A thread of the handler pool: {@link #busy} is set while it runs a task, and it leaves the live threads when
-     * it ends.
+     * A thread of the handler pool: {@link #busy} is set while it runs a task, {@link #released} once the pool lets it
+     * go, and it leaves the live threads when it ends.
      */
     private static final class HandlerThread extends Thread {
-        private final Set<HandlerThread> live;
+        private final Workers workers;
         private volatile boolean busy;
+        private volatile boolean released; // already taken off Workers.live
 
-        HandlerThread(Runnable runnable, String name, Set<HandlerThread> live) {
+        HandlerThread(Runnable runnable, String name, Workers workers) {
             super(runnable, name);
-            this.live = live;
+            this.workers = workers;
             setDaemon(true);
         }
 
@@ -529,7 +621,10 @@ public final class ListenerSchedulers {
             try {
                 super.run();
             } finally {
-                live.remove(this);
+                workers.threads.remove(this);
+                if (!released) {
+                    workers.live.decrementAndGet();
+                }
             }
         }
     }

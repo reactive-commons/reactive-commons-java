@@ -18,7 +18,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.LongSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -319,6 +321,105 @@ class ListenerSchedulersTest {
 
         assertThat(peak.get()).as("handlers waiting for their own result at the same time")
                 .isGreaterThan(baseThreads() * 4);
+    }
+
+    /**
+     * A pause of the process (a GC pause, the CPU quota of the container used up) freezes the handlers and the monitor
+     * of the pool alike: the check that runs after it finds the same task at the head of the queue, although nobody
+     * could take it. Such a late check does not make the pool grow, while the same tasks on time do.
+     */
+    @Test
+    void aStarvationCheckDelayedByAPauseOfTheProcessDoesNotGrowThePool() throws InterruptedException {
+        AtomicLong reads = new AtomicLong();
+        // every read of the clock is 50 ms after the previous one: every check runs late, as after a pause
+        LongSupplier pausing = () -> System.nanoTime() + reads.incrementAndGet() * 50_000_000L;
+        ListenerSchedulers.ElasticExecutor paused = new ListenerSchedulers.ElasticExecutor(
+                ListenerSchedulers.MAX_HANDLER_THREADS, "paused", KEEP_ALIVE, pausing);
+        ListenerSchedulers.ElasticExecutor onTime = new ListenerSchedulers.ElasticExecutor(
+                ListenerSchedulers.MAX_HANDLER_THREADS, "on-time", KEEP_ALIVE, System::nanoTime);
+        try {
+            int pausedPeak = runTasksWaitingForTheirOwnResult(paused, 60, 100);
+            int onTimePeak = runTasksWaitingForTheirOwnResult(onTime, 60, 100);
+
+            assertThat(pausedPeak).as("handlers at the same time when every check runs late")
+                    .isLessThanOrEqualTo(baseThreads());
+            assertThat(onTimePeak).as("handlers at the same time when the checks run on time")
+                    .isGreaterThan(baseThreads());
+        } finally {
+            paused.shutdownNow();
+            onTime.shutdownNow();
+        }
+    }
+
+    /**
+     * Under a steady flow of tasks the idle threads take them in turn, so none stays idle for the keep-alive time:
+     * the threads the handlers stopped needing are released anyway, once a whole keep-alive period passed without
+     * needing them.
+     */
+    @Test
+    void theThreadsNoLongerNeededAreReleasedWhileTasksKeepComing() throws InterruptedException {
+        AtomicLong offset = new AtomicLong();
+        ListenerSchedulers.ElasticExecutor pool = new ListenerSchedulers.ElasticExecutor(
+                ListenerSchedulers.MAX_HANDLER_THREADS, "shrinking", KEEP_ALIVE, () -> System.nanoTime() + offset.get());
+        try {
+            runTasksWaitingForTheirOwnResult(pool, 200, 200);
+            int grown = pool.getPoolSize();
+            assertThat(grown).as("threads after handlers that block").isGreaterThan(baseThreads() * 2);
+
+            offset.addAndGet(KEEP_ALIVE.toNanos()); // the period of the blocking handlers ends
+            runShortTasksOneAtATime(pool, 500);
+            assertThat(pool.getPoolSize()).as("threads kept: the handlers needed them in the previous period")
+                    .isGreaterThanOrEqualTo(grown);
+
+            offset.addAndGet(KEEP_ALIVE.toNanos()); // a whole period of short tasks, one at a time
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (pool.getPoolSize() > baseThreads() && System.nanoTime() < deadline) {
+                runShortTasksOneAtATime(pool, 50);
+            }
+            assertThat(pool.getPoolSize()).as("threads once the handlers stopped needing them")
+                    .isEqualTo(baseThreads());
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static final Duration KEEP_ALIVE = Duration.ofSeconds(15);
+
+    /**
+     * Runs the tasks at the same time, each waiting for its own result (as a blocking client call), and returns the
+     * most that ran at the same time.
+     */
+    private static int runTasksWaitingForTheirOwnResult(ListenerSchedulers.ElasticExecutor pool, int tasks,
+                                                        long millis) throws InterruptedException {
+        ScheduledExecutorService replies = Executors.newSingleThreadScheduledExecutor();
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger peak = new AtomicInteger();
+        CountDownLatch done = new CountDownLatch(tasks);
+        try {
+            for (int i = 0; i < tasks; i++) {
+                pool.execute(() -> {
+                    peak.accumulateAndGet(running.incrementAndGet(), Math::max);
+                    CompletableFuture<Void> reply = new CompletableFuture<>();
+                    replies.schedule(() -> reply.complete(null), millis, TimeUnit.MILLISECONDS);
+                    reply.join();
+                    running.decrementAndGet();
+                    done.countDown();
+                });
+            }
+            assertThat(done.await(30, TimeUnit.SECONDS)).as("every task ran").isTrue();
+        } finally {
+            replies.shutdownNow();
+        }
+        return peak.get();
+    }
+
+    private static void runShortTasksOneAtATime(ListenerSchedulers.ElasticExecutor pool, int tasks)
+            throws InterruptedException {
+        for (int i = 0; i < tasks; i++) {
+            CountDownLatch done = new CountDownLatch(1);
+            pool.execute(done::countDown);
+            assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+        }
     }
 
     private static int baseThreads() {
