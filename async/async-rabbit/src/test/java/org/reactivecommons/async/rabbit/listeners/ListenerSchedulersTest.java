@@ -11,10 +11,14 @@ import reactor.core.scheduler.Scheduler;
 
 import java.time.Duration;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -245,6 +249,80 @@ class ListenerSchedulersTest {
         } finally {
             ListenerSchedulers.release(registry);
         }
+    }
+
+    /**
+     * Handlers that log through a synchronous appender all wait for its monitor while one thread writes: more threads
+     * would only queue up behind it, so the pool keeps its base size although the tasks starve.
+     */
+    @Test
+    void shouldNotGrowWhileTheBusyThreadsWaitForTheSameMonitor() {
+        Object appender = new Object();
+        Set<String> threads = ConcurrentHashMap.newKeySet();
+
+        Flux.range(0, 150)
+                .flatMap(i -> Mono.fromRunnable(() -> {
+                    threads.add(Thread.currentThread().getName());
+                    synchronized (appender) {
+                        sleep(10);
+                    }
+                }).subscribeOn(ListenerSchedulers.handlers()), 150)
+                .blockLast(Duration.ofSeconds(30));
+
+        assertThat(threads).as("threads used while every handler waits for the same monitor")
+                .hasSizeLessThanOrEqualTo(baseThreads());
+    }
+
+    @Test
+    void shouldNotGrowWhileTheBusyThreadsWaitForTheSameLock() {
+        ReentrantLock appender = new ReentrantLock();
+        Set<String> threads = ConcurrentHashMap.newKeySet();
+
+        Flux.range(0, 150)
+                .flatMap(i -> Mono.fromRunnable(() -> {
+                    threads.add(Thread.currentThread().getName());
+                    appender.lock();
+                    try {
+                        sleep(10);
+                    } finally {
+                        appender.unlock();
+                    }
+                }).subscribeOn(ListenerSchedulers.handlers()), 150)
+                .blockLast(Duration.ofSeconds(30));
+
+        assertThat(threads).as("threads used while every handler waits for the same lock")
+                .hasSizeLessThanOrEqualTo(baseThreads());
+    }
+
+    /**
+     * Handlers that each wait for their own result (e.g. a blocking client call) are parked on different objects: the
+     * pool grows so they can wait at the same time.
+     */
+    @Test
+    void shouldGrowWhileEachBusyThreadWaitsForItsOwnResult() {
+        ScheduledExecutorService replies = Executors.newSingleThreadScheduledExecutor();
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger peak = new AtomicInteger();
+        try {
+            Flux.range(0, 300)
+                    .flatMap(i -> Mono.fromRunnable(() -> {
+                        peak.accumulateAndGet(running.incrementAndGet(), Math::max);
+                        CompletableFuture<Void> reply = new CompletableFuture<>();
+                        replies.schedule(() -> reply.complete(null), 200, TimeUnit.MILLISECONDS);
+                        reply.join();
+                        running.decrementAndGet();
+                    }).subscribeOn(ListenerSchedulers.handlers()), 300)
+                    .blockLast(Duration.ofSeconds(30));
+        } finally {
+            replies.shutdownNow();
+        }
+
+        assertThat(peak.get()).as("handlers waiting for their own result at the same time")
+                .isGreaterThan(baseThreads() * 4);
+    }
+
+    private static int baseThreads() {
+        return Math.min(ListenerSchedulers.MAX_HANDLER_THREADS, Math.max(2, Runtime.getRuntime().availableProcessors()));
     }
 
     private static void sleep(long millis) {

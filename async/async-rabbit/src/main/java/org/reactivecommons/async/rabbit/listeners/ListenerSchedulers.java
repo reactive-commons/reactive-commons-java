@@ -15,7 +15,9 @@ import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -25,6 +27,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.LockSupport;
 import java.util.function.Supplier;
 
 /**
@@ -32,12 +35,13 @@ import java.util.function.Supplier;
  *
  * <ul>
  *     <li>{@link #handlers()} runs the handlers. It is a pool that starts with one thread per processor and only
- *     grows when tasks have been starving for more than {@value #STARVATION_CHECK_MILLIS} ms, and whose idle
- *     threads are released after a minute, so handlers that do not
- *     block use a few threads and handlers that block can run at the same time up to the limit. The limit is the
- *     sum of the {@code maxConcurrency} of the active listeners (see {@link #registerListener(int)}), and at least
- *     {@value #MAX_HANDLER_THREADS} (the default {@code maxConcurrency} and {@code prefetchCount}): a listener whose
- *     handlers block can never take the threads the other listeners need.</li>
+ *     grows when tasks have been starving for more than {@value #STARVATION_CHECK_MILLIS} ms while its busy threads
+ *     wait for their own work (I/O), not for a resource they share (a lock, a monitor: more threads would only queue
+ *     up behind it). Its idle threads are released after {@value #HANDLER_KEEP_ALIVE_SECONDS} seconds, so handlers
+ *     that do not block use a few threads and handlers that block can run at the same time up to the limit. The
+ *     limit is the sum of the {@code maxConcurrency} of the active listeners (see {@link #registerListener(int)}),
+ *     and at least {@value #MAX_HANDLER_THREADS} (the default {@code maxConcurrency} and {@code prefetchCount}): a
+ *     listener whose handlers block can never take the threads the other listeners need.</li>
  *     <li>{@link #errorReporter()} runs the custom error reporter.</li>
  * </ul>
  * They are created when first used, and disposed when the last application using them is released (see
@@ -55,6 +59,7 @@ public final class ListenerSchedulers {
 
     public static final int MAX_HANDLER_THREADS = 250;
     private static final int KEEP_ALIVE_SECONDS = 60;
+    private static final int HANDLER_KEEP_ALIVE_SECONDS = 15;
     private static final long STARVATION_CHECK_MILLIS = 5;
     private static final int ERROR_REPORTER_THREADS = 4;
     private static final int ERROR_REPORTER_QUEUE = 256;
@@ -88,7 +93,7 @@ public final class ListenerSchedulers {
             synchronized (LOCK) {
                 current = handlers;
                 if (current == null || current.isDisposed()) {
-                    executor = new ElasticExecutor(handlerThreadsLimit(), daemonThreads("rc-handlers"));
+                    executor = new ElasticExecutor(handlerThreadsLimit(), "rc-handlers");
                     for (MeterRegistry registry : registries.keySet()) {
                         removeMeterIds(registry); // the stale gauges pointed to the previous pool
                         registerSchedulerMetrics(registry, executor);
@@ -314,24 +319,49 @@ public final class ListenerSchedulers {
      * <p>The submission path is just "put in a lock-free queue": nothing is measured there. A monitor, scheduled
      * only while there are queued tasks, looks every {@value ListenerSchedulers#STARVATION_CHECK_MILLIS} ms at the
      * head of the queue; if it is the same task as in the previous check, nobody took it for that long, so the
-     * threads are really busy and the pool grows. A burst of tasks that finish in microseconds is drained before
-     * that, so it does not create threads.</p>
+     * threads are really busy. A burst of tasks that finish in microseconds is drained before that, so it does not
+     * create threads.</p>
+     *
+     * <p>Busy threads that wait for their own work (each its own I/O, latch or future) make the pool grow. Busy
+     * threads that wait for a resource they share do not: more threads would only queue up behind it, hold more
+     * deliveries in memory and lengthen the GC pauses. A synchronous log appender is the usual case: under load,
+     * every handler waits for its lock while one thread writes.</p>
      */
     private static final class ElasticExecutor extends ThreadPoolExecutor {
 
         private final ScheduledThreadPoolExecutor monitor;
+        private final Workers workers;
         private final AtomicBoolean checkScheduled = new AtomicBoolean();
         private final AtomicLong growthCount = new AtomicLong();
         private Runnable headSeenInThePreviousCheck; // only used by the monitor thread
 
-        ElasticExecutor(int maxThreads, ThreadFactory threadFactory) {
-            super(baseThreads(maxThreads), maxThreads, KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
-                    new GrowingQueue(), threadFactory, new AbortPolicy());
+        ElasticExecutor(int maxThreads, String threadPrefix) {
+            this(maxThreads, new Workers(threadPrefix));
+        }
+
+        private ElasticExecutor(int maxThreads, Workers workers) {
+            super(baseThreads(maxThreads), maxThreads, HANDLER_KEEP_ALIVE_SECONDS, TimeUnit.SECONDS,
+                    new GrowingQueue(), workers, new AbortPolicy());
+            this.workers = workers;
             ((GrowingQueue) getQueue()).owner = this;
             allowCoreThreadTimeOut(true);
             monitor = new ScheduledThreadPoolExecutor(1, daemonThreads("rc-handlers-monitor"));
             monitor.setKeepAliveTime(KEEP_ALIVE_SECONDS, TimeUnit.SECONDS);
             monitor.allowCoreThreadTimeOut(true);
+        }
+
+        @Override
+        protected void beforeExecute(Thread thread, Runnable task) {
+            if (thread instanceof HandlerThread handler) {
+                handler.busy = true;
+            }
+        }
+
+        @Override
+        protected void afterExecute(Runnable task, Throwable error) {
+            if (Thread.currentThread() instanceof HandlerThread handler) {
+                handler.busy = false;
+            }
         }
 
         @Override
@@ -360,13 +390,47 @@ public final class ListenerSchedulers {
             checkScheduled.set(false);
             final BlockingQueue<Runnable> queue = getQueue();
             final Runnable head = queue.peek();
-            if (head != null && head == headSeenInThePreviousCheck) {
+            if (head != null && head == headSeenInThePreviousCheck && !busyThreadsWaitTogether()) {
                 grow(queue.size());
             }
             headSeenInThePreviousCheck = head;
             if (head != null) {
                 scheduleStarvationCheck();
             }
+        }
+
+        /**
+         * Whether at least half of the busy threads wait for a resource another one also waits for: a monitor (the
+         * thread is {@code BLOCKED}) or the same lock, semaphore or condition (the same
+         * {@link LockSupport#getBlocker(Thread) blocker}). A thread that waits for its own work (sleeping, reading a
+         * socket, or parked on its own latch or future) does not count. Reading the state and the blocker of a thread
+         * is two field reads: this runs only while tasks are starving, once per check.
+         */
+        boolean busyThreadsWaitTogether() {
+            int busy = 0;
+            int waitingTogether = 0;
+            final Map<Object, Integer> blockers = new IdentityHashMap<>();
+            for (HandlerThread thread : workers.threads) {
+                if (!thread.busy) {
+                    continue;
+                }
+                busy++;
+                final Thread.State state = thread.getState();
+                if (state == Thread.State.BLOCKED) {
+                    waitingTogether++;
+                } else if (state == Thread.State.WAITING || state == Thread.State.TIMED_WAITING) {
+                    final Object blocker = LockSupport.getBlocker(thread);
+                    if (blocker != null) {
+                        blockers.merge(blocker, 1, Integer::sum);
+                    }
+                }
+            }
+            for (int sharing : blockers.values()) {
+                if (sharing > 1) {
+                    waitingTogether += sharing;
+                }
+            }
+            return busy > 0 && waitingTogether * 2 >= busy;
         }
 
         /**
@@ -380,7 +444,7 @@ public final class ListenerSchedulers {
             final int step = Math.min(waitingTasks, Math.max(baseThreads(getMaximumPoolSize()), poolSize * 3));
             final int target = Math.min(getMaximumPoolSize(), poolSize + step);
             if (target > poolSize) {
-                // the new threads take the waiting tasks, and go away when idle for a minute
+                // the new threads take the waiting tasks, and go away once idle for HANDLER_KEEP_ALIVE_SECONDS
                 growthCount.incrementAndGet();
                 setCorePoolSize(target);
                 prestartAllCoreThreads();
@@ -422,6 +486,51 @@ public final class ListenerSchedulers {
                 pool.scheduleStarvationCheck();
             }
             return queued;
+        }
+    }
+
+    /**
+     * Creates the daemon threads of the handler pool and keeps the live ones, so the pool can see what its busy
+     * threads are waiting for.
+     */
+    private static final class Workers implements ThreadFactory {
+        private final String prefix;
+        private final AtomicInteger counter = new AtomicInteger();
+        private final Set<HandlerThread> threads = ConcurrentHashMap.newKeySet();
+
+        Workers(String prefix) {
+            this.prefix = prefix;
+        }
+
+        @Override
+        public Thread newThread(@NonNull Runnable runnable) {
+            final HandlerThread thread = new HandlerThread(runnable, prefix + "-" + counter.incrementAndGet(), threads);
+            threads.add(thread);
+            return thread;
+        }
+    }
+
+    /**
+     * A thread of the handler pool: {@link #busy} is set while it runs a task, and it leaves the live threads when
+     * it ends.
+     */
+    private static final class HandlerThread extends Thread {
+        private final Set<HandlerThread> live;
+        private volatile boolean busy;
+
+        HandlerThread(Runnable runnable, String name, Set<HandlerThread> live) {
+            super(runnable, name);
+            this.live = live;
+            setDaemon(true);
+        }
+
+        @Override
+        public void run() {
+            try {
+                super.run();
+            } finally {
+                live.remove(this);
+            }
         }
     }
 }
