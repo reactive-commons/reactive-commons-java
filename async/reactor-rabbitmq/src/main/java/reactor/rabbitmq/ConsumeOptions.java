@@ -21,7 +21,6 @@ import com.rabbitmq.client.Delivery;
 import lombok.Getter;
 import reactor.core.publisher.FluxSink;
 
-import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -42,10 +41,7 @@ public class ConsumeOptions {
             (requestedFromDownstream, message) -> false;
 
     private BiConsumer<Receiver.AcknowledgmentContext, Exception> exceptionHandler =
-            new ExceptionHandlers.RetryAcknowledgmentExceptionHandler(
-                    Duration.ofSeconds(10), Duration.ofMillis(200),
-                    ExceptionHandlers.CONNECTION_RECOVERY_PREDICATE
-            );
+            new ExceptionHandlers.FailFastAcknowledgmentExceptionHandler();
 
     private Consumer<Channel> channelCallback = ch -> {
     };

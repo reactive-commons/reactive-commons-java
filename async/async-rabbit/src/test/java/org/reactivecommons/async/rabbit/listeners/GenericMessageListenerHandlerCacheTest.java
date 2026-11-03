@@ -13,6 +13,8 @@ import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
@@ -86,11 +88,12 @@ class GenericMessageListenerHandlerCacheTest {
         DomainEventHandler<Object> handler = event -> Mono.empty();
         Map<String, RegisteredEventListener<?, ?>> events = Map.of("event.*",
                 new RegisteredEventListener<>("event.*", handler, Object.class));
-        new ApplicationEventListener(new ReactiveMessageListener(receiver, mock(TopologyCreator.class), 250, 250,
-                new SubscriberRegistry(), registry, "app", null), "test-queue", "domainEvents",
+        new ApplicationEventListener(new ListenerContext<>(new ReactiveMessageListener(receiver,
+                mock(TopologyCreator.class), 250, 250, new SubscriberRegistry(), registry, "app", null),
                 new HandlerResolver(Map.of(), events, events, Map.of(), Map.of(), Map.of(), Map.of()),
-                new RabbitJacksonMessageConverter(new JsonMapper()), false, false, -1, 10, Optional.empty(),
-                mock(DiscardNotifier.class), mock(CustomReporter.class), "app").startListener();
+                new RabbitJacksonMessageConverter(new JsonMapper()), new RetryPolicy(false, -1, 10), false,
+                mock(DiscardNotifier.class), mock(CustomReporter.class)), "test-queue", "domainEvents",
+                Optional.empty(), "app").startListener();
 
         verify(channel, timeout(10_000).times(routingKeys)).basicAck(anyLong(), any(Boolean.class));
         Collection<Timer> executions = registry.find("reactive_commons.consumer.handler.execution").timers();
@@ -181,8 +184,8 @@ class GenericMessageListenerHandlerCacheTest {
         private final AtomicInteger resolutions;
 
         TestListener(ReactiveMessageListener listener, AtomicInteger resolutions) {
-            super("test-queue", listener, false, false, -1, 10, mock(DiscardNotifier.class), "event",
-                    mock(CustomReporter.class));
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(false, -1, 10), false,
+                    mock(DiscardNotifier.class), mock(CustomReporter.class)), "test-queue", "event");
             this.resolutions = resolutions;
         }
 

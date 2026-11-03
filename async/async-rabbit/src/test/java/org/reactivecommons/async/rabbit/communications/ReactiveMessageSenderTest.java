@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit.communications;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.rabbitmq.client.AMQP;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.DistributionSummary;
@@ -19,6 +23,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException
 import org.reactivecommons.async.rabbit.converters.json.RabbitJacksonMessageConverter;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -53,10 +58,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -207,6 +208,40 @@ class ReactiveMessageSenderTest {
     }
 
     /**
+     * The flows the message is handed to die before writing it, one after another, until a flow keeps working: the
+     * message is retried on each new flow and written once.
+     */
+    @Test
+    void aMessageRetriedOnManyFlowsInARowIsPublishedOnce() {
+        int dyingFlows = 12; // each of the 4 publisher-confirms flows dies three times before one keeps working
+        AtomicInteger subscriptions = new AtomicInteger();
+        AtomicInteger written = new AtomicInteger();
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            final Flux<OutboundMessage> argument = invocation.getArgument(0);
+            if (subscriptions.getAndIncrement() >= dyingFlows) {
+                return argument.map(message -> {
+                    written.incrementAndGet();
+                    return new OutboundMessageResult<>(message, true);
+                });
+            }
+            // like a flow whose channel closed: the message reaching it is discarded unwritten and the flow ends
+            return argument.concatMap(message -> Mono.deferContextual(context -> {
+                Operators.onDiscard(message, Context.of(context));
+                return Mono.error(new IllegalStateException("channel closed"));
+            }));
+        });
+        try (ReactiveMessageSender retryingSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier, Duration.ofSeconds(20))) {
+            StepVerifier.create(retryingSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()),
+                            "exchange", "rkey", new HashMap<>(), true))
+                    .verifyComplete();
+
+            assertThat(subscriptions.get()).as("flows the message was handed to").isGreaterThan(dyingFlows);
+            assertThat(written.get()).as("times the message was written").isEqualTo(1);
+        }
+    }
+
+    /**
      * The flows the message is handed to die before writing it (e.g. their channels close), and no flow gets a channel
      * again before the send timeout: the message was never published, so its outcome is not in doubt.
      */
@@ -334,11 +369,28 @@ class ReactiveMessageSenderTest {
     }
 
     @Test
+    void theHandOverPoolFollowsTheProcessorsAndTheCompletionPoolKeepsItsThreads() throws Exception {
+        assertThat(ReactiveMessageSender.handOverThreads()).as("hand-over threads")
+                .isEqualTo(Math.min(13, Math.max(2, Runtime.getRuntime().availableProcessors())));
+        assertThat(pool(messageSender, "executorService2").getMaximumPoolSize()).as("hand-over pool")
+                .isEqualTo(ReactiveMessageSender.handOverThreads());
+        assertThat(pool(messageSender, "executorService").getMaximumPoolSize()).as("completion pool")
+                .isEqualTo(13);
+    }
+
+    private static ThreadPoolExecutor pool(ReactiveMessageSender sender, String name) throws Exception {
+        java.lang.reflect.Field field = ReactiveMessageSender.class.getDeclaredField(name);
+        field.setAccessible(true);
+        return (ThreadPoolExecutor) field.get(sender);
+    }
+
+    @Test
     void theLatencyAndTheSizeOfAPublishedMessageAreMeasured() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain")) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
+                "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .verifyComplete();
@@ -363,8 +415,8 @@ class ReactiveMessageSenderTest {
                         .map(message -> new OutboundMessageResult<>(message, true)));
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender limitedSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain", 64)) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024, 64,
+                new ConnectionBlockedState(), registry, "test-domain"))) {
             SomeClass large = new SomeClass("42", "x".repeat(100), new Date());
 
             StepVerifier.create(limitedSender.sendWithConfirm(large, "exchange", "rkey", new HashMap<>(), true))
@@ -425,9 +477,9 @@ class ReactiveMessageSenderTest {
     @Test
     void closingTheSenderRemovesItsMeters() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        ReactiveMessageSender closed = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
-                unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(), registry,
-                "test-domain");
+        ReactiveMessageSender closed = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, "test-domain"));
         StepVerifier.create(closed.sendWithConfirm(new SomeClass("1", "a", null), "exchange", "rkey",
                 new HashMap<>(), true)).verifyComplete();
         assertThat(registry.getMeters()).isNotEmpty();
@@ -441,8 +493,9 @@ class ReactiveMessageSenderTest {
     void theFlowResubscriptionCountersExistAtZeroBeforeAnyFlowIsResubscribed() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain")) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
+                "test-domain"))) {
             for (String kind : List.of("confirm", "noConfirm")) {
                 Counter resubscribed = registry.find("reactive_commons.publish.flow.resubscribe")
                         .tags("domain", "test-domain", "kind", kind).counter();
@@ -464,8 +517,9 @@ class ReactiveMessageSenderTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofMillis(100), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain")) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofMillis(100), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
+                "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectError(SendConfirmUnknownException.class)
@@ -483,8 +537,8 @@ class ReactiveMessageSenderTest {
     void thePublishMetersAreTaggedWithAnEmptyDomainWhenTheSenderHasNone() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, null)) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry, null))) {
             assertThat(registry.find("reactive_commons.publish.outcome").tags("domain", "", "outcome", "ack")
                     .counter()).as("same tag keys as the senders of a domain, as Prometheus requires").isNotNull();
         }
@@ -507,8 +561,9 @@ class ReactiveMessageSenderTest {
         });
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
         try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier, Duration.ofSeconds(5), 13, 1024, new ConnectionBlockedState(),
-                registry, "test-domain")) {
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
+                "test-domain"))) {
             StepVerifier.create(meteredSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectErrorSatisfies(error -> assertThat(error)
@@ -684,43 +739,36 @@ class ReactiveMessageSenderTest {
     void logsOnlyTheFirstResubscribeOfAFlowAtWarning() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class)))
                 .thenReturn(Flux.error(new RabbitFluxException("boom")));
-        List<LogRecord> records = new CopyOnWriteArrayList<>();
-        Handler handler = new Handler() {
+        List<ILoggingEvent> records = new CopyOnWriteArrayList<>();
+        AppenderBase<ILoggingEvent> appender = new AppenderBase<>() {
             @Override
-            public void publish(LogRecord logRecord) {
-                records.add(logRecord);
-            }
-
-            @Override
-            public void flush() {
-            }
-
-            @Override
-            public void close() {
+            protected void append(ILoggingEvent event) {
+                records.add(event);
             }
         };
-        Logger logger = Logger.getLogger(ReactiveMessageSender.class.getName());
+        appender.start();
+        Logger logger = (Logger) LoggerFactory.getLogger(ReactiveMessageSender.class);
         Level previousLevel = logger.getLevel();
-        logger.setLevel(Level.ALL);
-        logger.addHandler(handler);
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(appender);
         try (ReactiveMessageSender ignored = new ReactiveMessageSender(sender, "TestApp", messageConverter, null, false,
                 unroutableMessageNotifier)) {
             await().atMost(Duration.ofSeconds(5))
-                    .until(() -> count(records, "publisher-confirms flow #0", Level.WARNING) >= 1
-                            && count(records, "publisher-confirms flow #0", Level.FINE) >= 1);
+                    .until(() -> count(records, "publisher-confirms flow #0", Level.WARN) >= 1
+                            && count(records, "publisher-confirms flow #0", Level.DEBUG) >= 1);
 
-            assertThat(count(records, "publisher-confirms flow #0", Level.WARNING)).isEqualTo(1);
-            assertThat(count(records, "publisher-confirms flow #0", Level.FINE)).isGreaterThanOrEqualTo(1);
+            assertThat(count(records, "publisher-confirms flow #0", Level.WARN)).isEqualTo(1);
+            assertThat(count(records, "publisher-confirms flow #0", Level.DEBUG)).isGreaterThanOrEqualTo(1);
         } finally {
-            logger.removeHandler(handler);
+            logger.detachAppender(appender);
             logger.setLevel(previousLevel);
         }
     }
 
-    private static long count(List<LogRecord> records, String flowName, Level level) {
+    private static long count(List<ILoggingEvent> records, String flowName, Level level) {
         return records.stream()
-                .filter(logRecord -> level.equals(logRecord.getLevel()))
-                .filter(logRecord -> logRecord.getMessage() != null && logRecord.getMessage().contains(flowName))
+                .filter(event -> level.equals(event.getLevel()))
+                .filter(event -> event.getFormattedMessage().contains(flowName))
                 .count();
     }
 

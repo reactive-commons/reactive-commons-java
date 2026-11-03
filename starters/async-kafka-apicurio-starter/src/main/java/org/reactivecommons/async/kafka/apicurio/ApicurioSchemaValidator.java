@@ -10,7 +10,7 @@ import io.apicurio.registry.resolver.strategy.ArtifactReference;
 import io.apicurio.registry.resolver.strategy.ArtifactReferenceImpl;
 import io.apicurio.registry.serde.kafka.headers.HeadersHandler;
 import lombok.Builder;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.header.Headers;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
@@ -22,7 +22,6 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.StringJoiner;
-import java.util.logging.Level;
 
 /**
  * Reactive Commons keeps the Kafka wire format as raw bytes, so this validator does not replace the
@@ -37,7 +36,7 @@ import java.util.logging.Level;
  * <b>Resolving a schema is a blocking call</b> against the registry, cached by the underlying resolver, so this
  * validator must not be invoked from a thread that cannot block.
  */
-@Log
+@Slf4j
 public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
 
     /**
@@ -165,8 +164,8 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
     }
 
     private static InboundArtifact discard(ArtifactReference expected, ArtifactReference fromHeaders) {
-        log.log(Level.FINE, "Ignoring the schema coordinates {0} of an incoming record, the topic is validated "
-                + "against {1}", new Object[]{fromHeaders, expected});
+        log.debug("Ignoring the schema coordinates {} of an incoming record, the topic is validated against {}",
+                fromHeaders, expected);
         return new InboundArtifact(expected, fromHeaders);
     }
 
@@ -201,7 +200,7 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         } catch (RuntimeException e) {
             // A truncated globalId or contentId header makes the handler fail while reading its buffer. The
             // record is still validated, against the artifact configured for the topic.
-            log.log(Level.FINE, "Unreadable schema coordinates in an incoming record", e);
+            log.debug("Unreadable schema coordinates in an incoming record", e);
             return null;
         }
         boolean empty = reference == null || (!reference.hasValue() && reference.getContentHash() == null);

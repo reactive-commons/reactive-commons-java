@@ -1,7 +1,6 @@
 package org.reactivecommons.async.starter.config;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.DefaultCommandHandler;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.DefaultQueryHandler;
@@ -18,7 +17,6 @@ import reactor.core.publisher.Mono;
 
 import java.util.Map;
 
-@Log
 @Configuration
 @RequiredArgsConstructor
 @ComponentScan("org.reactivecommons.async.starter.impl.listener")

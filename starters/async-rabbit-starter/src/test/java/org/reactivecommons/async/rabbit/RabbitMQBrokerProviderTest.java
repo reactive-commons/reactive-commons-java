@@ -86,17 +86,9 @@ class RabbitMQBrokerProviderTest {
         props.setBrokerConfigProps(configProps);
         props.setAppName("test");
         props.setListenReplies(Boolean.TRUE);
-        brokerProvider = new RabbitMQBrokerProvider(DEFAULT_DOMAIN,
-                props,
-                brokerConfig,
-                router,
-                messageConverter,
-                meterRegistry,
-                customReporter,
-                healthIndicator,
-                listener,
-                sender,
-                discardNotifier);
+        brokerProvider = new RabbitMQBrokerProvider(DEFAULT_DOMAIN, props, brokerConfig,
+                new RabbitMQBrokerProvider.Components(router, messageConverter, meterRegistry, customReporter,
+                        healthIndicator, listener, sender, discardNotifier, null));
     }
 
     @Test

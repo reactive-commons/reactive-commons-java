@@ -28,7 +28,6 @@ import lombok.NoArgsConstructor;
 import java.io.IOException;
 import java.lang.reflect.InvocationHandler;
 import java.lang.reflect.Proxy;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeoutException;
 
@@ -43,7 +42,8 @@ public final class ChannelProxy {
     /**
      * Creates a dynamic proxy implementing {@link Channel} where {@code asyncCompletableRpc} runs on the current
      * channel, opening a new one when it is closed. {@code isOpen} and {@code close} act on the current channel,
-     * {@code equals} and {@code hashCode} use the identity of the proxy, and every other method throws
+     * {@code getConnection} returns the connection the channels are opened on, {@code equals} and {@code hashCode} use
+     * the identity of the proxy, and every other method throws
      * {@link UnsupportedOperationException}.
      */
     public static Channel create(Connection connection) throws IOException {
@@ -68,6 +68,7 @@ public final class ChannelProxy {
             return switch (method.getName()) {
                 case "asyncCompletableRpc" -> asyncCompletableRpc((Method) args[0]);
                 case "isOpen" -> isOpen();
+                case "getConnection" -> connection;
                 case "close" -> {
                     close();
                     yield null;
@@ -123,9 +124,7 @@ public final class ChannelProxy {
         }
 
         private Channel newChannel() throws IOException {
-            // null when the connection reached its channel_max
-            return Optional.ofNullable(connection.createChannel()).orElseThrow(
-                    () -> new IOException("No channel available: the connection reached its channel_max"));
+            return Utils.createChannel(connection);
         }
     }
 }

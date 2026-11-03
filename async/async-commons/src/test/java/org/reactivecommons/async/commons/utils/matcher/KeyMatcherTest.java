@@ -4,10 +4,14 @@ package org.reactivecommons.async.commons.utils.matcher;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 class KeyMatcherTest {
@@ -158,5 +162,24 @@ class KeyMatcherTest {
         assertEquals("prefix.*.#", keyMatcher.match(listeners, "prefix.any.any.any.any"));
         assertEquals("*.*.*", keyMatcher.match(listeners, "any.any.any"));
         assertEquals("*.#.*", keyMatcher.match(listeners, "any.any.any.any.any"));
+    }
+
+    @Test
+    void theCompiledPatternsAreTheWildcardNamesNeverTheRoutingKeys() throws Exception {
+        for (int i = 0; i < 5_000; i++) {
+            assertEquals("A.B.*", keyMatcher.match(listeners, "A.B.key" + i));
+        }
+
+        // the patterns are cached by name: looking up many routing keys does not grow the cache
+        Set<String> compiled = compiledPatterns().keySet();
+        assertTrue(compiled.containsAll(Set.of("A.*", "A.#", "A.B.*", "A.B.#", "A.B.*.D")));
+        assertTrue(compiled.stream().noneMatch(pattern -> pattern.contains("key")));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Pattern> compiledPatterns() throws Exception {
+        Field patterns = KeyMatcher.class.getDeclaredField("PATTERNS");
+        patterns.setAccessible(true);
+        return (Map<String, Pattern>) patterns.get(null);
     }
 }

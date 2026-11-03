@@ -78,8 +78,9 @@ public class RabbitMQBrokerProviderFactory implements BrokerProviderFactory<Asyn
                         RabbitMQSetupUtils.listenerConnectionMono(provider, props.getAppName()),
                         listener.subscriberRegistry()::snapshot)
                 : null;
-        return new RabbitMQBrokerProvider(domain, props, config, router, converter, meterRegistry, errorReporter,
-                healthIndicator, listener, sender, discardNotifier, queueDepth,
+        return new RabbitMQBrokerProvider(domain, props, config, new RabbitMQBrokerProvider.Components(router,
+                converter, meterRegistry, errorReporter, healthIndicator, listener, sender, discardNotifier,
+                queueDepth),
                 () -> {
                     RabbitMQSetupUtils.releaseConnections(provider.getConnectionFactory());
                     releaseDiscardProvider.run();

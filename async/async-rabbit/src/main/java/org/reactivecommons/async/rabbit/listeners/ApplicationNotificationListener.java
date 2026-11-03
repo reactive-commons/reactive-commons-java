@@ -1,17 +1,14 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
-import org.reactivecommons.async.api.handlers.CloudEventHandler;
-import org.reactivecommons.async.api.handlers.DomainEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -25,8 +22,13 @@ import static reactor.rabbitmq.ExchangeSpecification.exchange;
 import static reactor.rabbitmq.QueueSpecification.queue;
 import static reactor.core.publisher.Flux.fromIterable;
 
-@Log
 public class ApplicationNotificationListener extends GenericMessageListener {
+
+    /**
+     * A notification whose handler failed is retried once by the listener, 200 ms later, whatever the retry policy
+     * of the domain.
+     */
+    private static final RetryPolicy NOTIFICATION_RETRIES = new RetryPolicy(false, 1, 200);
 
     private final MessageConverter messageConverter;
     private final HandlerResolver resolver;
@@ -35,20 +37,13 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     private final boolean createTopology;
 
 
-    public ApplicationNotificationListener(ReactiveMessageListener receiver,
-                                           String exchangeName,
-                                           String queueName,
-                                           boolean createTopology,
-                                           HandlerResolver handlerResolver,
-                                           MessageConverter messageConverter,
-                                           DiscardNotifier discardNotifier,
-                                           CustomReporter errorReporter) {
-        super(queueName, receiver, false, true, 1,
-                200, discardNotifier, "event", errorReporter);
-        this.resolver = handlerResolver;
-        this.messageConverter = messageConverter;
+    public ApplicationNotificationListener(ListenerContext<ReactiveMessageListener> context, String exchangeName,
+                                           String queueName) {
+        super(context.withRetryPolicy(NOTIFICATION_RETRIES).withCreateTopology(true), queueName, "event");
+        this.resolver = context.resolver();
+        this.messageConverter = context.converter();
         this.exchangeName = exchangeName;
-        this.createTopology = createTopology;
+        this.createTopology = context.createTopology();
     }
 
     @Override
@@ -80,8 +75,7 @@ public class ApplicationNotificationListener extends GenericMessageListener {
             throw new MissingHandlerException("notification", executorPath);
         }
 
-        Function<Message, Object> converter = resolveConverter(eventListener);
-        final EventExecutor<Object> executor = new EventExecutor<>(eventListener.handler(), converter);
+        final EventExecutor<Object> executor = EventExecutor.of(eventListener, messageConverter);
 
         return message -> executor.execute(message).cast(Object.class);
     }
@@ -100,17 +94,6 @@ public class ApplicationNotificationListener extends GenericMessageListener {
     @Override
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
-    }
-
-    private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
-        if (registeredEventListener.handler() instanceof DomainEventHandler) {
-            final Class<T> eventClass = registeredEventListener.inputClass();
-            return msj -> messageConverter.readDomainEvent(msj, eventClass);
-        }
-        if (registeredEventListener.handler() instanceof CloudEventHandler) {
-            return messageConverter::readCloudEvent;
-        }
-        throw new RuntimeException("Unknown handler type");
     }
 
     @Override

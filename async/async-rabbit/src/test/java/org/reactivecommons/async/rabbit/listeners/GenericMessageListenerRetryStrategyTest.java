@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Delivery;
@@ -10,10 +14,13 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -30,10 +37,6 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
-import java.util.logging.Handler;
-import java.util.logging.Level;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -261,41 +264,27 @@ class GenericMessageListenerRetryStrategyTest {
         assertThat(startupWarnings(true, 60, 30_000, null)).as("DLQ retries").isEmpty();
     }
 
-    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, long retryDelay,
+    private List<String> startupWarnings(boolean withDLQRetry, long maxRetries, int retryDelay,
                                          Duration handlerTimeout) {
         lenient().when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class))).thenReturn(Flux.never());
-        Logger logger = Logger.getLogger(GenericMessageListener.class.getName());
-        List<String> warnings = new CopyOnWriteArrayList<>();
-        Handler capture = new Handler() {
-            @Override
-            public void publish(LogRecord logRecord) {
-                if (logRecord.getLevel() == Level.WARNING
-                        && logRecord.getMessage().contains("consumer_timeout")) {
-                    warnings.add(logRecord.getMessage());
-                }
-            }
-
-            @Override
-            public void flush() {
-                // nothing buffered
-            }
-
-            @Override
-            public void close() {
-                // nothing to release
-            }
-        };
-        logger.addHandler(capture);
+        Logger logger = (Logger) LoggerFactory.getLogger(GenericMessageListener.class);
+        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        logged.start();
+        logger.addAppender(logged);
         FailingListener listener = new FailingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
                 new SubscriberRegistry(), registry, DOMAIN, handlerTimeout), withDLQRetry, maxRetries, retryDelay,
                 discardNotifier, errorReporter, handlerCalls);
         try {
             listener.startListener();
         } finally {
-            logger.removeHandler(capture);
+            logger.detachAppender(logged);
             listener.stop();
         }
-        return warnings;
+        return logged.list.stream()
+                .filter(event -> event.getLevel() == Level.WARN)
+                .map(ILoggingEvent::getFormattedMessage)
+                .filter(message -> message.contains("consumer_timeout"))
+                .toList();
     }
 
     private void start(boolean withDLQRetry, long maxRetries, AcknowledgableDelivery delivery) {
@@ -383,10 +372,10 @@ class GenericMessageListenerRetryStrategyTest {
             this(listener, useDLQRetries, maxRetries, RETRY_DELAY, discardNotifier, errorReporter, handlerCalls);
         }
 
-        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, long retryDelay,
+        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, int retryDelay,
                         DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            super("test-queue", listener, useDLQRetries, false, maxRetries, retryDelay, discardNotifier,
-                    "command", errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, retryDelay),
+                    false, discardNotifier, errorReporter), "test-queue", "command");
             this.handlerCalls = handlerCalls;
         }
 
@@ -424,7 +413,8 @@ class GenericMessageListenerRetryStrategyTest {
 
         HangingListener(ReactiveMessageListener listener, long maxRetries, DiscardNotifier discardNotifier,
                         CustomReporter errorReporter, Function<Message, Mono<Object>> handler) {
-            super(QUEUE, listener, false, false, maxRetries, RETRY_DELAY, discardNotifier, "command", errorReporter);
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(false, maxRetries, RETRY_DELAY), false,
+                    discardNotifier, errorReporter), QUEUE, "command");
             this.handler = handler;
         }
 

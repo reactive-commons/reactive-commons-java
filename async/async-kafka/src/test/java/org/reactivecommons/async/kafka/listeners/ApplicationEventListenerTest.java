@@ -13,6 +13,8 @@ import org.reactivecommons.async.api.handlers.EventHandler;
 import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -46,18 +48,8 @@ class ApplicationEventListenerTest {
 
     @BeforeEach
     void setup() {
-        applicationEventListener = new ApplicationEventListener(
-                receiver,
-                resolver,
-                messageConverter,
-                true,
-                true,
-                3,
-                1000,
-                null,
-                null,
-                "testApp-events"
-        );
+        applicationEventListener = new ApplicationEventListener(new ListenerContext<>(receiver, resolver,
+                messageConverter, new RetryPolicy(true, 3, 1000), true, null, null), "testApp-events");
 
     }
 
@@ -130,17 +122,7 @@ class ApplicationEventListenerTest {
     }
 
     private ApplicationEventListener buildListener(String groupId) {
-        return new ApplicationEventListener(
-                receiver,
-                resolver,
-                messageConverter,
-                true,
-                false,
-                3,
-                1000,
-                null,
-                null,
-                groupId
-        );
+        return new ApplicationEventListener(new ListenerContext<>(receiver, resolver, messageConverter,
+                new RetryPolicy(true, 3, 1000), false, null, null), groupId);
     }
 }

@@ -574,7 +574,6 @@ properties and their defaults:
 | Property                | Default    | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |-------------------------|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `sendTimeout`           | `10s`      | Maximum time a sender waits for the outcome of a message before failing the caller.                                                                                                                                                                                                                                                                                                                                                    |
-| `handOverPoolSize`      | `13`       | Size of the publish hand-over thread pool (threads that call `basicPublish` and can block on broker back-pressure).                                                                                                                                                                                                                                                                                                                    |
 | `handOverQueueCapacity` | `16384`    | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. Size it to about one second of your peak publish rate: a smaller value rejects messages during short pauses (GC, scheduling) while the broker is still draining. |
 | `blockedHealthGrace`    | `5s`       | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN.                                                                                                                                                                                                                                                                                                                                           |
 | `maxMessageSize`        | `16777216` | Maximum size in bytes of the body of a published message. Set it to the `max_message_size` of your broker (16 MiB by default in RabbitMQ 4). A larger message fails fast with `SendFailureMessageTooLargeException` before being written to a channel.                                                                                                                                                                                 |
@@ -584,7 +583,6 @@ app:
   async:
     app:
       sendTimeout: 10s
-      handOverPoolSize: 13
       handOverQueueCapacity: 16384
       blockedHealthGrace: 5s
       maxMessageSize: 16777216
@@ -603,6 +601,22 @@ existing catch-blocks keep working.
 | `SendFailureBrokerBlockedException`    | The broker signalled `connection.blocked` (memory or disk alarm) and has not unblocked the connection yet: the publish fails immediately instead of waiting for `sendTimeout`.                                                                                 | Message was NOT published. Safe to retry after the alarm clears.                                                                                                              |
 | `SendFailureHandOverRejectedException` | The hand-over queue was full (sustained back-pressure, `handOverQueueCapacity` reached).                                                                                                                                                                       | Message was NOT published. Safe to retry; a flood of these means the broker is not draining faster than the application produces.                                             |
 | `SendFailureMessageTooLargeException`  | The body of the message is larger than `maxMessageSize`: it is rejected before being written, instead of making the broker close the channel it shares with other messages.                                                                                    | Message was NOT published. Retrying it unchanged fails again: reduce the payload (or raise the limit of the broker and `maxMessageSize` together).                            |
+
+The events emitted with the `DomainEventBus` fail with these exceptions as they are, as the commands and the queries
+do: handle them by their type.
+
+:::tip[Retrying a failed send]
+`SendConfirmUnknownException` and `SendFailureMessageTooLargeException` also extend `SendFailureNoAckException`: a
+retry filtered with `instanceof SendFailureNoAckException` sends again the messages whose outcome is unknown (they may
+be duplicated) and the messages that fail again anyway. To retry only the messages that were not published:
+
+```java
+Retry.backoff(3, Duration.ofSeconds(1))
+        .filter(e -> e instanceof SendFailureNoAckException
+                && !(e instanceof SendConfirmUnknownException)
+                && !(e instanceof SendFailureMessageTooLargeException))
+```
+:::
 
 :::caution[`requestReply` is at-least-once]
 The query request and its reply are both published with `sendNoConfirm`. On a `SendFailureNoAckException` after
@@ -664,7 +678,7 @@ app:
 
 When the subscription terminates (channel closed, consumer cancelled, upstream error), the listener re-subscribes
 with the same **200 ms → 5 s exponential backoff** used by the sender's publisher-confirms flows. The first restart
-per listener is logged at WARNING so an outage is visible; subsequent attempts log at FINE to avoid flooding when
+per listener is logged at WARN so an outage is visible; subsequent attempts log at DEBUG to avoid flooding when
 the broker is continuously unavailable. A listener is active once the broker has registered its consumer
 (`basic.consume-ok`), not when its channel opens. The failure counter is cleared when a message is delivered, or
 once the consumer has stayed registered for 5 seconds, so a recovered listener on a queue without traffic is healthy

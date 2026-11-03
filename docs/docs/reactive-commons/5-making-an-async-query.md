@@ -68,6 +68,13 @@ public class ReactiveDirectAsyncGateway {
 
 After that you can do async queries from you application to a remote application that handles this command.
 
+:::caution[Do not block while processing a reply]
+The replies of an application arrive on its reply queue, whose deliveries the RabbitMQ client dispatches one after
+another on a single thread, and the code that processes a reply (the operators after `requestReply`) runs on that
+thread. Code that blocks or takes long there holds back the replies of every other query of the application. Move
+such work off that thread with `publishOn`, e.g. `.publishOn(Schedulers.boundedElastic())` before a blocking call.
+:::
+
 ## Example
 
 You can see a real example at [samples/async/async-sender-client](https://github.com/reactive-commons/reactive-commons-java/tree/master/samples/async/async-sender-client)

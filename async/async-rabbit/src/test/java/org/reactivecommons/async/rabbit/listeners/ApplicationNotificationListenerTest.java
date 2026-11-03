@@ -9,6 +9,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.QueueSpecification;
 
@@ -64,8 +65,8 @@ class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass
     class StubGenericMessageListener extends ApplicationNotificationListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "exchange", "queue", true, handlerResolver,
-                    messageConverter, discardNotifier, errorReporter);
+            super(new ListenerContext<>(reactiveMessageListener, handlerResolver, messageConverter, null, true,
+                    discardNotifier, errorReporter), "exchange", "queue");
         }
 
     }

@@ -6,6 +6,8 @@ import com.rabbitmq.client.Envelope;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
@@ -41,10 +43,10 @@ class ApplicationCommandListenerExecutorPathTest {
     private static final JsonMapper MAPPER = new JsonMapper();
 
     private final MessageConverter converter = spy(new RabbitJacksonMessageConverter(MAPPER));
-    private final ApplicationCommandListener listener = new ApplicationCommandListener(
-            new ReactiveMessageListener(mock(Receiver.class), mock(TopologyCreator.class)), "queue", null,
-            "directMessages", converter, false, false, false, -1, 1000, Optional.empty(),
-            mock(DiscardNotifier.class), mock(CustomReporter.class));
+    private final ApplicationCommandListener listener = new ApplicationCommandListener(new ListenerContext<>(
+            new ReactiveMessageListener(mock(Receiver.class), mock(TopologyCreator.class)), null, converter,
+            new RetryPolicy(false, -1, 1000), false, mock(DiscardNotifier.class), mock(CustomReporter.class)),
+            "queue", "directMessages", false, Optional.empty());
 
     @Test
     void commandPathIsItsNameAndTheBodyIsNotParsedIntoATree() {

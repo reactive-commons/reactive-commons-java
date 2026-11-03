@@ -1,7 +1,6 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.BindingSpecification;
 import reactor.rabbitmq.ExchangeSpecification;
@@ -12,7 +11,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 
-@Log
 /*
  Direct use of channel is temporal, remove when https://github.com/reactor/reactor-rabbitmq/issues/37 is fixed in 1.0
  .0.RC2
@@ -86,14 +84,11 @@ public class TopologyCreator implements AutoCloseable {
     }
 
     public Mono<AMQP.Queue.DeclareOk> declareQueue(String name, Optional<Integer> maxLengthBytesOpt) {
+        final Map<String, Object> args = new HashMap<>();
+        maxLengthBytesOpt.ifPresent(maxLengthBytes -> args.put("x-max-length-bytes", maxLengthBytes));
         QueueSpecification specification = QueueSpecification.queue(name)
-                .durable(true);
-        if (maxLengthBytesOpt.isPresent()) {
-            final Map<String, Object> args = new HashMap<>();
-            args.put("x-max-length-bytes", maxLengthBytesOpt.orElse(0));
-            specification = specification.arguments(args);
-        }
-
+                .durable(true)
+                .arguments(args);
         return declare(specification);
     }
 

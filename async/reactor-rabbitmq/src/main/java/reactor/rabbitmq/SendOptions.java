@@ -23,16 +23,13 @@ import reactor.core.publisher.SignalType;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
-import java.time.Duration;
 import java.util.function.BiConsumer;
 
 @Getter
 public class SendOptions {
 
-    private BiConsumer<Sender.SendContext, Exception> exceptionHandler = new ExceptionHandlers.RetrySendingExceptionHandler(
-            Duration.ofSeconds(10), Duration.ofMillis(200),
-            ExceptionHandlers.CONNECTION_RECOVERY_PREDICATE
-    );
+    private BiConsumer<Sender.SendContext, Exception> exceptionHandler =
+            new ExceptionHandlers.FailFastSendingExceptionHandler();
 
     private Integer maxInFlight;
     private boolean trackReturned;

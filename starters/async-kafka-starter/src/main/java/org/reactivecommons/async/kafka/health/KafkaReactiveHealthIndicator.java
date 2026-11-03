@@ -1,7 +1,7 @@
 package org.reactivecommons.async.kafka.health;
 
 import lombok.RequiredArgsConstructor;
-import lombok.extern.log4j.Log4j2;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.reactivecommons.async.starter.config.health.RCHealthIndicator;
@@ -10,7 +10,7 @@ import reactor.core.publisher.Mono;
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.DOMAIN;
 import static org.reactivecommons.async.starter.config.health.ReactiveCommonsHealthIndicator.VERSION;
 
-@Log4j2
+@Slf4j
 @RequiredArgsConstructor
 public class KafkaReactiveHealthIndicator extends RCHealthIndicator {
     private final String domain;

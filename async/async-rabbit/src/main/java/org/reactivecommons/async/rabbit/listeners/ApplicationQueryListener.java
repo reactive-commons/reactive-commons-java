@@ -2,15 +2,15 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import io.cloudevents.CloudEvent;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.QueryExecutor;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -25,7 +25,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
-import java.util.logging.Level;
 
 import static java.util.Optional.ofNullable;
 import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
@@ -34,30 +33,25 @@ import static org.reactivecommons.async.commons.Headers.REPLY_ID;
 import static org.reactivecommons.async.commons.Headers.REPLY_TIMEOUT_MILLIS;
 import static org.reactivecommons.async.commons.Headers.SERVED_QUERY_ID;
 
-@Log
+@Slf4j
 public class ApplicationQueryListener extends GenericMessageListener {
     private final MessageConverter converter;
     private final HandlerResolver handlerResolver;
     private final ReactiveMessageSender sender;
     private final String replyExchange;
     private final String directExchange;
-    private final boolean withDLQRetry;
-    private final int retryDelay;
+    private final RetryPolicy retryPolicy;
     private final Optional<Integer> maxLengthBytes;
     private final boolean discardTimeoutQueries;
 
 
-    public ApplicationQueryListener(ReactiveMessageListener listener, String queueName, HandlerResolver resolver,
-                                    ReactiveMessageSender sender, String directExchange, MessageConverter converter,
-                                    String replyExchange, boolean withDLQRetry, boolean createTopology, long maxRetries,
-                                    int retryDelay, Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries,
-                                    DiscardNotifier discardNotifier, CustomReporter errorReporter) {
-        super(queueName, listener, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "query", errorReporter);
-        this.retryDelay = retryDelay;
-        this.withDLQRetry = withDLQRetry;
-        this.converter = converter;
-        this.handlerResolver = resolver;
+    public ApplicationQueryListener(ListenerContext<ReactiveMessageListener> context, String queueName,
+                                    ReactiveMessageSender sender, String directExchange, String replyExchange,
+                                    Optional<Integer> maxLengthBytes, boolean discardTimeoutQueries) {
+        super(context, queueName, "query");
+        this.retryPolicy = context.retryPolicy();
+        this.converter = context.converter();
+        this.handlerResolver = context.resolver();
         this.sender = sender;
         this.replyExchange = replyExchange;
         this.directExchange = directExchange;
@@ -89,11 +83,12 @@ public class ApplicationQueryListener extends GenericMessageListener {
         return msj -> converter.readAsyncQuery(msj, handlerClass).getQueryData();
     }
 
+    @Override
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(directExchange).durable(true).type("direct")
         );
-        if (withDLQRetry) {
+        if (retryPolicy.withDLQRetry()) {
             final Mono<AMQP.Exchange.DeclareOk> declareExchangeDLQ = creator.declare(
                     ExchangeSpecification.exchange(directExchange + ".DLQ").durable(true).type("direct")
             );
@@ -101,7 +96,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
                     queueName, directExchange + ".DLQ", maxLengthBytes
             );
             final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
-                    queueName, directExchange, retryDelay, maxLengthBytes
+                    queueName, directExchange, retryPolicy.retryDelay(), maxLengthBytes
             );
             final Mono<AMQP.Queue.BindOk> binding = creator.bind(
                     BindingSpecification.binding(directExchange, queueName, queueName)
@@ -125,7 +120,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     }
 
     @Override
-    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, Instant initTime) {
+    protected Mono<AcknowledgableDelivery> handle(AcknowledgableDelivery msj, long initNanos) {
         AMQP.BasicProperties messageProperties = msj.getProperties();
         if (!canBeAnswered(messageProperties)) {
             // e.g. published by another client: running the handler is pointless, nobody can get its reply
@@ -134,16 +129,16 @@ public class ApplicationQueryListener extends GenericMessageListener {
         }
 
         if (!hasTimeoutMetadata(messageProperties) || !discardTimeoutQueries) {
-            return super.handle(msj, initTime);
+            return super.handle(msj, initNanos);
         }
 
         // Deferred: a failure computing the timeout must fail this message only, never the whole listener flux
         return Mono.defer(() -> replyDeadlineMillis(messageProperties)
-                .map(deadline -> handleWithDeadline(msj, initTime, deadline))
+                .map(deadline -> handleWithDeadline(msj, initNanos, deadline))
                 .orElseGet(() -> {
                     // counted here only: retryIsUseless parses the same header again when the query fails
                     metrics.recordInvalidTimeoutHeader();
-                    return super.handle(msj, initTime);
+                    return super.handle(msj, initNanos);
                 }));
     }
 
@@ -182,18 +177,18 @@ public class ApplicationQueryListener extends GenericMessageListener {
         try {
             return Optional.of(Long.parseLong(String.valueOf(header).trim()));
         } catch (NumberFormatException e) {
-            log.log(Level.WARNING, () -> "Ignoring invalid " + name + " header: " + header);
+            log.warn("Ignoring invalid {} header: {}", name, header);
             return Optional.empty();
         }
     }
 
-    private Mono<AcknowledgableDelivery> handleWithDeadline(AcknowledgableDelivery msj, Instant initTime,
+    private Mono<AcknowledgableDelivery> handleWithDeadline(AcknowledgableDelivery msj, long initNanos,
                                                             long replyDeadlineMillis) {
         long millisUntilTimeout = replyDeadlineMillis - currentTimestamp().toEpochMilli();
         String executorPath = getExecutorPath(msj);
 
         if (millisUntilTimeout > 0) {
-            return super.handle(msj, initTime)
+            return super.handle(msj, initNanos)
                     .timeout(Duration.ofMillis(millisUntilTimeout), buildTimeOutFallback(executorPath));
         }
 
@@ -228,7 +223,7 @@ public class ApplicationQueryListener extends GenericMessageListener {
     private Mono<AcknowledgableDelivery> buildTimeOutFallback(String executorPath) {
         return Mono.fromRunnable(() -> {
             metrics.recordQueryDiscardedByTimeout();
-            log.log(Level.WARNING, String.format("query with path %s discarded by timeout", executorPath));
+            log.warn("query with path {} discarded by timeout", executorPath);
         });
     }
 
@@ -256,8 +251,8 @@ public class ApplicationQueryListener extends GenericMessageListener {
             return sender.sendNoConfirm(response, replyExchange, replyID, headers, false)
                     .onErrorResume(replyError -> {
                         metrics.recordQueryReplyFailed();
-                        log.log(Level.WARNING, replyError, () -> "Reply to query " + correlationID
-                                + " could not be published, its caller will not receive it");
+                        log.warn("Reply to query {} could not be published, its caller will not receive it",
+                                correlationID, replyError);
                         return Mono.empty();
                     });
         });

@@ -20,6 +20,7 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
+import org.reactivecommons.async.rabbit.communications.SenderSettings;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.config.ConnectionFactoryProvider;
@@ -36,6 +37,7 @@ import reactor.rabbitmq.Receiver;
 import reactor.rabbitmq.ReceiverOptions;
 import reactor.rabbitmq.Sender;
 import reactor.rabbitmq.SenderOptions;
+import reactor.rabbitmq.Utils;
 import reactor.util.retry.Retry;
 
 import javax.net.ssl.KeyManagerFactory;
@@ -54,6 +56,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -174,13 +177,8 @@ public final class RabbitMQSetupUtils {
                 : Duration.ofSeconds(10);
         final ConnectionBlockedState blockedState = blockedState(provider.getConnectionFactory());
         return new ReactiveMessageSender(sender, props.getAppName(), converter, topologyCreator,
-                props.getMandatory(), unroutableMessageNotifier, sendTimeout,
-                props.getHandOverPoolSize(), props.getHandOverQueueCapacity(),
-                blockedState, meterRegistry, domain, props.getMaxMessageSize());
-    }
-
-    public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props) {
-        return createMessageListener(provider, props, null, null);
+                unroutableMessageNotifier, new SenderSettings(props.getMandatory(), sendTimeout,
+                props.getHandOverQueueCapacity(), props.getMaxMessageSize(), blockedState, meterRegistry, domain));
     }
 
     public static ReactiveMessageListener createMessageListener(ConnectionFactoryProvider provider, AsyncProps props,
@@ -248,19 +246,22 @@ public final class RabbitMQSetupUtils {
         return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role), key -> {
             final ConnectionFactory f = key.factory();
             log.info("Creating {} connection mono to RabbitMQ Broker in host '{}'", role.kind, f.getHost());
+            final AtomicInteger failedAttempts = new AtomicInteger();
             return Mono.fromCallable(() -> f.newConnection(
                             appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
                     ))
                     // opening a connection blocks (up to the connection timeout): neither on the thread that
                     // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
                     .subscribeOn(Schedulers.boundedElastic())
-                    .doOnError(err -> log.error(
-                            "Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
-                            f.getHost(), err
-                    ))
+                    .doOnError(err -> logConnectionFailure(f, role, failedAttempts.incrementAndGet(), err))
                     .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
                             .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
                     .doOnNext(connection -> {
+                        final int failed = failedAttempts.getAndSet(0);
+                        if (failed > 0) {
+                            log.info("{} connection to RabbitMQ Broker in host '{}' established after {} failed "
+                                    + "attempts", role.kind, f.getHost(), failed);
+                        }
                         ESTABLISHED_CONNECTIONS.put(key, connection);
                         if (role == ConnectionRole.SENDER) {
                             final ConnectionBlockedState blockedState = blockedState(f);
@@ -269,8 +270,41 @@ public final class RabbitMQSetupUtils {
                             connection.addShutdownListener(cause -> blockedState.onConnectionShutdown());
                         }
                     })
-                    .cache();
+                    // a connection the client will not re-open is replaced by a new one the next time it is used (e.g.
+                    // when a listener restarts or a publishing flow is re-subscribed), unless the application released
+                    // its connections meanwhile
+                    .cacheInvalidateIf(connection -> CONNECTION_CACHE.containsKey(key)
+                            && closedForGood(connection, role));
         });
+    }
+
+    /**
+     * The attempts are retried every few seconds for as long as the broker refuses the connection: only the first
+     * failure is logged as an error, with its stack trace, the next ones at debug level.
+     */
+    private static void logConnectionFailure(ConnectionFactory factory, ConnectionRole role, int attempt,
+                                             Throwable error) {
+        if (attempt == 1) {
+            log.error("Error creating connection to RabbitMQ Broker in host '{}'. Starting retry process...",
+                    factory.getHost(), error);
+        } else {
+            log.debug("Error creating {} connection to RabbitMQ Broker in host '{}' (attempt {}), retrying: {}",
+                    role.kind, factory.getHost(), attempt, error.toString());
+        }
+    }
+
+    /**
+     * Whether the connection is closed and the client will not re-open it (see {@link Utils#isClosedForGood}), e.g.
+     * because a {@link ConnectionFactoryCustomizer} disabled its automatic recovery.
+     */
+    private static boolean closedForGood(Connection connection, ConnectionRole role) {
+        final boolean closedForGood = Utils.isClosedForGood(connection);
+        if (closedForGood) {
+            log.warn("The {} connection to RabbitMQ is closed and will not be recovered ({}): opening a new one",
+                    role.kind, connection.getCloseReason() != null ? connection.getCloseReason().getMessage()
+                            : "unknown reason");
+        }
+        return closedForGood;
     }
 
     /**

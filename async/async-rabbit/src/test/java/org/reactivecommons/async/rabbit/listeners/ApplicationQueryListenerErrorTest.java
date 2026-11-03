@@ -6,6 +6,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import reactor.core.publisher.Mono;
 
@@ -51,9 +53,9 @@ class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuperClass {
     class StubGenericMessageListener extends ApplicationQueryListener {
 
         public StubGenericMessageListener(HandlerResolver handlerResolver) {
-            super(reactiveMessageListener, "queueName", handlerResolver, mock(ReactiveMessageSender.class),
-                    "exchange", messageConverter, "exchange", true, true, 10L,
-                    100, Optional.of(1), true, discardNotifier, errorReporter);
+            super(new ListenerContext<>(reactiveMessageListener, handlerResolver, messageConverter,
+                    new RetryPolicy(true, 10L, 100), true, discardNotifier, errorReporter), "queueName",
+                    mock(ReactiveMessageSender.class), "exchange", "exchange", Optional.of(1), true);
         }
 
     }

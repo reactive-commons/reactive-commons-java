@@ -4,7 +4,7 @@ import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.communications.Message;
@@ -15,12 +15,10 @@ import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 
-import java.util.logging.Level;
 
-import static java.lang.String.format;
 import static org.reactivecommons.async.commons.converters.json.JacksonMessageConverter.APPLICATION_CLOUD_EVENT_JSON;
 
-@Log
+@Slf4j
 @RequiredArgsConstructor
 public class DLQDiscardNotifier implements DiscardNotifier {
     private final DomainEventBus eventBus;
@@ -85,13 +83,13 @@ public class DLQDiscardNotifier implements DiscardNotifier {
         } catch (Exception ex) {
             bodyString = "Opaque binary Message, unable to decode: " + ex.getMessage();
         }
-        log.log(Level.SEVERE, format("Unable to interpret discarded message: %s", bodyString), e);
+        log.error("Unable to interpret discarded message: {}", bodyString, e);
         DomainEvent<String> event = new DomainEvent<>("corruptData.dlq", "corruptData", bodyString);
         return Mono.from(eventBus.emit(event));
     }
 
     private Mono<Void> onError(Throwable e) {
-        log.log(Level.SEVERE, "FATAL!! unable to notify Discard of message!!", e);
+        log.error("FATAL!! unable to notify Discard of message!!", e);
         return Mono.empty();
     }
 

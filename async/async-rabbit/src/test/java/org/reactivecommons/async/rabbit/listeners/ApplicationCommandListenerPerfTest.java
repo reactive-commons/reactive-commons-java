@@ -15,6 +15,8 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
@@ -66,13 +68,12 @@ class ApplicationCommandListenerPerfTest {
     );
     private ReactiveMessageListener reactiveMessageListener;
 
-    private static BigInteger makeHardWork() {
+    private static void makeHardWork() {
         final long number = ThreadLocalRandom.current().nextLong(100) + 2700;
         BigInteger fact = new BigInteger("1");
         for (long i = 1; i <= number; i++) {
             fact = fact.multiply(BigInteger.valueOf(i));
         }
-        return fact;
     }
 
     @BeforeEach
@@ -99,8 +100,8 @@ class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10,
-                discardNotifier, "command", handlerResolver, messageConverter, errorReporter
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+                discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(MESSAGE_COUNT);
         TestUtils.instructSafeReceiverMock(receiver, messageFlux);
@@ -130,8 +131,8 @@ class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10,
-                discardNotifier, "command", handlerResolver, messageConverter, errorReporter
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+                discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(MESSAGE_COUNT);
         TestUtils.instructSafeReceiverMock(receiver, messageFlux);
@@ -188,8 +189,8 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 250, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10,
-                discardNotifier, "command", handlerResolver, messageConverter, errorReporter
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+                discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 
@@ -218,8 +219,8 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10,
-                discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+                discardNotifier, handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 
         TestUtils.instructSafeReceiverMock(receiver, messageFlux);
@@ -247,8 +248,8 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener, true, 10,
-                discardNotifier, "command", handlerResolver, messageConverter, errorReporter);
+        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+                discardNotifier, handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 
         TestUtils.instructSafeReceiverMock(receiver, messageFlux);
@@ -311,32 +312,14 @@ class ApplicationCommandListenerPerfTest {
         return Flux.fromIterable(new ArrayList<>(list));
     }
 
-    private AMQP.BasicProperties createProps() {
-        return new AMQP.BasicProperties(
-                "application/json",
-                "UTF-8",
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "3242",
-                null,
-                null,
-                null,
-                null,
-                null);
-    }
-
     static class StubGenericMessageListener extends ApplicationCommandListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                          long maxRetries, DiscardNotifier discardNotifier, String objectType,
+        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener,
+                                          DiscardNotifier discardNotifier,
                                           HandlerResolver handlerResolver, MessageConverter messageConverter,
                                           CustomReporter errorReporter) {
-            super(listener, queueName, handlerResolver, "directExchange", messageConverter, true, false, false, 10, 10,
-                    Optional.empty(), discardNotifier, errorReporter);
+            super(new ListenerContext<>(listener, handlerResolver, messageConverter, new RetryPolicy(true, 10, 10),
+                    false, discardNotifier, errorReporter), queueName, "directExchange", false, Optional.empty());
         }
 
     }

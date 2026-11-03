@@ -41,6 +41,7 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -67,7 +68,7 @@ public class Sender implements AutoCloseable {
 
     private static final Function<Connection, Channel> CHANNEL_CREATION_FUNCTION = conn -> {
         try {
-            return conn.createChannel();
+            return Utils.createChannel(conn);
         } catch (IOException e) {
             throw new RabbitFluxException("Error while creating channel", e);
         }
@@ -157,7 +158,10 @@ public class Sender implements AutoCloseable {
                 ? createScheduler("rabbitmq-sender-resource-creation")
                 : options.getResourceManagementScheduler();
         this.resourceManagementChannelMono = options.getResourceManagementChannelMono() == null
-                ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION).transform(this::cache)
+                // replaced by a proxy on the connection the Mono then gives once the client will not re-open the
+                // connection of the current one
+                ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION)
+                        .cacheInvalidateIf(proxy -> Utils.isClosedForGood(proxy.getConnection()))
                 : options.getResourceManagementChannelMono();
         if (options.getConnectionClosingTimeout() != null && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
             this.connectionClosingTimeout = (int) options.getConnectionClosingTimeout().toMillis();
@@ -206,7 +210,7 @@ public class Sender implements AutoCloseable {
                             }
                         })
                         .doOnError(e -> LOGGER.warn("Send failed with exception", e))
-                        .doFinally(st -> closeHandler.accept(st, channel))
+                        .doFinally(st -> closeChannel(closeHandler, st, channel))
         ).then();
     }
 
@@ -237,18 +241,27 @@ public class Sender implements AutoCloseable {
                 throw new RabbitFluxException("Error while setting publisher confirms on channel", e);
             }
             return channel;
-        }).flatMapMany(channel -> new PublishConfirmOperator<>(messages, channel, sendOptions).doFinally(signalType -> {
-            if (signalType == SignalType.ON_ERROR) {
-                closeHandler.accept(signalType, channel);
-            } else {
-                channelCloseThreadPool.execute(() -> closeHandler.accept(signalType, channel));
-            }
-        }));
+        }).flatMapMany(channel -> new PublishConfirmOperator<>(messages, channel, sendOptions)
+                .doFinally(signalType -> closeChannel(closeHandler, signalType, channel)));
 
         if (sendOptions.getMaxInFlight() != null) {
             result = result.publishOn(sendOptions.getScheduler(), sendOptions.getMaxInFlight());
         }
         return result;
+    }
+
+    /**
+     * Closes the channel of a terminated flow on {@link #channelCloseThreadPool}, whatever the signal: a flow can be
+     * terminated by the thread that reads the connection (e.g. a confirmation or a returned message that fails it), on
+     * which the close cannot complete, since that thread would have to read the answer of the broker. Once the sender
+     * is closed, on the calling thread.
+     */
+    private void closeChannel(BiConsumer<SignalType, Channel> closeHandler, SignalType signal, Channel channel) {
+        try {
+            channelCloseThreadPool.execute(() -> closeHandler.accept(signal, channel));
+        } catch (RejectedExecutionException e) {
+            closeHandler.accept(signal, channel);
+        }
     }
 
     // package-protected for testing

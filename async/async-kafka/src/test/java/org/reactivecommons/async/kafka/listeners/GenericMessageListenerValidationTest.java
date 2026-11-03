@@ -1,5 +1,9 @@
 package org.reactivecommons.async.kafka.listeners;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.classic.spi.ThrowableProxy;
+import ch.qos.logback.core.read.ListAppender;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
@@ -13,18 +17,15 @@ import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
 import reactor.test.StepVerifier;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.logging.Handler;
-import java.util.logging.LogRecord;
-import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -98,7 +99,7 @@ class GenericMessageListenerValidationTest {
         SchemaValidationException failure = new SchemaValidationException("invalid payload");
         doThrow(failure).when(schemaValidator).validateInbound(anyString(), any(), any());
 
-        List<LogRecord> whileHandling = recordLogs(() ->
+        List<ILoggingEvent> whileHandling = recordLogs(() ->
                 StepVerifier.create(listener.handle(receiverRecord, Instant.now()))
                         .expectError(SchemaValidationException.class)
                         .verify());
@@ -106,40 +107,29 @@ class GenericMessageListenerValidationTest {
         // handle() only classifies the failure: reporting it is the job of the fallback, which also logs the
         // headers, the body and the strategy applied, so the stack trace is not written twice per record
         assertThat(whileHandling)
-                .noneMatch(logRecord -> logRecord.getThrown() instanceof SchemaValidationException)
-                .noneMatch(logRecord -> logRecord.getMessage().contains("Outer error protection"));
+                .noneMatch(event -> thrown(event) instanceof SchemaValidationException)
+                .noneMatch(event -> event.getFormattedMessage().contains("Outer error protection"));
 
-        List<LogRecord> whileDiscarding = recordLogs(() ->
+        List<ILoggingEvent> whileDiscarding = recordLogs(() ->
                 listener.logError(failure, receiverRecord, FallbackStrategy.DEFINITIVE_DISCARD));
 
-        assertThat(whileDiscarding).filteredOn(logRecord -> logRecord.getThrown() == failure).hasSize(1);
+        assertThat(whileDiscarding).filteredOn(event -> thrown(event) == failure).hasSize(1);
     }
 
-    private List<LogRecord> recordLogs(Runnable action) {
-        List<LogRecord> records = new ArrayList<>();
-        Logger logger = Logger.getLogger(GenericMessageListener.class.getName());
-        Handler collector = new Handler() {
-            @Override
-            public void publish(LogRecord logRecord) {
-                records.add(logRecord);
-            }
-
-            @Override
-            public void flush() {
-                // the records are kept in memory
-            }
-
-            @Override
-            public void close() {
-                // nothing to release
-            }
-        };
-        logger.addHandler(collector);
+    private List<ILoggingEvent> recordLogs(Runnable action) {
+        Logger logger = (Logger) LoggerFactory.getLogger(GenericMessageListener.class);
+        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        logged.start();
+        logger.addAppender(logged);
         try {
             action.run();
         } finally {
-            logger.removeHandler(collector);
+            logger.detachAppender(logged);
         }
-        return records;
+        return logged.list;
+    }
+
+    private static Throwable thrown(ILoggingEvent event) {
+        return event.getThrowableProxy() instanceof ThrowableProxy proxy ? proxy.getThrowable() : null;
     }
 }

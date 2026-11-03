@@ -1,5 +1,8 @@
 package org.reactivecommons.async.rabbit;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -9,9 +12,11 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
+import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -74,7 +79,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             assertThat(state.blockedReason()).isNotBlank();
             Throwable error = catchThrowable(() -> emit(bus));
             assertThat(error).as("first publish after the alarm: %s", firstError)
-                    .hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
+                    .isInstanceOf(SendFailureBrokerBlockedException.class);
             awaitFor("health down once the grace elapses",
                     () -> provider.healthCheck().block().status() == RCHealth.Status.DOWN);
 
@@ -105,9 +110,9 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
             Throwable next = catchThrowable(() -> emit(bus));
             long nextMs = Duration.ofNanos(System.nanoTime() - t1).toMillis();
 
-            assertThat(first).hasCauseInstanceOf(SendConfirmUnknownException.class);
+            assertThat(first).isInstanceOf(SendConfirmUnknownException.class);
             assertThat(firstMs).isLessThan(SEND_TIMEOUT.plusSeconds(2).toMillis());
-            assertThat(next).hasCauseInstanceOf(SendFailureBrokerBlockedException.class);
+            assertThat(next).isInstanceOf(SendFailureBrokerBlockedException.class);
             assertThat(nextMs).as("fail-fast duration").isLessThan(1_000);
             rabbitmqctl("set_vm_memory_high_watermark", "0.4");
         }
@@ -128,25 +133,17 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         awaitFor("connection.blocked from the broker", state::isBlocked);
 
         List<String> aborts = new CopyOnWriteArrayList<>();
-        java.util.logging.Logger senderLog = java.util.logging.Logger.getLogger(
-                org.reactivecommons.async.rabbit.communications.ReactiveMessageSender.class.getName());
-        java.util.logging.Handler abortWarnings = new java.util.logging.Handler() {
+        Logger senderLog = (Logger) LoggerFactory.getLogger(ReactiveMessageSender.class);
+        AppenderBase<ILoggingEvent> abortWarnings = new AppenderBase<>() {
             @Override
-            public void publish(java.util.logging.LogRecord logRecord) {
-                if (logRecord.getMessage() != null && logRecord.getMessage().contains("aborting the connection")) {
-                    aborts.add(logRecord.getMessage());
+            protected void append(ILoggingEvent event) {
+                if (event.getFormattedMessage().contains("aborting the connection")) {
+                    aborts.add(event.getFormattedMessage());
                 }
             }
-
-            @Override
-            public void flush() {
-            }
-
-            @Override
-            public void close() {
-            }
         };
-        senderLog.addHandler(abortWarnings);
+        abortWarnings.start();
+        senderLog.addAppender(abortWarnings);
         long t0 = System.nanoTime();
         Thread closer = new Thread(context::close, "context-closer");
         closer.start();
@@ -155,7 +152,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         long closeMs = Duration.ofNanos(System.nanoTime() - t0).toMillis();
         rabbitmqctl("set_vm_memory_high_watermark", "0.4"); // releases the hung close, if any
         closer.join(Duration.ofSeconds(30).toMillis());
-        senderLog.removeHandler(abortWarnings);
+        senderLog.detachAppender(abortWarnings);
         System.out.println("[CLOSE] context closed while blocked in " + closeMs + " ms, abort warnings: "
                 + aborts.size());
 
@@ -246,9 +243,7 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
                     .flatMap(i -> Mono.from(bus.emit(new DomainEvent<>("scenario.event",
                                     UUID.randomUUID().toString(), Map.of("blob", blob))))
                             .thenReturn("ok")
-                            // the event bus wraps the failure of the sender
-                            .onErrorResume(e -> Mono.just((e.getCause() != null ? e.getCause() : e).getClass()
-                                    .getSimpleName()))
+                            .onErrorResume(e -> Mono.just(e.getClass().getSimpleName()))
                             .elapsed(), messages)
                     .collectList()
                     .block(Duration.ofSeconds(60));

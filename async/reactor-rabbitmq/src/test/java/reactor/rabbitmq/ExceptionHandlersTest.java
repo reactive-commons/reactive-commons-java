@@ -119,6 +119,48 @@ class ExceptionHandlersTest {
         assertEquals(2, counter.get());
     }
 
+    @Test
+    void failFastAcknowledgmentHandlerSkipsTheAcknowledgmentOfAClosedChannel() {
+        var handler = new ExceptionHandlers.FailFastAcknowledgmentExceptionHandler();
+        var context = new Receiver.AcknowledgmentContext(null, delivery -> {
+            throw new AssertionError("not retried");
+        });
+        assertThatNoException().isThrownBy(() -> handler.accept(context,
+                new RuntimeException(new ShutdownSignalException(true, false, null, null))));
+    }
+
+    @Test
+    void failFastAcknowledgmentHandlerFailsOnAnyOtherError() {
+        var handler = new ExceptionHandlers.FailFastAcknowledgmentExceptionHandler();
+        var context = new Receiver.AcknowledgmentContext(null, delivery -> {
+        });
+        var error = new IllegalStateException("broken");
+        assertThatThrownBy(() -> handler.accept(context, error))
+                .isInstanceOf(RabbitFluxException.class)
+                .hasCauseInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void failFastSendingHandlerReportsAPublicationDuringARecoveryAsNotPublished() {
+        var handler = new ExceptionHandlers.FailFastSendingExceptionHandler();
+        var context = sendContext(() -> {
+            throw new AssertionError("not retried");
+        });
+        var recovery = new ShutdownSignalException(true, false, null, null);
+        assertThatThrownBy(() -> handler.accept(context, recovery))
+                .isInstanceOf(RabbitFluxRetryTimeoutException.class);
+    }
+
+    @Test
+    void failFastSendingHandlerFailsOnAnyOtherError() {
+        var handler = new ExceptionHandlers.FailFastSendingExceptionHandler();
+        var context = sendContext(() -> null);
+        var error = new IllegalStateException("broken");
+        assertThatThrownBy(() -> handler.accept(context, error))
+                .isInstanceOf(RabbitFluxException.class)
+                .isNotInstanceOf(RabbitFluxRetryTimeoutException.class);
+    }
+
     private Sender.SendContext<OutboundMessage> sendContext(Callable<Void> callable) {
         return new Sender.SendContext<>(null, null) {
             @Override

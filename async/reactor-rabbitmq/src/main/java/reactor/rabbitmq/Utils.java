@@ -18,11 +18,15 @@ package reactor.rabbitmq;
 
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
+import com.rabbitmq.client.MissedHeartbeatException;
 import com.rabbitmq.client.RecoverableChannel;
 import com.rabbitmq.client.RecoverableConnection;
+import com.rabbitmq.client.ShutdownSignalException;
 import reactor.core.publisher.Mono;
 
+import java.io.IOException;
 import java.time.Duration;
+import java.util.Optional;
 
 public abstract class Utils {
 
@@ -33,12 +37,38 @@ public abstract class Utils {
                 () -> Duration.ZERO);
     }
 
+    /**
+     * Whether the connection is closed and the client will not re-open it: its automatic recovery is disabled, or the
+     * application closed it, which the client never recovers.
+     */
+    public static boolean isClosedForGood(Connection connection) {
+        if (connection.isOpen()) {
+            return false;
+        }
+        if (!isRecoverable(connection)) {
+            return true;
+        }
+        final ShutdownSignalException reason = connection.getCloseReason();
+        return reason != null && reason.isInitiatedByApplication()
+                && !(reason.getCause() instanceof MissedHeartbeatException);
+    }
+
     static boolean isRecoverable(Connection connection) {
         return connection instanceof RecoverableConnection;
     }
 
     static boolean isRecoverable(Channel channel) {
         return channel instanceof RecoverableChannel;
+    }
+
+    /**
+     * Opens a channel on the connection. The client opens none (it returns {@code null}) once the connection has every
+     * channel it may open, its {@code channel_max}: that fails here, saying why, instead of further on with a
+     * {@link NullPointerException}.
+     */
+    static Channel createChannel(Connection connection) throws IOException {
+        return Optional.ofNullable(connection.createChannel())
+                .orElseThrow(() -> new IOException("No channel available: the connection reached its channel_max"));
     }
 
     @FunctionalInterface

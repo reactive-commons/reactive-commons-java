@@ -5,6 +5,8 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -48,15 +50,7 @@ public record KafkaBrokerProvider(String domain,
     @Override
     public void listenDomainEvents(HandlerResolver resolver) {
         if (!props.getDomain().isIgnoreThisListener() && !resolver.getEventListeners().isEmpty()) {
-            ApplicationEventListener eventListener = new ApplicationEventListener(receiver,
-                    resolver,
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    discardNotifier,
-                    errorReporter,
+            ApplicationEventListener eventListener = new ApplicationEventListener(listenerContext(resolver),
                     props.resolveEventsGroupId());
             eventListener.startListener(topologyCreator);
         }
@@ -65,16 +59,8 @@ public record KafkaBrokerProvider(String domain,
     @Override
     public void listenNotificationEvents(HandlerResolver resolver) {
         if (!resolver.getNotificationListeners().isEmpty()) {
-            ApplicationNotificationsListener notificationEventListener = new ApplicationNotificationsListener(receiver,
-                    resolver,
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    discardNotifier,
-                    errorReporter,
-                    props.getAppName());
+            ApplicationNotificationsListener notificationEventListener = new ApplicationNotificationsListener(
+                    listenerContext(resolver), props.getAppName());
             notificationEventListener.startListener(topologyCreator);
         }
     }
@@ -97,15 +83,8 @@ public record KafkaBrokerProvider(String domain,
     @Override
     public void listenTopics(HandlerResolver resolver) {
         resolver.getTopicListeners().values().forEach(registeredListener -> {
-            ApplicationTopicListener topicListener = new ApplicationTopicListener(receiver,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    registeredListener,
-                    discardNotifier,
-                    errorReporter,
-                    props.resolveTopicListenerGroupId());
+            ApplicationTopicListener topicListener = new ApplicationTopicListener(listenerContext(resolver),
+                    registeredListener, props.resolveTopicListenerGroupId());
             topicListener.startListener(topologyCreator);
         });
     }
@@ -118,5 +97,14 @@ public record KafkaBrokerProvider(String domain,
     @Override
     public Mono<RCHealth> healthCheck() {
         return healthIndicator.health();
+    }
+
+    /**
+     * What the listeners of this domain share, with the retry policy and the topology setting of its properties.
+     */
+    private ListenerContext<ReactiveMessageListener> listenerContext(HandlerResolver resolver) {
+        return new ListenerContext<>(receiver, resolver, converter,
+                new RetryPolicy(props.getWithDLQRetry(), props.getMaxRetries(), props.getRetryDelay()),
+                props.getCreateTopology(), discardNotifier, errorReporter);
     }
 }

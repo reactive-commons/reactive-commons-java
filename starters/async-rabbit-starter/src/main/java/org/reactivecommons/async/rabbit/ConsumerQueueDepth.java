@@ -6,7 +6,7 @@ import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.listeners.SubscriberStatus;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -22,7 +22,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 
 /**
  * Polls the broker for the depth (ready messages) of the queues this application consumes and exports it as
@@ -39,7 +38,7 @@ import java.util.logging.Level;
  * logged: a broker failure never affects consumption. Only this application's queues are polled; the queues that
  * stop being consumed are removed from the registry.
  */
-@Log
+@Slf4j
 public final class ConsumerQueueDepth implements AutoCloseable {
 
     public static final Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(10);
@@ -128,7 +127,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
     private Connection connection() {
         if (connectionRequested.compareAndSet(false, true)) {
             connectionSubscription = listenerConnection.subscribe(established -> this.connection = established,
-                    error -> log.log(Level.FINE, error, () -> "Queue depth: no listener connection"));
+                    error -> log.debug("Queue depth: no listener connection", error));
         }
         return connection;
     }
@@ -156,7 +155,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
             try {
                 toClose.close();
             } catch (Exception e) {
-                log.log(Level.FINE, e, () -> "Could not close the queue depth channel");
+                log.debug("Could not close the queue depth channel", e);
             }
         }
     }
@@ -174,7 +173,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
                     .getId();
         } catch (Exception e) {
             // never let a mis-wired registry break the polling; metrics are best-effort
-            log.log(Level.WARNING, e, () -> "Could not register " + METRIC);
+            log.warn("Could not register {}", METRIC, e);
         }
         return new QueueProbe(count, id);
     }
@@ -192,7 +191,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
                 try {
                     registry.remove(id);
                 } catch (Exception e) {
-                    log.log(Level.FINE, e, () -> "Could not remove the queue depth gauge of " + entry.getKey());
+                    log.debug("Could not remove the queue depth gauge of {}", entry.getKey(), e);
                 }
             }
         }
@@ -200,10 +199,10 @@ public final class ConsumerQueueDepth implements AutoCloseable {
 
     private void fail(Throwable error) {
         if (warned.compareAndSet(false, true)) {
-            log.log(Level.WARNING, error, () -> "Could not read the depth of the queues of domain " + domain
-                    + ": the gauge will read NaN until the broker answers");
+            log.warn("Could not read the depth of the queues of domain {}: the gauge will read NaN until the broker "
+                    + "answers", domain, error);
         } else {
-            log.log(Level.FINE, error, () -> "Could not read the depth of the queues of domain " + domain);
+            log.debug("Could not read the depth of the queues of domain {}", domain, error);
         }
     }
 
@@ -228,7 +227,7 @@ public final class ConsumerQueueDepth implements AutoCloseable {
                 try {
                     registry.remove(probe.id());
                 } catch (Exception e) {
-                    log.log(Level.FINE, e, () -> "Could not remove the queue depth gauge");
+                    log.debug("Could not remove the queue depth gauge", e);
                 }
             }
         });

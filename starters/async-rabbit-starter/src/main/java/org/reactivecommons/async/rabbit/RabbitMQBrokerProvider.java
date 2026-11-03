@@ -1,11 +1,14 @@
 package org.reactivecommons.async.rabbit;
 
 import io.micrometer.core.instrument.MeterRegistry;
-import lombok.extern.java.Log;
+import lombok.Getter;
+import lombok.experimental.Accessors;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
@@ -32,7 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 import static reactor.rabbitmq.ExchangeSpecification.exchange;
 
-@Log
+@Accessors(fluent = true)
 public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
 
     /**
@@ -43,6 +46,7 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     static final Duration DRAIN_TIMEOUT = Duration.ofSeconds(10);
 
     private final String domain;
+    @Getter
     private final AsyncProps props;
     private final BrokerConfig config;
     private final ReactiveReplyRouter router;
@@ -50,8 +54,11 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final MeterRegistry meterRegistry;
     private final CustomReporter errorReporter;
     private final RabbitReactiveHealthIndicator healthIndicator;
+    @Getter
     private final ReactiveMessageListener receiver;
+    @Getter
     private final ReactiveMessageSender sender;
+    @Getter
     private final DiscardNotifier discardNotifier;
     private final ConsumerQueueDepth queueDepth;
     private final Runnable releaseConnections;
@@ -62,92 +69,41 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     private final List<ApplicationReplyListener> replyListeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean listeningReplies = new AtomicBoolean();
 
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier) {
-        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
-                sender, discardNotifier, null);
+    /**
+     * What the provider uses to publish, consume and report on the connections of its domain.
+     *
+     * @param queueDepth reports the depth of the queues the listeners consume from; none when {@code null}
+     */
+    public record Components(ReactiveReplyRouter router, RabbitJacksonMessageConverter converter,
+                             MeterRegistry meterRegistry, CustomReporter errorReporter,
+                             RabbitReactiveHealthIndicator healthIndicator, ReactiveMessageListener receiver,
+                             ReactiveMessageSender sender, DiscardNotifier discardNotifier,
+                             ConsumerQueueDepth queueDepth) {
     }
 
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth) {
-        this(domain, props, config, router, converter, meterRegistry, errorReporter, healthIndicator, receiver,
-                sender, discardNotifier, queueDepth, () -> {
-                });
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, Components components) {
+        this(domain, props, config, components, () -> {
+        });
     }
 
     /**
      * @param releaseConnections run once the provider is closed, to release the connections it used
      */
-    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, ReactiveReplyRouter router,
-                                  RabbitJacksonMessageConverter converter, MeterRegistry meterRegistry,
-                                  CustomReporter errorReporter, RabbitReactiveHealthIndicator healthIndicator,
-                                  ReactiveMessageListener receiver, ReactiveMessageSender sender,
-                                  DiscardNotifier discardNotifier, ConsumerQueueDepth queueDepth,
+    public RabbitMQBrokerProvider(String domain, AsyncProps props, BrokerConfig config, Components components,
                                   Runnable releaseConnections) {
         this.releaseConnections = releaseConnections;
         this.domain = domain;
         this.props = props;
         this.config = config;
-        this.router = router;
-        this.converter = converter;
-        this.meterRegistry = meterRegistry;
-        this.errorReporter = errorReporter;
-        this.healthIndicator = healthIndicator;
-        this.receiver = receiver;
-        this.sender = sender;
-        this.discardNotifier = discardNotifier;
-        this.queueDepth = queueDepth;
-    }
-
-    public String domain() {
-        return domain;
-    }
-
-    @Override
-    public AsyncProps props() {
-        return props;
-    }
-
-    public BrokerConfig config() {
-        return config;
-    }
-
-    public ReactiveReplyRouter router() {
-        return router;
-    }
-
-    public RabbitJacksonMessageConverter converter() {
-        return converter;
-    }
-
-    public MeterRegistry meterRegistry() {
-        return meterRegistry;
-    }
-
-    public CustomReporter errorReporter() {
-        return errorReporter;
-    }
-
-    public RabbitReactiveHealthIndicator healthIndicator() {
-        return healthIndicator;
-    }
-
-    public ReactiveMessageListener receiver() {
-        return receiver;
-    }
-
-    public ReactiveMessageSender sender() {
-        return sender;
-    }
-
-    public DiscardNotifier discardNotifier() {
-        return discardNotifier;
+        this.router = components.router();
+        this.converter = components.converter();
+        this.meterRegistry = components.meterRegistry();
+        this.errorReporter = components.errorReporter();
+        this.healthIndicator = components.healthIndicator();
+        this.receiver = components.receiver();
+        this.sender = components.sender();
+        this.discardNotifier = components.discardNotifier();
+        this.queueDepth = components.queueDepth();
     }
 
     @Override
@@ -172,18 +128,10 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public void listenDomainEvents(HandlerResolver resolver) {
         if (!props.getDomain().isIgnoreThisListener()) {
-            final ApplicationEventListener listener = new ApplicationEventListener(receiver,
+            final ApplicationEventListener listener = new ApplicationEventListener(listenerContext(resolver),
                     props.getBrokerConfigProps().getEventsQueue(),
                     props.getBrokerConfigProps().getDomainEventsExchangeName(),
-                    resolver,
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
                     props.getDomain().getEvents().getMaxLengthBytes(),
-                    discardNotifier,
-                    errorReporter,
                     props.getAppName());
             register(listener);
         }
@@ -192,14 +140,8 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     @Override
     public void listenQueues(HandlerResolver resolver) {
         resolver.getQueueListeners().values().forEach(registeredQueueListener -> {
-            final ApplicationQueueListener listener = new ApplicationQueueListener(receiver,
-                    props.getWithDLQRetry(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    registeredQueueListener,
-                    discardNotifier,
-                    errorReporter
-            );
+            final ApplicationQueueListener listener = new ApplicationQueueListener(listenerContext(resolver),
+                    registeredQueueListener);
             register(listener);
         });
     }
@@ -213,14 +155,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenNotificationEvents(HandlerResolver resolver) {
         if (resolver.hasNotificationListeners()) {
             final ApplicationNotificationListener listener = new ApplicationNotificationListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getDomainEventsExchangeName(),
-                    props.getBrokerConfigProps().getNotificationsQueue(),
-                    props.getCreateTopology(),
-                    resolver,
-                    converter,
-                    discardNotifier,
-                    errorReporter);
+                    props.getBrokerConfigProps().getNotificationsQueue());
             register(listener);
         }
     }
@@ -229,19 +166,11 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenCommands(HandlerResolver resolver) {
         if (resolver.hasCommandHandlers()) {
             ApplicationCommandListener commandListener = new ApplicationCommandListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getCommandsQueue(),
-                    resolver,
                     props.getDirect().getExchange(),
-                    converter,
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
                     props.getDelayedCommands(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
-                    props.getDirect().getMaxLengthBytes(),
-                    discardNotifier,
-                    errorReporter);
+                    props.getDirect().getMaxLengthBytes());
 
             register(commandListener);
         }
@@ -251,24 +180,25 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
     public void listenQueries(HandlerResolver resolver) {
         if (resolver.hasQueryHandlers()) {
             final ApplicationQueryListener listener = new ApplicationQueryListener(
-                    receiver,
+                    listenerContext(resolver),
                     props.getBrokerConfigProps().getQueriesQueue(),
-                    resolver,
                     sender,
                     props.getBrokerConfigProps().getDirectMessagesExchangeName(),
-                    converter,
                     props.getBrokerConfigProps().getGlobalReplyExchangeName(),
-                    props.getWithDLQRetry(),
-                    props.getCreateTopology(),
-                    props.getMaxRetries(),
-                    props.getRetryDelay(),
                     props.getGlobal().getMaxLengthBytes(),
-                    props.getDirect().isDiscardTimeoutQueries(),
-                    discardNotifier,
-                    errorReporter);
+                    props.getDirect().isDiscardTimeoutQueries());
 
             register(listener);
         }
+    }
+
+    /**
+     * What the listeners of this domain share, with the retry policy and the topology setting of its properties.
+     */
+    private ListenerContext<ReactiveMessageListener> listenerContext(HandlerResolver resolver) {
+        return new ListenerContext<>(receiver, resolver, converter,
+                new RetryPolicy(props.getWithDLQRetry(), props.getMaxRetries(), props.getRetryDelay()),
+                props.getCreateTopology(), discardNotifier, errorReporter);
     }
 
     /**

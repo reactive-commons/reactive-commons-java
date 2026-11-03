@@ -2,7 +2,6 @@ package org.reactivecommons.async.commons;
 
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredCommandHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueryHandler;
@@ -13,10 +12,10 @@ import org.reactivecommons.async.commons.utils.matcher.Matcher;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 
-@Log
 @RequiredArgsConstructor
 @SuppressWarnings("unchecked")
 public class HandlerResolver {
@@ -32,6 +31,11 @@ public class HandlerResolver {
     private final Map<String, RegisteredQueueListener> topicListeners;
 
     private final Matcher matcher = new KeyMatcher();
+    /**
+     * The events whose listening was stopped at runtime: their bindings are not declared again (e.g. when a listener
+     * restarts and sets up its topology) until their listening is started again.
+     */
+    private final Set<String> stoppedEvents = ConcurrentHashMap.newKeySet();
 
     /**
      * Wildcard matches are cached apart from the registered handlers (which a lookup without match scans) and up to
@@ -79,9 +83,24 @@ public class HandlerResolver {
         return (RegisteredEventListener<T, D>) resolve(eventNotificationListeners, matchedNotificationListeners, path);
     }
 
-    // Returns only the listenEvent not the handleDynamicEvents
+    // Returns only the listenEvent not the handleDynamicEvents, nor the events whose listening was stopped
     public Collection<RegisteredEventListener<?, ?>> getEventListeners() {
-        return eventsToBind.values();
+        if (stoppedEvents.isEmpty()) {
+            return eventsToBind.values();
+        }
+        return eventsToBind.values().stream().filter(listener -> !stoppedEvents.contains(listener.path())).toList();
+    }
+
+    /**
+     * Stops binding the event: it is left out of {@link #getEventListeners()} until
+     * {@link #startListeningEvent(String)}.
+     */
+    public void stopListeningEvent(String eventName) {
+        stoppedEvents.add(eventName);
+    }
+
+    public void startListeningEvent(String eventName) {
+        stoppedEvents.remove(eventName);
     }
 
     public List<String> getEventNames() {

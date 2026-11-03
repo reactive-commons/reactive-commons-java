@@ -1,13 +1,13 @@
 package org.reactivecommons.async.rabbit.communications;
 
 import lombok.NoArgsConstructor;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.RabbitMessage;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.OutboundMessage;
 import reactor.rabbitmq.OutboundMessageResult;
 
-@Log
+@Slf4j
 @NoArgsConstructor
 public class UnroutableMessageProcessor implements UnroutableMessageHandler {
 
@@ -19,12 +19,10 @@ public class UnroutableMessageProcessor implements UnroutableMessageHandler {
         var outboundMessage = result.outboundMessage();
         var properties = outboundMessage.getProperties();
         var body = outboundMessage.getBody();
-        log.severe(() -> "Unroutable message: exchange=" + outboundMessage.getExchange()
-                + ", routingKey=" + outboundMessage.getRoutingKey()
-                + ", messageId=" + (properties != null ? properties.getMessageId() : null)
-                + ", size=" + body.length + " bytes"
-                + ", properties=" + properties
-                + ", body=" + RabbitMessage.bodyPreview(body));
+        log.error("Unroutable message: exchange={}, routingKey={}, messageId={}, size={} bytes, properties={}, body={}",
+                outboundMessage.getExchange(), outboundMessage.getRoutingKey(),
+                properties != null ? properties.getMessageId() : null, body.length, properties,
+                RabbitMessage.bodyPreview(body));
         return Mono.empty();
     }
 }

@@ -17,7 +17,7 @@ import io.micrometer.core.instrument.Tags;
 import io.micrometer.core.instrument.Timer;
 import io.micrometer.core.instrument.binder.BaseUnits;
 import lombok.Getter;
-import lombok.extern.java.Log;
+import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.async.commons.communications.Message;
@@ -29,6 +29,7 @@ import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeEx
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
 import org.reactivecommons.async.rabbit.MeterUsage;
+import org.slf4j.event.Level;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
@@ -76,15 +77,17 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.logging.Level;
 
 import static org.reactivecommons.async.api.DirectAsyncGateway.DELAYED;
 import static org.reactivecommons.async.commons.Headers.SOURCE_APPLICATION;
 
-@Log
+@Slf4j
 public class ReactiveMessageSender implements AutoCloseable {
     static final Duration DEFAULT_SEND_TIMEOUT = Duration.ofSeconds(10);
-    static final int DEFAULT_HAND_OVER_POOL_SIZE = 13;
+    /**
+     * The threads of the pool that completes the callers, and the most threads of the hand-over pool.
+     */
+    static final int POOL_SIZE = 13;
     /**
      * About a second of a 15000 messages per second peak: a short pause (GC, scheduling, the broker flushing to disk)
      * must not reject messages, only a connection the broker stopped draining.
@@ -229,50 +232,35 @@ public class ReactiveMessageSender implements AutoCloseable {
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
                                  boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
                                  Duration sendTimeout) {
-        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
-                sendTimeout, DEFAULT_HAND_OVER_POOL_SIZE, DEFAULT_HAND_OVER_QUEUE_CAPACITY,
-                new ConnectionBlockedState(), null, null);
+        this(sender, sourceApplication, messageConverter, topologyCreator, unroutableMessageNotifier,
+                new SenderSettings(isMandatory, sendTimeout, DEFAULT_HAND_OVER_QUEUE_CAPACITY,
+                        DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), null, null));
     }
 
     public ReactiveMessageSender(Sender sender, String sourceApplication,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
-                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
-                                 ConnectionBlockedState blockedState,
-                                 MeterRegistry meterRegistry, String domain) {
-        this(sender, sourceApplication, messageConverter, topologyCreator, isMandatory, unroutableMessageNotifier,
-                sendTimeout, handOverPoolSize, handOverQueueCapacity, blockedState, meterRegistry, domain,
-                DEFAULT_MAX_MESSAGE_SIZE);
-    }
-
-    /**
-     * @param maxMessageSize the {@code max_message_size} of the broker, in bytes: a message with a larger body is
-     *                       rejected with {@link SendFailureMessageTooLargeException} before being written, instead of
-     *                       making the broker close the channel it shares with other messages
-     */
-    public ReactiveMessageSender(Sender sender, String sourceApplication,
-                                 MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 boolean isMandatory, UnroutableMessageNotifier unroutableMessageNotifier,
-                                 Duration sendTimeout, int handOverPoolSize, int handOverQueueCapacity,
-                                 ConnectionBlockedState blockedState,
-                                 MeterRegistry meterRegistry, String domain, int maxMessageSize) {
+                                 UnroutableMessageNotifier unroutableMessageNotifier, SenderSettings settings) {
+        // the hand-over pool follows the processors, and the completion pool keeps its threads for the callers whose
+        // code blocks after publishing
+        final int handOverThreads = handOverThreads();
+        final int handOverQueueCapacity = settings.handOverQueueCapacity();
         this.sender = sender;
-        this.maxMessageSize = maxMessageSize;
+        this.maxMessageSize = settings.maxMessageSize();
         this.sourceApplication = sourceApplication;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
-        this.isMandatory = isMandatory;
+        this.isMandatory = settings.mandatory();
         this.unroutableMessageNotifier = unroutableMessageNotifier;
-        this.sendTimeout = sendTimeout;
-        this.blockedState = blockedState != null ? blockedState : new ConnectionBlockedState();
+        this.sendTimeout = settings.sendTimeout();
+        this.blockedState = settings.blockedState() != null ? settings.blockedState() : new ConnectionBlockedState();
         this.maxBufferedMessages = Math.max(1, handOverQueueCapacity);
         this.executorService = new ThreadPoolExecutor(
-                handOverPoolSize, handOverPoolSize,
+                POOL_SIZE, POOL_SIZE,
                 IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
                 new LinkedBlockingQueue<>(),
                 daemonThreads("RMessageSender1-"));
         this.executorService2 = new ThreadPoolExecutor(
-                handOverPoolSize, handOverPoolSize,
+                handOverThreads, handOverThreads,
                 IDLE_THREAD_KEEP_ALIVE.toMillis(), TimeUnit.MILLISECONDS,
                 new ArrayBlockingQueue<>(Math.max(1, handOverQueueCapacity)),
                 daemonThreads("RMessageSender2-"),
@@ -280,9 +268,18 @@ public class ReactiveMessageSender implements AutoCloseable {
         // a sender that is not closed (e.g. used outside Spring) neither keeps idle threads nor the JVM alive
         this.executorService.allowCoreThreadTimeOut(true);
         this.executorService2.allowCoreThreadTimeOut(true);
-        this.metrics = new PublishMetrics(meterRegistry, domain, this.blockedState,
+        this.metrics = new PublishMetrics(settings.meterRegistry(), settings.domain(), this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
         initializeSenders();
+    }
+
+    /**
+     * The threads of the hand-over pool: one per processor, at least 2 and at most {@value #POOL_SIZE}. The messages
+     * of a connection are written by its single I/O thread, so hand-over threads beyond the processors do not publish
+     * faster: they only compete for the CPU (e.g. in a container limited to half a processor).
+     */
+    static int handOverThreads() {
+        return Math.min(POOL_SIZE, Math.max(2, Runtime.getRuntime().availableProcessors()));
     }
 
     private void initializeSenders() {
@@ -298,7 +295,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                     .doOnNext(this::onConfirmResult)
                     .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
                     .retryWhen(resubscribe(flowName, true))
-                    .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ " + flowName + " stopped")));
+                    .subscribe(null, error -> log.error("RabbitMQ {} stopped", flowName, error)));
         }
 
         flowSubscriptions.add(Flux.defer(() -> sender.send(
@@ -309,7 +306,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                         noConfirmSendOptions()))
                 .doOnDiscard(PendingMessage.class, PendingMessage::retryOnAnotherFlow)
                 .retryWhen(resubscribe("no-confirm flow", false))
-                .subscribe(null, error -> log.log(Level.SEVERE, error, () -> "RabbitMQ no-confirm flow stopped")));
+                .subscribe(null, error -> log.error("RabbitMQ no-confirm flow stopped", error)));
     }
 
     /**
@@ -431,8 +428,8 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
-     * Re-subscribes a terminated flow with backoff. The first failure of each flow is logged at WARNING so an outage
-     * is visible; later attempts are logged at FINE, otherwise a sustained outage would flood the log.
+     * Re-subscribes a terminated flow with backoff. The first failure of each flow is logged at WARN so an outage
+     * is visible; later attempts are logged at DEBUG, otherwise a sustained outage would flood the log.
      */
     private Retry resubscribe(String flowName, boolean confirmFlow) {
         return Retry.backoff(Long.MAX_VALUE, RESUBSCRIBE_MIN_BACKOFF)
@@ -445,15 +442,15 @@ public class ReactiveMessageSender implements AutoCloseable {
                         lastConfirmFailureMessage.set(String.valueOf(signal.failure()));
                     }
                     metrics.recordResubscribe(confirmFlow);
-                    log.log(resubscribeLogLevel(flowName), () -> "RabbitMQ " + flowName
-                            + " terminated, re-subscribing with a new channel (attempt "
-                            + (signal.totalRetriesInARow() + 1) + "): " + signal.failure());
+                    log.atLevel(resubscribeLogLevel(flowName)).log("RabbitMQ {} terminated, re-subscribing with a new "
+                            + "channel (attempt {}): {}", flowName, signal.totalRetriesInARow() + 1,
+                            String.valueOf(signal.failure()));
                 });
     }
 
     private Level resubscribeLogLevel(String flowName) {
         return firstResubscribeWarning.computeIfAbsent(flowName, key -> new AtomicBoolean())
-                .compareAndSet(false, true) ? Level.WARNING : Level.FINE;
+                .compareAndSet(false, true) ? Level.WARN : Level.DEBUG;
     }
 
     /**
@@ -509,7 +506,7 @@ public class ReactiveMessageSender implements AutoCloseable {
 
     private static void abortBlockedConnection(Connection connection) {
         if (connection.isOpen()) {
-            log.warning(() -> "Closing the sender while the broker blocks its connection: aborting the connection");
+            log.warn("Closing the sender while the broker blocks its connection: aborting the connection");
             connection.abort(BLOCKED_CONNECTION_ABORT_TIMEOUT_MILLIS);
         }
     }
@@ -568,7 +565,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             }
         } catch (Exception e) {
             // never let an error here terminate the publishing flow
-            log.log(Level.WARNING, e, () -> "Error while notifying the result of a published message");
+            log.warn("Error while notifying the result of a published message", e);
         }
     }
 
@@ -643,8 +640,8 @@ public class ReactiveMessageSender implements AutoCloseable {
         final Mono<Void> declaration = topologyCreator.declare(exchange)
                 .then()
                 .onErrorResume(error -> {
-                    log.log(Level.WARNING, error, () -> "Exchange " + name + " could not be declared, publishing"
-                            + " to it as it is: " + error.getMessage());
+                    log.warn("Exchange {} could not be declared, publishing to it as it is: {}", name,
+                            error.getMessage(), error);
                     return Mono.empty();
                 })
                 .cache();
@@ -663,15 +660,12 @@ public class ReactiveMessageSender implements AutoCloseable {
         final AtomicBoolean timedOut = new AtomicBoolean();
         final long startNanos = System.nanoTime();
         // waits for the declaration within the sendTimeout below, so a broker that never answers it fails the send
-        return exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
-                    final PendingMessage pending = messageFactory.apply(monoSink);
-                    current.set(pending);
-                    submit(pending, sinkSelector, confirmFlow);
-                }))
-                // no flow ready yet (start-up, re-subscription): wait until one is registered
-                .retryWhen(Retry.from(signals -> signals.concatMap(signal ->
-                        signal.failure() instanceof NoFlowAvailableException
-                                ? flowAvailable(sinkSelector) : Mono.error(signal.failure()))))
+        final Mono<Void> attempt = exchangeDeclared(exchange).then(Mono.<Void>create(monoSink -> {
+            final PendingMessage pending = messageFactory.apply(monoSink);
+            current.set(pending);
+            submit(pending, sinkSelector, confirmFlow);
+        }));
+        return retryWhileNoFlow(attempt, sinkSelector)
                 .timeout(sendTimeout)
                 .onErrorMap(TimeoutException.class, e -> {
                     timedOut.set(true);
@@ -685,6 +679,18 @@ public class ReactiveMessageSender implements AutoCloseable {
                 .doOnError(error -> metrics.recordPublishLatency(confirmFlow,
                         latencyOutcome(error, timedOut.get(), current.get()),
                         Duration.ofNanos(System.nanoTime() - startNanos)));
+    }
+
+    /**
+     * The attempt, made again once a flow is registered each time no flow could take the message (start-up, a flow
+     * being re-subscribed, a flow that terminated before writing it). Unlike {@code retryWhen}, nothing is built for
+     * the messages handed over at the first attempt, which are almost all of them. The failure that triggers a retry
+     * always comes from another thread (the hand-over pool or a terminating flow), so the retries never pile up on the
+     * stack.
+     */
+    private Mono<Void> retryWhileNoFlow(Mono<Void> attempt, Supplier<FluxSink<OutboundMessage>> sinkSelector) {
+        return attempt.onErrorResume(NoFlowAvailableException.class, noFlow -> flowAvailable(sinkSelector)
+                .then(Mono.defer(() -> retryWhileNoFlow(attempt, sinkSelector))));
     }
 
     private void submit(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
@@ -1180,7 +1186,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                     resubscribeCounter(false);
                 } catch (Exception e) {
                     // never let a mis-wired registry break the sender; metrics are best-effort
-                    log.log(Level.WARNING, e, () -> "Could not register publish metrics");
+                    log.warn("Could not register publish metrics", e);
                 }
             }
         }
@@ -1203,7 +1209,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             try {
                 MeterUsage.release(registry, this);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not remove publish metrics");
+                log.warn("Could not remove publish metrics", e);
             }
         }
 
@@ -1254,7 +1260,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                 .tag(TAG_CONFIRM, Boolean.toString(confirmFlow))
                                 .register(registry))).record(elapsed);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_LATENCY);
+                log.warn("Could not record {}", METRIC_PUBLISH_LATENCY, e);
             }
         }
 
@@ -1270,7 +1276,7 @@ public class ReactiveMessageSender implements AutoCloseable {
                                 .tag(TAG_CONFIRM, key.toString())
                                 .register(registry))).record(bytes);
             } catch (Exception e) {
-                log.log(Level.WARNING, e, () -> "Could not record " + METRIC_PUBLISH_MESSAGE_SIZE);
+                log.warn("Could not record {}", METRIC_PUBLISH_MESSAGE_SIZE, e);
             }
         }
     }

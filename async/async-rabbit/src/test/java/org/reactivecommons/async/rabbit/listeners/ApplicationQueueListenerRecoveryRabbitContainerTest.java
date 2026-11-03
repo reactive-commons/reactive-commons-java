@@ -9,6 +9,8 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -97,8 +99,9 @@ class ApplicationQueueListenerRecoveryRabbitContainerTest {
             registry.listenQueue(queue, message -> Mono.fromRunnable(() -> received.get(queue).incrementAndGet()));
         }
         for (RegisteredQueueListener registered : registry.getQueueHandlers().get(DEFAULT_DOMAIN)) {
-            new ApplicationQueueListener(messageListener, false, -1, 1000, registered,
-                    mock(DiscardNotifier.class), mock(CustomReporter.class)).startListener();
+            new ApplicationQueueListener(new ListenerContext<>(messageListener, null, null,
+                    new RetryPolicy(false, -1, 1000), true, mock(DiscardNotifier.class), mock(CustomReporter.class)),
+                    registered).startListener();
         }
 
         // 1. Healthy: every queue consumes.

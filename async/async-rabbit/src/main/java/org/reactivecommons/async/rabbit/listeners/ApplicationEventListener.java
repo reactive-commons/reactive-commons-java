@@ -1,18 +1,14 @@
 package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
-import lombok.extern.java.Log;
+import org.reactivecommons.async.commons.ListenerContext;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.exceptions.MissingHandlerException;
-import org.reactivecommons.async.api.handlers.CloudEventHandler;
-import org.reactivecommons.async.api.handlers.DomainEventHandler;
-import org.reactivecommons.async.api.handlers.RawEventHandler;
 import org.reactivecommons.async.api.handlers.registered.RegisteredEventListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.EventExecutor;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.converters.MessageConverter;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import reactor.core.publisher.Flux;
@@ -27,37 +23,23 @@ import java.util.function.Function;
 import static java.lang.String.format;
 import static reactor.core.publisher.Flux.fromIterable;
 
-@Log
 public class ApplicationEventListener extends GenericMessageListener {
 
     private final MessageConverter messageConverter;
     private final HandlerResolver resolver;
     private final String eventsExchange;
-    private final boolean withDLQRetry;
-    private final int retryDelay;
+    private final RetryPolicy retryPolicy;
     private final Optional<Integer> maxLengthBytes;
     private final String appName;
 
 
-    public ApplicationEventListener(ReactiveMessageListener receiver,
-                                    String queueName,
-                                    String eventsExchange,
-                                    HandlerResolver resolver,
-                                    MessageConverter messageConverter,
-                                    boolean withDLQRetry,
-                                    boolean createTopology,
-                                    long maxRetries, int retryDelay,
-                                    Optional<Integer> maxLengthBytes,
-                                    DiscardNotifier discardNotifier,
-                                    CustomReporter errorReporter,
-                                    String appName) {
-        super(queueName, receiver, withDLQRetry, createTopology, maxRetries, retryDelay, discardNotifier,
-                "event", errorReporter);
-        this.retryDelay = retryDelay;
-        this.withDLQRetry = withDLQRetry;
-        this.resolver = resolver;
+    public ApplicationEventListener(ListenerContext<ReactiveMessageListener> context, String queueName,
+                                    String eventsExchange, Optional<Integer> maxLengthBytes, String appName) {
+        super(context, queueName, "event");
+        this.retryPolicy = context.retryPolicy();
+        this.resolver = context.resolver();
         this.eventsExchange = eventsExchange;
-        this.messageConverter = messageConverter;
+        this.messageConverter = context.converter();
         this.maxLengthBytes = maxLengthBytes;
         this.appName = appName;
     }
@@ -67,12 +49,13 @@ public class ApplicationEventListener extends GenericMessageListener {
         final Mono<AMQP.Exchange.DeclareOk> declareExchange = creator.declare(
                 ExchangeSpecification.exchange(eventsExchange).durable(true).type("topic")
         );
-        // one at a time: they share the channel of the creator, which takes a single RPC at a time
-        final Flux<AMQP.Queue.BindOk> bindings = fromIterable(resolver.getEventListeners())
+        // one at a time: they share the channel of the creator, which takes a single RPC at a time. Read on every
+        // subscription (e.g. a restart of the listener): the events whose listening was stopped are not bound again
+        final Flux<AMQP.Queue.BindOk> bindings = Flux.defer(() -> fromIterable(resolver.getEventListeners()))
                 .concatMap(listener -> creator.bind(
                         BindingSpecification.binding(eventsExchange, listener.path(), queueName)
                 ));
-        if (withDLQRetry) {
+        if (retryPolicy.withDLQRetry()) {
             final String eventsDLQExchangeName = format("%s.%s.DLQ", appName, eventsExchange);
             final String retryExchangeName = format("%s.%s", appName, eventsExchange);
             final Mono<AMQP.Exchange.DeclareOk> retryExchange = creator.declare(
@@ -82,7 +65,7 @@ public class ApplicationEventListener extends GenericMessageListener {
                     ExchangeSpecification.exchange(eventsDLQExchangeName).durable(true).type("topic")
             );
             final Mono<AMQP.Queue.DeclareOk> declareDLQ = creator.declareDLQ(
-                    queueName, retryExchangeName, retryDelay, maxLengthBytes
+                    queueName, retryExchangeName, retryPolicy.retryDelay(), maxLengthBytes
             );
             final Mono<AMQP.Queue.DeclareOk> declareQueue = creator.declareQueue(
                     queueName, eventsDLQExchangeName, maxLengthBytes
@@ -115,8 +98,7 @@ public class ApplicationEventListener extends GenericMessageListener {
             throw new MissingHandlerException("event", executorPath); // not cached: a dynamic one may come later
         }
 
-        Function<Message, Object> converter = resolveConverter(handler);
-        final EventExecutor<Object> executor = new EventExecutor<>(handler.handler(), converter);
+        final EventExecutor<Object> executor = EventExecutor.of(handler, messageConverter);
 
         return msj -> executor
                 .execute(msj)
@@ -136,20 +118,6 @@ public class ApplicationEventListener extends GenericMessageListener {
     @Override
     protected Object parseMessageForReporter(Message msj) {
         return messageConverter.readDomainEventStructure(msj);
-    }
-
-    private <T, D> Function<Message, Object> resolveConverter(RegisteredEventListener<T, D> registeredEventListener) {
-        if (registeredEventListener.handler() instanceof DomainEventHandler) {
-            final Class<T> eventClass = registeredEventListener.inputClass();
-            return msj -> messageConverter.readDomainEvent(msj, eventClass);
-        }
-        if (registeredEventListener.handler() instanceof CloudEventHandler) {
-            return messageConverter::readCloudEvent;
-        }
-        if (registeredEventListener.handler() instanceof RawEventHandler) {
-            return message -> message;
-        }
-        throw new RuntimeException("Unknown handler type");
     }
 
     @Override

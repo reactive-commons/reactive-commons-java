@@ -1,10 +1,8 @@
 package org.reactivecommons.async.rabbit.listeners;
 
-import lombok.extern.java.Log;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
-import org.reactivecommons.async.commons.DiscardNotifier;
+import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.communications.Message;
-import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.InstanceIdentifier;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
@@ -15,22 +13,15 @@ import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.function.Function;
 
-@Log
 public class ApplicationQueueListener extends GenericMessageListener {
 
     static final int MAX_CONSUMER_TAG_BYTES = 255;
 
     private final RegisteredQueueListener registeredListener;
 
-    public ApplicationQueueListener(ReactiveMessageListener listener,
-                                    boolean withDLQRetry,
-                                    long maxRetries,
-                                    int retryDelay,
-                                    RegisteredQueueListener registeredListener,
-                                    DiscardNotifier discardNotifier,
-                                    CustomReporter errorReporter) {
-        super(registeredListener.queueName(), listener, withDLQRetry, true, maxRetries, retryDelay,
-                discardNotifier, "queue", errorReporter);
+    public ApplicationQueueListener(ListenerContext<ReactiveMessageListener> context,
+                                    RegisteredQueueListener registeredListener) {
+        super(context.withCreateTopology(true), registeredListener.queueName(), "queue");
         this.registeredListener = registeredListener;
     }
 

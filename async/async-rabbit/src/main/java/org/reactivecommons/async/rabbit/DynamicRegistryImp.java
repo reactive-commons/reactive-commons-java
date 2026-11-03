@@ -25,6 +25,7 @@ public class DynamicRegistryImp implements DynamicRegistry {
     @Override
     public <T> Mono<Void> listenEvent(String eventName, DomainEventHandler<T> fn, Class<T> eventClass) {
         resolver.addEventListener(new RegisteredEventListener<>(eventName, fn, eventClass));
+        resolver.startListeningEvent(eventName);
 
         return topologyCreator.bind(buildBindingSpecification(eventName))
                 .then();
@@ -44,13 +45,18 @@ public class DynamicRegistryImp implements DynamicRegistry {
 
     @Override
     public Mono<Void> startListeningEvent(String eventName) {
-        return topologyCreator.bind(buildBindingSpecification(eventName))
+        return Mono.fromRunnable(() -> resolver.startListeningEvent(eventName))
+                .then(topologyCreator.bind(buildBindingSpecification(eventName)))
                 .then();
     }
 
+    /**
+     * Unbinds the event, and keeps it unbound when the listener declares its bindings again (e.g. once it restarts).
+     */
     @Override
     public Mono<Void> stopListeningEvent(String eventName) {
-        return topologyCreator.unbind(buildBindingSpecification(eventName))
+        return Mono.fromRunnable(() -> resolver.stopListeningEvent(eventName))
+                .then(topologyCreator.unbind(buildBindingSpecification(eventName)))
                 .then();
     }
 
