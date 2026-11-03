@@ -446,9 +446,11 @@ public abstract class GenericMessageListener {
 
     private void logRetry(Throwable err, AcknowledgableDelivery msj, String messageID, FallbackStrategy strategy) {
         if (log.isWarnEnabled()) {
-            log.warn("{} - queue {}, dead-lettered {} times, redelivered {}, failed with {} (stack trace, headers and "
-                            + "body at DEBUG)", format(strategy.message, messageID), queueName, getRetryNumber(msj),
-                    msj.getEnvelope() != null && msj.getEnvelope().isRedeliver(), err.toString());
+            final String attempt = strategy == FallbackStrategy.RETRY_DLQ
+                    ? "retry " + (getRetryNumber(msj) + 1) + " of " + maxRetries
+                    : "redelivered " + (msj.getEnvelope() != null && msj.getEnvelope().isRedeliver());
+            log.warn("{} - queue {}, {}, failed with {} (stack trace, headers and body at DEBUG)",
+                    format(strategy.message, messageID), queueName, attempt, err.toString());
         }
         if (log.isDebugEnabled()) {
             try {

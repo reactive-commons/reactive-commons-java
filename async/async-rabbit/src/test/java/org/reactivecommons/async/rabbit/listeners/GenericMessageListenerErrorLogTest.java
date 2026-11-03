@@ -95,9 +95,38 @@ class GenericMessageListenerErrorLogTest {
         assertThat(event.getLevel()).isEqualTo(Level.WARN);
         assertThat(event.getThrowableProxy()).as("stack trace").isNull();
         assertThat(event.getFormattedMessage())
-                .contains(String.format(strategy.message, "message-1"), "queue test-queue", "dead-lettered 2 times",
-                        "redelivered true", "java.lang.IllegalStateException: the handler failed")
+                .contains(String.format(strategy.message, "message-1"), "queue test-queue",
+                        "java.lang.IllegalStateException: the handler failed")
                 .doesNotContain(BODY_MARKER, HEADER_VALUE);
+    }
+
+    /**
+     * With {@code maxRetries: 2}, the first failure is sent to the retry queue as retry 1 of 2, the second one as
+     * retry 2 of 2, and the third one is discarded.
+     */
+    @Test
+    void aDlqRetryIsNumberedAsMaxRetriesCountsIt() {
+        logger.setLevel(Level.INFO);
+        TestListener withDlqRetries = new TestListener(new RetryPolicy(true, 2, 10));
+
+        withDlqRetries.logError(failure, delivery(null), FallbackStrategy.RETRY_DLQ);
+        withDlqRetries.logError(failure, delivery(1L), FallbackStrategy.RETRY_DLQ);
+
+        assertThat(events).extracting(ILoggingEvent::getFormattedMessage)
+                .satisfiesExactly(first -> assertThat(first).contains(", retry 1 of 2,"),
+                        second -> assertThat(second).contains(", retry 2 of 2,"));
+    }
+
+    /**
+     * Fast retries are unlimited and leave no count in the message: only the redelivered flag of the broker.
+     */
+    @Test
+    void aFastRetryTellsWhetherTheBrokerRedeliveredTheMessage() {
+        logger.setLevel(Level.INFO);
+
+        listener.logError(failure, delivery(), FallbackStrategy.FAST_RETRY);
+
+        assertThat(events.get(0).getFormattedMessage()).contains(", redelivered true,").doesNotContain("retry 1");
     }
 
     @Test
@@ -174,11 +203,20 @@ class GenericMessageListenerErrorLogTest {
      * A message dead-lettered twice and redelivered, with a header and a body that a retry must not log.
      */
     private static AcknowledgableDelivery delivery() {
-        Map<String, Object> death = new HashMap<>();
-        death.put("count", 2L);
-        death.put("queue", "test-queue");
+        return delivery(2L);
+    }
+
+    /**
+     * @param deadLetterings the {@code x-death} count of the message, or null when it was never dead-lettered
+     */
+    private static AcknowledgableDelivery delivery(Long deadLetterings) {
         Map<String, Object> headers = new HashMap<>();
-        headers.put("x-death", new ArrayList<>(List.of(death)));
+        if (deadLetterings != null) {
+            Map<String, Object> death = new HashMap<>();
+            death.put("count", deadLetterings);
+            death.put("queue", "test-queue");
+            headers.put("x-death", new ArrayList<>(List.of(death)));
+        }
         headers.put("custom-header", HEADER_VALUE);
         AMQP.BasicProperties properties = new AMQP.BasicProperties.Builder()
                 .messageId("message-1")
@@ -194,9 +232,13 @@ class GenericMessageListenerErrorLogTest {
     private static class TestListener extends GenericMessageListener {
 
         TestListener() {
+            this(new RetryPolicy(false, -1, 10));
+        }
+
+        TestListener(RetryPolicy retryPolicy) {
             super(new ListenerContext<>(new ReactiveMessageListener(mock(Receiver.class), mock(TopologyCreator.class),
                     250, 250, new SubscriberRegistry(), new SimpleMeterRegistry(), "app", null), null, null,
-                    new RetryPolicy(false, -1, 10), false, mock(DiscardNotifier.class), mock(CustomReporter.class)),
+                    retryPolicy, false, mock(DiscardNotifier.class), mock(CustomReporter.class)),
                     "test-queue", "event");
         }
 
