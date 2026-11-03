@@ -1,5 +1,9 @@
 package org.reactivecommons.async.rabbit.listeners;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.AppenderBase;
 import com.rabbitmq.client.Channel;
 import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ShutdownListener;
@@ -18,6 +22,7 @@ import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageListener;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.rabbitmq.AcknowledgableDelivery;
@@ -26,6 +31,8 @@ import reactor.rabbitmq.Receiver;
 
 import java.lang.reflect.Field;
 import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -104,6 +111,38 @@ class GenericMessageListenerRecoveryTest {
                     .as("a new subscription should be created on each recovery cycle")
                     .isEqualTo(cycle + 1);
         }
+    }
+
+    /**
+     * Stopping the listener (e.g. while the application shuts down) closes its channel: an expected, clean close that
+     * is neither a failure to log at WARN nor a reason to recover the listener.
+     */
+    @Test
+    void theChannelClosedByStoppingTheListenerIsNotReportedAsAFailure() throws Exception {
+        messageListener.startListener();
+        ShutdownListener shutdownListener = captureShutdownListener();
+        Logger logger = (Logger) LoggerFactory.getLogger(GenericMessageListener.class);
+        String testThread = Thread.currentThread().getName();
+        List<String> warnings = new CopyOnWriteArrayList<>();
+        AppenderBase<ILoggingEvent> capture = new AppenderBase<>() {
+            @Override
+            protected void append(ILoggingEvent event) {
+                if (event.getLevel().isGreaterOrEqual(Level.WARN) && event.getThreadName().equals(testThread)) {
+                    warnings.add(event.getFormattedMessage());
+                }
+            }
+        };
+        capture.start();
+        logger.addAppender(capture);
+        try {
+            messageListener.stop();
+            shutdownListener.shutdownCompleted(mockShutdownCause()); // as the client does once stop() closes it
+        } finally {
+            logger.detachAppender(capture);
+        }
+
+        assertThat(warnings).as("warnings logged while stopping").isEmpty();
+        assertThat(totalSubscriptions).as("subscriptions").hasValue(1);
     }
 
     private void awaitSubscriptions(int expected) {

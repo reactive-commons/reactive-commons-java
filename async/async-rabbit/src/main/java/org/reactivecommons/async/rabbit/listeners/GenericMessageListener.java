@@ -141,6 +141,11 @@ public abstract class GenericMessageListener {
                 .channelCallback(channel -> {
                     consumingChannel.set(channel);
                     channel.addShutdownListener(cause -> {
+                        if (stopped.get()) {
+                            // the application stopped the listener (e.g. it is shutting down) and closed the channel
+                            log.debug("Channel of queue {} closed: the listener is stopped", queueName);
+                            return;
+                        }
                         log.warn("Channel shutdown detected in queue {} channel open: {} connection open: {}",
                                 queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
                         if (channel.getConnection().isOpen() && !channel.isOpen()) {
