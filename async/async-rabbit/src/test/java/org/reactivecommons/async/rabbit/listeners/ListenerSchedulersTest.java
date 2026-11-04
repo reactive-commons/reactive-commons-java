@@ -429,6 +429,38 @@ class ListenerSchedulersTest {
         assertThat(done.await(5, TimeUnit.SECONDS)).as("every short task ran").isTrue();
     }
 
+    /**
+     * Handlers that wait for each other (here a latch that only enough handlers running at the same time open) all
+     * wait for the same blocker, as handlers behind a shared lock do: but no task completes, so the pool grows instead
+     * of leaving them waiting forever for tasks that stay queued.
+     */
+    @Test
+    void handlersWaitingForTasksStillQueuedMakeThePoolGrow() throws InterruptedException {
+        ListenerSchedulers.ElasticExecutor pool = new ListenerSchedulers.ElasticExecutor(
+                ListenerSchedulers.MAX_HANDLER_THREADS, "barrier", KEEP_ALIVE, System::nanoTime);
+        int handlers = baseThreads() * 3;
+        CountDownLatch barrier = new CountDownLatch(handlers);
+        CountDownLatch done = new CountDownLatch(handlers);
+        try {
+            for (int i = 0; i < handlers; i++) {
+                pool.execute(() -> {
+                    barrier.countDown();
+                    try {
+                        if (barrier.await(30, TimeUnit.SECONDS)) {
+                            done.countDown();
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                });
+            }
+
+            assertThat(done.await(15, TimeUnit.SECONDS)).as("every handler got past the barrier").isTrue();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
     private static final Duration KEEP_ALIVE = Duration.ofSeconds(15);
 
     /**
@@ -459,12 +491,20 @@ class ListenerSchedulersTest {
         return peak.get();
     }
 
+    /**
+     * Each task starts once the previous one is over, its thread included (it counts as busy until then): one handler
+     * at a time, whatever the number of processors.
+     */
     private static void runShortTasksOneAtATime(ListenerSchedulers.ElasticExecutor pool, int tasks)
             throws InterruptedException {
         for (int i = 0; i < tasks; i++) {
             CountDownLatch done = new CountDownLatch(1);
             pool.execute(done::countDown);
             assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (pool.getActiveCount() > 0 && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
         }
     }
 

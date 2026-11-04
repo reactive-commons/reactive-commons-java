@@ -64,6 +64,11 @@ public final class ListenerSchedulers {
     private static final int KEEP_ALIVE_SECONDS = 60;
     private static final int HANDLER_KEEP_ALIVE_SECONDS = 15;
     private static final long STARVATION_CHECK_MILLIS = 5;
+    /**
+     * Starvation checks in a row without any task completing (at least a second) after which the pool grows even if
+     * its busy threads wait together.
+     */
+    private static final int STALL_CHECKS = 200;
     private static final int ERROR_REPORTER_THREADS = 4;
     private static final int ERROR_REPORTER_QUEUE = 256;
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 10;
@@ -263,10 +268,12 @@ public final class ListenerSchedulers {
         // never let a mis-wired registry break the listeners; metrics are best-effort. The ids of the meters that
         // could be registered are kept even if another one fails, so they are removed on release.
         final List<Meter.Id> ids = new ArrayList<>(4);
-        register(ids, () -> Gauge.builder(M_POOL_SIZE, pool, e -> e.getPoolSize()).register(registry).getId());
-        register(ids, () -> Gauge.builder(M_THREADS_ACTIVE, pool, e -> e.getActiveCount()).register(registry).getId());
+        register(ids, () -> Gauge.builder(M_POOL_SIZE, pool, ElasticExecutor::getPoolSize).register(registry).getId());
+        register(ids, () -> Gauge.builder(M_THREADS_ACTIVE, pool, ElasticExecutor::getActiveCount)
+                .register(registry).getId());
         register(ids, () -> Gauge.builder(M_QUEUE_SIZE, pool, e -> e.getQueue().size()).register(registry).getId());
-        register(ids, () -> FunctionCounter.builder(M_GROWTH, pool, e -> e.growthCount()).register(registry).getId());
+        register(ids, () -> FunctionCounter.builder(M_GROWTH, pool, ElasticExecutor::growthCount)
+                .register(registry).getId());
         if (!ids.isEmpty()) {
             meterIds.put(registry, ids);
         }
@@ -305,39 +312,39 @@ public final class ListenerSchedulers {
         }
     }
 
-    private static ThreadFactory daemonThreads(String prefix) {
-        AtomicInteger counter = new AtomicInteger();
-        return runnable -> {
-            Thread thread = new Thread(runnable, prefix + "-" + counter.incrementAndGet());
-            thread.setDaemon(true);
-            return thread;
-        };
-    }
-
     /**
-     * A pool with a small base size (one thread per processor) that grows, up to its limit, only when the tasks are
-     * starving: unlike the default {@link ThreadPoolExecutor}, it does not wait for a bounded queue to be full.
-     * Handlers that do not block never leave the base size, handlers that block make it grow.
+     * A thread pool with a small base size (one thread per processor) that grows up to its limit only when task
+     * starvation is detected.
      *
-     * <p>The submission path is just "put in a lock-free queue": nothing is measured there. A monitor, scheduled
-     * only while there are queued tasks, looks every {@value ListenerSchedulers#STARVATION_CHECK_MILLIS} ms at the
-     * head of the queue; if it is the same task as in the previous check, nobody took it for that long, so the
-     * threads are really busy. A burst of tasks that finish in microseconds is drained before that, so it does not
-     * create threads.</p>
+     * <p>Growth:</p>
+     * <ul>
+     *     <li>Unlike {@link ThreadPoolExecutor}, it does not wait for a bounded queue to fill.</li>
+     *     <li>Non-blocking tasks stay within the base size; blocking tasks trigger pool growth.</li>
+     *     <li>A monitor checks the head of the queue every {@value ListenerSchedulers#STARVATION_CHECK_MILLIS} ms. If
+     *     the same task remains stuck, it infers starvation and grows (up to four times its size per check, as many
+     *     threads as tasks wait). Short bursts of fast tasks do not create threads.</li>
+     * </ul>
      *
-     * <p>Busy threads that wait for their own work (each its own I/O, latch or future) make the pool grow. Busy
-     * threads that wait for a resource they share do not: more threads would only queue up behind it, hold more
-     * deliveries in memory and lengthen the GC pauses. A synchronous log appender is the usual case: under load,
-     * every handler waits for its lock while one thread writes.</p>
+     * <p>Blocking constraints:</p>
+     * <ul>
+     *     <li>The pool grows if threads wait for independent work (individual I/O, futures).</li>
+     *     <li>It does not grow if threads contend for a shared resource (e.g. synchronous log appenders), to prevent
+     *     memory bloat and GC pauses.</li>
+     *     <li>Exception: if no task completes during {@value ListenerSchedulers#STALL_CHECKS} checks in a row (at
+     *     least a second), a deadlock or latch is assumed, and the pool grows anyway to force progress. Checks are
+     *     counted, not time: on a busy host or a throttled container most checks run late, and they must still add
+     *     up.</li>
+     *     <li>A check delayed by a system pause (GC, container CPU quota) does not make the pool grow: the tasks only
+     *     look stuck. It still counts for the exception above.</li>
+     * </ul>
      *
-     * <p>A check that runs late does not count either: the process was paused (a GC pause, the CPU quota of its
-     * container used up, a host that took the CPU away), so the queued tasks only look stuck. Every thread was frozen
-     * with them, and more threads would not have run any sooner.</p>
-     *
-     * <p>The pool shrinks to what its handlers used lately, even under a steady flow of tasks: the idle threads take
-     * the queued tasks in turn, so under load none of them stays idle for the keep-alive time. A thread asking for its
-     * next task leaves while the queue is empty and the pool has more threads than the most handlers that ran at the
-     * same time during the last keep-alive period (plus a quarter).</p>
+     * <p>Shrinking:</p>
+     * <ul>
+     *     <li>The pool shrinks to match recent usage, even under a steady task flow.</li>
+     *     <li>A thread asking for its next task leaves if the queue is empty and the pool has more threads than the
+     *     peak number of concurrent active threads during the last keep-alive period (plus a 25% margin), never below
+     *     the base size nor while the pool grows.</li>
+     * </ul>
      */
     static final class ElasticExecutor extends ThreadPoolExecutor {
 
@@ -354,7 +361,10 @@ public final class ListenerSchedulers {
         private volatile int previousWindowPeak;
         private volatile int base;
         private volatile long checkDueAt;
-        private Runnable headSeenInThePreviousCheck; // only used by the monitor thread
+        // only used by the monitor thread
+        private Runnable headSeenInThePreviousCheck;
+        private long completedAtLastCheck;
+        private int checksWithoutProgress;
 
         ElasticExecutor(int maxThreads, String threadPrefix) {
             this(maxThreads, threadPrefix, Duration.ofSeconds(HANDLER_KEEP_ALIVE_SECONDS), System::nanoTime);
@@ -461,17 +471,36 @@ public final class ListenerSchedulers {
 
         private void growIfStarving() {
             checkScheduled.set(false);
+            final long now = clock.getAsLong();
             // late by more than the period between two checks: the process was paused, the head only looks stuck
-            final boolean late = clock.getAsLong() - checkDueAt > TimeUnit.MILLISECONDS.toNanos(STARVATION_CHECK_MILLIS);
+            final boolean late = now - checkDueAt > TimeUnit.MILLISECONDS.toNanos(STARVATION_CHECK_MILLIS);
             final BlockingQueue<Runnable> queue = getQueue();
             final Runnable head = queue.peek();
-            if (head != null && head == headSeenInThePreviousCheck && !late && !busyThreadsWaitTogether()) {
+            final boolean stalled = stalled(headSeenInThePreviousCheck == null);
+            final boolean stuck = head != null && head == headSeenInThePreviousCheck;
+            if (stuck && (stalled || (!late && !busyThreadsWaitTogether()))) {
                 grow(queue.size());
+                // the new threads get as many checks before the pool grows again for lack of progress
+                checksWithoutProgress = 0;
             }
             headSeenInThePreviousCheck = head;
             if (head != null) {
                 scheduleStarvationCheck();
             }
+        }
+
+        /**
+         * Whether no task completed during the last {@value ListenerSchedulers#STALL_CHECKS} checks, counting from this
+         * one when {@code restart} (a new starving episode).
+         */
+        private boolean stalled(boolean restart) {
+            final long completed = getCompletedTaskCount();
+            if (restart || completed != completedAtLastCheck) {
+                completedAtLastCheck = completed;
+                checksWithoutProgress = 0;
+                return false;
+            }
+            return ++checksWithoutProgress >= STALL_CHECKS;
         }
 
         /**
@@ -537,6 +566,15 @@ public final class ListenerSchedulers {
                 base = baseThreads(maxThreads);
                 setCorePoolSize(base);
             }
+        }
+
+        private static ThreadFactory daemonThreads(String prefix) {
+            AtomicInteger counter = new AtomicInteger();
+            return runnable -> {
+                Thread thread = new Thread(runnable, prefix + "-" + counter.incrementAndGet());
+                thread.setDaemon(true);
+                return thread;
+            };
         }
 
         private static int baseThreads(int maxThreads) {

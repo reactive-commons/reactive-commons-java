@@ -721,10 +721,12 @@ never wait for the threads taken by the blocking handlers of another one (e.g. q
 It only grows when its queued tasks wait more than 5 ms while its busy threads wait for their own work (blocking I/O,
 their own future): when at least half of them are blocked on a monitor or wait for the same lock, e.g. a synchronous
 log appender, it does not grow, since more threads would only queue behind it, hold more deliveries in memory and
-lengthen the GC pauses. Nor does it grow after a pause of the process (a GC pause, the CPU quota of the container used
-up), when the tasks only look stuck. It keeps the threads its handlers needed during the last 15 seconds, plus a
-quarter, and releases the others even while deliveries keep coming. Lower the `maxConcurrency` of a listener whose
-handlers block to bound the threads it can take. While at least one application context using them has a
+lengthen the GC pauses, unless no task completes for a second: then they wait for tasks that are still queued (e.g.
+handlers that wait for each other on a latch), and the pool grows so that those can run. Nor does it grow after a
+pause of the process (a GC pause, the CPU quota of the container used up), when the tasks only look stuck. It keeps
+the threads its handlers needed during the last 15 seconds, plus a quarter, and releases the others even while
+deliveries keep coming. Lower the `maxConcurrency` of a listener whose handlers block to bound the threads it can
+take. While at least one application context using them has a
 `MeterRegistry`, the handler pool is exported to that registry:
 
 | Metric                                               | Type            | Meaning                                                                   |
