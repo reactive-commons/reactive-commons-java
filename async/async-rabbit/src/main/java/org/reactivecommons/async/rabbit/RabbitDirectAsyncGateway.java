@@ -9,6 +9,7 @@ import org.reactivecommons.async.api.From;
 import org.reactivecommons.async.commons.config.BrokerConfig;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
+import org.reactivecommons.async.commons.utils.RandomUuids;
 import reactor.rabbitmq.OutboundMessageResult;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import reactor.core.observability.micrometer.Micrometer;
@@ -21,7 +22,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.UUID;
 import java.util.function.Function;
 
 import static java.lang.Boolean.TRUE;
@@ -143,7 +143,7 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
         // Deferred: the reply registration only exists while the query is subscribed, and it is always released
         // (answered, timed out, publication failed or canceled by the caller)
         return Mono.defer(() -> {
-                    final String correlationID = UUID.randomUUID().toString().replace("-", "");
+                    final String correlationID = RandomUuids.nextWithoutDashes();
 
                     // registered before publishing so that a fast reply cannot be missed
                     // the per-domain gateways are called without the domain: use the one of this gateway

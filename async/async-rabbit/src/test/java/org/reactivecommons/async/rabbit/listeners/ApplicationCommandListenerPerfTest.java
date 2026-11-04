@@ -42,6 +42,7 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
@@ -53,6 +54,7 @@ class ApplicationCommandListenerPerfTest {
 
     private static final CountDownLatch latch = new CountDownLatch(12 + 1);
     private static final int MESSAGE_COUNT = 40000;
+    private static final Duration WAIT = Duration.ofMinutes(2);
     private final Semaphore semaphore = new Semaphore(0);
     @Mock
     private Receiver receiver;
@@ -76,6 +78,14 @@ class ApplicationCommandListenerPerfTest {
         }
     }
 
+    /**
+     * Fails instead of waiting forever (and hanging the build) when some messages are never handled.
+     */
+    private void awaitPermits(int permits) throws InterruptedException {
+        Assertions.assertThat(semaphore.tryAcquire(permits, WAIT.toSeconds(), TimeUnit.SECONDS))
+                .as("%d messages handled within %s", permits, WAIT).isTrue();
+    }
+
     @BeforeEach
     void setUp() {
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
@@ -86,7 +96,7 @@ class ApplicationCommandListenerPerfTest {
             if (latch.getCount() > 0) {
                 latch.countDown();
                 try {
-                    latch.await();
+                    latch.await(WAIT.toSeconds(), TimeUnit.SECONDS);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -109,7 +119,7 @@ class ApplicationCommandListenerPerfTest {
         messageListener.startListener();
         final long init = System.currentTimeMillis();
         latch.countDown();
-        semaphore.acquire(MESSAGE_COUNT);
+        awaitPermits(MESSAGE_COUNT);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
@@ -139,7 +149,7 @@ class ApplicationCommandListenerPerfTest {
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
-        semaphore.acquire(MESSAGE_COUNT);
+        awaitPermits(MESSAGE_COUNT);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
@@ -199,7 +209,7 @@ class ApplicationCommandListenerPerfTest {
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
-        semaphore.acquire(messageCount);
+        awaitPermits(messageCount);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
@@ -228,7 +238,7 @@ class ApplicationCommandListenerPerfTest {
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
-        semaphore.acquire(messageCount);
+        awaitPermits(messageCount);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;
@@ -257,7 +267,7 @@ class ApplicationCommandListenerPerfTest {
         System.out.println("Permits before: " + semaphore.availablePermits());
         final long init = System.currentTimeMillis();
         messageListener.startListener();
-        semaphore.acquire(messageCount);
+        awaitPermits(messageCount);
         final long end = System.currentTimeMillis();
 
         final long total = end - init;

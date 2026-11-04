@@ -32,7 +32,7 @@ app:
       brokerType: "rabbitmq" # please don't change this value
       queueType: null # you can set to 'classic' or to 'quorum' if your RabbitMQ cluster supports it, by default it will take the virtual host default queue type
       flux:
-        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows only when the handlers block (blocking I/O), up to the sum of the maxConcurrency of the listeners (at least 250 threads), and releases the idle threads after a minute
+        maxConcurrency: 250 # max concurrency of listener flow. The handlers of all the listeners run on one pool shared by the whole application, that grows only when the handlers wait for their own I/O (not for a lock they share, such as a synchronous log appender), up to the sum of the maxConcurrency of the listeners (at least 250 threads), and releases the threads it did not need in the last 15 seconds, even while deliveries keep coming
       domain:
         ignoreThisListener: false # Allows you to disable event listener for this specific domain
         events:
@@ -573,7 +573,7 @@ properties and their defaults:
 
 | Property                | Default    | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |-------------------------|------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `sendTimeout`           | `10s`      | Maximum time a sender waits for the outcome of a message before failing the caller.                                                                                                                                                                                                                                                                                                                                                    |
+| `sendTimeout`           | `10s`      | Maximum time a sender waits for the outcome of a message before failing the caller. The messages waiting for their outcome are checked every `sendTimeout` / 20 (between 10 and 100 ms) instead of with a timer each, so a message fails at most that much later than its `sendTimeout`.                                                                                                                                               |
 | `handOverQueueCapacity` | `16384`    | Maximum number of messages waiting to be written to a channel (queued for the hand-over pool, or handed to a publishing flow whose channel is busy, e.g. while the broker blocks the connection). When reached, new publishes fail fast instead of growing in memory. Size it to about one second of your peak publish rate: a smaller value rejects messages during short pauses (GC, scheduling) while the broker is still draining. |
 | `blockedHealthGrace`    | `5s`       | How long a `connection.blocked` alarm must persist before the health indicator reports DOWN.                                                                                                                                                                                                                                                                                                                                           |
 | `maxMessageSize`        | `16777216` | Maximum size in bytes of the body of a published message. Set it to the `max_message_size` of your broker (16 MiB by default in RabbitMQ 4). A larger message fails fast with `SendFailureMessageTooLargeException` before being written to a channel.                                                                                                                                                                                 |
@@ -718,9 +718,16 @@ unacknowledged until the last one: up to `maxRetries` × `retryDelay`, plus the 
 The handler pool and the error-reporter scheduler are shared by every listener of the JVM. The handler pool can grow
 up to the sum of the `maxConcurrency` of the active listeners (at least 250 threads), so the handlers of a listener
 never wait for the threads taken by the blocking handlers of another one (e.g. queries behind slow event handlers).
-It only grows when its handlers block: lower the `maxConcurrency` of a listener whose handlers block to bound the
-threads it can take. While at least one application context using them has a `MeterRegistry`, the handler pool is
-exported to that registry:
+It only grows when two checks in a row find its queued tasks waiting more than 5 ms while its busy threads wait for
+their own work (blocking I/O, their own future): when at least half of them wait for a monitor or a lock another
+thread holds, e.g. a synchronous log appender (log4j2 and Logback alike), it does not grow, since more threads would
+only queue behind it, hold more deliveries in memory and lengthen the GC pauses, unless no task completes for a
+second: then they wait for tasks that are still queued (e.g. handlers that wait for each other on a latch), and the
+pool grows so that those can run. Nor does it grow after a pause of the process (a GC pause, the CPU quota of the
+container used up), when the tasks only look stuck. It keeps the threads its handlers needed during the last 15
+seconds, plus a quarter, and releases the others even while deliveries keep coming. Lower the `maxConcurrency` of a
+listener whose handlers block to bound the threads it can take. While at least one application context using them has a
+`MeterRegistry`, the handler pool is exported to that registry:
 
 | Metric                                               | Type            | Meaning                                                                   |
 |------------------------------------------------------|-----------------|---------------------------------------------------------------------------|
@@ -849,6 +856,41 @@ distributing the workload efficiently.
 For example, if a microservice that sends and listens on one domain is deployed with **4 replicas**, each of them will
 establish its own two connections to the broker. As a result, the entire microservice deployment will have a total of
 **8 connections** to the broker (4 if it only sends with `listenReplies: false`).
+
+## Threads, logging and performance
+
+### Logging in the applications
+
+Logging is often the first limit of an application under load: a synchronous appender writes each event while it
+holds a lock, so the threads that log at the same time wait for each other, whatever the library does. Asynchronous
+logging is not a fix for every application: it depends on the volume of the logs and on whether they may be lost.
+
+1. **Log less on the hot path.** This is the only measure that always helps: log each message at `DEBUG`, not
+   `INFO`; do not log a stack trace per retry (the library logs a retry as one `WARN` line); and avoid the location
+   patterns (`%C`, `%F`, `%l`, `%L`, `%M`) in the layouts, which walk the stack on every event.
+2. **Asynchronous logging absorbs bursts, not a sustained rate above what the appender writes.** Once its buffer is
+   full, the application logs at the speed of the appender again. Its background thread also competes for the CPU:
+   in a container with one CPU or less it is unlikely to help. Measure it under your load before adopting it.
+3. **Decide what may be lost.** With the asynchronous loggers of Log4j 2, the default policy for a full buffer
+   (`log4j2.asyncQueueFullPolicy=Default`) makes the logging thread wait: nothing is lost. `Discard` drops the events
+   at or below `log4j2.discardThreshold` (`INFO` by default) while the buffer is full: use it only for high-volume
+   operational logs whose loss is acceptable. Logback's `AsyncAppender` (Logback is the default logging of Spring
+   Boot) drops `TRACE`, `DEBUG` and `INFO` events once its queue (256 events by default) is 80 % full, unless its
+   `discardingThreshold` is `0`.
+4. **Keep the audit and business logs synchronous.** Combine asynchronous loggers for the high-volume categories with
+   synchronous ones for what must not be lost (`AsyncLogger` next to `Logger` and `Root` in a Log4j 2 configuration):
+   the appenders of a synchronous logger run on the calling thread, so their exceptions can reach the application.
+   With the all-asynchronous context selector (`AsyncLoggerContextSelector`) use only `Logger` and `Root`: adding
+   `AsyncLogger` creates two asynchronous barriers instead of one.
+5. **The events still in the buffer are lost if the process ends abruptly** (`SIGKILL`, OOM kill, crash). A graceful
+   shutdown writes them: keep the shutdown hook of the logging system (Spring Boot registers one), give the pod a
+   `terminationGracePeriodSeconds` long enough, and leave memory headroom against OOM kills. Logback's
+   `AsyncAppender` waits at most `maxFlushTime` (1 second by default) when it stops and discards the rest.
+6. **Size the buffer.** Log4j 2 allocates the whole ring buffer of the asynchronous loggers at first use and never
+   resizes it (`log4j2.asyncLoggerRingBufferSize`: 256 × 1024 events by default, 4 × 1024 in garbage-free mode),
+   which counts in a container with little memory.
+7. **Never log at high volume synchronously on Reactor or Netty threads**: they are few and each one serves many
+   connections, so one thread waiting for the log lock stalls all of them.
 
 ## Mandatory property
 

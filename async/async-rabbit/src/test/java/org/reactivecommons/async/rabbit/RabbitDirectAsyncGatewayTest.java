@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.IntStream;
 
@@ -117,7 +118,8 @@ class RabbitDirectAsyncGatewayTest {
 
         final long init = System.currentTimeMillis();
         target.subscribe();
-        semaphore.acquire(messageCount);
+        assertThat(semaphore.tryAcquire(messageCount, 2, TimeUnit.MINUTES))
+                .as("%d messages published within 2 minutes", messageCount).isTrue();
         final long end = System.currentTimeMillis();
 
         final long total = end - init;

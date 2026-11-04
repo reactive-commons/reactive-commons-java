@@ -141,6 +141,11 @@ public abstract class GenericMessageListener {
                 .channelCallback(channel -> {
                     consumingChannel.set(channel);
                     channel.addShutdownListener(cause -> {
+                        if (stopped.get()) {
+                            // the application stopped the listener (e.g. it is shutting down) and closed the channel
+                            log.debug("Channel of queue {} closed: the listener is stopped", queueName);
+                            return;
+                        }
                         log.warn("Channel shutdown detected in queue {} channel open: {} connection open: {}",
                                 queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
                         if (channel.getConnection().isOpen() && !channel.isOpen()) {
@@ -420,10 +425,18 @@ public abstract class GenericMessageListener {
     }
 
     /**
-     * Logs a failed message, which happens again on every retry: only the beginning of its body is written.
+     * Logs a failed message. Its definitive discard is logged in full: the error with its stack trace at
+     * {@code ERROR}, then its headers and the beginning of its body. A retry is logged as a single {@code WARN} line,
+     * without stack trace, headers or body, which are logged at {@code DEBUG}: a message that keeps failing is logged
+     * again on every retry, and under load writing a stack trace per retry takes the CPU and the log lock the
+     * handlers need.
      */
     protected void logError(Throwable err, AcknowledgableDelivery msj, FallbackStrategy strategy) {
         final String messageID = msj.getProperties().getMessageId();
+        if (strategy != FallbackStrategy.DEFINITIVE_DISCARD) {
+            logRetry(err, msj, messageID, strategy);
+            return;
+        }
         try {
             log.error("Error encounter while processing message {} of queue {} ({} bytes)", messageID, queueName,
                     msj.getBody().length, err);
@@ -432,7 +445,25 @@ public abstract class GenericMessageListener {
         } catch (Exception e) {
             log.error("Error Login message Content!!", e);
         } finally {
-            log.warn(format(strategy.message, messageID));
+            log.warn("{}", format(strategy.message, messageID));
+        }
+    }
+
+    private void logRetry(Throwable err, AcknowledgableDelivery msj, String messageID, FallbackStrategy strategy) {
+        if (log.isWarnEnabled()) {
+            final String attempt = strategy == FallbackStrategy.RETRY_DLQ
+                    ? "retry " + (getRetryNumber(msj) + 1) + " of " + maxRetries
+                    : "redelivered " + (msj.getEnvelope() != null && msj.getEnvelope().isRedeliver());
+            log.warn("{} - queue {}, {}, failed with {} (stack trace, headers and body at DEBUG)",
+                    format(strategy.message, messageID), queueName, attempt, err.toString());
+        }
+        if (log.isDebugEnabled()) {
+            try {
+                log.debug("Message {} of queue {} failed. Headers: {} Body: {}", messageID, queueName,
+                        msj.getProperties().getHeaders(), RabbitMessage.bodyPreview(msj.getBody()), err);
+            } catch (Exception e) {
+                log.debug("Error Login message Content!!", e);
+            }
         }
     }
 

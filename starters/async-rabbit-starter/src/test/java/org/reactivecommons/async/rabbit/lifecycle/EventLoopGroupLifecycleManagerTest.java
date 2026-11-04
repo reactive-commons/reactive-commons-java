@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 import org.reactivecommons.async.rabbit.RabbitMQSetupUtils;
+import org.reactivecommons.async.starter.config.BrokerProviderLifecycleManager;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,7 +60,7 @@ class EventLoopGroupLifecycleManagerTest {
     }
 
     @Test
-    void shouldReturnPhaseMinusTen() {
-        assertEquals(-10, manager.getPhase());
+    void shouldStopAfterTheBrokerProviders() {
+        assertEquals(BrokerProviderLifecycleManager.PHASE - 3, manager.getPhase());
     }
 }
