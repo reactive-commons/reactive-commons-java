@@ -47,6 +47,10 @@ class ReactiveMessageSenderTimeoutTest {
      */
     private static final Duration LATENESS = Duration.ofMillis(500);
     private static final String SCHEDULE_HOOK = "count-timers";
+    /**
+     * The most a test waits for the outcome of a publish.
+     */
+    private static final Duration WAIT = Duration.ofSeconds(5);
 
     private final Sender sender = mock(Sender.class);
     private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
@@ -76,9 +80,9 @@ class ReactiveMessageSenderTimeoutTest {
 
         for (int i = 0; i < 200; i++) {
             messageSender.sendWithConfirm("message-" + i, "exchange", "rkey", new HashMap<>(), true)
-                    .block(Duration.ofSeconds(5));
+                    .block(WAIT);
             messageSender.sendNoConfirm("message-" + i, "exchange", "rkey", new HashMap<>(), true)
-                    .block(Duration.ofSeconds(5));
+                    .block(WAIT);
         }
 
         assertThat(timers).as("timers scheduled by 400 publishes").hasValue(0);
@@ -98,7 +102,7 @@ class ReactiveMessageSenderTimeoutTest {
 
         long start = System.nanoTime();
         Mono<Void> send = messageSender.sendWithConfirm("silent", "exchange", "rkey", new HashMap<>(), true);
-        assertThatThrownBy(() -> send.block(Duration.ofSeconds(5)))
+        assertThatThrownBy(() -> send.block(WAIT))
                 .isExactlyInstanceOf(SendConfirmUnknownException.class)
                 .hasMessageStartingWith("No confirmation received within " + SEND_TIMEOUT)
                 .hasCauseInstanceOf(TimeoutException.class);
@@ -119,7 +123,7 @@ class ReactiveMessageSenderTimeoutTest {
 
         long start = System.nanoTime();
         Mono<Void> send = messageSender.sendWithConfirm("waiting", "exchange", "rkey", new HashMap<>(), true);
-        assertThatThrownBy(() -> send.block(Duration.ofSeconds(5)))
+        assertThatThrownBy(() -> send.block(WAIT))
                 .isExactlyInstanceOf(SendFailureNoAckException.class)
                 .hasMessageContaining("no RabbitMQ publishing flow available within " + SEND_TIMEOUT);
         Duration elapsed = Duration.ofNanos(System.nanoTime() - start);
@@ -135,7 +139,7 @@ class ReactiveMessageSenderTimeoutTest {
         messageSender = newSender(sender, null, SEND_TIMEOUT);
 
         messageSender.sendWithConfirm("message", "exchange", "rkey", new HashMap<>(), true)
-                .block(Duration.ofSeconds(5));
+                .block(WAIT);
 
         Field field = ReactiveMessageSender.class.getDeclaredField("timeoutChecker");
         field.setAccessible(true);

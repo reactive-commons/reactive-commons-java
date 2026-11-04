@@ -535,7 +535,7 @@ public final class ListenerSchedulers {
          */
         boolean busyThreadsWaitTogether() {
             int busy = 0;
-            int waitingTogether = 0;
+            int blocked = 0;
             final Map<Object, List<HandlerThread>> parked = new IdentityHashMap<>();
             for (HandlerThread thread : workers.threads) {
                 if (!thread.busy) {
@@ -544,7 +544,7 @@ public final class ListenerSchedulers {
                 busy++;
                 final Thread.State state = thread.getState();
                 if (state == Thread.State.BLOCKED) {
-                    waitingTogether++;
+                    blocked++;
                 } else if (state == Thread.State.WAITING || state == Thread.State.TIMED_WAITING) {
                     final Object blocker = LockSupport.getBlocker(thread);
                     if (blocker != null) {
@@ -552,19 +552,29 @@ public final class ListenerSchedulers {
                     }
                 }
             }
-            // a lock, a latch or a semaphore: only a lock has an owner, which the JVM knows
+            return busy > 0 && waitingTogether(busy, blocked, parked) * 2 >= busy;
+        }
+
+        /**
+         * How many of the busy threads wait together: the {@code blocked} ones, plus those parked on the same blocker
+         * as another one or on a lock some thread holds. The owners of the locks are only asked when they can make
+         * the count reach half of the {@code busy} threads.
+         */
+        private static int waitingTogether(int busy, int blocked, Map<Object, List<HandlerThread>> parked) {
+            int together = blocked;
             final List<HandlerThread> alone = new ArrayList<>();
             for (Map.Entry<Object, List<HandlerThread>> waiting : parked.entrySet()) {
                 if (waiting.getValue().size() > 1) {
-                    waitingTogether += waiting.getValue().size();
+                    together += waiting.getValue().size();
                 } else if (waiting.getKey() instanceof AbstractOwnableSynchronizer) {
+                    // a lock, a latch or a semaphore: only a lock has an owner, which the JVM knows
                     alone.add(waiting.getValue().get(0));
                 }
             }
-            if (waitingTogether * 2 < busy && (waitingTogether + alone.size()) * 2 >= busy) {
-                waitingTogether += waitingForAHeldLock(alone);
+            if (together * 2 < busy && (together + alone.size()) * 2 >= busy) {
+                together += waitingForAHeldLock(alone);
             }
-            return busy > 0 && waitingTogether * 2 >= busy;
+            return together;
         }
 
         /**

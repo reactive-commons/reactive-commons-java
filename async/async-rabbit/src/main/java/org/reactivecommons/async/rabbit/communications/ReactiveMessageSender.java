@@ -235,6 +235,7 @@ public class ReactiveMessageSender implements AutoCloseable {
      * silently growing in memory.
      */
     private final ThreadPoolExecutor executorService2;
+    private final Outcomes outcomes;
 
     public ReactiveMessageSender(Sender sender, String sourceApplication,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
@@ -290,6 +291,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         this.timeoutChecker.allowCoreThreadTimeOut(true);
         this.metrics = new PublishMetrics(settings.meterRegistry(), settings.domain(), this.blockedState,
                 activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
+        this.outcomes = new Outcomes(this.metrics, this.executorService);
         initializeSenders();
     }
 
@@ -613,7 +615,7 @@ public class ReactiveMessageSender implements AutoCloseable {
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(true, body.length);
             return send(exchange, (monoSink, startNanos) -> new ConfirmableMessage(exchange, routingKey, props, body,
-                    monoSink, startNanos, metrics), this::nextConfirmSink, true);
+                    monoSink, startNanos, outcomes), this::nextConfirmSink, true);
         });
     }
 
@@ -641,9 +643,8 @@ public class ReactiveMessageSender implements AutoCloseable {
                     timeToLive);
             final byte[] body = converted.getBody();
             metrics.recordMessageSize(false, body.length);
-            final Runnable onPublished = () -> metrics.recordOutcome(OUTCOME_PUBLISHED, false);
             return send(exchange, (monoSink, startNanos) -> new NoConfirmMessage(exchange, routingKey, props, body,
-                    monoSink, startNanos, metrics, executorService, onPublished), this::availableNoConfirmSink, false);
+                    monoSink, startNanos, outcomes), this::availableNoConfirmSink, false);
         });
     }
 
@@ -819,7 +820,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         final long timeoutNanos = sendTimeout.toNanos();
         for (PendingMessage pending : pendingMessages) {
             if (now - pending.startNanos - timeoutNanos >= 0) {
-                pending.expire(this::timeoutFailure, executorService);
+                pending.expire(this::timeoutFailure);
             }
         }
     }
@@ -827,29 +828,6 @@ public class ReactiveMessageSender implements AutoCloseable {
     private Throwable timeoutFailure(PendingMessage pending) {
         return timeoutFailure(new TimeoutException("No outcome of the message within " + sendTimeout), pending,
                 pending.confirmFlow());
-    }
-
-    private static String latencyOutcome(Throwable error, PendingMessage pending) {
-        if (error instanceof SendFailureReturnedException) {
-            return OUTCOME_RETURNED;
-        }
-        if (error instanceof SendFailureBrokerBlockedException) {
-            return OUTCOME_BLOCKED;
-        }
-        if (error instanceof SendFailureMessageTooLargeException) {
-            return OUTCOME_TOO_LARGE;
-        }
-        if (error instanceof SendFailureHandOverRejectedException) {
-            return OUTCOME_REJECTED;
-        }
-        if (error instanceof SendConfirmUnknownException) {
-            return OUTCOME_UNKNOWN;
-        }
-        // the same exception reports a broker nack and a message that was never written (e.g. no channel, shut down)
-        if (error instanceof SendFailureNoAckException && pending.isPublished()) {
-            return OUTCOME_NACK;
-        }
-        return OUTCOME_FAILED;
     }
 
     private void handOver(PendingMessage pending, Supplier<FluxSink<OutboundMessage>> sinkSelector,
@@ -1019,6 +997,13 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
+     * Where the outcome of a message goes: recorded in the metrics of the sender, and completed for its caller on the
+     * completion pool rather than on a connection thread. One per sender, shared by its messages.
+     */
+    private record Outcomes(PublishMetrics metrics, Executor completionExecutor) {
+    }
+
+    /**
      * A message whose caller is waiting for its outcome. It is completed at most once, and its latency is recorded
      * then, before its caller gets the outcome. A cancelled message records nothing: its caller stopped waiting, but
      * it may still be published.
@@ -1035,7 +1020,7 @@ public class ReactiveMessageSender implements AutoCloseable {
          * them all.
          */
         final long startNanos;
-        private final PublishMetrics metrics;
+        final Outcomes outcomes;
         private final AtomicBoolean finished = new AtomicBoolean();
         private final AtomicBoolean outcomeCounted = new AtomicBoolean();
         private volatile Runnable onFinished = () -> { };
@@ -1047,11 +1032,11 @@ public class ReactiveMessageSender implements AutoCloseable {
         private volatile AtomicInteger bufferCounter;
 
         PendingMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                       MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics) {
+                       MonoSink<Void> monoSink, long startNanos, Outcomes outcomes) {
             super(exchange, routingKey, properties, body);
             this.monoSink = monoSink;
             this.startNanos = startNanos;
-            this.metrics = metrics;
+            this.outcomes = outcomes;
             monoSink.onCancel(this::discard);
         }
 
@@ -1152,18 +1137,41 @@ public class ReactiveMessageSender implements AutoCloseable {
             if (markFinished()) {
                 // a message no flow could take is retried: its publish is not over
                 if (error != NoFlowAvailableException.INSTANCE) {
-                    recordLatency(latencyOutcome(error, this));
+                    recordLatency(latencyOutcome(error));
                 }
                 monoSink.error(error);
             }
         }
 
+        private String latencyOutcome(Throwable error) {
+            if (error instanceof SendFailureReturnedException) {
+                return OUTCOME_RETURNED;
+            }
+            if (error instanceof SendFailureBrokerBlockedException) {
+                return OUTCOME_BLOCKED;
+            }
+            if (error instanceof SendFailureMessageTooLargeException) {
+                return OUTCOME_TOO_LARGE;
+            }
+            if (error instanceof SendFailureHandOverRejectedException) {
+                return OUTCOME_REJECTED;
+            }
+            if (error instanceof SendConfirmUnknownException) {
+                return OUTCOME_UNKNOWN;
+            }
+            // the same exception reports a broker nack and a message never written (e.g. no channel, shut down)
+            if (error instanceof SendFailureNoAckException && isPublished()) {
+                return OUTCOME_NACK;
+            }
+            return OUTCOME_FAILED;
+        }
+
         /**
          * Fails the message because its send timeout is over. It is finished first, which drops it from the buffer of
-         * its flow if it is still there, so the failure tells how far it got. The caller gets it on the
-         * {@code completionExecutor}, like the other outcomes, and not on the thread that checks the timeouts.
+         * its flow if it is still there, so the failure tells how far it got. The caller gets it on the completion
+         * pool, like the other outcomes, and not on the thread that checks the timeouts.
          */
-        void expire(Function<PendingMessage, Throwable> failure, Executor completionExecutor) {
+        void expire(Function<PendingMessage, Throwable> failure) {
             if (markFinished()) {
                 Throwable error;
                 try {
@@ -1173,12 +1181,13 @@ public class ReactiveMessageSender implements AutoCloseable {
                 }
                 recordLatency(OUTCOME_TIMEOUT);
                 final Throwable outcome = error;
-                runOn(completionExecutor, () -> monoSink.error(outcome));
+                runOn(outcomes.completionExecutor(), () -> monoSink.error(outcome));
             }
         }
 
         private void recordLatency(String outcome) {
-            metrics.recordPublishLatency(confirmFlow(), outcome, Duration.ofNanos(System.nanoTime() - startNanos));
+            outcomes.metrics().recordPublishLatency(confirmFlow(), outcome,
+                    Duration.ofNanos(System.nanoTime() - startNanos));
         }
 
         private void discard() {
@@ -1208,8 +1217,8 @@ public class ReactiveMessageSender implements AutoCloseable {
     private static final class ConfirmableMessage extends PendingMessage {
 
         ConfirmableMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                           MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics) {
-            super(exchange, routingKey, properties, body, monoSink, startNanos, metrics);
+                           MonoSink<Void> monoSink, long startNanos, Outcomes outcomes) {
+            super(exchange, routingKey, properties, body, monoSink, startNanos, outcomes);
         }
 
         @Override
@@ -1236,15 +1245,10 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     private static final class NoConfirmMessage extends PendingMessage {
-        private final Executor completionExecutor;
-        private final Runnable onPublished;
 
         NoConfirmMessage(String exchange, String routingKey, AMQP.BasicProperties properties, byte[] body,
-                         MonoSink<Void> monoSink, long startNanos, PublishMetrics metrics,
-                         Executor completionExecutor, Runnable onPublished) {
-            super(exchange, routingKey, properties, body, monoSink, startNanos, metrics);
-            this.completionExecutor = completionExecutor;
-            this.onPublished = onPublished;
+                         MonoSink<Void> monoSink, long startNanos, Outcomes outcomes) {
+            super(exchange, routingKey, properties, body, monoSink, startNanos, outcomes);
         }
 
         @Override
@@ -1255,8 +1259,8 @@ public class ReactiveMessageSender implements AutoCloseable {
         @Override
         protected void published() {
             super.published();
-            runOn(completionExecutor, () -> {
-                onPublished.run();
+            runOn(outcomes.completionExecutor(), () -> {
+                outcomes.metrics().recordOutcome(OUTCOME_PUBLISHED, false);
                 succeed();
             });
         }

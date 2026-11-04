@@ -26,6 +26,7 @@ import java.util.function.LongSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.awaitility.Awaitility.await;
 
 class ListenerSchedulersTest {
 
@@ -314,7 +315,7 @@ class ListenerSchedulersTest {
         boolean together = busyThreadsWaitTogether(() -> {
             appender.lock();
             try {
-                await(written); // writing
+                waitFor(written); // writing
             } finally {
                 appender.unlock();
             }
@@ -335,7 +336,7 @@ class ListenerSchedulersTest {
         CountDownLatch firstReply = new CountDownLatch(1);
         CountDownLatch secondReply = new CountDownLatch(1);
 
-        boolean together = busyThreadsWaitTogether(() -> await(firstReply), () -> await(secondReply));
+        boolean together = busyThreadsWaitTogether(() -> waitFor(firstReply), () -> waitFor(secondReply));
 
         assertThat(together).as("each handler waits for its own reply").isFalse();
     }
@@ -368,7 +369,7 @@ class ListenerSchedulersTest {
         }
     }
 
-    private static void await(CountDownLatch latch) {
+    private static void waitFor(CountDownLatch latch) {
         try {
             latch.await();
         } catch (InterruptedException e) {
@@ -489,10 +490,10 @@ class ListenerSchedulersTest {
                 assertThat(blocked.await(5, TimeUnit.SECONDS)).isTrue();
             }
             long startedBefore = pool.startedThreads();
-            Thread.sleep(500);
-            long startedMeanwhile = pool.startedThreads() - startedBefore;
 
-            assertThat(startedMeanwhile).as("threads started in 500 ms once no task is waiting").isZero();
+            await().during(Duration.ofMillis(500)).atMost(Duration.ofSeconds(2)).untilAsserted(() ->
+                    assertThat(pool.startedThreads() - startedBefore)
+                            .as("threads started once no task is waiting").isZero());
             assertThat(pool.getCorePoolSize()).as("core size once the pool grew").isEqualTo(baseThreads());
         } finally {
             replies.shutdownNow();
