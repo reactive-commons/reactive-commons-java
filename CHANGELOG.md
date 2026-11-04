@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.8.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.8.0) (2026-11-04)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.7.0...v7.8.0)
+
+**Merged pull requests:**
+
+- feat\(rabbit\): bound the handler pool and lower the per-message cost of retries, send timeouts and ids [\#190](https://github.com/reactive-commons/reactive-commons-java/pull/190) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.7.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.7.0) (2026-11-03)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.6.0...v7.7.0)
