@@ -43,7 +43,12 @@ import static org.reactivecommons.async.commons.Headers.CORRELATION_ID;
 @ExtendWith(MockitoExtension.class)
 class RabbitDirectAsyncGatewayReplyRouterTest {
 
-    private static final Duration REPLY_TIMEOUT = Duration.ofMillis(300);
+    /**
+     * The reply timeout of the queries that must not time out: the first test of a cold JVM on a busy CI runner
+     * (first Mockito verification, first Jackson serialization) took more than 300 ms to route the reply.
+     */
+    private static final Duration REPLY_TIMEOUT = Duration.ofSeconds(10);
+    private static final Duration SHORT_REPLY_TIMEOUT = Duration.ofMillis(300);
 
     private final MessageConverter converter =
             new RabbitJacksonMessageConverter(new DefaultObjectMapperSupplier().get());
@@ -56,9 +61,12 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @BeforeEach
     void init() {
-        BrokerConfig config = new BrokerConfig(false, false, false, REPLY_TIMEOUT);
-        gateway = new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter,
-                new SimpleMeterRegistry());
+        gateway = gateway(REPLY_TIMEOUT);
+    }
+
+    private RabbitDirectAsyncGateway gateway(Duration replyTimeout) {
+        BrokerConfig config = new BrokerConfig(false, false, false, replyTimeout);
+        return new RabbitDirectAsyncGateway(config, router, sender, "exchange", converter, new SimpleMeterRegistry());
     }
 
     @Test
@@ -76,6 +84,7 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void timedOutQueryReleasesItsRegistration() throws Exception {
+        gateway = gateway(SHORT_REPLY_TIMEOUT);
         when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
                 .thenReturn(Mono.empty());
 
