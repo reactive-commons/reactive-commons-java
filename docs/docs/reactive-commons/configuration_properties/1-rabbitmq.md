@@ -718,15 +718,15 @@ unacknowledged until the last one: up to `maxRetries` × `retryDelay`, plus the 
 The handler pool and the error-reporter scheduler are shared by every listener of the JVM. The handler pool can grow
 up to the sum of the `maxConcurrency` of the active listeners (at least 250 threads), so the handlers of a listener
 never wait for the threads taken by the blocking handlers of another one (e.g. queries behind slow event handlers).
-It only grows when its queued tasks wait more than 5 ms while its busy threads wait for their own work (blocking I/O,
-their own future): when at least half of them are blocked on a monitor or wait for the same lock, e.g. a synchronous
-log appender, it does not grow, since more threads would only queue behind it, hold more deliveries in memory and
-lengthen the GC pauses, unless no task completes for a second: then they wait for tasks that are still queued (e.g.
-handlers that wait for each other on a latch), and the pool grows so that those can run. Nor does it grow after a
-pause of the process (a GC pause, the CPU quota of the container used up), when the tasks only look stuck. It keeps
-the threads its handlers needed during the last 15 seconds, plus a quarter, and releases the others even while
-deliveries keep coming. Lower the `maxConcurrency` of a listener whose handlers block to bound the threads it can
-take. While at least one application context using them has a
+It only grows when two checks in a row find its queued tasks waiting more than 5 ms while its busy threads wait for
+their own work (blocking I/O, their own future): when at least half of them wait for a monitor or a lock another
+thread holds, e.g. a synchronous log appender (log4j2 and Logback alike), it does not grow, since more threads would
+only queue behind it, hold more deliveries in memory and lengthen the GC pauses, unless no task completes for a
+second: then they wait for tasks that are still queued (e.g. handlers that wait for each other on a latch), and the
+pool grows so that those can run. Nor does it grow after a pause of the process (a GC pause, the CPU quota of the
+container used up), when the tasks only look stuck. It keeps the threads its handlers needed during the last 15
+seconds, plus a quarter, and releases the others even while deliveries keep coming. Lower the `maxConcurrency` of a
+listener whose handlers block to bound the threads it can take. While at least one application context using them has a
 `MeterRegistry`, the handler pool is exported to that registry:
 
 | Metric                                               | Type            | Meaning                                                                   |

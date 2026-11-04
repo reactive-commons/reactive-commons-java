@@ -19,6 +19,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 
@@ -275,6 +277,10 @@ class ListenerSchedulersTest {
                 .hasSizeLessThanOrEqualTo(baseThreads());
     }
 
+    /**
+     * The same with an appender that uses a lock instead of a monitor, as Logback does. With two threads (one or two
+     * processors) one writes while the other waits alone for the lock.
+     */
     @Test
     void shouldNotGrowWhileTheBusyThreadsWaitForTheSameLock() {
         ReentrantLock appender = new ReentrantLock();
@@ -294,6 +300,80 @@ class ListenerSchedulersTest {
 
         assertThat(threads).as("threads used while every handler waits for the same lock")
                 .hasSizeLessThanOrEqualTo(baseThreads());
+    }
+
+    /**
+     * One handler writes to an appender while the other waits for its lock: no other handler waits for that lock,
+     * but another thread holds it, so both wait for a shared resource.
+     */
+    @Test
+    void aHandlerWaitingAloneForALockAnotherThreadHoldsWaitsForASharedResource() {
+        ReentrantLock appender = new ReentrantLock();
+        CountDownLatch written = new CountDownLatch(1);
+
+        boolean together = busyThreadsWaitTogether(() -> {
+            appender.lock();
+            try {
+                await(written); // writing
+            } finally {
+                appender.unlock();
+            }
+        }, () -> {
+            appender.lock();
+            appender.unlock();
+        });
+
+        assertThat(together).as("a handler writes, the other waits for the lock it holds").isTrue();
+    }
+
+    /**
+     * A handler parked on a latch of its own (a blocking client call, {@code Mono#block}) waits for its own work: a
+     * latch has no owner, unlike a lock.
+     */
+    @Test
+    void handlersParkedOnLatchesOfTheirOwnWaitForTheirOwnWork() {
+        CountDownLatch firstReply = new CountDownLatch(1);
+        CountDownLatch secondReply = new CountDownLatch(1);
+
+        boolean together = busyThreadsWaitTogether(() -> await(firstReply), () -> await(secondReply));
+
+        assertThat(together).as("each handler waits for its own reply").isFalse();
+    }
+
+    /**
+     * Runs the tasks on a pool of as many threads, each once the previous one is parked, and tells whether its busy
+     * threads wait together then. The pool is at its limit, so it does not grow meanwhile.
+     */
+    private static boolean busyThreadsWaitTogether(Runnable... tasks) {
+        ListenerSchedulers.ElasticExecutor pool = new ListenerSchedulers.ElasticExecutor(
+                tasks.length, "sampled", KEEP_ALIVE, System::nanoTime);
+        try {
+            for (Runnable task : tasks) {
+                AtomicReference<Thread> running = new AtomicReference<>();
+                pool.execute(() -> {
+                    running.set(Thread.currentThread());
+                    task.run();
+                });
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while ((running.get() == null || LockSupport.getBlocker(running.get()) == null)
+                        && System.nanoTime() < deadline) {
+                    Thread.onSpinWait();
+                }
+                assertThat(running.get()).as("the task parked").isNotNull()
+                        .extracting(LockSupport::getBlocker).isNotNull();
+            }
+            return pool.busyThreadsWaitTogether();
+        } finally {
+            pool.shutdownNow();
+        }
+    }
+
+    private static void await(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 
     /**

@@ -11,6 +11,8 @@ import org.jspecify.annotations.NonNull;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
+import java.lang.management.ManagementFactory;
+import java.lang.management.ThreadInfo;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
@@ -28,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.AbstractOwnableSynchronizer;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -327,9 +330,10 @@ public final class ListenerSchedulers {
      *
      * <p>Blocking constraints:</p>
      * <ul>
-     *     <li>The pool grows if threads wait for independent work (individual I/O, futures).</li>
-     *     <li>It does not grow if threads contend for a shared resource (e.g. synchronous log appenders), to prevent
-     *     memory bloat and GC pauses.</li>
+     *     <li>The pool grows if threads wait for independent work (individual I/O, futures), as seen in two checks in a
+     *     row: a single look may catch a thread between two tasks, or a lock being handed over.</li>
+     *     <li>It does not grow if threads contend for a shared resource (a monitor or a lock another thread holds, e.g.
+     *     synchronous log appenders), to prevent memory bloat and GC pauses.</li>
      *     <li>Exception: if no task completes during {@value ListenerSchedulers#STALL_CHECKS} checks in a row (at
      *     least a second), a deadlock or latch is assumed, and the pool grows anyway to force progress. Checks are
      *     counted, not time: on a busy host or a throttled container most checks run late, and they must still add
@@ -365,6 +369,7 @@ public final class ListenerSchedulers {
         private Runnable headSeenInThePreviousCheck;
         private long completedAtLastCheck;
         private int checksWithoutProgress;
+        private boolean apartInThePreviousSample;
 
         ElasticExecutor(int maxThreads, String threadPrefix) {
             this(maxThreads, threadPrefix, Duration.ofSeconds(HANDLER_KEEP_ALIVE_SECONDS), System::nanoTime);
@@ -478,7 +483,8 @@ public final class ListenerSchedulers {
             final Runnable head = queue.peek();
             final boolean stalled = stalled(headSeenInThePreviousCheck == null);
             final boolean stuck = head != null && head == headSeenInThePreviousCheck;
-            if (stuck && (stalled || (!late && !busyThreadsWaitTogether()))) {
+            // at its limit the pool cannot grow: the busy threads are not even sampled
+            if (stuck && getPoolSize() < getMaximumPoolSize() && (stalled || (!late && waitApartTwiceInARow()))) {
                 grow(queue.size());
                 // the new threads get as many checks before the pool grows again for lack of progress
                 checksWithoutProgress = 0;
@@ -486,7 +492,21 @@ public final class ListenerSchedulers {
             headSeenInThePreviousCheck = head;
             if (head != null) {
                 scheduleStarvationCheck();
+            } else {
+                apartInThePreviousSample = false; // the starving episode is over
             }
+        }
+
+        /**
+         * Whether the busy threads wait apart (each for its own work) in this sample and in the previous one of the same
+         * starving episode. A single sample may catch a thread between two tasks, or a lock being handed over to the
+         * next thread: with two threads, that alone would look like threads waiting apart.
+         */
+        private boolean waitApartTwiceInARow() {
+            final boolean apart = !busyThreadsWaitTogether();
+            final boolean confirmed = apart && apartInThePreviousSample;
+            apartInThePreviousSample = apart;
+            return confirmed;
         }
 
         /**
@@ -504,16 +524,19 @@ public final class ListenerSchedulers {
         }
 
         /**
-         * Whether at least half of the busy threads wait for a resource another one also waits for: a monitor (the
-         * thread is {@code BLOCKED}) or the same lock, semaphore or condition (the same
+         * Whether at least half of the busy threads wait for a resource another thread holds or also waits for: a
+         * monitor (the thread is {@code BLOCKED}), a lock another thread owns (a {@code ReentrantLock}, as the
+         * appenders of Logback use), or the same semaphore or condition as another busy thread (the same
          * {@link LockSupport#getBlocker(Thread) blocker}). A thread that waits for its own work (sleeping, reading a
          * socket, or parked on its own latch or future) does not count. Reading the state and the blocker of a thread
-         * is two field reads: this runs only while tasks are starving, once per check.
+         * is two field reads; the JVM is asked for the owner of a lock a thread waits for alone (about a microsecond
+         * per thread, without pausing it), only when it can change the answer. This runs only while tasks are
+         * starving, once per check.
          */
         boolean busyThreadsWaitTogether() {
             int busy = 0;
             int waitingTogether = 0;
-            final Map<Object, Integer> blockers = new IdentityHashMap<>();
+            final Map<Object, List<HandlerThread>> parked = new IdentityHashMap<>();
             for (HandlerThread thread : workers.threads) {
                 if (!thread.busy) {
                     continue;
@@ -525,16 +548,46 @@ public final class ListenerSchedulers {
                 } else if (state == Thread.State.WAITING || state == Thread.State.TIMED_WAITING) {
                     final Object blocker = LockSupport.getBlocker(thread);
                     if (blocker != null) {
-                        blockers.merge(blocker, 1, Integer::sum);
+                        parked.computeIfAbsent(blocker, b -> new ArrayList<>(1)).add(thread);
                     }
                 }
             }
-            for (int sharing : blockers.values()) {
-                if (sharing > 1) {
-                    waitingTogether += sharing;
+            // a lock, a latch or a semaphore: only a lock has an owner, which the JVM knows
+            final List<HandlerThread> alone = new ArrayList<>();
+            for (Map.Entry<Object, List<HandlerThread>> waiting : parked.entrySet()) {
+                if (waiting.getValue().size() > 1) {
+                    waitingTogether += waiting.getValue().size();
+                } else if (waiting.getKey() instanceof AbstractOwnableSynchronizer) {
+                    alone.add(waiting.getValue().get(0));
                 }
             }
+            if (waitingTogether * 2 < busy && (waitingTogether + alone.size()) * 2 >= busy) {
+                waitingTogether += waitingForAHeldLock(alone);
+            }
             return busy > 0 && waitingTogether * 2 >= busy;
+        }
+
+        /**
+         * How many of the threads wait for a lock that some thread holds. Reading their state without their stack
+         * does not pause the JVM.
+         */
+        private static int waitingForAHeldLock(List<HandlerThread> threads) {
+            final long[] ids = new long[threads.size()];
+            for (int i = 0; i < ids.length; i++) {
+                ids[i] = threads.get(i).getId();
+            }
+            int waiting = 0;
+            try {
+                for (ThreadInfo info : ManagementFactory.getThreadMXBean().getThreadInfo(ids, 0)) {
+                    if (info != null && info.getLockOwnerId() != -1) {
+                        waiting++;
+                    }
+                }
+            } catch (SecurityException e) {
+                // not allowed to read the threads: they only count when they wait for the same lock
+                log.debug("Could not read the locks the handler threads wait for", e);
+            }
+            return waiting;
         }
 
         /**
