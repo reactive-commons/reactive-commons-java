@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit.lifecycle;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.listeners.ListenerSchedulers;
+import org.reactivecommons.async.starter.config.BrokerProviderLifecycleManager;
 import org.springframework.context.SmartLifecycle;
 
 /**
@@ -57,9 +58,9 @@ public class ListenerSchedulersLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        // lifecycle beans stop in descending phase: after the broker providers (-7), which stop their listeners and
-        // wait for the deliveries in flight, so no listener dispatches to the pools once they are released; before
-        // the connections (-10)
-        return -8;
+        // lifecycle beans stop in descending phase: after the broker providers, which stop their listeners and wait
+        // for the deliveries in flight, so no listener dispatches to the pools once they are released; before the
+        // connections
+        return BrokerProviderLifecycleManager.PHASE - 1;
     }
 }

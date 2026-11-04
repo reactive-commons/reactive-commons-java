@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.lifecycle;
 
 import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.rabbit.RabbitMQSetupUtils;
+import org.reactivecommons.async.starter.config.BrokerProviderLifecycleManager;
 import org.springframework.context.SmartLifecycle;
 
 /**
@@ -48,6 +49,7 @@ public class EventLoopGroupLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        return -10;
+        // stops last: the broker providers close their connections first
+        return BrokerProviderLifecycleManager.PHASE - 3;
     }
 }

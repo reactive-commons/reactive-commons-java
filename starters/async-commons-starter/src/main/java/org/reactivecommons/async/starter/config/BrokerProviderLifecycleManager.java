@@ -8,15 +8,24 @@ import org.springframework.context.SmartLifecycle;
  * as Spring AMQP does with its listener containers, and closes the providers (listeners, senders and the threads they
  * own) when the application context closes.
  * <p>
- * It starts after the connections/event loop group (phase {@code -10}) and the listener schedulers (phase
- * {@code -8}) are retained.
- * <p>
- * It stops before the listener schedulers (phase {@code -8}) and the connections/event loop group (phase {@code -10}):
- * the providers stop their listeners and wait for the deliveries in flight while the handler pools and the
- * connections are still usable.
+ * Spring stops the lifecycle beans in descending phase. The providers stop in {@link #PHASE}:
+ * <ul>
+ *     <li>after the graceful shutdown of the web server ({@code DEFAULT_PHASE - 1024}): the requests it lets finish
+ *     can still publish messages and wait for the replies of their queries;</li>
+ *     <li>before the application task executor ({@code DEFAULT_PHASE / 2}) and the HTTP clients of the application
+ *     (Spring stops {@code ReactorClientHttpConnector} and {@code ReactorResourceFactory} in phases 1 and 0): the
+ *     handlers of the deliveries in flight, which the providers wait for, can still call other services;</li>
+ *     <li>before the listener schedulers ({@code PHASE - 1}) and the connections/event loop group
+ *     ({@code PHASE - 3}), which they start after.</li>
+ * </ul>
  */
 @Slf4j
 public class BrokerProviderLifecycleManager implements SmartLifecycle {
+
+    /**
+     * The phase of the broker providers. The phases of the listener schedulers and of the connections follow it.
+     */
+    public static final int PHASE = SmartLifecycle.DEFAULT_PHASE - 4096;
 
     private final ConnectionManager connectionManager;
     private volatile boolean running = false;
@@ -51,6 +60,6 @@ public class BrokerProviderLifecycleManager implements SmartLifecycle {
 
     @Override
     public int getPhase() {
-        return -7; // descending stop order: before the listener schedulers (-8) and the connections (-10)
+        return PHASE;
     }
 }
