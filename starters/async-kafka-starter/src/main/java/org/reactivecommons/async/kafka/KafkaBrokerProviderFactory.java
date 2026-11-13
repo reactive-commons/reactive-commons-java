@@ -1,11 +1,9 @@
 package org.reactivecommons.async.kafka;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
@@ -20,18 +18,14 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.ssl.SslBundles;
 import org.springframework.stereotype.Service;
 
 @Service("kafka")
 @RequiredArgsConstructor
 public class KafkaBrokerProviderFactory implements BrokerProviderFactory<AsyncKafkaProps> {
-    private final ReactiveReplyRouter router;
     private final KafkaJacksonMessageConverter converter;
-    private final MeterRegistry meterRegistry;
     private final CustomReporter errorReporter;
     private final KafkaCustomizations customizations;
-    private final SslBundles sslBundles;
     private final ObjectProvider<SchemaValidator> schemaValidatorProvider;
     private final ObjectProvider<DomainSchemaValidatorProvider> domainSchemaValidatorProvider;
 
@@ -55,13 +49,19 @@ public class KafkaBrokerProviderFactory implements BrokerProviderFactory<AsyncKa
         AdminClient adminClient = AdminClient.create(props.getConnectionProperties().buildAdminProperties());
         KafkaReactiveHealthIndicator healthIndicator = new KafkaReactiveHealthIndicator(domain, adminClient);
         DiscardNotifier discardNotifier;
+        Runnable releaseDiscardProvider = () -> {
+        };
         if (props.isUseDiscardNotifierPerDomain()) {
             discardNotifier = KafkaSetupUtils.createDiscardNotifier(sender, converter);
         } else {
             discardNotifier = discardProvider.get();
+            if (discardProvider instanceof KafkaDiscardProvider shared) {
+                shared.retain();
+                releaseDiscardProvider = shared::release;
+            }
         }
-        return new KafkaBrokerProvider(domain, props, router, converter, meterRegistry, errorReporter,
-                healthIndicator, listener, sender, discardNotifier, creator, customizations, sslBundles);
+        return new KafkaBrokerProvider(domain, props, new KafkaBrokerProvider.Components(converter, errorReporter,
+                healthIndicator, listener, sender, discardNotifier, creator), releaseDiscardProvider);
     }
 
     /**

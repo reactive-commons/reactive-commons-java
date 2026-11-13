@@ -1,13 +1,11 @@
 package org.reactivecommons.async.kafka;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
@@ -18,7 +16,6 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.ssl.SslBundles;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -30,17 +27,12 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class KafkaBrokerProviderFactoryTest {
-    private final ReactiveReplyRouter router = new ReactiveReplyRouter();
     @Mock
     private KafkaJacksonMessageConverter converter;
-    @Mock
-    private MeterRegistry meterRegistry;
     @Mock
     private CustomReporter errorReporter;
     @Mock
     private KafkaCustomizations customizations;
-    @Mock
-    private SslBundles sslBundles;
     @Mock
     private ObjectProvider<SchemaValidator> schemaValidatorProvider;
     @Mock
@@ -50,8 +42,8 @@ class KafkaBrokerProviderFactoryTest {
 
     @BeforeEach
     void setUp() {
-        providerFactory = new KafkaBrokerProviderFactory(router, converter, meterRegistry, errorReporter,
-                customizations, sslBundles, schemaValidatorProvider, domainSchemaValidatorProvider);
+        providerFactory = new KafkaBrokerProviderFactory(converter, errorReporter, customizations,
+                schemaValidatorProvider, domainSchemaValidatorProvider);
     }
 
     @Test
@@ -121,8 +113,8 @@ class KafkaBrokerProviderFactoryTest {
         KafkaBrokerProvider accounts =
                 (KafkaBrokerProvider) providerFactory.getProvider("accounts", props, discardProvider);
         // Assert
-        assertThat(app.receiver().getSchemaValidator()).isSameAs(appValidator);
-        assertThat(accounts.receiver().getSchemaValidator()).isSameAs(accountsValidator);
+        assertThat(app.components().receiver().getSchemaValidator()).isSameAs(appValidator);
+        assertThat(accounts.components().receiver().getSchemaValidator()).isSameAs(accountsValidator);
     }
 
     @Test
@@ -138,7 +130,7 @@ class KafkaBrokerProviderFactoryTest {
         KafkaBrokerProvider legacy =
                 (KafkaBrokerProvider) providerFactory.getProvider("legacy", props, discardProvider);
         // Assert
-        assertThat(legacy.receiver().getSchemaValidator()).isInstanceOf(NoOpSchemaValidator.class);
+        assertThat(legacy.components().receiver().getSchemaValidator()).isInstanceOf(NoOpSchemaValidator.class);
     }
 
     @Test

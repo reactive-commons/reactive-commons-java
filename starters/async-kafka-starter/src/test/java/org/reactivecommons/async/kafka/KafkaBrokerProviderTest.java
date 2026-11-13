@@ -1,6 +1,5 @@
 package org.reactivecommons.async.kafka;
 
-import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -12,25 +11,24 @@ import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.commons.ext.CustomReporter;
-import org.reactivecommons.async.commons.reply.ReactiveReplyRouter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
-import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
-import org.springframework.boot.ssl.DefaultSslBundleRegistry;
-import org.springframework.boot.ssl.SslBundles;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.kafka.receiver.ReceiverRecord;
 import reactor.test.StepVerifier;
 
 import javax.sound.midi.Receiver;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -45,8 +43,6 @@ import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 @ExtendWith(MockitoExtension.class)
 class KafkaBrokerProviderTest {
     private final AsyncKafkaProps props = new AsyncKafkaProps();
-    private final SslBundles sslBundles = new DefaultSslBundleRegistry();
-    private final KafkaCustomizations customizations = new KafkaCustomizations();
     @Mock
     private ReactiveMessageListener listener;
     @Mock
@@ -59,10 +55,6 @@ class KafkaBrokerProviderTest {
     private CustomReporter customReporter;
     @Mock
     private Receiver receiver;
-    @Mock
-    private ReactiveReplyRouter router;
-    @Mock
-    private MeterRegistry meterRegistry;
     @Mock
     private ReactiveMessageSender sender;
     @Mock
@@ -77,19 +69,31 @@ class KafkaBrokerProviderTest {
     @BeforeEach
     void init() {
         props.setAppName("test");
-        brokerProvider = new KafkaBrokerProvider(DEFAULT_DOMAIN,
-                props,
-                router,
-                messageConverter,
-                meterRegistry,
-                customReporter,
-                healthIndicator,
-                listener,
-                sender,
-                discardNotifier,
-                creator,
-                customizations,
-                sslBundles);
+        brokerProvider = new KafkaBrokerProvider(DEFAULT_DOMAIN, props, components());
+    }
+
+    @Test
+    void shouldStopTheListenersAndCloseTheClientsOnceWhenClosed() {
+        AtomicBoolean consumerCancelled = new AtomicBoolean();
+        AtomicInteger releases = new AtomicInteger();
+        KafkaBrokerProvider provider = new KafkaBrokerProvider(DEFAULT_DOMAIN, props, components(),
+                releases::incrementAndGet);
+        RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
+                message -> Mono.empty(), topologyCreator -> Mono.empty());
+        when(handlerResolver.getTopicListeners()).thenReturn(Map.of("my.custom.topic", registeredListener));
+        when(listener.getMaxConcurrency()).thenReturn(1);
+        when(listener.listen(any(String.class), any()))
+                .thenReturn(Flux.<ReceiverRecord<String, byte[]>>never().doOnCancel(() -> consumerCancelled.set(true)));
+        provider.listenTopics(handlerResolver);
+        // Act
+        provider.close();
+        provider.close();
+        // Assert
+        assertThat(consumerCancelled).as("consumer flow cancelled, which closes the Kafka consumer").isTrue();
+        verify(sender, times(1)).close();
+        verify(creator, times(1)).close();
+        verify(healthIndicator, times(1)).close();
+        assertThat(releases).as("shared discard provider released").hasValue(1);
     }
 
     @Test
@@ -281,5 +285,10 @@ class KafkaBrokerProviderTest {
         StepVerifier.create(flow)
                 .expectNextMatches(health -> health.status().equals(RCHealth.Status.UP))
                 .verifyComplete();
+    }
+
+    private KafkaBrokerProvider.Components components() {
+        return new KafkaBrokerProvider.Components(messageConverter, customReporter, healthIndicator, listener, sender,
+                discardNotifier, creator);
     }
 }
