@@ -208,6 +208,60 @@ Resolution order for the events consumer group id:
 
 Each domain resolves its own group id, so you can authorize a different consumer group per Kafka cluster.
 
+## Consumer-only services
+
+The Kafka producer of a domain is created when the domain publishes for the first time (with the `DomainEventBus`,
+or when a message that exhausted its retries is sent to its `.dlq` topic). A service that only listens never opens a
+producer, so it needs no `WRITE` permission and opens no producer connection to the cluster. Nothing has to be configured
+for this.
+
+When the application context closes, each domain stops its listeners and closes its consumers, its producer (once the
+records already handed to it are sent) and its admin clients.
+
+## Using RabbitMQ and Kafka in the same application
+
+Each broker starter requires its own `app` domain, and a domain name belongs to a single broker. When both starters are
+present, disable `app` in one of them and register the handlers of that broker on a domain with its own name. For
+example, with RabbitMQ as the default broker:
+
+```yaml title="application.yaml"
+app:
+  async:
+    app: # RabbitMQ keeps the default domain
+      maxRetries: 3
+reactive:
+  commons:
+    kafka:
+      app:
+        enabled: false # the default domain belongs to RabbitMQ
+      accounts: # the Kafka domain, with its own name
+        connectionProperties:
+          bootstrap-servers: localhost:9092
+          consumer:
+            group-id: accounts.consumer-group
+```
+
+```java
+@Bean
+public HandlerRegistry handlerRegistry() {
+    return HandlerRegistry.register()
+            .listenEvent("orders.created", handler::onOrderCreated, Order.class)  // RabbitMQ, 'app' domain
+            .listenTopic("accounts", "accounts.events", handler::onAccountEvent); // Kafka, 'accounts' domain
+}
+```
+
+If a domain is enabled in both brokers, the application fails to start:
+
+```
+Domain 'app' is enabled for both 'rabbitmq' and 'kafka'. A domain belongs to a single broker: disable it in one of
+them (app.async.app.enabled: false or reactive.commons.kafka.app.enabled: false).
+```
+
+Setting `enabled: false` in YAML is enough. Declaring the `app` domain again in a `KafkaPropsCustomizer` with
+`domainProperties.put("app", ...)` is only needed when `app` is not in your YAML, and remember that `put` replaces
+the whole domain (see [Approach 2](#approach-2-hybrid-yaml--kafkapropscustomizer)): to change only some values of a
+domain declared in YAML, use `domainProperties.customize(...)`.
+
 ## Schema validation
 
 Payloads can be validated against a JSON Schema registered in an Apicurio Registry, both when publishing and when
