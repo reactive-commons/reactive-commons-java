@@ -212,13 +212,29 @@ Each domain resolves its own group id, so you can authorize a different consumer
 
 With the default settings (`maxRetries: -1` and `withDLQRetry: false`), a message whose handler fails is retried in
 place, every `retryDelay` milliseconds, until the handler succeeds. Its offset is not committed in the meantime, so the
-message is not lost if the application stops: it is delivered again when the consumer group resumes.
+message is not lost if the application stops: it is delivered again when the consumer group resumes. The messages after
+it in the same partition wait until it is handled (see [Ordering and concurrency](#ordering-and-concurrency)).
 
 A message that can never be handled is not retried: when its payload cannot be converted to the type of the handler
 or does not match its schema, it is logged and skipped (or sent to its `.dlq` topic when `withDLQRetry` is true).
 
 With `maxRetries` set to a positive number, a failed message is retried that many times, every `retryDelay`
 milliseconds, and then discarded (or sent to its `.dlq` topic when `withDLQRetry` is true).
+
+## Ordering and concurrency
+
+The messages of a partition are handled one at a time, in the order of the partition, and the partitions assigned to a
+listener are handled at the same time. A message is acknowledged once its handler completes, so the offset of a
+partition is only committed past messages that were already handled: a message still being handled when the
+application stops is delivered again when the consumer group resumes.
+
+To handle more messages at the same time, give the topic more partitions, or run more instances of the application in
+the same consumer group. Messages that must be handled in order, such as the events of the same entity, must be
+published with the same key, so they go to the same partition.
+
+While a message is being handled, or retried, the next messages of its partition are kept in memory. When 256 of them
+are waiting, the listener stops fetching messages for all of its partitions until that message is handled, so the
+memory used by a listener is bounded.
 
 ## Consumer-only services
 
