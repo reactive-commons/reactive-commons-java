@@ -81,7 +81,6 @@ class KafkaBrokerProviderTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners()).thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any()))
                 .thenReturn(Flux.<ReceiverRecord<String, byte[]>>never().doOnCancel(() -> consumerCancelled.set(true)));
         provider.listenTopics(handlerResolver);
@@ -119,7 +118,6 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
@@ -135,7 +133,6 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
@@ -150,7 +147,6 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
@@ -168,7 +164,6 @@ class KafkaBrokerProviderTest {
         when(handlerResolver.getEventNames()).thenReturn(List.of("event.one"));
         when(creator.createTopics(any())).thenReturn(Mono.empty());
         when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
@@ -187,7 +182,6 @@ class KafkaBrokerProviderTest {
         when(handlerResolver.getNotificationNames()).thenReturn(List.of("notification.one"));
         when(creator.createTopics(any())).thenReturn(Mono.empty());
         when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
@@ -203,7 +197,6 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
@@ -217,7 +210,6 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);
@@ -233,7 +225,6 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("topic.one", first, "topic.two", second));
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);
@@ -258,7 +249,6 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.getMaxConcurrency()).thenReturn(1);
         when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);

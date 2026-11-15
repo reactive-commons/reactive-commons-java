@@ -113,7 +113,6 @@ class ApplicationEventListenerTest {
     @Test
     void shouldUseTheGivenGroupId() {
         ApplicationEventListener listener = buildListener("dummy.consumer-group");
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any())).thenReturn(Flux.never());
 
         listener.startListener(mock(TopologyCreator.class));

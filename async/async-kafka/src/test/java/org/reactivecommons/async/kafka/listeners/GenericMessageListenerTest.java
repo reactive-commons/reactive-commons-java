@@ -167,7 +167,6 @@ class GenericMessageListenerTest {
         // and keep the test JVM busy indefinitely
         Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(receiverRecord).concatWith(Flux.never());
         when(receiver.listen(anyString(), any(List.class))).thenReturn(flux);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         return offset;
     }
 

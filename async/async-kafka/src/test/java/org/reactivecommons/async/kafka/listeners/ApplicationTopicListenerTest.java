@@ -50,7 +50,6 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
@@ -63,7 +62,6 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true, "app-my.custom.topic");
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
@@ -77,7 +75,6 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> customSetup);
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
@@ -94,7 +91,6 @@ class ApplicationTopicListenerTest {
                 message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic"))
                 .then(((TopologyCreator) creator).createDlqTopics(List.of("my.custom.topic"))));
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
         when(topologyCreator.createDlqTopics(any(List.class))).thenReturn(Mono.empty());
@@ -110,7 +106,6 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic")));
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
 
@@ -124,7 +119,6 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, false);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
@@ -181,7 +175,6 @@ class ApplicationTopicListenerTest {
                     return Mono.empty();
                 }, creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.getMaxConcurrency()).thenReturn(1);
         // Never-ending flux: the record is handled explicitly below. A completing flux would make onTerminate()
         // resubscribe in a background loop, racing with this test (flaky stubs) and keeping the JVM busy
         when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());

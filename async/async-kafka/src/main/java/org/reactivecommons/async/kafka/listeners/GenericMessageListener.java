@@ -1,6 +1,7 @@
 package org.reactivecommons.async.kafka.listeners;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.kafka.common.TopicPartition;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.commons.ListenerContext;
@@ -96,7 +97,7 @@ public abstract class GenericMessageListener {
     }
 
     public void startListener(TopologyCreator creator) {
-        log.info("Using max concurrency {}, in receiver for topics: {}", messageListener.getMaxConcurrency(), topics);
+        log.info("Handling the messages of each partition one at a time, in order, for topics: {}", topics);
 
         if (useDLQ) {
             log.info("ATTENTION! Using DLQ Strategy for retries with {} + 1 Max Retries configured!", maxRetries);
@@ -144,13 +145,23 @@ public abstract class GenericMessageListener {
         errorReporterScheduler.dispose();
     }
 
+    /**
+     * Handles the messages of each partition one at a time, in the order of the partition, and the partitions at the
+     * same time. A message is acknowledged once handled, so the offsets of a partition are acknowledged in order:
+     * acknowledging an offset commits every previous one of the partition, so a later message must never be
+     * acknowledged while an earlier one is still being handled.
+     */
     private Flux<ReceiverRecord<String, byte[]>> consumeFaultTolerant(Flux<ReceiverRecord<String, byte[]>> messageFlux) {
-        return messageFlux.flatMap(msj -> {
-            final Instant init = Instant.now();
-            return handle(msj, init)
-                    .doOnSuccess(r -> r.receiverOffset().acknowledge())
-                    .onErrorResume(err -> requeueOrAck(msj, err, init));
-        }, messageListener.getMaxConcurrency());
+        return messageFlux
+                .groupBy(msj -> new TopicPartition(msj.topic(), msj.partition()))
+                .flatMap(partition -> partition.concatMap(this::handleAndAcknowledge), Integer.MAX_VALUE);
+    }
+
+    private Mono<ReceiverRecord<String, byte[]>> handleAndAcknowledge(ReceiverRecord<String, byte[]> msj) {
+        final Instant init = Instant.now();
+        return handle(msj, init)
+                .doOnSuccess(r -> r.receiverOffset().acknowledge())
+                .onErrorResume(err -> requeueOrAck(msj, err, init));
     }
 
     protected Mono<ReceiverRecord<String, byte[]>> handle(ReceiverRecord<String, byte[]> msj, Instant initTime) {
