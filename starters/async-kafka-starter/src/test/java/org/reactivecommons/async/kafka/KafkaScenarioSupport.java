@@ -9,6 +9,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.reactivecommons.api.domain.RawMessage;
@@ -22,10 +23,12 @@ import org.springframework.core.env.MapPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Future;
 import java.util.stream.Stream;
 
 /**
@@ -109,8 +112,12 @@ final class KafkaScenarioSupport {
                 ProducerConfig.CLIENT_ID_CONFIG, "test-publisher");
         try (KafkaProducer<String, String> producer =
                      new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            List<Future<RecordMetadata>> sent = new ArrayList<>();
             for (String value : values) {
-                producer.send(new ProducerRecord<>(topic, partition, null, value)).get();
+                sent.add(producer.send(new ProducerRecord<>(topic, partition, null, value)));
+            }
+            for (Future<RecordMetadata> result : sent) {
+                result.get();
             }
         }
     }

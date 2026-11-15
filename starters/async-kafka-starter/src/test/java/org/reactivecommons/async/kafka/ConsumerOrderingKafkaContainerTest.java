@@ -1,8 +1,14 @@
 package org.reactivecommons.async.kafka;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.communications.PartitionFlowControl;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
@@ -15,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -132,5 +139,53 @@ class ConsumerOrderingKafkaContainerTest {
             assertThat(committedOffset(KAFKA, group, topic, 0)).as("committed offset of the blocked partition")
                     .isEqualTo(-1);
         }
+    }
+
+    /**
+     * The messages waiting behind a message still being handled are kept apart for each partition, so however many
+     * of them wait, the other partitions of the listener keep being handled.
+     */
+    @Test
+    void aPartitionWithManyMessagesWaitingDoesNotStopTheOthers() throws Exception {
+        String topic = "ordering.backlog";
+        String group = "ordering-backlog";
+        createTopic(KAFKA, topic, 2);
+        publish(KAFKA, topic, 0, values("blocked", 1000));
+        publish(KAFKA, topic, 1, values("free", 2000));
+        AtomicInteger completed = new AtomicInteger();
+        ListAppender<ILoggingEvent> flowControl = recordFlowControl();
+        HandlerRegistry handlers = HandlerRegistry.register().listenTopic(DOMAIN, topic, message ->
+                body(message).startsWith("blocked")
+                        ? Mono.never()
+                        : Mono.fromRunnable(completed::incrementAndGet));
+
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+                handlers, ListenTopics.class)) {
+            await().atMost(Duration.ofSeconds(60)).until(() -> committedOffset(KAFKA, group, topic, 1) == 2000);
+            assertThat(completed).as("messages of the other partition").hasValue(2000);
+            assertThat(committedOffset(KAFKA, group, topic, 0)).as("committed offset of the blocked partition")
+                    .isEqualTo(-1);
+        } finally {
+            ((Logger) LoggerFactory.getLogger(PartitionFlowControl.class)).detachAppender(flowControl);
+        }
+        // The blocked partition was paused on the consumer, instead of keeping all its messages in memory, and it
+        // stayed paused. The other one may be paused too while its messages arrive faster than they are handled,
+        // and resumed once they are handled
+        assertThat(flowControl.list).extracting(ILoggingEvent::getFormattedMessage)
+                .contains("Paused partition " + topic + "-0: messages waiting to be handled")
+                .doesNotContain("Resumed partition " + topic + "-0: messages waiting to be handled");
+    }
+
+    private static ListAppender<ILoggingEvent> recordFlowControl() {
+        Logger logger = (Logger) LoggerFactory.getLogger(PartitionFlowControl.class);
+        logger.setLevel(Level.DEBUG);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        return appender;
+    }
+
+    private static String[] values(String prefix, int count) {
+        return IntStream.range(0, count).mapToObj(i -> prefix + "-" + i).toArray(String[]::new);
     }
 }
