@@ -21,7 +21,7 @@ reactive:
     kafka:
       app: # this is the name of the default domain
         withDLQRetry: false # if you want to have dlq topics with retries you can set it to true, you cannot change it after queues are created, because you will get an error, so you should delete topology before the change.
-        maxRetries: -1 # -1 will be considered default value. When withDLQRetry is true, it will be retried 10 times. When withDLQRetry is false, it will be retried indefinitely.
+        maxRetries: -1 # -1 will be considered default value. When withDLQRetry is true, it will be retried 10 times. When withDLQRetry is false, it will be retried in place until it succeeds, see Retries of a failed message.
         retryDelay: 1000 # interval for message retries, with and without DLQRetry
         checkExistingTopics: true # if you don't want to verify topic existence before send a record you can set it to false
         createTopology: true # if your organization have restrictions with automatic topology creation you can set it to false and create it manually or by your organization process.
@@ -207,6 +207,18 @@ Resolution order for the events consumer group id:
 2. Otherwise `${spring.application.name}-events`, the default convention.
 
 Each domain resolves its own group id, so you can authorize a different consumer group per Kafka cluster.
+
+## Retries of a failed message
+
+With the default settings (`maxRetries: -1` and `withDLQRetry: false`), a message whose handler fails is retried in
+place, every `retryDelay` milliseconds, until the handler succeeds. Its offset is not committed in the meantime, so the
+message is not lost if the application stops: it is delivered again when the consumer group resumes.
+
+A message that can never be handled is not retried: when its payload cannot be converted to the type of the handler
+or does not match its schema, it is logged and skipped (or sent to its `.dlq` topic when `withDLQRetry` is true).
+
+With `maxRetries` set to a positive number, a failed message is retried that many times, every `retryDelay`
+milliseconds, and then discarded (or sent to its `.dlq` topic when `withDLQRetry` is true).
 
 ## Consumer-only services
 
