@@ -166,7 +166,7 @@ class GenericMessageListenerTest {
         // Never-ending flux: a completing one would make GenericMessageListener.onTerminate() resubscribe in a loop
         // and keep the test JVM busy indefinitely
         Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(receiverRecord).concatWith(Flux.never());
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(flux);
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(flux);
         return offset;
     }
 

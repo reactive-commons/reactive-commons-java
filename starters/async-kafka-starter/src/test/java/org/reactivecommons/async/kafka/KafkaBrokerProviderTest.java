@@ -81,7 +81,7 @@ class KafkaBrokerProviderTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners()).thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.listen(any(String.class), any()))
+        when(listener.listen(any(String.class), any(), any()))
                 .thenReturn(Flux.<ReceiverRecord<String, byte[]>>never().doOnCancel(() -> consumerCancelled.set(true)));
         provider.listenTopics(handlerResolver);
         // Act
@@ -118,11 +118,11 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("test-events"), any());
+        verify(listener, times(1)).listen(eq("test-events"), any(), any());
     }
 
     @Test
@@ -133,11 +133,11 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getEventListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(eq("dummy.consumer-group"), any());
+        verify(listener, times(1)).listen(eq("dummy.consumer-group"), any(), any());
     }
 
     @Test
@@ -147,11 +147,11 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen(any(String.class), any());
+        verify(listener, times(1)).listen(any(String.class), any(), any());
     }
 
     @Test
@@ -164,7 +164,7 @@ class KafkaBrokerProviderTest {
         when(handlerResolver.getEventNames()).thenReturn(List.of("event.one"));
         when(creator.createTopics(any())).thenReturn(Mono.empty());
         when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenDomainEvents(handlerResolver);
         // Assert
@@ -182,7 +182,7 @@ class KafkaBrokerProviderTest {
         when(handlerResolver.getNotificationNames()).thenReturn(List.of("notification.one"));
         when(creator.createTopics(any())).thenReturn(Mono.empty());
         when(creator.createDlqTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
         // Assert
@@ -197,7 +197,7 @@ class KafkaBrokerProviderTest {
         when(mockedListeners.isEmpty()).thenReturn(false);
         when(handlerResolver.getNotificationListeners()).thenReturn(mockedListeners);
         when(creator.createTopics(any())).thenReturn(Mono.empty());
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenNotificationEvents(handlerResolver);
         // Assert
@@ -210,11 +210,11 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen("test", List.of("my.custom.topic"));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("my.custom.topic")), any());
     }
 
     @Test
@@ -225,12 +225,12 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("topic.one", first, "topic.two", second));
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, times(1)).listen("test", List.of("topic.one"));
-        verify(listener, times(1)).listen("test", (List.of("topic.two")));
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.one")), any());
+        verify(listener, times(1)).listen(eq("test"), eq(List.of("topic.two")), any());
     }
 
     @Test
@@ -239,7 +239,7 @@ class KafkaBrokerProviderTest {
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
-        verify(listener, never()).listen(any(String.class), any());
+        verify(listener, never()).listen(any(String.class), any(), any());
     }
 
     @Test
@@ -249,12 +249,12 @@ class KafkaBrokerProviderTest {
                 message -> Mono.empty(), topologyCreator -> Mono.empty());
         when(handlerResolver.getTopicListeners())
                 .thenReturn(Map.of("my.custom.topic", registeredListener));
-        when(listener.listen(any(String.class), any())).thenReturn(Flux.never());
+        when(listener.listen(any(String.class), any(), any())).thenReturn(Flux.never());
         // Act
         brokerProvider.listenTopics(handlerResolver);
         // Assert
         verify(listener, times(1))
-                .listen("dummy.consumer-group", List.of("my.custom.topic"));
+                .listen(eq("dummy.consumer-group"), eq(List.of("my.custom.topic")), any());
     }
 
     @Test
@@ -263,7 +263,7 @@ class KafkaBrokerProviderTest {
         brokerProvider.listenQueues(handlerResolver);
         // Assert
         verify(handlerResolver, never()).getQueueListeners();
-        verify(listener, never()).listen(any(String.class), any());
+        verify(listener, never()).listen(any(String.class), any(), any());
     }
 
     @Test

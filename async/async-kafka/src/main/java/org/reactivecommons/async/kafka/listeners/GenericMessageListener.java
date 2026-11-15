@@ -11,6 +11,7 @@ import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.kafka.KafkaMessage;
+import org.reactivecommons.async.kafka.communications.PartitionFlowControl;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
@@ -108,16 +109,14 @@ public abstract class GenericMessageListener {
             log.info("Retrying a failed message every {} ms until it succeeds", retryDelay.toMillis());
         }
 
-        if (createTopology) {
-            this.messageFlux = setUpBindings(creator)
-                    .thenMany(this.messageListener.listen(groupId, topics)
-                            .doOnError(err -> log.error("Error listening queue", err))
-                            .transform(this::consumeFaultTolerant));
-        } else {
-            this.messageFlux = this.messageListener.listen(groupId, topics)
+        // Each subscription gets its own consumer, so its own flow control
+        Flux<ReceiverRecord<String, byte[]>> records = Flux.defer(() -> {
+            PartitionFlowControl flowControl = new PartitionFlowControl();
+            return messageListener.listen(groupId, topics, flowControl)
                     .doOnError(err -> log.error("Error listening queue", err))
-                    .transform(this::consumeFaultTolerant);
-        }
+                    .transform(received -> consumeFaultTolerant(received, flowControl));
+        });
+        this.messageFlux = createTopology ? setUpBindings(creator).thenMany(records) : records;
 
         onTerminate();
     }
@@ -150,11 +149,21 @@ public abstract class GenericMessageListener {
      * same time. A message is acknowledged once handled, so the offsets of a partition are acknowledged in order:
      * acknowledging an offset commits every previous one of the partition, so a later message must never be
      * acknowledged while an earlier one is still being handled.
+     * <p>
+     * The messages waiting in a partition do not take room from the others: each partition is paused on the consumer
+     * when too many of its messages wait (see {@link PartitionFlowControl}).
      */
-    private Flux<ReceiverRecord<String, byte[]>> consumeFaultTolerant(Flux<ReceiverRecord<String, byte[]>> messageFlux) {
+    private Flux<ReceiverRecord<String, byte[]>> consumeFaultTolerant(Flux<ReceiverRecord<String, byte[]>> messageFlux,
+                                                                      PartitionFlowControl flowControl) {
         return messageFlux
-                .groupBy(msj -> new TopicPartition(msj.topic(), msj.partition()))
-                .flatMap(partition -> partition.concatMap(this::handleAndAcknowledge), Integer.MAX_VALUE);
+                .doOnNext(msj -> flowControl.received(partitionOf(msj)))
+                .groupBy(GenericMessageListener::partitionOf, Integer.MAX_VALUE)
+                .flatMap(partition -> partition.concatMap(msj -> handleAndAcknowledge(msj)
+                        .doFinally(signal -> flowControl.handled(partitionOf(msj)))), Integer.MAX_VALUE);
+    }
+
+    private static TopicPartition partitionOf(ReceiverRecord<String, byte[]> msj) {
+        return new TopicPartition(msj.topic(), msj.partition());
     }
 
     private Mono<ReceiverRecord<String, byte[]>> handleAndAcknowledge(ReceiverRecord<String, byte[]> msj) {

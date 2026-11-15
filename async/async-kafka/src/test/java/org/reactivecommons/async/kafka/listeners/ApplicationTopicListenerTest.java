@@ -50,11 +50,11 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 
-        verify(receiver, times(1)).listen(anyString(), eq(List.of("my.custom.topic")));
+        verify(receiver, times(1)).listen(anyString(), eq(List.of("my.custom.topic")), any());
     }
 
     @Test
@@ -62,11 +62,11 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, true, "app-my.custom.topic");
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 
-        verify(receiver, times(1)).listen(eq("app-my.custom.topic"), any(List.class));
+        verify(receiver, times(1)).listen(eq("app-my.custom.topic"), any(List.class), any());
     }
 
     @Test
@@ -75,7 +75,7 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> customSetup);
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 
@@ -91,7 +91,7 @@ class ApplicationTopicListenerTest {
                 message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic"))
                 .then(((TopologyCreator) creator).createDlqTopics(List.of("my.custom.topic"))));
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
         when(topologyCreator.createDlqTopics(any(List.class))).thenReturn(Mono.empty());
 
@@ -106,7 +106,7 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic")));
         ApplicationTopicListener listener = buildListener(registeredListener, true);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());
 
         listener.startListener(topologyCreator);
@@ -119,7 +119,7 @@ class ApplicationTopicListenerTest {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
                 message -> Mono.empty(), creator -> Mono.empty());
         ApplicationTopicListener listener = buildListener(registeredListener, false);
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 
@@ -177,7 +177,7 @@ class ApplicationTopicListenerTest {
         ApplicationTopicListener listener = buildListener(registeredListener, true);
         // Never-ending flux: the record is handled explicitly below. A completing flux would make onTerminate()
         // resubscribe in a background loop, racing with this test (flaky stubs) and keeping the JVM busy
-        when(receiver.listen(anyString(), any(List.class))).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
 
         listener.startListener(topologyCreator);
 

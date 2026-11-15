@@ -113,11 +113,11 @@ class ApplicationEventListenerTest {
     @Test
     void shouldUseTheGivenGroupId() {
         ApplicationEventListener listener = buildListener("dummy.consumer-group");
-        when(receiver.listen(anyString(), any())).thenReturn(Flux.never());
+        when(receiver.listen(anyString(), any(), any())).thenReturn(Flux.never());
 
         listener.startListener(mock(TopologyCreator.class));
 
-        verify(receiver, times(1)).listen(eq("dummy.consumer-group"), any());
+        verify(receiver, times(1)).listen(eq("dummy.consumer-group"), any(), any());
     }
 
     private ApplicationEventListener buildListener(String groupId) {

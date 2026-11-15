@@ -24,9 +24,16 @@ public class ReactiveMessageListener {
         this(receiverOptions, NoOpSchemaValidator.INSTANCE);
     }
 
-    public Flux<ReceiverRecord<String, byte[]>> listen(String groupId, List<String> topics) { // Notification events
+    /**
+     * Subscribes a new consumer of the group to the topics.
+     *
+     * @param flowControl pauses and resumes the partitions of this subscription
+     */
+    public Flux<ReceiverRecord<String, byte[]>> listen(String groupId, List<String> topics,
+                                                       PartitionFlowControl flowControl) {
         ReceiverOptions<String, byte[]> options = receiverOptions.consumerProperty(GROUP_ID_CONFIG, groupId);
-        return KafkaReceiver.create(options.subscription(topics))
-                .receive();
+        KafkaReceiver<String, byte[]> receiver = KafkaReceiver.create(options.subscription(topics));
+        flowControl.attach(receiver);
+        return receiver.receive();
     }
 }
