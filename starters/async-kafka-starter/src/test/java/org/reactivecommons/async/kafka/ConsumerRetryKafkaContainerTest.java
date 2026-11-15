@@ -3,6 +3,7 @@ package org.reactivecommons.async.kafka;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
+import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
@@ -16,12 +17,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.body;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.committedOffset;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.publish;
+import static org.reactivecommons.async.kafka.KafkaScenarioSupport.readAll;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.startOnOwnDomain;
 
 /**
@@ -43,6 +46,36 @@ class ConsumerRetryKafkaContainerTest {
     @Configuration
     @EnableTopicListeners
     static class ListenTopics {
+    }
+
+    @Configuration
+    @EnableEventListeners
+    static class ListenEvents {
+    }
+
+    /**
+     * With {@code withDLQRetry: true} and the default {@code maxRetries} (-1), a failed event is retried 10 times,
+     * as documented, and then sent to its {@code .dlq} topic.
+     */
+    @Test
+    void withADlqAFailedEventIsRetriedTenTimesAndThenSentToItsDlq() throws Exception {
+        String event = "retry.dlq-default";
+        String app = "retry-dlq-default";
+        publish(KAFKA, event, "{\"name\":\"" + event + "\",\"eventId\":\"evt-1\",\"data\":{\"amount\":10}}");
+        AtomicInteger attempts = new AtomicInteger();
+        HandlerRegistry handlers = HandlerRegistry.register().listenDomainEvent(DOMAIN, event, domainEvent -> {
+            attempts.incrementAndGet();
+            return Mono.error(new IllegalStateException("dependency down"));
+        }, Map.class);
+
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, app, DOMAIN,
+                Map.of("withDLQRetry", "true", "retryDelay", "100"), handlers, ListenEvents.class)) {
+            await().atMost(WAIT).until(() -> !readAll(KAFKA, event + ".dlq").isEmpty());
+            assertThat(attempts).as("deliveries to the handler: the first one and 10 retries").hasValue(11);
+            assertThat(readAll(KAFKA, event + ".dlq")).as("discarded events")
+                    .singleElement().asString().contains("\"eventId\":\"evt-1\"");
+            await().atMost(WAIT).until(() -> committedOffset(KAFKA, app + "-events", event, 0) == 1);
+        }
     }
 
     @Test

@@ -5,12 +5,15 @@ import lombok.NoArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.HandlerRegistry;
@@ -23,6 +26,7 @@ import org.springframework.core.env.MapPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
 
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -119,6 +123,32 @@ final class KafkaScenarioSupport {
             for (Future<RecordMetadata> result : sent) {
                 result.get();
             }
+        }
+    }
+
+    /**
+     * The values of every record of a topic, read from the beginning with a plain Kafka consumer of the test, or an
+     * empty list when the topic does not exist.
+     */
+    static List<String> readAll(KafkaContainer kafka, String topic) {
+        Map<String, Object> config = Map.of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        try (KafkaConsumer<String, String> consumer =
+                     new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
+                    .map(info -> new TopicPartition(topic, info.partition()))
+                    .toList();
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+            Map<TopicPartition, Long> end = consumer.endOffsets(partitions);
+            List<String> values = new ArrayList<>();
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (partitions.stream().anyMatch(p -> consumer.position(p) < end.get(p))
+                    && System.nanoTime() < deadline) {
+                consumer.poll(Duration.ofMillis(200)).forEach(item -> values.add(item.value()));
+            }
+            return values;
+        } catch (Exception e) {
+            return List.of();
         }
     }
 
