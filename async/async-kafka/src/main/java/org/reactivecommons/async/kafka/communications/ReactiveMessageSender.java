@@ -44,7 +44,7 @@ public class ReactiveMessageSender {
     );
 
     private static final int SENDER_COUNT = 4;
-    private static final String CLOSED = "The Kafka sender is closed";
+    private static final String CLOSED_MESSAGE = "The Kafka sender is closed";
 
     private final KafkaSender<String, byte[]> sender;
     private final Disposable.Composite subscriptions = Disposables.composite();
@@ -80,14 +80,14 @@ public class ReactiveMessageSender {
      */
     private void start() {
         if (closed) {
-            throw new IllegalStateException(CLOSED);
+            throw new IllegalStateException(CLOSED_MESSAGE);
         }
         if (started) {
             return;
         }
         synchronized (this) {
             if (closed) {
-                throw new IllegalStateException(CLOSED);
+                throw new IllegalStateException(CLOSED_MESSAGE);
             }
             if (started) {
                 return;
@@ -136,7 +136,7 @@ public class ReactiveMessageSender {
             }
             closed = true;
         }
-        IllegalStateException closedError = new IllegalStateException(CLOSED);
+        IllegalStateException closedError = new IllegalStateException(CLOSED_MESSAGE);
         ready.completeExceptionally(closedError);
         sender.close();
         subscriptions.dispose();

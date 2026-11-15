@@ -22,6 +22,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -40,12 +41,12 @@ class ReactiveMessageSenderLifecycleTest {
     private final MessageConverter converter = mock(MessageConverter.class);
 
     @Test
-    void shouldNotCreateTheProducerUntilTheFirstSend() throws InterruptedException {
+    void shouldNotCreateTheProducerUntilTheFirstSend() {
         sender(factory());
 
-        Thread.sleep(300);
-
-        assertThat(producersCreated).as("producers created without sending").hasValue(0);
+        await().during(Duration.ofMillis(300)).atMost(TIMEOUT)
+                .untilAsserted(() -> assertThat(producersCreated).as("producers created without sending")
+                        .hasValue(0));
     }
 
     @Test
