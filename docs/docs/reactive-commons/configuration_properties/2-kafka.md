@@ -232,9 +232,10 @@ To handle more messages at the same time, give the topic more partitions, or run
 the same consumer group. Messages that must be handled in order, such as the events of the same entity, must be
 published with the same key, so they go to the same partition.
 
-While a message is being handled, or retried, the next messages of its partition are kept in memory. When 256 of them
-are waiting, the listener stops fetching messages for all of its partitions until that message is handled, so the
-memory used by a listener is bounded.
+While a message is being handled, or retried, the next messages of its partition wait in memory. When about 256 of
+them are waiting, the listener pauses that partition on the Kafka consumer, and resumes it once half of them were
+handled. The other partitions keep being fetched and handled, so a slow or failing message only holds back the messages
+of its own partition, and the memory used by each partition is bounded.
 
 ## Consumer-only services
 
