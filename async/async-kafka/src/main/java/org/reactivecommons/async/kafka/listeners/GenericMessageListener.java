@@ -101,7 +101,8 @@ public abstract class GenericMessageListener {
         log.info("Handling the messages of each partition one at a time, in order, for topics: {}", topics);
 
         if (useDLQ) {
-            log.info("ATTENTION! Using DLQ Strategy for retries with {} + 1 Max Retries configured!", maxRetries);
+            log.info("Retrying a failed message {} times, every {} ms, before sending it to its DLQ", maxRetries,
+                    retryDelay.toMillis());
         } else if (hasRetries()) {
             log.info("Retrying a failed message {} times, every {} ms, before discarding it", maxRetries,
                     retryDelay.toMillis());

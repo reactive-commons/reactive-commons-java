@@ -3,6 +3,8 @@ package org.reactivecommons.async.kafka;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.DomainEventBus;
@@ -10,6 +12,7 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.handlers.registered.RegisteredQueueListener;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.HandlerResolver;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
@@ -19,6 +22,7 @@ import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConver
 import org.reactivecommons.async.kafka.health.KafkaReactiveHealthIndicator;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
+import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.kafka.receiver.ReceiverRecord;
@@ -31,6 +35,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -280,5 +285,40 @@ class KafkaBrokerProviderTest {
     private KafkaBrokerProvider.Components components() {
         return new KafkaBrokerProvider.Components(messageConverter, customReporter, healthIndicator, listener, sender,
                 discardNotifier, creator);
+    }
+
+    @ParameterizedTest(name = "withDLQRetry={0}, maxRetries={1} -> retried {2} times")
+    @CsvSource({
+            "false, -1, -1", // retried in place until it succeeds
+            "false, 3, 3",
+            "true, -1, 10", // the documented default with a DLQ
+            "true, 3, 3",
+            "true, 0, 0"
+    })
+    void shouldResolveTheRetryPolicyOfTheDomain(boolean withDLQRetry, int maxRetries, long expectedRetries) {
+        AsyncKafkaProps domainProps = AsyncKafkaProps.builder().withDLQRetry(withDLQRetry).maxRetries(maxRetries)
+                .retryDelay(500).build();
+
+        RetryPolicy policy = KafkaBrokerProvider.retryPolicy("accounts", domainProps);
+
+        assertThat(policy).isEqualTo(new RetryPolicy(withDLQRetry, expectedRetries, 500));
+    }
+
+    @Test
+    void shouldRejectANegativeMaxRetriesOtherThanTheDefault() {
+        AsyncKafkaProps domainProps = AsyncKafkaProps.builder().maxRetries(-2).build();
+
+        assertThatThrownBy(() -> KafkaBrokerProvider.retryPolicy("accounts", domainProps))
+                .isInstanceOf(InvalidConfigurationException.class)
+                .hasMessageContaining("accounts").hasMessageContaining("maxRetries");
+    }
+
+    @Test
+    void shouldRejectANegativeRetryDelay() {
+        AsyncKafkaProps domainProps = AsyncKafkaProps.builder().retryDelay(-1).build();
+
+        assertThatThrownBy(() -> KafkaBrokerProvider.retryPolicy("accounts", domainProps))
+                .isInstanceOf(InvalidConfigurationException.class)
+                .hasMessageContaining("accounts").hasMessageContaining("retryDelay");
     }
 }

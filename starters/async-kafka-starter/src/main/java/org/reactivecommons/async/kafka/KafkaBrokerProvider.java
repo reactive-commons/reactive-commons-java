@@ -19,6 +19,7 @@ import org.reactivecommons.async.kafka.listeners.ApplicationTopicListener;
 import org.reactivecommons.async.kafka.listeners.GenericMessageListener;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.config.health.RCHealth;
+import org.reactivecommons.async.starter.exceptions.InvalidConfigurationException;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
@@ -30,6 +31,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * clients and the threads of the domain.
  */
 public final class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps> {
+    /**
+     * How many times a failed message is retried before it is sent to its DLQ, when {@code withDLQRetry} is true and
+     * {@code maxRetries} is left to its default (-1).
+     */
+    public static final int DEFAULT_DLQ_MAX_RETRIES = 10;
+
     private final String domain;
     private final AsyncKafkaProps props;
     private final Components components;
@@ -74,6 +81,31 @@ public final class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps
         this.discardNotifier = components.discardNotifier();
         this.topologyCreator = components.topologyCreator();
         this.releaseDiscardProvider = releaseDiscardProvider;
+        retryPolicy(domain, props); // an invalid retry setting fails the startup, before any listener is registered
+    }
+
+    /**
+     * The retry policy of the domain, with the default of {@code maxRetries} resolved: with a DLQ, a failed message
+     * is retried {@link #DEFAULT_DLQ_MAX_RETRIES} times; without it, it is retried in place until it succeeds (-1).
+     *
+     * @throws InvalidConfigurationException when {@code maxRetries} or {@code retryDelay} is out of range
+     */
+    static RetryPolicy retryPolicy(String domain, AsyncKafkaProps props) {
+        int maxRetries = props.getMaxRetries();
+        int retryDelay = props.getRetryDelay();
+        if (maxRetries < -1) {
+            throw new InvalidConfigurationException("Domain " + domain + ": maxRetries must be -1 (the default) or "
+                    + "0 or more, but it is " + maxRetries);
+        }
+        if (retryDelay < 0) {
+            throw new InvalidConfigurationException("Domain " + domain + ": retryDelay must be 0 or more "
+                    + "milliseconds, but it is " + retryDelay);
+        }
+        boolean withDLQRetry = props.getWithDLQRetry();
+        if (withDLQRetry && maxRetries == -1) {
+            maxRetries = DEFAULT_DLQ_MAX_RETRIES;
+        }
+        return new RetryPolicy(withDLQRetry, maxRetries, retryDelay);
     }
 
     public String domain() {
@@ -175,8 +207,7 @@ public final class KafkaBrokerProvider implements BrokerProvider<AsyncKafkaProps
      * What the listeners of this domain share, with the retry policy and the topology setting of its properties.
      */
     private ListenerContext<ReactiveMessageListener> listenerContext(HandlerResolver resolver) {
-        return new ListenerContext<>(receiver, resolver, converter,
-                new RetryPolicy(props.getWithDLQRetry(), props.getMaxRetries(), props.getRetryDelay()),
+        return new ListenerContext<>(receiver, resolver, converter, retryPolicy(domain, props),
                 props.getCreateTopology(), discardNotifier, errorReporter);
     }
 }
