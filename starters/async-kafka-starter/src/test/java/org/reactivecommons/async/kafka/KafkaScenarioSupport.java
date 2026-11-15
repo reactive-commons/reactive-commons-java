@@ -4,6 +4,7 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -86,6 +87,31 @@ final class KafkaScenarioSupport {
         try (KafkaProducer<String, String> producer =
                      new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
             producer.send(new ProducerRecord<>(topic, value)).get();
+        }
+    }
+
+    /**
+     * Creates a topic with the given number of partitions.
+     */
+    static void createTopic(KafkaContainer kafka, String topic, int partitions) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            admin.createTopics(List.of(new NewTopic(topic, partitions, (short) 1))).all().get();
+        }
+    }
+
+    /**
+     * Publishes the values, in order, to one partition of a topic, with a plain Kafka producer of the test.
+     */
+    static void publish(KafkaContainer kafka, String topic, int partition, String... values) throws Exception {
+        Map<String, Object> config = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ProducerConfig.CLIENT_ID_CONFIG, "test-publisher");
+        try (KafkaProducer<String, String> producer =
+                     new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            for (String value : values) {
+                producer.send(new ProducerRecord<>(topic, partition, null, value)).get();
+            }
         }
     }
 
