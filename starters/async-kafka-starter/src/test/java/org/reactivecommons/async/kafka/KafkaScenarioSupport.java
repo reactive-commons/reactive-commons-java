@@ -2,10 +2,17 @@ package org.reactivecommons.async.kafka;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.reactivecommons.api.domain.RawMessage;
+import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.reactivecommons.async.starter.impl.common.kafka.RCKafkaConfig;
@@ -13,6 +20,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.core.env.MapPropertySource;
 import org.testcontainers.kafka.KafkaContainer;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -35,18 +43,33 @@ final class KafkaScenarioSupport {
      */
     static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
                                                                Class<?>... configurations) {
+        return startOnOwnDomain(kafka, appName, domain, Map.of(), null, configurations);
+    }
+
+    /**
+     * Same as above, with properties of the domain (e.g. {@code retryDelay}) and the handlers of the application.
+     *
+     * @param domainProperties properties of the domain, without the {@code reactive.commons.kafka.<domain>} prefix
+     * @param handlers         the handlers of the application, or {@code null} when a configuration registers them
+     */
+    static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
+                                                               Map<String, Object> domainProperties,
+                                                               HandlerRegistry handlers, Class<?>... configurations) {
+        String prefix = "reactive.commons.kafka." + domain + ".";
         Map<String, Object> properties = new HashMap<>();
         properties.put("spring.application.name", appName);
         properties.put("reactive.commons.kafka.app.enabled", "false");
-        properties.put("reactive.commons.kafka." + domain + ".enabled", "true");
-        properties.put("reactive.commons.kafka." + domain + ".connectionProperties.bootstrap-servers",
-                kafka.getBootstrapServers());
-        properties.put("reactive.commons.kafka." + domain + ".connectionProperties.consumer.auto-offset-reset",
-                "earliest");
+        properties.put(prefix + "enabled", "true");
+        properties.put(prefix + "connectionProperties.bootstrap-servers", kafka.getBootstrapServers());
+        properties.put(prefix + "connectionProperties.consumer.auto-offset-reset", "earliest");
+        domainProperties.forEach((key, value) -> properties.put(prefix + key, value));
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
         // The configurations of the application first, so the default beans of the starter (e.g. an empty
         // HandlerRegistry) back off, as they do in a Spring Boot application
+        if (handlers != null) {
+            context.registerBean("handlerRegistry", HandlerRegistry.class, () -> handlers);
+        }
         context.register(configurations);
         context.register(RCKafkaConfig.class, ReactiveCommonsConfig.class, ReactiveCommonsListenersConfig.class);
         context.refresh();
@@ -64,6 +87,25 @@ final class KafkaScenarioSupport {
                      new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
             producer.send(new ProducerRecord<>(topic, value)).get();
         }
+    }
+
+    /**
+     * The offset committed by a consumer group on a partition, or -1 when it committed none.
+     */
+    static long committedOffset(KafkaContainer kafka, String group, String topic, int partition) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            OffsetAndMetadata offset = admin.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get()
+                    .get(new TopicPartition(topic, partition));
+            return offset == null ? -1 : offset.offset();
+        }
+    }
+
+    /**
+     * The body of a message received by a raw topic handler, as text.
+     */
+    static String body(RawMessage message) {
+        return new String(((Message) message).getBody(), StandardCharsets.UTF_8);
     }
 
     /**
