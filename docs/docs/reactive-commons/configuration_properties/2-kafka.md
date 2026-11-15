@@ -218,8 +218,13 @@ it in the same partition wait until it is handled (see [Ordering and concurrency
 A message that can never be handled is not retried: when its payload cannot be converted to the type of the handler
 or does not match its schema, it is logged and skipped (or sent to its `.dlq` topic when `withDLQRetry` is true).
 
-With `maxRetries` set to a positive number, a failed message is retried that many times, every `retryDelay`
-milliseconds, and then discarded (or sent to its `.dlq` topic when `withDLQRetry` is true).
+With `withDLQRetry: true`, a failed message is retried `maxRetries` times, every `retryDelay` milliseconds, and then
+sent to its `.dlq` topic. Left to its default (-1), `maxRetries` is 10 in this case.
+
+With `maxRetries` set to 0 or more and `withDLQRetry: false`, a failed message is retried that many times, every
+`retryDelay` milliseconds, and then discarded.
+
+The application fails to start when `maxRetries` is lower than -1 or `retryDelay` is negative.
 
 ## Ordering and concurrency
 
