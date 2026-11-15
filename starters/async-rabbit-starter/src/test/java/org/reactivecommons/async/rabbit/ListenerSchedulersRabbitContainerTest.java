@@ -83,7 +83,7 @@ class ListenerSchedulersRabbitContainerTest {
                         PEAK.accumulateAndGet(running, Math::max);
                         try {
                             if (blockMillis > 0) {
-                                Thread.sleep(blockMillis);
+                                new CountDownLatch(1).await(blockMillis, TimeUnit.MILLISECONDS);
                             }
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();

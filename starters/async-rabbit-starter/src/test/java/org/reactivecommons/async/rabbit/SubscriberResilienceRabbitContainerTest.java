@@ -29,6 +29,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -277,7 +278,7 @@ class SubscriberResilienceRabbitContainerTest {
         private static void block() {
             handlersStarted.incrementAndGet();
             try {
-                Thread.sleep(60_000);
+                new CountDownLatch(1).await(60_000, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 handlersInterrupted.incrementAndGet();
                 Thread.currentThread().interrupt();
