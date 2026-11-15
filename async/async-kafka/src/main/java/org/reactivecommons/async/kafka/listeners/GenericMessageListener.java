@@ -6,6 +6,7 @@ import org.reactivecommons.async.commons.FallbackStrategy;
 import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.commons.utils.LoggerSubscriber;
 import org.reactivecommons.async.kafka.KafkaMessage;
@@ -71,6 +72,14 @@ public abstract class GenericMessageListener {
         return maxRetries != -1;
     }
 
+    /**
+     * Without a DLQ and with the default {@code maxRetries} (-1), a message whose handler fails is retried in place
+     * until it succeeds: Kafka cannot redeliver a single message, so its offset must not be committed until then.
+     */
+    private boolean retriesInPlaceForever() {
+        return !hasRetries() && !useDLQ;
+    }
+
     protected Mono<Void> setUpBindings(TopologyCreator creator) {
         if (useDLQ) {
             return creator.createTopics(topics).then(creator.createDlqTopics(getDlqBaseTopics()));
@@ -91,8 +100,11 @@ public abstract class GenericMessageListener {
 
         if (useDLQ) {
             log.info("ATTENTION! Using DLQ Strategy for retries with {} + 1 Max Retries configured!", maxRetries);
+        } else if (hasRetries()) {
+            log.info("Retrying a failed message {} times, every {} ms, before discarding it", maxRetries,
+                    retryDelay.toMillis());
         } else {
-            log.info("ATTENTION! Using infinite fast retries as Retry Strategy");
+            log.info("Retrying a failed message every {} ms until it succeeds", retryDelay.toMillis());
         }
 
         if (createTopology) {
@@ -159,6 +171,11 @@ public abstract class GenericMessageListener {
                             }
                             return err;
                         });
+            } else if (retriesInPlaceForever()) {
+                flow = flow.retryWhen(Retry.fixedDelay(Long.MAX_VALUE, retryDelay)
+                        .filter(GenericMessageListener::isRetryable)
+                        .scheduler(scheduler)
+                        .doBeforeRetry(signal -> onFailedAttempt(msj, message, executorPath, initTime, signal)));
             }
             return flow.doOnSuccess(o -> logExecution(executorPath, initTime, true))
                     .subscribeOn(scheduler)
@@ -181,23 +198,59 @@ public abstract class GenericMessageListener {
         }
     }
 
+    /**
+     * Discards a message whose retries are exhausted or that can never be handled.
+     */
     private Mono<ReceiverRecord<String, byte[]>> requeueOrAck(ReceiverRecord<String, byte[]> msj, Throwable err,
                                                               Instant init) {
         final Message message = KafkaMessage.fromDelivery(msj);
         reportErrorMetric(msj, init);
         sendErrorToCustomReporter(err, message, hasRetries());
-        if (hasRetries()) { // Discard
-            logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
-            if (useDLQ) {
-                return discardNotifier
-                        .notifyDiscard(message)
-                        .doOnSuccess(_a -> msj.receiverOffset().acknowledge())
-                        .thenReturn(msj);
+        logError(err, msj, FallbackStrategy.DEFINITIVE_DISCARD);
+        if (useDLQ) {
+            return discardNotifier
+                    .notifyDiscard(message)
+                    .doOnSuccess(_a -> msj.receiverOffset().acknowledge())
+                    .thenReturn(msj);
+        }
+        if (retriesInPlaceForever()) {
+            // Only a message that can never be handled gets here: it is skipped, so it does not hold the
+            // messages after it
+            msj.receiverOffset().acknowledge();
+        }
+        return Mono.just(msj);
+    }
+
+    /**
+     * Whether retrying the handler may succeed. A message that cannot be read (it cannot be converted, or it does
+     * not match its schema) fails the same way every time.
+     */
+    private static boolean isRetryable(Throwable err) {
+        for (Throwable cause = err; cause != null; cause = cause.getCause()) {
+            if (cause instanceof MessageConversionException || cause instanceof SchemaValidationException
+                    || cause instanceof ClassCastException) {
+                return false;
             }
-            return Mono.just(msj);
-        } else { // infinity fast retries
-            logError(err, msj, FallbackStrategy.FAST_RETRY);
-            return Mono.just(msj).delayElement(retryDelay);
+        }
+        return true;
+    }
+
+    /**
+     * Reports every failed attempt of a message retried in place. The first one is logged at WARN with its stack
+     * trace, the next ones at DEBUG, so a message that keeps failing does not flood the log.
+     */
+    private void onFailedAttempt(ReceiverRecord<String, byte[]> msj, Message message, String executorPath,
+                                 Instant initTime, Retry.RetrySignal signal) {
+        final Throwable err = signal.failure();
+        final long attempt = signal.totalRetries() + 1;
+        logExecution(executorPath, initTime, false);
+        sendErrorToCustomReporter(err, message, attempt > 1);
+        if (attempt == 1) {
+            log.warn("Handler of message {} from topic {} failed, retrying it every {} ms until it succeeds",
+                    msj.key(), msj.topic(), retryDelay.toMillis(), err);
+        } else {
+            log.debug("Handler of message {} from topic {} failed again (attempt {}): {}", msj.key(), msj.topic(),
+                    attempt, err.toString());
         }
     }
 

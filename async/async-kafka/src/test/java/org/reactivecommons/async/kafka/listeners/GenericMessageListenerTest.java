@@ -10,24 +10,31 @@ import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.ListenerContext;
 import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.communications.Message;
+import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
+import reactor.kafka.receiver.ReceiverOffset;
 import reactor.kafka.receiver.ReceiverRecord;
 import reactor.test.StepVerifier;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -89,8 +96,68 @@ class GenericMessageListenerTest {
         verify(topologyCreator, never()).createDlqTopics(any(List.class));
     }
 
-    private void givenAReceivedMessage() {
+    @Test
+    void shouldRetryAFailedMessageInPlaceUntilItsHandlerSucceeds() {
+        // Arrange
+        ReceiverOffset offset = givenAReceivedMessage();
+        AtomicInteger attempts = new AtomicInteger();
+        SampleListener sampleListener = defaultRetryListener(message -> attempts.incrementAndGet() < 3
+                ? Mono.error(new IllegalStateException("dependency down"))
+                : Mono.empty());
+        // Act
+        sampleListener.startListener(topologyCreator);
+        // Assert
+        verify(offset, timeout(TIMEOUT.toMillis())).acknowledge();
+        assertThat(attempts).hasValue(3);
+        sampleListener.stop();
+    }
+
+    @Test
+    void shouldNotAcknowledgeAMessageWhileItsHandlerKeepsFailing() {
+        // Arrange
+        ReceiverOffset offset = givenAReceivedMessage();
+        AtomicInteger attempts = new AtomicInteger();
+        SampleListener sampleListener = defaultRetryListener(message -> {
+            attempts.incrementAndGet();
+            return Mono.error(new IllegalStateException("dependency down"));
+        });
+        // Act
+        sampleListener.startListener(topologyCreator);
+        // Assert
+        await().atMost(TIMEOUT).until(() -> attempts.get() >= 5);
+        verify(offset, never()).acknowledge();
+        sampleListener.stop();
+    }
+
+    @Test
+    void shouldSkipAMessageThatCanNeverBeHandledWithoutRetryingIt() {
+        // Arrange
+        ReceiverOffset offset = givenAReceivedMessage();
+        AtomicInteger attempts = new AtomicInteger();
+        SampleListener sampleListener = defaultRetryListener(message -> {
+            attempts.incrementAndGet();
+            return Mono.error(new MessageConversionException("not a valid payload"));
+        });
+        // Act
+        sampleListener.startListener(topologyCreator);
+        // Assert
+        verify(offset, timeout(TIMEOUT.toMillis())).acknowledge();
+        assertThat(attempts).hasValue(1);
+        sampleListener.stop();
+    }
+
+    /**
+     * The default retry policy: no DLQ and {@code maxRetries} -1, retrying every 10 ms.
+     */
+    private SampleListener defaultRetryListener(Function<Message, Mono<Object>> handler) {
+        return new SampleListener(receiver, false, false, -1, 10, mock(DiscardNotifier.class), "event",
+                mock(CustomReporter.class), "appName", List.of("topic"), handler);
+    }
+
+    private ReceiverOffset givenAReceivedMessage() {
         ReceiverRecord<String, byte[]> receiverRecord = mock(ReceiverRecord.class);
+        ReceiverOffset offset = mock(ReceiverOffset.class);
+        lenient().when(receiverRecord.receiverOffset()).thenReturn(offset);
         when(receiverRecord.topic()).thenReturn("topic");
         when(receiverRecord.value()).thenReturn("message".getBytes(StandardCharsets.UTF_8));
         Headers header = new RecordHeaders().add("contentType", "application/json".getBytes(StandardCharsets.UTF_8));
@@ -101,6 +168,7 @@ class GenericMessageListenerTest {
         Flux<ReceiverRecord<String, byte[]>> flux = Flux.just(receiverRecord).concatWith(Flux.never());
         when(receiver.listen(anyString(), any(List.class))).thenReturn(flux);
         when(receiver.getMaxConcurrency()).thenReturn(1);
+        return offset;
     }
 
     private SampleListener listener(boolean useDLQ, boolean createTopology, Sinks.One<Object> handled) {
