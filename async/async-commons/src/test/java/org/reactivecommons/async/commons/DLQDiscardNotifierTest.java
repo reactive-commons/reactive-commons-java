@@ -1,5 +1,9 @@
 package org.reactivecommons.async.commons;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.cloudevents.CloudEvent;
 import io.cloudevents.core.builder.CloudEventBuilder;
 import org.junit.jupiter.api.BeforeEach;
@@ -11,10 +15,12 @@ import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import org.slf4j.LoggerFactory;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -155,6 +161,45 @@ class DLQDiscardNotifierTest {
         notifier.notifyDiscard(message).block();
 
         verify(eventBus).emit(argThat((DomainEvent<?> ev) -> ev.getName().equals("corruptData.dlq")));
+    }
+
+    /**
+     * KC-16: the body of a message that cannot be read may carry personal data: it is logged at DEBUG only, while
+     * the DLQ still receives it as before.
+     */
+    @Test
+    void anUnreadableMessageIsLoggedWithoutItsBodyAboveDebug() {
+        String body = "{\"card\":\"4111-SECRET-BODY\"";
+        var message = createMessage(body.getBytes(StandardCharsets.UTF_8), "application/json");
+        when(messageConverter.readValue(eq(message), any(Class.class)))
+                .thenThrow(new MessageConversionException("cannot read"));
+        Logger logger = (Logger) LoggerFactory.getLogger(DLQDiscardNotifier.class);
+        Level previous = logger.getLevel();
+        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        logged.start();
+        logger.addAppender(logged);
+        try {
+            logger.setLevel(Level.INFO);
+            StepVerifier.create(notifier.notifyDiscard(message)).verifyComplete();
+            assertThat(logged.list).singleElement().satisfies(event -> {
+                assertThat(event.getLevel()).isEqualTo(Level.ERROR);
+                assertThat(event.getThrowableProxy()).as("no stack trace above DEBUG").isNull();
+                assertThat(event.getFormattedMessage())
+                        .contains(body.length() + " bytes", MessageConversionException.class.getName())
+                        .doesNotContain("SECRET");
+            });
+
+            logged.list.clear();
+            logger.setLevel(Level.DEBUG);
+            StepVerifier.create(notifier.notifyDiscard(message)).verifyComplete();
+            assertThat(logged.list).filteredOn(event -> event.getLevel() == Level.DEBUG).singleElement()
+                    .satisfies(event -> assertThat(event.getFormattedMessage()).contains(body));
+        } finally {
+            logger.detachAppender(logged);
+            logger.setLevel(previous);
+        }
+        verify(eventBus, times(2)).emit(argThat((DomainEvent<?> ev) -> ev.getName().equals("corruptData.dlq")
+                && body.equals(ev.getData())));
     }
 
     @Test
