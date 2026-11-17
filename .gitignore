@@ -647,3 +647,4 @@ contiperf-report
 samples/async/local-example/
 .kafka-env
 /build-cache/
+/.claude/
