@@ -6,6 +6,7 @@ import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.impl.common.kafka.RCKafkaConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 
@@ -17,6 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Verifies that YAML/properties values and programmatic values provided through a KafkaPropsCustomizer are merged
  * when the customizer uses customize(), instead of replacing the whole domain as put() does.
  */
+// Closed after the class: a cached context would keep its admin clients trying to reach the cluster
+@DirtiesContext
 @SpringBootTest(classes = {
         RCKafkaConfig.class,
         AsyncKafkaPropsDomain.class,

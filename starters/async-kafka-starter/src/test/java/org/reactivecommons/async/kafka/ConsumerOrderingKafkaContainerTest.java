@@ -101,7 +101,10 @@ class ConsumerOrderingKafkaContainerTest {
         try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
                 slowFirst, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> started.contains("slow"));
-            Thread.sleep(LONGER_THAN_A_COMMIT.toMillis());
+            // Holds during longer than a periodic commit: neither a later message starts nor an offset is committed
+            await().during(LONGER_THAN_A_COMMIT).atMost(LONGER_THAN_A_COMMIT.plus(WAIT))
+                    .pollInterval(Duration.ofSeconds(1))
+                    .until(() -> started.equals(List.of("slow")) && committedOffset(KAFKA, group, topic, 0) == -1);
             assertThat(started).as("handlers started while 'slow' is still running").containsExactly("slow");
             assertThat(committedOffset(KAFKA, group, topic, 0)).as("committed offset").isEqualTo(-1);
         }

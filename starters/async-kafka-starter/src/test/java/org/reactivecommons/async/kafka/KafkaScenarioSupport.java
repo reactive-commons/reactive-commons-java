@@ -4,8 +4,11 @@ import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -63,14 +66,33 @@ final class KafkaScenarioSupport {
     static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
                                                                Map<String, Object> domainProperties,
                                                                HandlerRegistry handlers, Class<?>... configurations) {
+        return startOnOwnDomain(kafka.getBootstrapServers(), appName, domain, domainProperties, handlers,
+                configurations);
+    }
+
+    /**
+     * Same as above, against the given bootstrap servers, which may not be reachable.
+     */
+    static AnnotationConfigApplicationContext startOnOwnDomain(String bootstrapServers, String appName, String domain,
+                                                               Map<String, Object> domainProperties,
+                                                               HandlerRegistry handlers, Class<?>... configurations) {
         String prefix = "reactive.commons.kafka." + domain + ".";
         Map<String, Object> properties = new HashMap<>();
         properties.put("spring.application.name", appName);
         properties.put("reactive.commons.kafka.app.enabled", "false");
         properties.put(prefix + "enabled", "true");
-        properties.put(prefix + "connectionProperties.bootstrap-servers", kafka.getBootstrapServers());
+        properties.put(prefix + "connectionProperties.bootstrap-servers", bootstrapServers);
         properties.put(prefix + "connectionProperties.consumer.auto-offset-reset", "earliest");
         domainProperties.forEach((key, value) -> properties.put(prefix + key, value));
+        return start(properties, handlers, configurations);
+    }
+
+    /**
+     * Starts the starter with the given properties, the handlers of the application (or {@code null} when a
+     * configuration registers them) and its configurations.
+     */
+    static AnnotationConfigApplicationContext start(Map<String, Object> properties, HandlerRegistry handlers,
+                                                    Class<?>... configurations) {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
         // The configurations of the application first, so the default beans of the starter (e.g. an empty
@@ -131,6 +153,14 @@ final class KafkaScenarioSupport {
      * empty list when the topic does not exist.
      */
     static List<String> readAll(KafkaContainer kafka, String topic) {
+        return readRecords(kafka, topic).stream().map(ConsumerRecord::value).toList();
+    }
+
+    /**
+     * Every record of a topic, read from the beginning with a plain Kafka consumer of the test, or an empty list when
+     * the topic does not exist.
+     */
+    static List<ConsumerRecord<String, String>> readRecords(KafkaContainer kafka, String topic) {
         Map<String, Object> config = Map.of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
         try (KafkaConsumer<String, String> consumer =
                      new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
@@ -140,15 +170,28 @@ final class KafkaScenarioSupport {
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
             Map<TopicPartition, Long> end = consumer.endOffsets(partitions);
-            List<String> values = new ArrayList<>();
+            List<ConsumerRecord<String, String>> records = new ArrayList<>();
             long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
             while (partitions.stream().anyMatch(p -> consumer.position(p) < end.get(p))
                     && System.nanoTime() < deadline) {
-                consumer.poll(Duration.ofMillis(200)).forEach(item -> values.add(item.value()));
+                consumer.poll(Duration.ofMillis(200)).forEach(records::add);
             }
-            return values;
+            return records;
         } catch (Exception e) {
             return List.of();
+        }
+    }
+
+    /**
+     * Publishes a record, with its key and headers, with a plain Kafka producer of the test.
+     */
+    static void publish(KafkaContainer kafka, ProducerRecord<String, String> producerRecord) throws Exception {
+        Map<String, Object> config = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ProducerConfig.CLIENT_ID_CONFIG, "test-publisher");
+        try (KafkaProducer<String, String> producer =
+                     new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            producer.send(producerRecord).get();
         }
     }
 
@@ -161,6 +204,22 @@ final class KafkaScenarioSupport {
             OffsetAndMetadata offset = admin.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get()
                     .get(new TopicPartition(topic, partition));
             return offset == null ? -1 : offset.offset();
+        }
+    }
+
+    /**
+     * Whether a consumer group finished rebalancing with the given number of members, each one with partitions
+     * assigned.
+     */
+    static boolean isStableWithAssignedMembers(KafkaContainer kafka, String group, int members) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            ConsumerGroupDescription description = admin.describeConsumerGroups(List.of(group)).all().get()
+                    .get(group);
+            return description.groupState() == GroupState.STABLE
+                    && description.members().size() == members
+                    && description.members().stream()
+                    .noneMatch(member -> member.assignment().topicPartitions().isEmpty());
         }
     }
 
