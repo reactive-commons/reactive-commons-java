@@ -13,66 +13,73 @@ public class KafkaDirectAsyncGateway implements DirectAsyncGateway {
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T> Mono<Void> sendCommand(Command<T> command, String targetName, long delayMillis, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public Mono<Void> sendCommand(CloudEvent command, String targetName, long delayMillis, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T, R> Mono<R> requestReply(AsyncQuery<T> query, String targetName, Class<R> type, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
     }
 
     @Override
     public <T> Mono<Void> reply(T response, From from) {
-        throw new UnsupportedOperationException(NOT_IMPLEMENTED_YET);
+        return notImplemented();
+    }
+
+    /**
+     * The error is given through {@code onError}, not thrown, so the error handlers of the caller's chain see it.
+     */
+    private static <T> Mono<T> notImplemented() {
+        return Mono.error(() -> new UnsupportedOperationException(NOT_IMPLEMENTED_YET));
     }
 }
