@@ -2,10 +2,13 @@ package org.reactivecommons.async.kafka.communications.topology;
 
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
+import org.apache.kafka.clients.admin.DescribeTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,7 @@ import org.reactivecommons.async.kafka.communications.exceptions.TopicNotFoundEx
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -28,6 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -41,8 +47,6 @@ class TopologyCreatorTest {
     private TopologyCreator creator;
     @Mock
     private AdminClient adminClient;
-    @Mock
-    private ListTopicsResult listTopicsResult;
     @Mock
     private CreateTopicsResult createTopicsResult;
     private KafkaCustomizations customizations;
@@ -58,11 +62,6 @@ class TopologyCreatorTest {
     @Test
     void shouldCreateTopics() {
         // Arrange
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1", "topic2"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
-
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();
@@ -76,26 +75,21 @@ class TopologyCreatorTest {
     }
 
     @Test
-    void shouldCheckTopics() {
+    void shouldCheckATopicByDescribingOnlyThatTopic() {
         // Arrange
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1", "topic2"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
+        describeAnswers(found());
         creator = new TopologyCreator(adminClient, customizations, true);
         // Act
         creator.checkTopic("topic1");
         // Assert
-        verify(listTopicsResult, times(1)).names();
+        verify(adminClient).describeTopics(eq(List.of("topic1")), any(DescribeTopicsOptions.class));
+        verify(adminClient, never()).listTopics(any(ListTopicsOptions.class));
     }
 
     @Test
     void shouldFailWhenCheckTopics() {
         // Arrange
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1", "topic2"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
+        describeAnswers(failed(new UnknownTopicOrPartitionException("unknown")));
         creator = new TopologyCreator(adminClient, customizations, true);
         // Assert
         assertThrows(TopicNotFoundException.class, () ->
@@ -104,68 +98,23 @@ class TopologyCreatorTest {
     }
 
     @Test
-    void shouldRefreshTopicsBeforeFailingWhenTopicIsMissingFromCache() {
-        // Arrange: topic3 does not exist yet when the creator is built...
-        KafkaFutureImpl<Set<String>> initialNames = new KafkaFutureImpl<>();
-        initialNames.complete(Set.of("topic1", "topic2"));
-        KafkaFutureImpl<Set<String>> refreshedNames = new KafkaFutureImpl<>();
-        refreshedNames.complete(Set.of("topic1", "topic2", "topic3"));
-        ListTopicsResult refreshedListTopicsResult = mock(ListTopicsResult.class);
-        doReturn(initialNames).when(listTopicsResult).names();
-        doReturn(refreshedNames).when(refreshedListTopicsResult).names();
-        // ... but it is created by another process/replica after the cache was initialized
-        when(adminClient.listTopics(any(ListTopicsOptions.class)))
-                .thenReturn(listTopicsResult)
-                .thenReturn(refreshedListTopicsResult);
-        creator = new TopologyCreator(adminClient, customizations, true);
-
-        // Act: checkTopic should transparently refresh the cache and find it, instead of failing immediately
-        creator.checkTopic("topic3");
-
-        // Assert
-        verify(adminClient, times(2)).listTopics(any(ListTopicsOptions.class));
-    }
-
-    @Test
-    void shouldStillFailWhenTopicIsMissingAfterRefresh() {
-        // Arrange: topic3 never exists, neither at construction time nor after refreshing
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1", "topic2"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
-        creator = new TopologyCreator(adminClient, customizations, true);
-
-        // Act & Assert
-        assertThrows(TopicNotFoundException.class, () -> creator.checkTopic("topic3"));
-        // The cache was refreshed once (constructor) + once more inside checkTopic before failing
-        verify(adminClient, times(2)).listTopics(any(ListTopicsOptions.class));
-    }
-
-    @Test
-    void shouldNotRefreshTopicsWhenTopicIsAlreadyCached() {
+    void shouldNotDescribeATopicAlreadyFound() {
         // Arrange
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1", "topic2"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
+        describeAnswers(found());
         creator = new TopologyCreator(adminClient, customizations, true);
 
         // Act
         creator.checkTopic("topic1");
+        creator.checkTopic("topic1");
 
-        // Assert: only the constructor's initial load, no refresh needed
-        verify(adminClient, times(1)).listTopics(any(ListTopicsOptions.class));
+        // Assert
+        verify(adminClient, times(1)).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
     }
 
     @Test
     @SuppressWarnings("unchecked")
     void shouldCreateDlqTopicsWithDlqSuffix() {
         // Arrange
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of());
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
-
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();
@@ -206,11 +155,7 @@ class TopologyCreatorTest {
 
     @Test
     void shouldRegisterCreatedDlqTopicsSoTheyCanBeSentTo() {
-        // Arrange: the DLQ topic does not exist when the creator is built
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
+        // Arrange
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.complete(null);
         doReturn(create).when(createTopicsResult).all();
@@ -220,18 +165,15 @@ class TopologyCreatorTest {
         // Act
         StepVerifier.create(creator.createDlqTopics(List.of("topic1"))).verifyComplete();
 
-        // Assert: checkTopic finds it in the cache, without listing the topics again
+        // Assert: the topic is known, the cluster is not asked about it
         assertDoesNotThrow(() -> creator.checkTopic("topic1.dlq"));
-        verify(adminClient, times(1)).listTopics(any(ListTopicsOptions.class));
+        StepVerifier.create(creator.ensureTopic("topic1.dlq")).verifyComplete();
+        verify(adminClient, never()).describeTopics(anyCollection(), any(DescribeTopicsOptions.class));
     }
 
     @Test
     void shouldTreatAlreadyExistingDlqTopicAsCreated() {
         // Arrange: another replica already created the DLQ topic
-        KafkaFutureImpl<Set<String>> names = new KafkaFutureImpl<>();
-        names.complete(Set.of("topic1"));
-        doReturn(names).when(listTopicsResult).names();
-        when(adminClient.listTopics(any(ListTopicsOptions.class))).thenReturn(listTopicsResult);
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
         create.completeExceptionally(new TopicExistsException("Topic 'topic1.dlq' already exists."));
         doReturn(create).when(createTopicsResult).all();
@@ -268,7 +210,52 @@ class TopologyCreatorTest {
     }
 
     @Test
+    void shouldCloseTheAdminClientOnceWithABoundedWait() {
+        creator = new TopologyCreator(adminClient, customizations, true);
+
+        creator.close();
+        creator.close();
+
+        verify(adminClient, times(1)).close(TopologyCreator.CLOSE_TIMEOUT);
+    }
+
+    /**
+     * KC-31: the admin client of a domain is shared (e.g. with the discard notifier): it is closed once every user
+     * closed the creator.
+     */
+    @Test
+    void shouldCloseASharedAdminClientOnceTheLastUserClosesIt() {
+        creator = new TopologyCreator(adminClient, customizations, true);
+        assertThat(creator.retain()).isTrue();
+
+        creator.close();
+        verify(adminClient, never()).close(any(Duration.class));
+
+        creator.close();
+        verify(adminClient, times(1)).close(TopologyCreator.CLOSE_TIMEOUT);
+        assertThat(creator.retain()).as("a closed creator cannot be shared anymore").isFalse();
+    }
+
+    @Test
     void toDlqTopicShouldAppendDlqSuffix() {
         assertThat(TopologyCreator.toDlqTopic("my-topic")).isEqualTo("my-topic.dlq");
+    }
+
+    private void describeAnswers(KafkaFutureImpl<Map<String, TopicDescription>> future) {
+        DescribeTopicsResult result = mock(DescribeTopicsResult.class);
+        doReturn(future).when(result).allTopicNames();
+        when(adminClient.describeTopics(anyCollection(), any(DescribeTopicsOptions.class))).thenReturn(result);
+    }
+
+    private static KafkaFutureImpl<Map<String, TopicDescription>> found() {
+        KafkaFutureImpl<Map<String, TopicDescription>> future = new KafkaFutureImpl<>();
+        future.complete(Map.of());
+        return future;
+    }
+
+    private static KafkaFutureImpl<Map<String, TopicDescription>> failed(Throwable error) {
+        KafkaFutureImpl<Map<String, TopicDescription>> future = new KafkaFutureImpl<>();
+        future.completeExceptionally(error);
+        return future;
     }
 }

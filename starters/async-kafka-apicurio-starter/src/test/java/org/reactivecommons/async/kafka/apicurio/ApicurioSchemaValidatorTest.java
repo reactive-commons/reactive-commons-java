@@ -1,5 +1,6 @@
 package org.reactivecommons.async.kafka.apicurio;
 
+import com.microsoft.kiota.ApiExceptionBuilder;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
 import com.networknt.schema.SpecVersion;
@@ -14,10 +15,20 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.reactivecommons.async.kafka.validation.SchemaResolutionException;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 
+import java.io.IOException;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
+import java.net.http.HttpTimeoutException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -259,15 +270,87 @@ class ApicurioSchemaValidatorTest {
                 .hasMessageContaining("as JSON");
     }
 
-    @Test
-    void shouldWrapRegistryFailures() {
+    /**
+     * A failure that is neither an answer of the registry nor a network failure (e.g. a wrong configuration) would
+     * fail the same way if asked again.
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {IllegalStateException.class, IllegalArgumentException.class})
+    void shouldRejectARecordWhenTheResolverFailsForAnotherReason(Class<? extends RuntimeException> type)
+            throws Exception {
         when(schemaResolver.resolveSchemaByArtifactReference(any()))
-                .thenThrow(new IllegalStateException("registry is down"));
+                .thenThrow(type.getConstructor(String.class).newInstance("artifactId cannot be null"));
+        Headers headers = new RecordHeaders();
+
+        Throwable thrown = catchThrowable(() -> validator.validateInbound("person.topic", VALID, headers));
+
+        assertThat(thrown).isExactlyInstanceOf(SchemaValidationException.class)
+                .hasMessageContaining("Unable to resolve the schema")
+                .hasCauseInstanceOf(type);
+    }
+
+    /**
+     * A registry that cannot be reached says nothing about the record: querying it again may succeed, so the failure
+     * is told apart from an invalid record. The resolver wraps the failures of its client in a RuntimeException.
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {ConnectException.class, SocketTimeoutException.class, UnknownHostException.class,
+            NoRouteToHostException.class, SocketException.class, HttpTimeoutException.class, IOException.class})
+    void shouldReportARegistryThatCannotBeReachedAsAResolutionFailure(Class<? extends IOException> type)
+            throws Exception {
+        IOException unreachable = type.getConstructor(String.class).newInstance("registry unreachable");
+        when(schemaResolver.resolveSchemaByArtifactReference(any())).thenThrow(new RuntimeException(unreachable));
         Headers headers = new RecordHeaders();
 
         assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
-                .isInstanceOf(SchemaValidationException.class)
+                .isExactlyInstanceOf(SchemaResolutionException.class)
+                .hasMessageContaining("Unable to resolve the schema")
+                .hasRootCause(unreachable);
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {429, 502, 503, 504})
+    void shouldReportATransientAnswerOfTheRegistryAsAResolutionFailure(int status) {
+        givenTheRegistryAnswers(status);
+        Headers headers = new RecordHeaders();
+
+        assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
+                .isExactlyInstanceOf(SchemaResolutionException.class)
                 .hasMessageContaining("Unable to resolve the schema");
+    }
+
+    /**
+     * Any other answer of the registry would be the same if asked again (the artifact does not exist, the credentials
+     * are rejected, the registry fails on this request): the record is rejected instead of holding its partition.
+     */
+    @ParameterizedTest
+    @ValueSource(ints = {400, 401, 403, 404, 408, 409, 500, 501})
+    void shouldRejectARecordForAnyOtherAnswerOfTheRegistry(int status) {
+        givenTheRegistryAnswers(status);
+        Headers headers = new RecordHeaders();
+
+        assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
+                .isExactlyInstanceOf(SchemaValidationException.class)
+                .hasMessageContaining("Unable to resolve the schema");
+    }
+
+    /**
+     * The status of the answer decides, even when the client also reports the network exchange that carried it.
+     */
+    @Test
+    void shouldClassifyByTheAnswerOfTheRegistryOverTheNetworkFailureItWraps() {
+        when(schemaResolver.resolveSchemaByArtifactReference(any())).thenThrow(new RuntimeException(
+                new ApiExceptionBuilder().withMessage("Unauthorized").withResponseStatusCode(401)
+                        .withThrowable(new IOException("stream closed")).build()));
+        Headers headers = new RecordHeaders();
+
+        assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
+                .isExactlyInstanceOf(SchemaValidationException.class);
+    }
+
+    private void givenTheRegistryAnswers(int status) {
+        when(schemaResolver.resolveSchemaByArtifactReference(any())).thenThrow(new RuntimeException(
+                new ApiExceptionBuilder().withMessage("HTTP " + status).withResponseStatusCode(status).build()));
     }
 
     @Test

@@ -79,6 +79,37 @@ class KafkaJacksonMessageConverterTest {
         assertEquals(expectedJsonNode, receivedJsonNode);
     }
 
+    /**
+     * The key of the record of a CloudEvent is its {@code partitionkey} extension, as the Kafka binding of
+     * CloudEvents maps it, so the events of one entity go to the same partition in order.
+     */
+    @Test
+    void shouldUseThePartitionKeyOfACloudEventAsTheKey() {
+        CloudEvent withPartitionKey = CloudEventBuilder.v1()
+                .withId("evt-1")
+                .withSource(URI.create("https://reactivecommons.org/events"))
+                .withType("test")
+                .withExtension("partitionkey", "account-42")
+                .build();
+
+        Message message = converter.toMessage(withPartitionKey);
+
+        assertEquals("account-42", message.getProperties().getKey());
+    }
+
+    @Test
+    void shouldUseTheIdOfACloudEventWithoutPartitionKeyAsTheKey() {
+        CloudEvent withoutPartitionKey = CloudEventBuilder.v1()
+                .withId("evt-2")
+                .withSource(URI.create("https://reactivecommons.org/events"))
+                .withType("test")
+                .build();
+
+        Message message = converter.toMessage(withoutPartitionKey);
+
+        assertEquals("evt-2", message.getProperties().getKey());
+    }
+
     @Data
     @AllArgsConstructor
     @NoArgsConstructor

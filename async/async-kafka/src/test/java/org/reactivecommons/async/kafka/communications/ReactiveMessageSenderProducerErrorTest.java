@@ -63,24 +63,26 @@ class ReactiveMessageSenderProducerErrorTest {
     }
 
     @Test
-    void shouldNeverCompleteTheFailedSendWithReactorKafkaDefaultOptions() {
+    void shouldFailEveryPendingSendWithReactorKafkaDefaultOptions() {
         // Documents why stopOnError(false) is needed: with the default (true) reactor-kafka terminates the whole
-        // send sequence, the confirmation never arrives and the caller's Mono hangs forever
+        // send sequence on the first failed record, so the sends still waiting for their outcome fail with it, and
+        // the next send has to create a new producer
         assertThat(senderOptions().stopOnError()).isTrue();
         ReactiveMessageSender sender = sender(senderOptions());
 
         Mono<Void> failed = sender.send("first").cache();
+        Mono<Void> pending = sender.send("second").cache();
         failed.subscribe(v -> {
         }, e -> {
         });
-        awaitUntil(() -> producer.history().size() == 1);
+        pending.subscribe(v -> {
+        }, e -> {
+        });
+        awaitUntil(() -> producer.history().size() == 2);
         producer.errorNext(TOPIC_NOT_PRESENT);
 
-        StepVerifier.create(failed)
-                .expectSubscription()
-                .expectNoEvent(Duration.ofMillis(500))
-                .thenCancel()
-                .verify(TIMEOUT);
+        StepVerifier.create(failed).expectErrorMatches(TOPIC_NOT_PRESENT::equals).verify(TIMEOUT);
+        StepVerifier.create(pending).expectErrorMatches(TOPIC_NOT_PRESENT::equals).verify(TIMEOUT);
     }
 
     private void sendAndComplete(ReactiveMessageSender sender, String key, int expectedHistory) {
@@ -115,8 +117,10 @@ class ReactiveMessageSenderProducerErrorTest {
                 return (Producer<K, V>) producer;
             }
         };
-        return new ReactiveMessageSender(KafkaSender.create(factory, options), converter,
-                mock(TopologyCreator.class), NoOpSchemaValidator.INSTANCE);
+        TopologyCreator topologyCreator = mock(TopologyCreator.class);
+        when(topologyCreator.ensureTopic(any())).thenReturn(Mono.empty());
+        return new ReactiveMessageSender(KafkaSender.create(factory, options), converter, topologyCreator,
+                NoOpSchemaValidator.INSTANCE);
     }
 
     private static void awaitUntil(BooleanSupplier condition) {

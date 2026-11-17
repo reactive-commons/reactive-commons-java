@@ -3,14 +3,17 @@ package org.reactivecommons.async.kafka;
 import io.cloudevents.CloudEvent;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.api.function.ThrowingSupplier;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.From;
+import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 @ExtendWith(MockitoExtension.class)
 class KafkaDirectAsyncGatewayTest {
@@ -27,44 +30,30 @@ class KafkaDirectAsyncGatewayTest {
     @Mock
     private From from;
 
+    /**
+     * KC-27: every operation fails through {@code onError}, so the error handlers of the caller see it; calling it
+     * does not throw.
+     */
     @Test
     void allMethodsAreNotImplemented() {
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(cloudEvent, targetName)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, domain)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay, domain)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(command, targetName)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(command, targetName, domain)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(command, targetName, delay)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.sendCommand(command, targetName, delay, domain)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class)
-        );
-        assertThrows(UnsupportedOperationException.class,
-                () -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class, domain)
-        );
-        assertThrows(UnsupportedOperationException.class, () -> directAsyncGateway.reply(targetName, from));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(cloudEvent, targetName));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(cloudEvent, targetName, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(cloudEvent, targetName, delay, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName, delay));
+        assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName, delay, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class));
+        assertFailsThroughOnError(() -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class));
+        assertFailsThroughOnError(() -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class, domain));
+        assertFailsThroughOnError(() -> directAsyncGateway.reply(targetName, from));
+    }
+
+    private static void assertFailsThroughOnError(ThrowingSupplier<Mono<?>> operation) {
+        StepVerifier.create(assertDoesNotThrow(operation))
+                .expectError(UnsupportedOperationException.class)
+                .verify();
     }
 }

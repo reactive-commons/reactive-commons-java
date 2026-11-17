@@ -10,6 +10,7 @@ import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.kafka.sender.KafkaSender;
 import reactor.kafka.sender.SenderOptions;
@@ -126,7 +127,9 @@ class ReactiveMessageSenderLifecycleTest {
                 .withKeySerializer(new StringSerializer())
                 .withValueSerializer(new ByteArraySerializer())
                 .stopOnError(false);
-        return new ReactiveMessageSender(KafkaSender.create(factory, options), converter,
-                mock(TopologyCreator.class), NoOpSchemaValidator.INSTANCE);
+        TopologyCreator topologyCreator = mock(TopologyCreator.class);
+        when(topologyCreator.ensureTopic(any())).thenReturn(Mono.empty());
+        return new ReactiveMessageSender(KafkaSender.create(factory, options), converter, topologyCreator,
+                NoOpSchemaValidator.INSTANCE);
     }
 }
