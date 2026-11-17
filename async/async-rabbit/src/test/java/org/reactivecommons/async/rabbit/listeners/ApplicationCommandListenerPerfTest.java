@@ -179,7 +179,7 @@ class ApplicationCommandListenerPerfTest {
     private Mono<Void> handleTestPassiveBlockMessageDelay(Command<DummyMessage> message) {
         return Mono.fromRunnable(() -> {
             try {
-                Thread.sleep(10);
+                new CountDownLatch(1).await(10, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }

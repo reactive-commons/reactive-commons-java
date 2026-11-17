@@ -19,6 +19,8 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -62,7 +64,7 @@ class HandlerPoolIsolationRabbitContainerTest {
                     .listenEvent("scenario.event", event -> Mono.fromRunnable(() -> {
                         BLOCKED.incrementAndGet();
                         try {
-                            Thread.sleep(BLOCKING.toMillis());
+                            new CountDownLatch(1).await(BLOCKING.toMillis(), TimeUnit.MILLISECONDS);
                         } catch (InterruptedException e) {
                             Thread.currentThread().interrupt();
                         } finally {

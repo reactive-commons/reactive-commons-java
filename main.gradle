@@ -67,7 +67,7 @@ subprojects {
     }
 
     // TODO: Remove once it has been updated in spring boot
-    ext["rabbit-amqp-client.version"] = '5.37.0'
+    ext["rabbit-amqp-client.version"] = '5.37.1'
     ext['jackson-2-bom.version'] = "2.21.8"
     ext['jackson-bom.version'] = "3.1.8"
 
@@ -202,6 +202,7 @@ tasks.register('generateMergedReport', JacocoReport) {
 }
 
 tasks.named('wrapper') {
-    gradleVersion = '9.8.2'
+    gradleVersion = '9.9.1'
+    distributionSha256Sum = 'd8a18a7a841dd5df825d35a685fad6f2d7f12ac0c280e57b67c27b4a520ba228'
     validateDistributionUrl = true
 }

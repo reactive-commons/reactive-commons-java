@@ -13,6 +13,8 @@ import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
@@ -47,6 +49,8 @@ public abstract class GenericMessageListener {
     private final String objectType;
     private final CustomReporter customReporter;
     private volatile Flux<ReceiverRecord<String, byte[]>> messageFlux;
+    private final Disposable.Swap subscription = Disposables.swap();
+    private volatile boolean stopped;
 
     protected GenericMessageListener(ListenerContext<ReactiveMessageListener> context, String objectType,
                                      String groupId, List<String> topics) {
@@ -105,9 +109,27 @@ public abstract class GenericMessageListener {
         onTerminate();
     }
 
+    /**
+     * Subscribes the flow again when it terminates, unless the listener was stopped.
+     */
     private void onTerminate() {
-        messageFlux.doOnTerminate(this::onTerminate)
-                .subscribe(new LoggerSubscriber<>(getClass().getName()));
+        if (stopped) {
+            return;
+        }
+        LoggerSubscriber<ReceiverRecord<String, byte[]>> subscriber = new LoggerSubscriber<>(getClass().getName());
+        subscription.update(subscriber);
+        messageFlux.doOnTerminate(this::onTerminate).subscribe(subscriber);
+    }
+
+    /**
+     * Stops consuming (cancelling the flow closes the Kafka consumer) and releases the threads of the listener.
+     * Idempotent.
+     */
+    public void stop() {
+        stopped = true;
+        subscription.dispose();
+        scheduler.dispose();
+        errorReporterScheduler.dispose();
     }
 
     private Flux<ReceiverRecord<String, byte[]>> consumeFaultTolerant(Flux<ReceiverRecord<String, byte[]>> messageFlux) {

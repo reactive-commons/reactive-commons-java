@@ -595,7 +595,7 @@ class ListenerSchedulersTest {
 
     private static void sleep(long millis) {
         try {
-            Thread.sleep(millis);
+            new CountDownLatch(1).await(millis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

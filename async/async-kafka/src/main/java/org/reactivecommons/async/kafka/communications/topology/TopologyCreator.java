@@ -103,4 +103,11 @@ public class TopologyCreator {
             }
         }
     }
+
+    /**
+     * Closes the admin client used to list and create the topics.
+     */
+    public void close() {
+        adminClient.close();
+    }
 }

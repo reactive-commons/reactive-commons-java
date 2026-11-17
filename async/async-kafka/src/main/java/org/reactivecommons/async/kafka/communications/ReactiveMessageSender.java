@@ -9,6 +9,8 @@ import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
+import reactor.core.Disposable;
+import reactor.core.Disposables;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 import reactor.core.publisher.Mono;
@@ -19,6 +21,8 @@ import reactor.kafka.sender.SenderResult;
 
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
@@ -40,6 +44,13 @@ public class ReactiveMessageSender {
     );
 
     private static final int SENDER_COUNT = 4;
+    private static final String CLOSED_MESSAGE = "The Kafka sender is closed";
+
+    private final KafkaSender<String, byte[]> sender;
+    private final Disposable.Composite subscriptions = Disposables.composite();
+    private final CompletableFuture<Void> ready = new CompletableFuture<>();
+    private volatile boolean started;
+    private volatile boolean closed;
 
     private final MessageConverter messageConverter;
     private final TopologyCreator topologyCreator;
@@ -47,23 +58,95 @@ public class ReactiveMessageSender {
 
     public ReactiveMessageSender(KafkaSender<String, byte[]> sender, MessageConverter messageConverter,
                                  TopologyCreator topologyCreator, SchemaValidator schemaValidator) {
+        this.sender = sender;
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
         this.schemaValidator = schemaValidator == null ? NoOpSchemaValidator.INSTANCE : schemaValidator;
-        for (int i = 0; i < SENDER_COUNT; ++i) {
-            Flux<SenderRecord<String, byte[], String>> source = Flux.create(fluxSinks::add);
-            sender.send(source)
-                    .doOnNext(this::confirm)
-                    .subscribe();
-        }
     }
 
     public <V> Mono<Void> send(V message) {
         return Mono.create(sink -> {
             SenderRecord<String, byte[], String> senderRecord = createRecord(message);
+            start();
             confirmations.put(senderRecord.key(), sink);
-            executorServiceEmit.submit(() -> fluxSinks.get((int) (System.currentTimeMillis() % SENDER_COUNT))
-                    .next(senderRecord));
+            executorServiceEmit.submit(() -> emit(senderRecord));
+        });
+    }
+
+    /**
+     * Subscribes the send sequences on the first send, not when the sender is created: subscribing them creates the
+     * Kafka producer (connection, authentication, network thread and buffers), which a service that only consumes
+     * never needs.
+     */
+    private void start() {
+        if (closed) {
+            throw new IllegalStateException(CLOSED_MESSAGE);
+        }
+        if (started) {
+            return;
+        }
+        synchronized (this) {
+            if (closed) {
+                throw new IllegalStateException(CLOSED_MESSAGE);
+            }
+            if (started) {
+                return;
+            }
+            for (int i = 0; i < SENDER_COUNT; ++i) {
+                Flux<SenderRecord<String, byte[], String>> source = Flux.create(this::addSink);
+                subscriptions.add(sender.send(source)
+                        .doOnNext(this::confirm)
+                        .subscribe(null, ready::completeExceptionally));
+            }
+            started = true;
+        }
+    }
+
+    /**
+     * reactor-kafka subscribes the sources once the producer is created, on another thread: the records wait until
+     * every source is subscribed, or fail if the producer could not be created.
+     */
+    private void addSink(FluxSink<SenderRecord<String, byte[], String>> sink) {
+        fluxSinks.add(sink);
+        if (fluxSinks.size() == SENDER_COUNT) {
+            ready.complete(null);
+        }
+    }
+
+    private void emit(SenderRecord<String, byte[], String> senderRecord) {
+        try {
+            ready.join();
+            fluxSinks.get((int) (System.currentTimeMillis() % SENDER_COUNT)).next(senderRecord);
+        } catch (RuntimeException e) {
+            MonoSink<Void> sink = confirmations.remove(senderRecord.correlationMetadata());
+            if (sink != null) {
+                sink.error(e instanceof CompletionException && e.getCause() != null ? e.getCause() : e);
+            }
+        }
+    }
+
+    /**
+     * Closes the producer, if it was created, once the records already handed to it are sent, and releases the
+     * threads of the sender. The sends still waiting for their confirmation fail. Idempotent.
+     */
+    public void close() {
+        synchronized (this) {
+            if (closed) {
+                return;
+            }
+            closed = true;
+        }
+        IllegalStateException closedError = new IllegalStateException(CLOSED_MESSAGE);
+        ready.completeExceptionally(closedError);
+        sender.close();
+        subscriptions.dispose();
+        executorServiceEmit.shutdown();
+        executorServiceConfirm.shutdown();
+        confirmations.keySet().forEach(key -> {
+            MonoSink<Void> sink = confirmations.remove(key);
+            if (sink != null) {
+                sink.error(closedError);
+            }
         });
     }
 

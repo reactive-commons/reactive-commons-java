@@ -25,6 +25,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -48,7 +50,8 @@ class ReactiveMessageSenderValidationTest {
 
     @BeforeEach
     void setUp() {
-        when(kafkaSender.send(any(Flux.class))).thenReturn(Flux.never());
+        // lenient: a record that fails the validation never opens the producer
+        lenient().when(kafkaSender.send(any(Flux.class))).thenReturn(Flux.never());
         KafkaMessage.KafkaMessageProperties properties = new KafkaMessage.KafkaMessageProperties();
         properties.setTopic("topic");
         properties.setKey("key");
@@ -82,5 +85,6 @@ class ReactiveMessageSenderValidationTest {
         StepVerifier.create(sender.send(event))
                 .expectError(SchemaValidationException.class)
                 .verify();
+        verify(kafkaSender, never()).send(any());
     }
 }

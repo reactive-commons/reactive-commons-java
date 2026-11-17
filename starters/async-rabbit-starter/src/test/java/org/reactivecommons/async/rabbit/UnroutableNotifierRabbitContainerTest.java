@@ -21,6 +21,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -55,7 +57,7 @@ class UnroutableNotifierRabbitContainerTest {
     static final UnroutableMessageHandler BLOCKING_HANDLER = result -> Mono.fromRunnable(() -> {
         HANDLER_THREADS.add(Thread.currentThread().getName());
         try {
-            Thread.sleep(BLOCKING.toMillis());
+            new CountDownLatch(1).await(BLOCKING.toMillis(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

@@ -32,4 +32,24 @@ class KafkaDiscardProviderTest {
         // Assert
         assertThat(notifier).isExactlyInstanceOf(DLQDiscardNotifier.class);
     }
+
+    @Test
+    void shouldCloseItsSenderOnceTheLastUserReleasesIt() {
+        // Arrange
+        AsyncKafkaProps props = new AsyncKafkaProps();
+        props.setCheckExistingTopics(false);
+        props.setConnectionProperties(new KafkaProperties());
+        KafkaDiscardProvider discardProvider = new KafkaDiscardProvider(props, converter, customizations);
+        DiscardNotifier notifier = discardProvider.get();
+        discardProvider.retain();
+        discardProvider.retain();
+        // Act
+        discardProvider.release();
+        DiscardNotifier stillInUse = discardProvider.get();
+        discardProvider.release();
+        DiscardNotifier afterLastRelease = discardProvider.get();
+        // Assert
+        assertThat(stillInUse).as("kept while a user is left").isSameAs(notifier);
+        assertThat(afterLastRelease).as("rebuilt after its sender was closed").isNotSameAs(notifier);
+    }
 }

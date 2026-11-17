@@ -31,4 +31,10 @@ public class KafkaReactiveHealthIndicator extends RCHealthIndicator {
                 .doOnError(e -> log.error("Error checking Kafka health in domain {}", domain, e));
     }
 
+    /**
+     * Closes the admin client used to check the cluster.
+     */
+    public void close() {
+        adminClient.close();
+    }
 }
