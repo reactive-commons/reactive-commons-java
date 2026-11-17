@@ -30,10 +30,28 @@ public final class PartitionFlowControl {
     // decided, so a resume can never overtake the pause it undoes
     private final Map<TopicPartition, Integer> waiting = new HashMap<>();
     private final Set<TopicPartition> paused = new HashSet<>();
+    private final Runnable onAssigned;
     private volatile KafkaReceiver<String, byte[]> receiver;
+
+    public PartitionFlowControl() {
+        this(() -> {
+        });
+    }
+
+    /**
+     * @param onAssigned run every time partitions are assigned to the consumer of the subscription, which tells that
+     *                   it joined its group (or took its partitions) and fetches records
+     */
+    public PartitionFlowControl(Runnable onAssigned) {
+        this.onAssigned = onAssigned;
+    }
 
     void attach(KafkaReceiver<String, byte[]> receiver) {
         this.receiver = receiver;
+    }
+
+    void assigned() {
+        onAssigned.run();
     }
 
     /**

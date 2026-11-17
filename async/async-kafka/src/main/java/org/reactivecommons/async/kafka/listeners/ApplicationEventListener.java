@@ -19,7 +19,16 @@ public class ApplicationEventListener extends GenericMessageListener {
 
 
     public ApplicationEventListener(ListenerContext<ReactiveMessageListener> context, String groupId) {
-        super(context, "event", groupId, context.resolver().getEventNames());
+        this(context, groupId, null);
+    }
+
+    /**
+     * @param schedulers the threads shared with the other listeners of the domain, or {@code null} for threads of its
+     *                   own
+     */
+    public ApplicationEventListener(ListenerContext<ReactiveMessageListener> context, String groupId,
+                                    KafkaListenerSchedulers schedulers) {
+        super(context, "event", groupId, context.resolver().getEventNames(), schedulers);
         this.resolver = context.resolver();
         this.messageConverter = context.converter();
     }
