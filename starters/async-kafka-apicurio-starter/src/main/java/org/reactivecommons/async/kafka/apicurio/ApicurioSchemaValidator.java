@@ -1,6 +1,7 @@
 package org.reactivecommons.async.kafka.apicurio;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.kiota.ApiException;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.ValidationMessage;
 import io.apicurio.registry.resolver.ParsedSchema;
@@ -12,6 +13,7 @@ import io.apicurio.registry.serde.kafka.headers.HeadersHandler;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.header.Headers;
+import org.reactivecommons.async.kafka.validation.SchemaResolutionException;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
 
@@ -54,6 +56,19 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
      * Apicurio resolves a missing group id as this group, so both spellings name the same one.
      */
     private static final String DEFAULT_GROUP_ID = "default";
+
+    /**
+     * The answers of the registry worth asking again: too many requests (429), and a gateway or the registry itself
+     * temporarily unable to answer (502, 503, 504). It is the same list the Apicurio serdes retry with
+     * {@code apicurio.registry.retry.transient-errors=true}, and 503 is the one HTTP defines as temporary. Any other
+     * answer would be the same if asked again.
+     */
+    private static final Set<Integer> TRANSIENT_HTTP_STATUSES = Set.of(429, 502, 503, 504);
+
+    /**
+     * Guards the walk of the causes of a failure against a cyclic chain.
+     */
+    private static final int MAX_CAUSE_DEPTH = 32;
 
     private final SchemaResolver<JsonSchema, Object> schemaResolver;
     private final boolean ownsResolver;
@@ -207,19 +222,51 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         return empty ? null : reference;
     }
 
+    /**
+     * A registry that could not be queried, or that answered with a transient error, throws a
+     * {@link SchemaResolutionException}, which the listeners retry: the record may be valid, and querying the registry
+     * again may succeed. Any other failure (any other answer of the registry, e.g. 401, 404 or 500, or a configuration
+     * error) throws a {@link SchemaValidationException}: asking again would fail the same way, so the record is
+     * discarded instead of holding its partition.
+     */
     private SchemaLookupResult<JsonSchema> resolve(String topic, ArtifactReference reference) {
         SchemaLookupResult<JsonSchema> lookup;
         try {
             lookup = schemaResolver.resolveSchemaByArtifactReference(reference);
         } catch (Exception e) {
-            throw new SchemaValidationException(
-                    String.format("Unable to resolve the schema for topic %s and reference %s", topic, reference), e);
+            String message = String.format("Unable to resolve the schema for topic %s and reference %s", topic,
+                    reference);
+            if (isTransient(e)) {
+                throw new SchemaResolutionException(message, e);
+            }
+            throw new SchemaValidationException(message, e);
         }
         if (lookup == null) {
             throw new SchemaValidationException(
                     String.format("No schema was resolved for topic %s and reference %s", topic, reference));
         }
         return lookup;
+    }
+
+    /**
+     * Whether querying the registry again may succeed. The resolver wraps the failures of the registry client, which
+     * reports an answer of the registry as an {@link ApiException} with its HTTP status, and a failure to reach it
+     * (connection refused or reset, socket timeout, unknown host, no route) as an {@link IOException}. The Apicurio
+     * client does not retry an HTTP answer by itself.
+     *
+     * @return {@code true} for an answer in {@link #TRANSIENT_HTTP_STATUSES}, or for a network failure without
+     * answer; {@code false} for any other answer and for any failure that is neither
+     */
+    private static boolean isTransient(Throwable error) {
+        boolean networkFailure = false;
+        int depth = 0;
+        for (Throwable cause = error; cause != null && depth < MAX_CAUSE_DEPTH; cause = cause.getCause(), depth++) {
+            if (cause instanceof ApiException apiException && apiException.getResponseStatusCode() > 0) {
+                return TRANSIENT_HTTP_STATUSES.contains(apiException.getResponseStatusCode());
+            }
+            networkFailure |= cause instanceof IOException;
+        }
+        return networkFailure;
     }
 
     private void validate(String topic, byte[] payload, ParsedSchema<JsonSchema> schema, String hint) {
