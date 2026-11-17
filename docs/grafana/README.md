@@ -94,8 +94,18 @@ Micrometer names are exported to Prometheus with dots replaced by underscores an
 | `reactive_commons.schedulers.handler.threads.active` | `reactive_commons_schedulers_handler_threads_active` | Handler pool threads |
 | `reactive_commons.schedulers.handler.queue.size` | `reactive_commons_schedulers_handler_queue_size` | Queued handler tasks |
 | `reactive_commons.schedulers.handler.growth` | `reactive_commons_schedulers_handler_growth_total` | Handler pool growth /s |
+| `reactive_commons.kafka.consumer.messages` | `reactive_commons_kafka_consumer_messages_total{outcome,topic,domain}` | Kafka consumer outcomes /s |
+| `reactive_commons.kafka.consumer.handler.latency` | `reactive_commons_kafka_consumer_handler_latency_seconds_*{topic,domain}` | Kafka handler latency |
+| `reactive_commons.kafka.consumer.handler.failures` | `reactive_commons_kafka_consumer_handler_failures_total{topic,domain}` | Kafka handler failures and retries /s |
+| `reactive_commons.kafka.consumer.retry.attempts` | `reactive_commons_kafka_consumer_retry_attempts_total{topic,domain}` | Kafka handler failures and retries /s |
+| `reactive_commons.kafka.consumer.restart` | `reactive_commons_kafka_consumer_restart_total{topic,domain}` | Kafka listener restarts /s |
+| `kafka.consumer.fetch.manager.records.lag.max` (Kafka client) | `kafka_consumer_fetch_manager_records_lag_max{topic,partition,client_id,domain}` | Kafka consumer lag |
 | `async_query.subscribed` | `async_query_subscribed_total{operation,target,type}` | Async queries /s, query throughput by target |
 | `async_query.flow.duration` | `async_query_flow_duration_seconds_*{operation,target,type,status,exception}` | Query latency, query outcomes by status, query failures by exception |
+
+The *Kafka listeners* row charts the listeners of the Kafka domains (`async-kafka-starter`): their meters are
+registered the first time they are used, so their panels show `No data` until a message is handled, and they are
+tagged with `topic` instead of `queue` (the `Queue` filter does not apply to them).
 
 ## Things to know
 

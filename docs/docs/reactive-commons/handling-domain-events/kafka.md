@@ -73,10 +73,11 @@ public class EventsHandler {
 }
 ```
 
-Unlike regular events, every notification listener gets its **own** consumer group, generated at startup as
-`<appName>-notification-<random-uuid>`. Since each pod ends up in a different consumer group, Kafka treats every one of
-them as an independent consumer and delivers the full stream to each — this is the Kafka equivalent of RabbitMQ's
-temporary, exclusive queue per pod: same broadcast semantics, different mechanism.
+Unlike regular events, notifications are read without a consumer group: every pod reads all the partitions of the
+notification topics by itself, from the moment it starts, so each one gets the full stream. This is the Kafka equivalent
+of RabbitMQ's temporary, exclusive queue per pod: same broadcast semantics, different mechanism. No consumer group is
+created in the broker, and none is left behind by a pod that stops (see
+[Notifications](../configuration_properties/2-kafka.md#notifications)).
 
 ### Listening Raw Events
 
