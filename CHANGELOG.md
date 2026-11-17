@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.8.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.8.1) (2026-11-17)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.8.0...v7.8.1)
+
+**Merged pull requests:**
+
+- fix\(kafka\): create the producer lazily and release Kafka resources on close [\#191](https://github.com/reactive-commons/reactive-commons-java/pull/191) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.8.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.8.0) (2026-11-04)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.7.0...v7.8.0)
