@@ -7,6 +7,7 @@ import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.reactivecommons.async.kafka.communications.PartitionFlowControl;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -18,7 +19,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
@@ -76,8 +76,8 @@ class ConsumerOrderingKafkaContainerTest {
                     .then();
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, "ordering-in-order", DOMAIN,
-                Map.of(), handlers, ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain("ordering-in-order", DOMAIN), handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> completed.size() == 10);
             assertThat(completed).as("order in which the handlers completed")
                     .containsExactly("0", "1", "2", "3", "4", "5", "6", "7", "8", "9");
@@ -98,7 +98,7 @@ class ConsumerOrderingKafkaContainerTest {
             return value.equals("slow") ? Mono.never() : Mono.empty();
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
                 slowFirst, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> started.contains("slow"));
             // Holds during longer than a periodic commit: neither a later message starts nor an offset is committed
@@ -114,7 +114,7 @@ class ConsumerOrderingKafkaContainerTest {
             afterRestart.add(body(message));
             return Mono.empty();
         });
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
                 recovered, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 3);
             assertThat(afterRestart).as("messages delivered after the restart")
@@ -135,7 +135,7 @@ class ConsumerOrderingKafkaContainerTest {
             return value.equals("blocked") ? Mono.never() : Mono.fromRunnable(() -> completed.add(value));
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
                 handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 1) == 2);
             assertThat(completed).as("messages of the other partition").containsExactly("free-1", "free-2");
@@ -162,7 +162,7 @@ class ConsumerOrderingKafkaContainerTest {
                         ? Mono.never()
                         : Mono.fromRunnable(completed::incrementAndGet));
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
                 handlers, ListenTopics.class)) {
             await().atMost(Duration.ofSeconds(60)).until(() -> committedOffset(KAFKA, group, topic, 1) == 2000);
             assertThat(completed).as("messages of the other partition").hasValue(2000);

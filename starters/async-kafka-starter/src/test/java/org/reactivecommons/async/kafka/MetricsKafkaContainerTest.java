@@ -9,6 +9,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.reactivecommons.async.kafka.metrics.KafkaDomainMetrics;
 import org.reactivecommons.async.kafka.metrics.KafkaMetricsFactory;
 import org.reactivecommons.async.kafka.metrics.MicrometerKafkaMetricsFactory;
@@ -88,8 +89,9 @@ class MetricsKafkaContainerTest {
         publish(KAFKA, TOPIC, "{\"fail\":1}");
         MeterRegistry registry;
 
-        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA, "metrics-app", DOMAIN,
-                Map.of("maxRetries", "1", "retryDelay", "50"), handlers(), ListenAndSend.class, WithRegistry.class)) {
+        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA,
+                new OwnDomain("metrics-app", DOMAIN, Map.of("maxRetries", "1", "retryDelay", "50")), handlers(),
+                ListenAndSend.class, WithRegistry.class)) {
             registry = context.getBean(MeterRegistry.class);
             Mono.from(context.getBean(DomainEventBus.class).emit(DOMAIN, new DomainEvent<>(TOPIC, "1", Map.of())))
                     .block(Duration.ofSeconds(30));
@@ -128,8 +130,9 @@ class MetricsKafkaContainerTest {
         List<String> received = new CopyOnWriteArrayList<>();
         publish(KAFKA, topic, "{\"ok\":1}");
 
-        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA, "no-metrics-app", DOMAIN,
-                Map.of(), HandlerRegistry.register().listenTopic(DOMAIN, topic, message -> {
+        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA,
+                new OwnDomain("no-metrics-app", DOMAIN),
+                HandlerRegistry.register().listenTopic(DOMAIN, topic, message -> {
                     received.add(body(message));
                     return Mono.empty();
                 }), ListenAndSend.class, WithRegistry.class, WithoutMetrics.class)) {

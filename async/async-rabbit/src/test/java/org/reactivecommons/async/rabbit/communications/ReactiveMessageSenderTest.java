@@ -676,8 +676,8 @@ class ReactiveMessageSenderTest {
             return argument.map(msg -> new OutboundMessageResult<>(msg, true, true));
         });
         // the flows are subscribed when the sender is created: use a new sender so it sees this stub
-        try (ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier)) {
+        try (ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier)) {
             StepVerifier.create(returningSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectError(SendFailureReturnedException.class)

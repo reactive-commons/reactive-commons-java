@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Timeout;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -44,8 +45,9 @@ class ConsumerQueueDepthRabbitContainerTest {
     @Test
     @Timeout(180)
     void exportsTheDepthOfTheConsumedQueue() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qd",
-                false, true, BlockingHandler.class, SendEvents.class, ListenEvents.class, SmallPrefetch.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("qd", false, true), BlockingHandler.class, SendEvents.class, ListenEvents.class,
+                SmallPrefetch.class)) {
             System.out.println("[REAL BROKER] context started");
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
             System.out.println("[REAL BROKER] consumer registered");

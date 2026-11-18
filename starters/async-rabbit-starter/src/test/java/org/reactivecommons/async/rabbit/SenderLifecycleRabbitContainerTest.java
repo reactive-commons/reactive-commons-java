@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -45,8 +46,9 @@ class SenderLifecycleRabbitContainerTest {
         Set<String> before = senderThreads();
         Set<String> whileRunning;
         RabbitMQBrokerProvider provider;
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "slc",
-                false, true, RabbitScenarioSupport.Handlers.class, SendEvents.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("slc", false, true), RabbitScenarioSupport.Handlers.class, SendEvents.class,
+                ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "slc-app.subsEvents");
             DomainEventBus bus = context.getBean(DomainEventBus.class);
             provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)

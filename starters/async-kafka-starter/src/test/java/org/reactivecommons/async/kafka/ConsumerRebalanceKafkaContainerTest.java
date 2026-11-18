@@ -3,6 +3,7 @@ package org.reactivecommons.async.kafka;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
@@ -59,15 +60,15 @@ class ConsumerRebalanceKafkaContainerTest {
         // Retried once, then discarded: there is no DLQ
         Map<String, Object> discardAfterOneRetry = Map.of("maxRetries", "1", "retryDelay", "100");
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, discardAfterOneRetry,
-                handlers, ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, discardAfterOneRetry), handlers, ListenTopics.class)) {
             // The partition is handled in order: once "ok" is handled, "fail" was already discarded
             await().atMost(WAIT).until(() -> handled.contains("ok"));
             assertThat(handled).as("deliveries to the handler").containsExactly("fail", "fail", "ok");
 
             long start = System.nanoTime();
-            try (AnnotationConfigApplicationContext secondInstance = startOnOwnDomain(KAFKA, group, DOMAIN,
-                    discardAfterOneRetry, handlers, ListenTopics.class)) {
+            try (AnnotationConfigApplicationContext secondInstance = startOnOwnDomain(KAFKA,
+                    new OwnDomain(group, DOMAIN, discardAfterOneRetry), handlers, ListenTopics.class)) {
                 await().atMost(Duration.ofSeconds(90)).until(() -> isStableWithAssignedMembers(KAFKA, group, 2));
                 Duration rebalance = Duration.ofNanos(System.nanoTime() - start);
                 assertThat(rebalance).as("time until the second instance gets its partition")

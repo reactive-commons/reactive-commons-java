@@ -10,6 +10,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
@@ -73,8 +74,9 @@ class ClientIdsKafkaContainerTest {
         logged.start();
         appInfo.addAppender(logged);
 
-        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA, "client-ids-app", DOMAIN,
-                Map.of("connectionProperties.client-id", CLIENT_ID), handlers, ListenAndSend.class)) {
+        try (AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA,
+                new OwnDomain("client-ids-app", DOMAIN, Map.of("connectionProperties.client-id", CLIENT_ID)), handlers,
+                ListenAndSend.class)) {
             Mono.from(context.getBean(DomainEventBus.class).emit(DOMAIN, new DomainEvent<>(EVENT, "1", Map.of())))
                     .block(Duration.ofSeconds(30));
             await().atMost(Duration.ofSeconds(60)).until(() -> RECEIVED.get() >= 2);

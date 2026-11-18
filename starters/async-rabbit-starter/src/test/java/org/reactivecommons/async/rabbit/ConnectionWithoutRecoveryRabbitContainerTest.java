@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -65,8 +66,9 @@ class ConnectionWithoutRecoveryRabbitContainerTest {
     @Test
     void anApplicationWhoseConnectionsAreClosedForGoodOpensNewOnes() throws Exception {
         HANDLED.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, PREFIX,
-                false, false, CountingHandlersWithoutAutomaticRecovery.class, SendDirect.class, ListenCommands.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(PREFIX, false, false), CountingHandlersWithoutAutomaticRecovery.class, SendDirect.class,
+                ListenCommands.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);
             send(gateway).block(Duration.ofSeconds(30));

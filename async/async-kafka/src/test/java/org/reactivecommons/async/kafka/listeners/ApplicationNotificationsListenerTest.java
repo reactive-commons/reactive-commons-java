@@ -125,7 +125,8 @@ class ApplicationNotificationsListenerTest {
         listener.startListener(topologyCreator);
 
         try {
-            ArgumentCaptor<Consumer<Collection<ReceiverPartition>>> onAssigned = ArgumentCaptor.forClass(Consumer.class);
+            ArgumentCaptor<Consumer<Collection<ReceiverPartition>>> onAssigned =
+                    ArgumentCaptor.forClass(Consumer.class);
             verify(receiver).listenAssigned(eq(List.of(first, second)), onAssigned.capture(), any());
             verify(receiver, never()).listen(any(), any(), any());
             ReceiverPartition firstAssigned = assigned(first, 7);

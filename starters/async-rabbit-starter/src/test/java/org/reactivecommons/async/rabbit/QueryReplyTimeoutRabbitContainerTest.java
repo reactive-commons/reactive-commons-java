@@ -6,6 +6,7 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -83,8 +84,8 @@ class QueryReplyTimeoutRabbitContainerTest {
 
     @Test
     void aQueryAnsweredWithinItsReplyTimeoutIsNotDiscarded() {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qto",
-                false, true, Map.of("app.async.app.direct.discardTimeoutQueries", "true"),
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("qto", false, true, Map.of("app.async.app.direct.discardTimeoutQueries", "true")),
                 SlowQueryHandlers.class, SendDirect.class, ListenQueries.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, TARGET + ".query");
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);
@@ -136,7 +137,7 @@ class QueryReplyTimeoutRabbitContainerTest {
         }
         assertThat(messages(queue)).as("the query is routed to an existing queue").isZero();
         try (AnnotationConfigApplicationContext caller = RabbitScenarioSupport.startWithHandlers(RABBIT,
-                prefix + "-caller", false, true, CountingQueryHandlers.class, SendDirect.class)) {
+                new Scenario(prefix + "-caller", false, true), CountingQueryHandlers.class, SendDirect.class)) {
             Throwable timeout = catchThrowable(() -> caller.getBean(DirectAsyncGateway.class)
                     .requestReply(new AsyncQuery<>("scenario.query", "late"), target, String.class)
                     .block(Duration.ofSeconds(10)));
@@ -157,7 +158,7 @@ class QueryReplyTimeoutRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext startListener(String prefix, Map<String, Object> properties) {
-        return RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false, false, properties,
+        return RabbitScenarioSupport.startWithHandlers(RABBIT, new Scenario(prefix, false, false, properties),
                 CountingQueryHandlers.class, ListenQueries.class);
     }
 

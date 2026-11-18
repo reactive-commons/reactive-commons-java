@@ -272,8 +272,8 @@ class GenericMessageListenerRetryStrategyTest {
         logged.start();
         logger.addAppender(logged);
         FailingListener listener = new FailingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
-                new SubscriberRegistry(), registry, DOMAIN, handlerTimeout), withDLQRetry, maxRetries, retryDelay,
-                discardNotifier, errorReporter, handlerCalls);
+                new SubscriberRegistry(), registry, DOMAIN, handlerTimeout),
+                new RetryPolicy(withDLQRetry, maxRetries, retryDelay), discardNotifier, errorReporter, handlerCalls);
         try {
             listener.startListener();
         } finally {
@@ -298,8 +298,9 @@ class GenericMessageListenerRetryStrategyTest {
         when(receiver.consumeManualAck(anyString(), any(ConsumeOptions.class)))
                 .thenReturn(Flux.just(delivery).concatWith(Flux.never()));
         new FailingListener(new ReactiveMessageListener(receiver, topologyCreator, 250, 250,
-                new SubscriberRegistry(), registry, DOMAIN, null), withDLQRetry, maxRetries,
-                discardNotifier, errorReporter, handlerCalls).startListener();
+                new SubscriberRegistry(), registry, DOMAIN, null),
+                new RetryPolicy(withDLQRetry, maxRetries, RETRY_DELAY), discardNotifier, errorReporter, handlerCalls)
+                .startListener();
     }
 
     private void stubCollaborators(Mono<Void> discardNotification) {
@@ -367,14 +368,9 @@ class GenericMessageListenerRetryStrategyTest {
     private static class FailingListener extends GenericMessageListener {
         private final AtomicInteger handlerCalls;
 
-        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries,
-                        DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            this(listener, useDLQRetries, maxRetries, RETRY_DELAY, discardNotifier, errorReporter, handlerCalls);
-        }
-
-        FailingListener(ReactiveMessageListener listener, boolean useDLQRetries, long maxRetries, int retryDelay,
-                        DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handlerCalls) {
-            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, retryDelay),
+        FailingListener(ReactiveMessageListener listener, RetryPolicy retryPolicy, DiscardNotifier discardNotifier,
+                        CustomReporter errorReporter, AtomicInteger handlerCalls) {
+            super(new ListenerContext<>(listener, null, null, retryPolicy,
                     false, discardNotifier, errorReporter), "test-queue", "command");
             this.handlerCalls = handlerCalls;
         }

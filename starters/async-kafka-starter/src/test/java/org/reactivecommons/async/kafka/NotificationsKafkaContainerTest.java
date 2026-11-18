@@ -7,6 +7,7 @@ import org.apache.kafka.clients.admin.NewPartitions;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableNotificationListener;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
@@ -53,8 +54,9 @@ class NotificationsKafkaContainerTest {
 
         for (int start = 1; start <= 3; start++) {
             List<String> received = new CopyOnWriteArrayList<>();
-            try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, "notifications-restarts",
-                    DOMAIN, Map.of(), recording(name, received), ListenNotifications.class)) {
+            try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                    new OwnDomain("notifications-restarts", DOMAIN), recording(name, received),
+                    ListenNotifications.class)) {
                 String id = "start-" + start;
                 // Read from the end of the partitions once assigned: published until it is read
                 await().atMost(WAIT).pollInterval(PUBLISH_EVERY).until(() -> {
@@ -75,10 +77,11 @@ class NotificationsKafkaContainerTest {
         List<String> second = new CopyOnWriteArrayList<>();
         AtomicInteger warmUps = new AtomicInteger();
 
-        try (AnnotationConfigApplicationContext ignoredFirst = startOnOwnDomain(KAFKA, "notifications-instances",
-                DOMAIN, Map.of(), recording(name, first), ListenNotifications.class);
-             AnnotationConfigApplicationContext ignoredSecond = startOnOwnDomain(KAFKA, "notifications-instances",
-                     DOMAIN, Map.of(), recording(name, second), ListenNotifications.class)) {
+        try (AnnotationConfigApplicationContext ignoredFirst = startOnOwnDomain(KAFKA,
+                new OwnDomain("notifications-instances", DOMAIN), recording(name, first), ListenNotifications.class);
+             AnnotationConfigApplicationContext ignoredSecond = startOnOwnDomain(KAFKA,
+                     new OwnDomain("notifications-instances", DOMAIN), recording(name, second),
+                     ListenNotifications.class)) {
             // Both instances read every partition once their notifications are read
             await().atMost(WAIT).pollInterval(PUBLISH_EVERY).until(() -> {
                 publish(KAFKA, name, notification(name, "warm-up-" + warmUps.incrementAndGet()));
@@ -102,8 +105,9 @@ class NotificationsKafkaContainerTest {
         createTopic(KAFKA, name, 1);
         List<String> received = new CopyOnWriteArrayList<>();
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, "notifications-partitions",
-                DOMAIN, Map.of(), recording(name, received), ListenNotifications.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain("notifications-partitions", DOMAIN), recording(name, received),
+                ListenNotifications.class)) {
             await().atMost(WAIT).pollInterval(PUBLISH_EVERY).until(() -> {
                 publish(KAFKA, name, 0, notification(name, "warm-up"));
                 return received.contains("warm-up");
@@ -119,7 +123,6 @@ class NotificationsKafkaContainerTest {
         }
     }
 
-    @SuppressWarnings("rawtypes")
     private static HandlerRegistry recording(String name, List<String> received) {
         return HandlerRegistry.register().listenNotificationEvent(DOMAIN, name,
                 notification -> Mono.fromRunnable(() -> received.add(notification.getEventId())), Map.class);

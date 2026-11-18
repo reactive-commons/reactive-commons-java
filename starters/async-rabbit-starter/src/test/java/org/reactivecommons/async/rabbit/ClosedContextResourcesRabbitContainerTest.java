@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -86,7 +87,7 @@ class ClosedContextResourcesRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext start(String prefix) {
-        return RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false, true,
+        return RabbitScenarioSupport.startWithHandlers(RABBIT, new Scenario(prefix, false, true),
                 RabbitScenarioSupport.Handlers.class, SendEvents.class, SendDirect.class, ListenEvents.class,
                 ListenCommands.class, ListenQueries.class);
     }

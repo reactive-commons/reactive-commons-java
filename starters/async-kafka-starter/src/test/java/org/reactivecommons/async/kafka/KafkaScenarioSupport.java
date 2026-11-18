@@ -54,37 +54,51 @@ final class KafkaScenarioSupport {
      */
     static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
                                                                Class<?>... configurations) {
-        return startOnOwnDomain(kafka, appName, domain, Map.of(), null, configurations);
+        return startOnOwnDomain(kafka, new OwnDomain(appName, domain), null, configurations);
     }
 
     /**
      * Same as above, with properties of the domain (e.g. {@code retryDelay}) and the handlers of the application.
      *
-     * @param domainProperties properties of the domain, without the {@code reactive.commons.kafka.<domain>} prefix
-     * @param handlers         the handlers of the application, or {@code null} when a configuration registers them
+     * @param ownDomain the application name, its domain and the properties of the domain
+     * @param handlers  the handlers of the application, or {@code null} when a configuration registers them
      */
-    static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
-                                                               Map<String, Object> domainProperties,
+    static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, OwnDomain ownDomain,
                                                                HandlerRegistry handlers, Class<?>... configurations) {
-        return startOnOwnDomain(kafka.getBootstrapServers(), appName, domain, domainProperties, handlers,
-                configurations);
+        return startOnOwnDomain(kafka.getBootstrapServers(), ownDomain, handlers, configurations);
     }
 
     /**
      * Same as above, against the given bootstrap servers, which may not be reachable.
      */
-    static AnnotationConfigApplicationContext startOnOwnDomain(String bootstrapServers, String appName, String domain,
-                                                               Map<String, Object> domainProperties,
+    static AnnotationConfigApplicationContext startOnOwnDomain(String bootstrapServers, OwnDomain ownDomain,
                                                                HandlerRegistry handlers, Class<?>... configurations) {
-        String prefix = "reactive.commons.kafka." + domain + ".";
+        String prefix = "reactive.commons.kafka." + ownDomain.domain() + ".";
         Map<String, Object> properties = new HashMap<>();
-        properties.put("spring.application.name", appName);
+        properties.put("spring.application.name", ownDomain.appName());
         properties.put("reactive.commons.kafka.app.enabled", "false");
         properties.put(prefix + "enabled", "true");
         properties.put(prefix + "connectionProperties.bootstrap-servers", bootstrapServers);
         properties.put(prefix + "connectionProperties.consumer.auto-offset-reset", "earliest");
-        domainProperties.forEach((key, value) -> properties.put(prefix + key, value));
+        ownDomain.properties().forEach((key, value) -> properties.put(prefix + key, value));
         return start(properties, handlers, configurations);
+    }
+
+    /**
+     * The Kafka domain of its own on which the application registers its handlers.
+     *
+     * @param appName    the {@code spring.application.name} of the application
+     * @param domain     the name of the domain
+     * @param properties properties of the domain, without the {@code reactive.commons.kafka.<domain>} prefix
+     */
+    record OwnDomain(String appName, String domain, Map<String, Object> properties) {
+
+        /**
+         * A domain without properties of its own.
+         */
+        OwnDomain(String appName, String domain) {
+            this(appName, domain, Map.of());
+        }
     }
 
     /**

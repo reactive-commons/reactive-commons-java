@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -46,8 +47,8 @@ class ConnectionBlockedRabbitContainerTest {
 
     @Test
     void failsFastWhenBlockedStateIsRaisedAndClearsOnUnblock() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "blk",
-                false, true, RabbitScenarioSupport.Handlers.class,
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("blk", false, true), RabbitScenarioSupport.Handlers.class,
                 SendEvents.class, ListenEvents.class, PropsOverride.class)) {
             // wait for the event queue to have a consumer: the exchange + queue + binding exist before we publish
             RabbitScenarioSupport.awaitConsumers(RABBIT, "blk-app.subsEvents");

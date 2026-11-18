@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.DynamicRegistry;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.starter.impl.listener.rabbit.RabbitMQListenerOnlyConfig;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -49,8 +50,9 @@ class StoppedEventListeningRabbitContainerTest {
 
     @Test
     void anEventWhoseListeningWasStoppedStaysUnboundWhenTheListenerRestarts() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, PREFIX,
-                false, false, Handlers.class, ListenEvents.class, RabbitMQListenerOnlyConfig.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(PREFIX, false, false), Handlers.class, ListenEvents.class,
+                RabbitMQListenerOnlyConfig.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
             await().atMost(Duration.ofSeconds(30)).until(() -> boundEvents().containsAll(List.of(STOPPED, KEPT)));
 

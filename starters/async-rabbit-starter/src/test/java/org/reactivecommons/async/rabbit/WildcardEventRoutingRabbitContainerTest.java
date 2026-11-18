@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -57,8 +58,8 @@ class WildcardEventRoutingRabbitContainerTest {
     void eachEventIsHandledOnceByTheMostSpecificHandler() {
         HANDLED.clear();
         List<String> events = List.of("wcr.order.created", "wcr.user.created", "wcr.user.deleted", "wcr.a.b.c");
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "wcr",
-                false, false, WildcardHandlers.class, SendEvents.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("wcr", false, false), WildcardHandlers.class, SendEvents.class, ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "wcr-app.subsEvents");
             DomainEventBus bus = context.getBean(DomainEventBus.class);
 

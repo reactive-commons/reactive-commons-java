@@ -289,9 +289,12 @@ class ReactiveMessageSenderRabbitContainerTest {
         var command = new org.reactivecommons.api.domain.Command<>("order.create", "command-456", "data");
         var query = new org.reactivecommons.async.api.AsyncQuery<>("order.find", "data");
 
-        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10));
-        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10)); // re-sent
-        messageSender.sendWithConfirm(command, EXCHANGE, ROUTING_KEY, new HashMap<>(), true).block(Duration.ofSeconds(10));
+        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                .block(Duration.ofSeconds(10));
+        messageSender.sendWithConfirm(event, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                .block(Duration.ofSeconds(10)); // re-sent
+        messageSender.sendWithConfirm(command, EXCHANGE, ROUTING_KEY, new HashMap<>(), true)
+                .block(Duration.ofSeconds(10));
         messageSender.sendNoConfirm(query, EXCHANGE, ROUTING_KEY, new HashMap<>(), false).block(Duration.ofSeconds(10));
         awaitQueueSize(4);
 

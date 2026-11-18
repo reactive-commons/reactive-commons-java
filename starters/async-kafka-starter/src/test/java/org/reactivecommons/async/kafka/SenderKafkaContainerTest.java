@@ -54,7 +54,8 @@ class SenderKafkaContainerTest {
             DomainEventBus bus = context.getBean(DomainEventBus.class);
 
             StepVerifier.create(Flux.range(0, 20)
-                            .flatMap(i -> Mono.from(bus.emit(DOMAIN, new DomainEvent<>(topic, "evt-1", Map.of("n", i)))))
+                            .flatMap(i -> Mono.from(
+                                    bus.emit(DOMAIN, new DomainEvent<>(topic, "evt-1", Map.of("n", i)))))
                             .then())
                     .expectComplete()
                     .verify(WAIT);

@@ -113,7 +113,8 @@ class ApplicationTopicListenerTest {
     @Test
     void shouldRunTheTopicCreationWhenTheRegisteredSetupRequestsIt() {
         RegisteredQueueListener registeredListener = new RegisteredQueueListener("my.custom.topic",
-                message -> Mono.empty(), creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic")));
+                message -> Mono.empty(),
+                creator -> ((TopologyCreator) creator).createTopics(List.of("my.custom.topic")));
         ApplicationTopicListener listener = buildListener(registeredListener, true);
         when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
         when(topologyCreator.createTopics(any(List.class))).thenReturn(Mono.empty());

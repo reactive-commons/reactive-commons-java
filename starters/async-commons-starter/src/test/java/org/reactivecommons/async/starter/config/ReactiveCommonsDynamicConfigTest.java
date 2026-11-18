@@ -10,6 +10,9 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.commons.HandlerResolver;
 import org.reactivecommons.async.starter.broker.BrokerProvider;
 
+import java.util.EnumSet;
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -47,25 +50,27 @@ class ReactiveCommonsDynamicConfigTest {
     // Helper: build a ReactiveCommonsDomainFeatures for DEFAULT_DOMAIN
     // -------------------------------------------------------------------------
 
-    private ReactiveCommonsDomainFeatures domainFeatures(boolean listenEvents,
-                                                         boolean listenNotifications,
-                                                         boolean listenCommands,
-                                                         boolean listenQueries,
-                                                         boolean sendEvents,
-                                                         boolean sendCommands) {
+    /**
+     * The features of a domain: each one is enabled when it is in the set, and disabled otherwise.
+     */
+    private enum Capability {
+        LISTEN_EVENTS, LISTEN_NOTIFICATIONS, LISTEN_COMMANDS, LISTEN_QUERIES, SEND_EVENTS, SEND_COMMANDS
+    }
+
+    private ReactiveCommonsDomainFeatures domainFeatures(Set<Capability> enabled) {
         var features = new ReactiveCommonsDomainFeatures();
         ReactiveCommonsFeatures f = features.withDomain(DEFAULT_DOMAIN);
-        f.setListenEvents(listenEvents);
-        f.setListenNotificationEvents(listenNotifications);
-        f.setListenCommands(listenCommands);
-        f.setListenQueries(listenQueries);
-        f.setSendEvents(sendEvents);
-        f.setSendCommands(sendCommands);
+        f.setListenEvents(enabled.contains(Capability.LISTEN_EVENTS));
+        f.setListenNotificationEvents(enabled.contains(Capability.LISTEN_NOTIFICATIONS));
+        f.setListenCommands(enabled.contains(Capability.LISTEN_COMMANDS));
+        f.setListenQueries(enabled.contains(Capability.LISTEN_QUERIES));
+        f.setSendEvents(enabled.contains(Capability.SEND_EVENTS));
+        f.setSendCommands(enabled.contains(Capability.SEND_COMMANDS));
         return features;
     }
 
     private ReactiveCommonsDomainFeatures allFalse() {
-        return domainFeatures(false, false, false, false, false, false);
+        return domainFeatures(EnumSet.noneOf(Capability.class));
     }
 
     // -------------------------------------------------------------------------
@@ -74,7 +79,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateEventListenersWhenFlagIsTrue() {
-        var features = domainFeatures(true, false, false, false, false, false);
+        var features = domainFeatures(EnumSet.of(Capability.LISTEN_EVENTS));
         config.dynamicEventListenerActivator(manager, handlers, features);
         verify(provider).listenDomainEvents(resolver);
     }
@@ -87,7 +92,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateNotificationListenersWhenFlagIsTrue() {
-        var features = domainFeatures(false, true, false, false, false, false);
+        var features = domainFeatures(EnumSet.of(Capability.LISTEN_NOTIFICATIONS));
         config.dynamicNotificationListenerActivator(manager, handlers, features);
         verify(provider).listenNotificationEvents(resolver);
     }
@@ -100,7 +105,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateCommandListenersWhenFlagIsTrue() {
-        var features = domainFeatures(false, false, true, false, false, false);
+        var features = domainFeatures(EnumSet.of(Capability.LISTEN_COMMANDS));
         config.dynamicCommandListenerActivator(manager, handlers, features);
         verify(provider).listenCommands(resolver);
     }
@@ -113,7 +118,7 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateQueryListenersWhenFlagIsTrue() {
-        var features = domainFeatures(false, false, false, true, false, false);
+        var features = domainFeatures(EnumSet.of(Capability.LISTEN_QUERIES));
         config.dynamicQueryListenerActivator(manager, handlers, features);
         verify(provider).listenQueries(resolver);
     }
@@ -154,7 +159,8 @@ class ReactiveCommonsDynamicConfigTest {
 
     @Test
     void shouldActivateAllListenersWhenAllFlagsAreTrue() {
-        var features = domainFeatures(true, true, true, true, false, false);
+        var features = domainFeatures(EnumSet.of(Capability.LISTEN_EVENTS, Capability.LISTEN_NOTIFICATIONS,
+                Capability.LISTEN_COMMANDS, Capability.LISTEN_QUERIES));
 
         config.dynamicEventListenerActivator(manager, handlers, features);
         config.dynamicNotificationListenerActivator(manager, handlers, features);
@@ -217,7 +223,7 @@ class ReactiveCommonsDynamicConfigTest {
     @Test
     void shouldCreateRealDomainEventBusWhenSendEventsIsTrue() {
         when(provider.getDomainBus()).thenReturn(domainEventBus);
-        var features = domainFeatures(false, false, false, false, true, false);
+        var features = domainFeatures(EnumSet.of(Capability.SEND_EVENTS));
 
         DomainEventBus bus = config.dynamicDomainEventBus(manager, features);
 
@@ -250,7 +256,7 @@ class ReactiveCommonsDynamicConfigTest {
     @Test
     void shouldCreateRealDirectAsyncGatewayWhenSendCommandsIsTrue() {
         when(provider.getDirectAsyncGateway()).thenReturn(directAsyncGateway);
-        var features = domainFeatures(false, false, false, false, false, true);
+        var features = domainFeatures(EnumSet.of(Capability.SEND_COMMANDS));
 
         DirectAsyncGateway gateway = config.dynamicDirectAsyncGateway(manager, features);
 

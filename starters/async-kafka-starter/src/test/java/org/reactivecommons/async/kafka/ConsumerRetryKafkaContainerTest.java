@@ -5,6 +5,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.exceptions.MessageConversionException;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
@@ -68,8 +69,9 @@ class ConsumerRetryKafkaContainerTest {
             return Mono.error(new IllegalStateException("dependency down"));
         }, Map.class);
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, app, DOMAIN,
-                Map.of("withDLQRetry", "true", "retryDelay", "100"), handlers, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(app, DOMAIN, Map.of("withDLQRetry", "true", "retryDelay", "100")), handlers,
+                ListenEvents.class)) {
             await().atMost(WAIT).until(() -> !readAll(KAFKA, event + ".dlq").isEmpty());
             assertThat(attempts).as("deliveries to the handler: the first one and 10 retries").hasValue(11);
             assertThat(readAll(KAFKA, event + ".dlq")).as("discarded events")
@@ -90,8 +92,8 @@ class ConsumerRetryKafkaContainerTest {
             return recovered.get() ? Mono.empty() : Mono.error(new IllegalStateException("dependency down"));
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, RETRY_EVERY_200_MS,
-                handlers, ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, RETRY_EVERY_200_MS), handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> attempts.size() >= 3);
             assertThat(committedOffset(KAFKA, group, topic, 0))
                     .as("offset committed while the handler keeps failing").isEqualTo(-1);
@@ -117,8 +119,8 @@ class ConsumerRetryKafkaContainerTest {
                     : Mono.empty();
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, RETRY_EVERY_200_MS,
-                handlers, ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, RETRY_EVERY_200_MS), handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 1);
             publish(KAFKA, topic, "next");
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 2);

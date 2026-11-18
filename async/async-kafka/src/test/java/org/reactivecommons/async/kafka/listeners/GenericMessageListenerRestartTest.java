@@ -8,8 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.reactivecommons.async.commons.DiscardNotifier;
-import org.reactivecommons.async.commons.ext.CustomReporter;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import reactor.core.publisher.Flux;
@@ -25,6 +24,7 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import java.util.function.IntFunction;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -184,9 +184,8 @@ class GenericMessageListenerRestartTest {
         return receiverRecord;
     }
 
-    private GenericMessageListenerTest.SampleListener listener(
-            java.util.function.Function<org.reactivecommons.async.commons.communications.Message, Mono<Object>> handler) {
-        return new GenericMessageListenerTest.SampleListener(receiver, false, false, -1, 10,
-                mock(DiscardNotifier.class), "event", mock(CustomReporter.class), "appName", List.of("topic"), handler);
+    private GenericMessageListenerTest.SampleListener listener(Function<Message, Mono<Object>> handler) {
+        return new GenericMessageListenerTest.SampleListener(receiver,
+                GenericMessageListenerTest.ListenerSettings.defaultRetries(), handler);
     }
 }

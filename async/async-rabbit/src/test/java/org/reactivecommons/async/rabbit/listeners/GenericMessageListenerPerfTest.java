@@ -61,11 +61,8 @@ class GenericMessageListenerPerfTest {
 
     @BeforeEach
     void init() {
-//        when(errorReporter.reportError(any(Throwable.class), any(Message.class), any(Object.class))).thenReturn(Mono.empty());
         ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-        messageListener = new StubGenericMessageListener(
-                "test-queue", reactiveMessageListener, true, true, 10, discardNotifier, "command", errorReporter
-        );
+        messageListener = new StubGenericMessageListener(reactiveMessageListener, discardNotifier, errorReporter);
     }
 
 
@@ -142,11 +139,14 @@ class GenericMessageListenerPerfTest {
 
     class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                          boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
-                                          String objectType, CustomReporter errorReporter) {
-            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, 200),
-                    createTopology, discardNotifier, errorReporter), queueName, objectType);
+        /**
+         * Listens on {@code test-queue} for {@code command} messages, with DLQ retries (10 at most) and topology
+         * creation enabled.
+         */
+        public StubGenericMessageListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
+                                          CustomReporter errorReporter) {
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(true, 10, 200),
+                    true, discardNotifier, errorReporter), "test-queue", "command");
         }
 
         @Override
@@ -284,12 +284,14 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public void basicPublish(String exchange, String routingKey, boolean mandatory, AMQP.BasicProperties props, byte[] body) {
+    public void basicPublish(String exchange, String routingKey, boolean mandatory, AMQP.BasicProperties props,
+                             byte[] body) {
 
     }
 
     @Override
-    public void basicPublish(String exchange, String routingKey, boolean mandatory, boolean immediate, AMQP.BasicProperties props, byte[] body) {
+    public void basicPublish(String exchange, String routingKey, boolean mandatory, boolean immediate,
+                             AMQP.BasicProperties props, byte[] body) {
 
     }
 
@@ -314,32 +316,39 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, String type, boolean durable, boolean autoDelete, Map<String, Object> arguments) {
+    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, String type, boolean durable, boolean autoDelete,
+                                                   Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, BuiltinExchangeType type, boolean durable, boolean autoDelete, Map<String, Object> arguments) {
+    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, BuiltinExchangeType type, boolean durable,
+                                                   boolean autoDelete, Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, String type, boolean durable, boolean autoDelete, boolean internal, Map<String, Object> arguments) {
+    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, String type, boolean durable, boolean autoDelete,
+                                                   boolean internal, Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, BuiltinExchangeType type, boolean durable, boolean autoDelete, boolean internal, Map<String, Object> arguments) {
+    public AMQP.Exchange.DeclareOk exchangeDeclare(String exchange, BuiltinExchangeType type, boolean durable,
+                                                   boolean autoDelete, boolean internal,
+                                                   Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public void exchangeDeclareNoWait(String exchange, String type, boolean durable, boolean autoDelete, boolean internal, Map<String, Object> arguments) {
+    public void exchangeDeclareNoWait(String exchange, String type, boolean durable, boolean autoDelete,
+                                      boolean internal, Map<String, Object> arguments) {
 
     }
 
     @Override
-    public void exchangeDeclareNoWait(String exchange, BuiltinExchangeType type, boolean durable, boolean autoDelete, boolean internal, Map<String, Object> arguments) {
+    public void exchangeDeclareNoWait(String exchange, BuiltinExchangeType type, boolean durable, boolean autoDelete,
+                                      boolean internal, Map<String, Object> arguments) {
 
     }
 
@@ -369,12 +378,14 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Exchange.BindOk exchangeBind(String destination, String source, String routingKey, Map<String, Object> arguments) {
+    public AMQP.Exchange.BindOk exchangeBind(String destination, String source, String routingKey,
+                                             Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public void exchangeBindNoWait(String destination, String source, String routingKey, Map<String, Object> arguments) {
+    public void exchangeBindNoWait(String destination, String source, String routingKey,
+                                   Map<String, Object> arguments) {
 
     }
 
@@ -384,12 +395,14 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Exchange.UnbindOk exchangeUnbind(String destination, String source, String routingKey, Map<String, Object> arguments) {
+    public AMQP.Exchange.UnbindOk exchangeUnbind(String destination, String source, String routingKey,
+                                                 Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public void exchangeUnbindNoWait(String destination, String source, String routingKey, Map<String, Object> arguments) {
+    public void exchangeUnbindNoWait(String destination, String source, String routingKey,
+                                     Map<String, Object> arguments) {
 
     }
 
@@ -399,12 +412,14 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Queue.DeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, boolean autoDelete, Map<String, Object> arguments) {
+    public AMQP.Queue.DeclareOk queueDeclare(String queue, boolean durable, boolean exclusive, boolean autoDelete,
+                                             Map<String, Object> arguments) {
         return null;
     }
 
     @Override
-    public void queueDeclareNoWait(String queue, boolean durable, boolean exclusive, boolean autoDelete, Map<String, Object> arguments) {
+    public void queueDeclareNoWait(String queue, boolean durable, boolean exclusive, boolean autoDelete,
+                                   Map<String, Object> arguments) {
 
     }
 
@@ -434,7 +449,8 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Queue.BindOk queueBind(String queue, String exchange, String routingKey, Map<String, Object> arguments) {
+    public AMQP.Queue.BindOk queueBind(String queue, String exchange, String routingKey,
+                                       Map<String, Object> arguments) {
         return null;
     }
 
@@ -449,7 +465,8 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public AMQP.Queue.UnbindOk queueUnbind(String queue, String exchange, String routingKey, Map<String, Object> arguments) {
+    public AMQP.Queue.UnbindOk queueUnbind(String queue, String exchange, String routingKey,
+                                           Map<String, Object> arguments) {
         return null;
     }
 
@@ -489,12 +506,14 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public String basicConsume(String queue, DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, DeliverCallback deliverCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, DeliverCallback deliverCallback, CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, DeliverCallback deliverCallback, CancelCallback cancelCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
@@ -504,17 +523,20 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback, CancelCallback cancelCallback) {
+    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback, CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
@@ -524,17 +546,21 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments, DeliverCallback deliverCallback, CancelCallback cancelCallback) {
+    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments,
+                               DeliverCallback deliverCallback, CancelCallback cancelCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments, DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments,
+                               DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments, DeliverCallback deliverCallback, CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, Map<String, Object> arguments,
+                               DeliverCallback deliverCallback, CancelCallback cancelCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
@@ -544,32 +570,40 @@ class ChannelDummy implements Channel {
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback, CancelCallback cancelCallback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback, CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive, Map<String, Object> arguments, Consumer callback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive,
+                               Map<String, Object> arguments, Consumer callback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive, Map<String, Object> arguments, DeliverCallback deliverCallback, CancelCallback cancelCallback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive,
+                               Map<String, Object> arguments, DeliverCallback deliverCallback,
+                               CancelCallback cancelCallback) {
         return null;
     }
 
     @Override
-    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive, Map<String, Object> arguments, DeliverCallback deliverCallback, ConsumerShutdownSignalCallback shutdownSignalCallback) {
+    public String basicConsume(String queue, boolean autoAck, String consumerTag, boolean noLocal, boolean exclusive,
+                               Map<String, Object> arguments, DeliverCallback deliverCallback,
+                               ConsumerShutdownSignalCallback shutdownSignalCallback) {
         return null;
     }
 

@@ -6,6 +6,7 @@ import com.rabbitmq.client.Connection;
 import com.rabbitmq.client.ConnectionFactory;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -88,8 +89,8 @@ class ListenerPrefetchRabbitContainerTest {
                                 .getBytes(StandardCharsets.UTF_8));
             }
             String outcome;
-            try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix,
-                    false, false, properties, NeverEndingHandler.class, ListenCommands.class)) {
+            try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                    new Scenario(prefix, false, false, properties), NeverEndingHandler.class, ListenCommands.class)) {
                 RabbitMQBrokerProvider provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)
                         .getProviders().get(RabbitScenarioSupport.DEFAULT_DOMAIN);
                 assertThat(provider.props().getBrokerConfigProps().getCommandsQueue()).isEqualTo(queue);

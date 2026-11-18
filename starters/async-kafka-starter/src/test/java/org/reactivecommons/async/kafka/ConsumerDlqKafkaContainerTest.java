@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
@@ -75,8 +76,8 @@ class ConsumerDlqKafkaContainerTest {
         original.headers().add("trace-id", "abc".getBytes(StandardCharsets.UTF_8));
         publish(KAFKA, original);
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN,
-                Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100"),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100")),
                 failingHandlerWithItsDlq(topic), ListenTopics.class)) {
             await().atMost(WAIT).until(() -> !readRecords(KAFKA, topic + ".dlq").isEmpty());
             List<ConsumerRecord<String, String>> discarded = readRecords(KAFKA, topic + ".dlq");
@@ -108,8 +109,8 @@ class ConsumerDlqKafkaContainerTest {
         original.headers().add("name", "ñandú".getBytes(StandardCharsets.UTF_8));
         publish(KAFKA, original);
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN,
-                Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100"),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100")),
                 failingHandlerWithItsDlq(topic), ListenTopics.class)) {
             await().atMost(WAIT).until(() -> !readRecords(KAFKA, topic + ".dlq").isEmpty());
             ConsumerRecord<String, String> dlq = readRecords(KAFKA, topic + ".dlq").get(0);
@@ -135,9 +136,9 @@ class ConsumerDlqKafkaContainerTest {
                         ? Mono.error(new IllegalStateException("dependency down"))
                         : Mono.empty(), Map.class);
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, app, DOMAIN,
-                Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100"), handlers,
-                ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(app, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100")),
+                handlers, ListenEvents.class)) {
             await().atMost(WAIT).until(() -> !readRecords(KAFKA, event + ".dlq").isEmpty());
             ConsumerRecord<String, String> dlq = readRecords(KAFKA, event + ".dlq").get(0);
             assertThat(dlq.value()).as("value").contains("\"eventId\":\"evt-2\"");
@@ -163,8 +164,9 @@ class ConsumerDlqKafkaContainerTest {
         publish(KAFKA, new ProducerRecord<>(topic, "order-2", "{\"id\":2}"));
 
         // The application does not create the topology, and the DLQ topic does not exist yet
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN,
-                Map.of("withDLQRetry", "true", "maxRetries", "0", "retryDelay", "100", "createTopology", "false"),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "0", "retryDelay", "100",
+                        "createTopology", "false")),
                 failingHandlerWithItsDlq(topic), ListenTopics.class)) {
             // Waits without any condition to wait for: nothing must happen meanwhile
             assertThat(new CountDownLatch(1).await(LONGER_THAN_A_COMMIT.toMillis(), TimeUnit.MILLISECONDS)).isFalse();

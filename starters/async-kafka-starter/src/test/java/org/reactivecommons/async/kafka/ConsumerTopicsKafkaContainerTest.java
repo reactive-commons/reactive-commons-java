@@ -6,6 +6,7 @@ import org.reactivecommons.api.domain.RawMessage;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
@@ -58,8 +59,8 @@ class ConsumerTopicsKafkaContainerTest {
                     received.add(topic + " <- " + body(message))));
         }
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(), handlers,
-                ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
+                handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> received.size() == 3);
             assertThat(received).containsExactlyInAnyOrder(
                     "topics.one <- record of topics.one",
@@ -88,9 +89,9 @@ class ConsumerTopicsKafkaContainerTest {
             publish(KAFKA, new ProducerRecord<>(topic, "order-1", "failed in " + topic));
         }
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN,
-                Map.of("withDLQRetry", "true", "maxRetries", "0", "retryDelay", "100"), handlers,
-                ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "0", "retryDelay", "100")),
+                handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> topics.stream().noneMatch(topic -> readAll(KAFKA, topic + ".dlq")
                     .isEmpty()));
             for (String topic : topics) {

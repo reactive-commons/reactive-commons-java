@@ -109,7 +109,8 @@ class RabbitDirectAsyncGatewayReplyRouterTest {
 
     @Test
     void queryCancelledByTheCallerReleasesItsRegistration() throws Exception {
-        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class))).thenReturn(Mono.empty());
+        when(sender.sendNoConfirm(any(), anyString(), anyString(), anyMap(), anyBoolean(), any(Duration.class)))
+                .thenReturn(Mono.empty());
 
         Disposable subscription = query().subscribe(v -> {
         }, e -> {

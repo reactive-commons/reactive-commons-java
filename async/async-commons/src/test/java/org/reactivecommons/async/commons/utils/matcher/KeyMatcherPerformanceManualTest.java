@@ -30,7 +30,8 @@ class KeyMatcherPerformanceManualTest {
     @BeforeEach
     void init() {
         ClassLoader classLoader = getClass().getClassLoader();
-        File file = new File(Objects.requireNonNull(classLoader.getResource("candidateNamesForMatching.txt")).getFile());
+        File file = new File(
+                Objects.requireNonNull(classLoader.getResource("candidateNamesForMatching.txt")).getFile());
         try {
             Set<String> names = new HashSet<>(Files
                     .readAllLines(Paths.get(file.getAbsolutePath())));

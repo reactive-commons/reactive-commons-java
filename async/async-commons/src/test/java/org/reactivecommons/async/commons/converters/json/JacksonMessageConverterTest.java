@@ -41,7 +41,8 @@ class JacksonMessageConverterTest {
 
     @Test
     void readDomainEvent() {
-        String json = "{\"name\":\"myEvent\",\"eventId\":\"eid123\",\"data\":{\"id\":\"1\",\"name\":\"val\",\"date\":null}}";
+        String json = "{\"name\":\"myEvent\",\"eventId\":\"eid123\","
+                + "\"data\":{\"id\":\"1\",\"name\":\"val\",\"date\":null}}";
         var msg = createMessage(json.getBytes(StandardCharsets.UTF_8), "application/json");
         var result = converter.readDomainEvent(msg, SampleClass.class);
         assertThat(result.getName()).isEqualTo("myEvent");
@@ -52,7 +53,8 @@ class JacksonMessageConverterTest {
 
     @Test
     void readCommand() {
-        String json = "{\"name\":\"myCmd\",\"commandId\":\"cid456\",\"data\":{\"id\":\"x\",\"name\":\"v\",\"date\":null}}";
+        String json = "{\"name\":\"myCmd\",\"commandId\":\"cid456\","
+                + "\"data\":{\"id\":\"x\",\"name\":\"v\",\"date\":null}}";
         var msg = createMessage(json.getBytes(StandardCharsets.UTF_8), "application/json");
         var result = converter.readCommand(msg, SampleClass.class);
         assertThat(result.getName()).isEqualTo("myCmd");

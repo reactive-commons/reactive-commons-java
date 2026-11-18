@@ -42,7 +42,8 @@ class ApplicationQueryListenerErrorTest extends ListenerReporterTestSuperClass {
                         m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
                 );
 
-        assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(AsyncQuery::getResource, event1, event2));
+        assertContinueAfterSendErrorToCustomReporter(handlerRegistry,
+                createSource(AsyncQuery::getResource, event1, event2));
     }
 
     @Override

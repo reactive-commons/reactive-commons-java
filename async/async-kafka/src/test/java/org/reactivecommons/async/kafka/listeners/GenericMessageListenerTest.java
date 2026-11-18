@@ -252,8 +252,8 @@ class GenericMessageListenerTest {
         // Arrange
         ReceiverOffset offset = givenAReceivedMessage();
         AtomicInteger attempts = new AtomicInteger();
-        SampleListener sampleListener = new SampleListener(receiver, false, false, 1, 10,
-                mock(DiscardNotifier.class), "event", mock(CustomReporter.class), "appName", List.of("topic"),
+        SampleListener sampleListener = new SampleListener(receiver, new ListenerSettings(
+                new RetryPolicy(false, 1, 10), mock(DiscardNotifier.class), mock(CustomReporter.class)),
                 message -> {
                     attempts.incrementAndGet();
                     return Mono.error(new IllegalStateException("dependency down"));
@@ -278,8 +278,8 @@ class GenericMessageListenerTest {
         DiscardNotifier discardNotifier = mock(DiscardNotifier.class);
         when(discardNotifier.tryNotifyDiscard(any())).thenReturn(Mono.fromRunnable(() ->
                 threads.add("discard:" + Thread.currentThread().getName())));
-        SampleListener sampleListener = new SampleListener(receiver, true, false, 2, 10, discardNotifier, "event",
-                mock(CustomReporter.class), "appName", List.of("topic"), message -> {
+        SampleListener sampleListener = new SampleListener(receiver, new ListenerSettings(
+                new RetryPolicy(true, 2, 10), discardNotifier, mock(CustomReporter.class)), message -> {
             threads.add("attempt:" + Thread.currentThread().getName());
             return Mono.error(new IllegalStateException("dependency down"));
         });
@@ -299,8 +299,8 @@ class GenericMessageListenerTest {
         CustomReporter reporter = reporter();
         AtomicInteger attempts = new AtomicInteger();
         ReceiverOffset offset = givenAReceivedMessage();
-        SampleListener sampleListener = new SampleListener(receiver, false, false, 1, 10,
-                mock(DiscardNotifier.class), "event", reporter, "appName", List.of("topic"), message -> {
+        SampleListener sampleListener = new SampleListener(receiver, new ListenerSettings(
+                new RetryPolicy(false, 1, 10), mock(DiscardNotifier.class), reporter), message -> {
             attempts.incrementAndGet();
             return Mono.error(failure);
         });
@@ -320,8 +320,8 @@ class GenericMessageListenerTest {
         CustomReporter reporter = reporter();
         AtomicInteger attempts = new AtomicInteger();
         ReceiverOffset offset = givenAReceivedMessage();
-        SampleListener sampleListener = new SampleListener(receiver, false, false, 3, 10,
-                mock(DiscardNotifier.class), "event", reporter, "appName", List.of("topic"), message -> {
+        SampleListener sampleListener = new SampleListener(receiver, new ListenerSettings(
+                new RetryPolicy(false, 3, 10), mock(DiscardNotifier.class), reporter), message -> {
             attempts.incrementAndGet();
             return Mono.error(failure);
         });
@@ -477,8 +477,8 @@ class GenericMessageListenerTest {
      * A listener with a DLQ, whose handler always fails and is not retried.
      */
     private SampleListener dlqListener(DiscardNotifier discardNotifier) {
-        return new SampleListener(receiver, true, false, 0, 10, discardNotifier, "event",
-                mock(CustomReporter.class), "appName", List.of("topic"),
+        return new SampleListener(receiver, new ListenerSettings(
+                new RetryPolicy(true, 0, 10), discardNotifier, mock(CustomReporter.class)),
                 message -> Mono.error(new IllegalStateException("dependency down")));
     }
 
@@ -486,8 +486,7 @@ class GenericMessageListenerTest {
      * The default retry policy: no DLQ and {@code maxRetries} -1, retrying every 10 ms.
      */
     private SampleListener defaultRetryListener(Function<Message, Mono<Object>> handler) {
-        return new SampleListener(receiver, false, false, -1, 10, mock(DiscardNotifier.class), "event",
-                mock(CustomReporter.class), "appName", List.of("topic"), handler);
+        return new SampleListener(receiver, ListenerSettings.defaultRetries(), handler);
     }
 
     private ReceiverOffset givenAReceivedMessage() {
@@ -508,15 +507,8 @@ class GenericMessageListenerTest {
     private SampleListener listener(boolean useDLQ, boolean createTopology, Sinks.One<Object> handled) {
         return new SampleListener(
                 receiver,
-                useDLQ,
-                createTopology,
-                1,
-                1,
-                mock(DiscardNotifier.class),
-                "event",
-                mock(CustomReporter.class),
-                "appName",
-                List.of("topic"),
+                new ListenerSettings(new RetryPolicy(useDLQ, 1, 1), createTopology, mock(DiscardNotifier.class),
+                        mock(CustomReporter.class), Subscription.DEFAULT),
                 message -> {
                     handled.tryEmitValue("");
                     return Mono.empty();
@@ -524,15 +516,50 @@ class GenericMessageListenerTest {
         );
     }
 
+    /**
+     * The consumer group and the topics a {@link SampleListener} subscribes to.
+     */
+    public record Subscription(String groupId, List<String> topics) {
+        public static final Subscription DEFAULT = new Subscription("appName", List.of("topic"));
+    }
+
+    /**
+     * How a {@link SampleListener} retries, whether it creates the topology, who it notifies and what it listens to.
+     */
+    public record ListenerSettings(RetryPolicy retryPolicy, boolean createTopology, DiscardNotifier discardNotifier,
+                                   CustomReporter customReporter, Subscription subscription) {
+
+        /**
+         * Without creating the topology, on {@link Subscription#DEFAULT}.
+         */
+        public ListenerSettings(RetryPolicy retryPolicy, DiscardNotifier discardNotifier,
+                                CustomReporter customReporter) {
+            this(retryPolicy, false, discardNotifier, customReporter, Subscription.DEFAULT);
+        }
+
+        /**
+         * The default retry policy: no DLQ and {@code maxRetries} -1, retrying every 10 ms, with mocked notifiers.
+         */
+        public static ListenerSettings defaultRetries() {
+            return defaultRetries(mock(DiscardNotifier.class), mock(CustomReporter.class));
+        }
+
+        public static ListenerSettings defaultRetries(DiscardNotifier discardNotifier, CustomReporter customReporter) {
+            return new ListenerSettings(new RetryPolicy(false, -1, 10), discardNotifier, customReporter);
+        }
+    }
+
+    /**
+     * Listens to {@code event} messages with the given settings and handler.
+     */
     public static class SampleListener extends GenericMessageListener {
         private final Function<Message, Mono<Object>> handler;
 
-        public SampleListener(ReactiveMessageListener listener, boolean useDLQ, boolean createTopology, long maxRetries,
-                              int retryDelay, DiscardNotifier discardNotifier, String objectType,
-                              CustomReporter customReporter, String groupId, List<String> topics,
+        public SampleListener(ReactiveMessageListener listener, ListenerSettings settings,
                               Function<Message, Mono<Object>> handler) {
-            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQ, maxRetries, retryDelay),
-                    createTopology, discardNotifier, customReporter), objectType, groupId, topics);
+            super(new ListenerContext<>(listener, null, null, settings.retryPolicy(), settings.createTopology(),
+                            settings.discardNotifier(), settings.customReporter()),
+                    "event", settings.subscription().groupId(), settings.subscription().topics());
             this.handler = handler;
         }
 

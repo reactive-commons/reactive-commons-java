@@ -89,37 +89,27 @@ final class RabbitScenarioSupport {
      */
     static AnnotationConfigApplicationContext start(RabbitMQContainer rabbit, String prefix, boolean twoDomains,
                                                     boolean listenReplies, Class<?>... features) {
-        return startWithHandlers(rabbit, prefix, twoDomains, listenReplies, Handlers.class, features);
+        return startWithHandlers(rabbit, new Scenario(prefix, twoDomains, listenReplies), Handlers.class, features);
     }
 
     /**
-     * Same as above, with the configuration class that registers the handlers of the application.
+     * Same as above, with the configuration class that registers the handlers of the application and, when the
+     * scenario has them, additional properties.
      */
-    static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, String prefix,
-                                                                boolean twoDomains, boolean listenReplies,
+    static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, Scenario scenario,
                                                                 Class<?> handlers, Class<?>... features) {
-        return startWithHandlers(rabbit, prefix, twoDomains, listenReplies, Map.of(), handlers, features);
-    }
-
-    /**
-     * Same as above, with additional properties (e.g. {@code app.async.app.direct.discardTimeoutQueries}), which win
-     * over the defaults of the scenario.
-     */
-    static AnnotationConfigApplicationContext startWithHandlers(RabbitMQContainer rabbit, String prefix,
-                                                                boolean twoDomains, boolean listenReplies,
-                                                                Map<String, Object> extraProperties,
-                                                                Class<?> handlers, Class<?>... features) {
+        String prefix = scenario.prefix();
         Map<String, Object> properties = new HashMap<>();
         properties.put("spring.application.name", prefix);
         properties.put("spring.rabbitmq.host", rabbit.getHost());
         properties.put("spring.rabbitmq.port", rabbit.getAmqpPort());
         properties.put("spring.rabbitmq.username", rabbit.getAdminUsername());
         properties.put("spring.rabbitmq.password", rabbit.getAdminPassword());
-        domain(properties, DEFAULT_DOMAIN, prefix + "-app", listenReplies);
-        if (twoDomains) {
-            domain(properties, EXTRA_DOMAIN, prefix + "-extra", listenReplies);
+        domain(properties, DEFAULT_DOMAIN, prefix + "-app", scenario.listenReplies());
+        if (scenario.twoDomains()) {
+            domain(properties, EXTRA_DOMAIN, prefix + "-extra", scenario.listenReplies());
         }
-        properties.putAll(extraProperties);
+        properties.putAll(scenario.extraProperties());
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
         context.register(handlers, RabbitMQConfig.class, AsyncPropsDomain.class,
@@ -187,5 +177,24 @@ final class RabbitScenarioSupport {
             }
         }
         return channels;
+    }
+
+    /**
+     * The application a scenario starts.
+     *
+     * @param prefix          the {@code spring.application.name} and the prefix of the connection names
+     * @param twoDomains      whether the application also connects to {@link RabbitScenarioSupport#EXTRA_DOMAIN}
+     * @param listenReplies   whether the domains listen to the replies of the queries
+     * @param extraProperties additional properties (e.g. {@code app.async.app.direct.discardTimeoutQueries}), which
+     *                        win over the defaults of the scenario
+     */
+    record Scenario(String prefix, boolean twoDomains, boolean listenReplies, Map<String, Object> extraProperties) {
+
+        /**
+         * A scenario without additional properties.
+         */
+        Scenario(String prefix, boolean twoDomains, boolean listenReplies) {
+            this(prefix, twoDomains, listenReplies, Map.of());
+        }
     }
 }

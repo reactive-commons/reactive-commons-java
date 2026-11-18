@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageHandler;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageNotifier;
 import org.reactivecommons.async.rabbit.communications.UnroutableMessageProcessor;
@@ -87,8 +88,8 @@ class UnroutableNotifierRabbitContainerTest {
     @Test
     void aHandlerThatStartsListeningAfterAnotherOneReceivesTheUnroutableMessages() throws Exception {
         HANDLER_THREADS.clear();
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "unr",
-                false, false, MANDATORY, Handlers.class, SendEvents.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("unr", false, false, MANDATORY), Handlers.class, SendEvents.class, ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "unr-app.subsEvents");
             // the default processor is already listening
             context.getBean(UnroutableMessageNotifier.class).listenToUnroutableMessages(BLOCKING_HANDLER);
@@ -106,8 +107,8 @@ class UnroutableNotifierRabbitContainerTest {
     @Test
     void aBlockingHandlerRunsOffTheIoThreadsOfTheConnections() throws Exception {
         HANDLER_THREADS.clear();
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "unb",
-                false, false, MANDATORY, HandlersWithOwnUnroutableHandler.class, SendEvents.class,
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("unb", false, false, MANDATORY), HandlersWithOwnUnroutableHandler.class, SendEvents.class,
                 ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "unb-app.subsEvents");
             DomainEventBus bus = context.getBean(DomainEventBus.class);

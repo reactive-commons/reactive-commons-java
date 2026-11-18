@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableDomainEventBus;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -13,7 +14,6 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
 import java.time.Duration;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
@@ -43,7 +43,7 @@ class UnreachableBrokerStartupTest {
     void theContextStartsWithinSecondsWhenTheBrokerCannotBeReached() {
         // Nothing listens on port 1: every connection is refused. Topics are checked (the default)
         AnnotationConfigApplicationContext context = assertTimeoutPreemptively(Duration.ofSeconds(10),
-                () -> startOnOwnDomain("localhost:1", "unreachable-broker", DOMAIN, Map.of(), null,
+                () -> startOnOwnDomain("localhost:1", new OwnDomain("unreachable-broker", DOMAIN), null,
                         ListenAndSend.class));
         try {
             assertThat(context.isActive()).isTrue();

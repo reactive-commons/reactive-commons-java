@@ -45,7 +45,8 @@ class KafkaDirectAsyncGatewayTest {
         assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName, delay));
         assertFailsThroughOnError(() -> directAsyncGateway.sendCommand(command, targetName, delay, domain));
         assertFailsThroughOnError(() -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class));
-        assertFailsThroughOnError(() -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain));
+        assertFailsThroughOnError(
+                () -> directAsyncGateway.requestReply(cloudEvent, targetName, CloudEvent.class, domain));
         assertFailsThroughOnError(() -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class));
         assertFailsThroughOnError(() -> directAsyncGateway.requestReply(query, targetName, CloudEvent.class, domain));
         assertFailsThroughOnError(() -> directAsyncGateway.reply(targetName, from));

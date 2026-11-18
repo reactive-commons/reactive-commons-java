@@ -7,6 +7,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.PublisherStatus;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.rabbit.health.RabbitReactiveHealthIndicator;
@@ -70,8 +71,8 @@ class SubscriberResilienceRabbitContainerTest {
     @Test
     void aReplyLostWhileTheReplyConnectionRecoversFailsTheCallerPromptly() throws Exception {
         try (AnnotationConfigApplicationContext server = startServer("srv1");
-             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT, "req1",
-                     false, true, NoHandlers.class, SendDirect.class)) {
+             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                     new Scenario("req1", false, true), NoHandlers.class, SendDirect.class)) {
             DirectAsyncGateway gateway = requester.getBean(DirectAsyncGateway.class);
             for (int loss = 1; loss <= 2; loss++) {
                 awaitReplyQueue("req1-app");
@@ -105,8 +106,8 @@ class SubscriberResilienceRabbitContainerTest {
     @Test
     void aReplyListenerRestartInOneDomainDoesNotFailTheQueriesOfAnother() throws Exception {
         try (AnnotationConfigApplicationContext server = startServer("srv2");
-             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT, "req2",
-                     true, true, NoHandlers.class, SendDirect.class)) {
+             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                     new Scenario("req2", true, true), NoHandlers.class, SendDirect.class)) {
             String appReplyQueue = awaitReplyQueue("req2-app");
             awaitReplyQueue("req2-extra");
             DirectAsyncGateway gateway = requester.getBean(DirectAsyncGateway.class);
@@ -135,8 +136,9 @@ class SubscriberResilienceRabbitContainerTest {
     void aTimedOutBlockingHandlerReleasesItsThread() throws Exception {
         handlersStarted.set(0);
         handlersInterrupted.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "hto",
-                false, false, BlockingHandlers.class, SendEvents.class, ListenEvents.class, HandlerTimeout.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("hto", false, false), BlockingHandlers.class, SendEvents.class, ListenEvents.class,
+                HandlerTimeout.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "hto-app.subsEvents");
             Mono.from(context.getBean(DomainEventBus.class).emit(new DomainEvent<>("blocking.event",
                     UUID.randomUUID().toString(), Map.of()))).block(Duration.ofSeconds(10));
@@ -204,8 +206,8 @@ class SubscriberResilienceRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext startServer(String prefix) {
-        AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false,
-                false, SlowQueryHandlers.class, ListenQueries.class);
+        AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(prefix, false, false), SlowQueryHandlers.class, ListenQueries.class);
         RabbitScenarioSupport.awaitConsumers(RABBIT, prefix + "-app.query");
         return server;
     }

@@ -6,6 +6,7 @@ import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.impl.config.annotations.EnableEventListeners;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Configuration;
 import org.testcontainers.junit.jupiter.Container;
@@ -64,8 +65,8 @@ class ConsumerTombstoneKafkaContainerTest {
             return Mono.empty();
         }, Map.class);
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, app, DOMAIN, COUNT_CONSUMERS,
-                handlers, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(app, DOMAIN, COUNT_CONSUMERS), handlers, ListenEvents.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, app + "-events", event, 0) == 3);
             assertThat(handled).as("events handled").containsExactly("evt-1", "evt-2");
             assertThat(CountingConsumerInterceptor.consumersCreated(app + "-events")).as("consumers created")
@@ -88,8 +89,8 @@ class ConsumerTombstoneKafkaContainerTest {
             return Mono.empty();
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, COUNT_CONSUMERS,
-                handlers, ListenTopics.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, COUNT_CONSUMERS), handlers, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 3);
             assertThat(handled).as("records handled").containsExactly("order-1=created", "order-1=null",
                     "order-2=created");

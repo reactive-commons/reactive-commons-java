@@ -12,6 +12,7 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.starter.config.ConnectionManager;
@@ -66,8 +67,8 @@ class ConsumerRetryRabbitContainerTest {
      */
     @Test
     void anEventWithoutHandlerIsDiscardedInsteadOfRetriedForever() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "stale",
-                false, false, OkHandlers.class, SendEvents.class, ListenEvents.class);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("stale", false, false), OkHandlers.class, SendEvents.class, ListenEvents.class);
              com.rabbitmq.client.Connection admin = adminConnection()) {
             String queue = "stale-app.subsEvents";
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
@@ -86,8 +87,8 @@ class ConsumerRetryRabbitContainerTest {
 
     @Test
     void aCommandWithoutHandlerIsDiscardedInsteadOfRetriedForever() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "nocmd",
-                false, false, OkHandlers.class, SendDirect.class, ListenCommands.class);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("nocmd", false, false), OkHandlers.class, SendDirect.class, ListenCommands.class);
              com.rabbitmq.client.Connection admin = adminConnection()) {
             String queue = "nocmd-app";
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
@@ -112,8 +113,9 @@ class ConsumerRetryRabbitContainerTest {
     void aDiscardedMessageIsNotLostWhenItsDiscardNotificationFails() throws Exception {
         release = new CompletableFuture<>();
         executions.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "disc",
-                false, false, FailingEventHandlers.class, SendEvents.class, ListenEvents.class, NoRetries.class);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("disc", false, false), FailingEventHandlers.class, SendEvents.class, ListenEvents.class,
+                NoRetries.class);
              com.rabbitmq.client.Connection admin = adminConnection()) {
             String queue = "disc-app.subsEvents";
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
@@ -146,9 +148,9 @@ class ConsumerRetryRabbitContainerTest {
     void aDiscardNobodyListensToIsAcknowledgedWhenPublishingIsMandatory() {
         release = CompletableFuture.completedFuture(null);
         executions.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "mand",
-                false, false, Map.of("app.async.app.mandatory", "true"), FailingEventHandlers.class,
-                SendEvents.class, ListenEvents.class, NoRetries.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("mand", false, false, Map.of("app.async.app.mandatory", "true")),
+                FailingEventHandlers.class, SendEvents.class, ListenEvents.class, NoRetries.class)) {
             String queue = "mand-app.subsEvents";
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);
 
@@ -173,10 +175,10 @@ class ConsumerRetryRabbitContainerTest {
     void aQueryWhoseReplyCannotBePublishedIsNotExecutedAgain() throws Exception {
         release = new CompletableFuture<>();
         executions.set(0);
-        try (AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT, "rsrv",
-                false, false, HeldQueryHandlers.class, ListenQueries.class, SendEvents.class);
-             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT, "rreq",
-                     false, true, OkHandlers.class, SendDirect.class)) {
+        try (AnnotationConfigApplicationContext server = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("rsrv", false, false), HeldQueryHandlers.class, ListenQueries.class, SendEvents.class);
+             AnnotationConfigApplicationContext requester = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                     new Scenario("rreq", false, true), OkHandlers.class, SendDirect.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "rsrv-app.query");
             requester.getBean(DirectAsyncGateway.class).requestReply(new AsyncQuery<>("held.query", "q"),
                     "rsrv-app", String.class).subscribe(r -> { }, e -> { });
@@ -203,8 +205,8 @@ class ConsumerRetryRabbitContainerTest {
     @Test
     void aFailingQueryIsNotRetriedOnceItsCallerTimedOut() {
         executions.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qexp",
-                false, true, FailingQueryHandlers.class, SendDirect.class, ListenQueries.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("qexp", false, true), FailingQueryHandlers.class, SendDirect.class, ListenQueries.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "qexp-app.query");
             Throwable callerOutcome = catchThrowable(() -> context.getBean(DirectAsyncGateway.class)
                     .requestReply(new AsyncQuery<>("failing.query", "q"), "qexp-app", String.class)
@@ -232,8 +234,8 @@ class ConsumerRetryRabbitContainerTest {
     @Test
     void aQueryDiscardedByTimeoutIsAcknowledged() {
         executions.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qdis",
-                false, true, SlowQueryHandlers.class, SendDirect.class, ListenQueries.class,
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("qdis", false, true), SlowQueryHandlers.class, SendDirect.class, ListenQueries.class,
                 DiscardTimeoutQueries.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "qdis-app.query");
             catchThrowable(() -> context.getBean(DirectAsyncGateway.class)
@@ -260,8 +262,8 @@ class ConsumerRetryRabbitContainerTest {
         release = new CompletableFuture<>();
         release.complete(null);
         executions.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "qmal",
-                false, false, HeldQueryHandlers.class, ListenQueries.class);
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("qmal", false, false), HeldQueryHandlers.class, ListenQueries.class);
              com.rabbitmq.client.Connection admin = adminConnection()) {
             String queue = "qmal-app.query";
             RabbitScenarioSupport.awaitConsumers(RABBIT, queue);

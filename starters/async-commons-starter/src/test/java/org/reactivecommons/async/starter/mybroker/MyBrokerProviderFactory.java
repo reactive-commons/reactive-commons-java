@@ -21,7 +21,8 @@ public class MyBrokerProviderFactory implements BrokerProviderFactory<MyBrokerAs
     }
 
     @Override
-    public BrokerProvider<MyBrokerAsyncProps> getProvider(String domain, MyBrokerAsyncProps props, DiscardProvider discardProvider) {
+    public BrokerProvider<MyBrokerAsyncProps> getProvider(String domain, MyBrokerAsyncProps props,
+                                                          DiscardProvider discardProvider) {
         return new MyBrokerProvider(domain, props, discardProvider);
     }
 }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
@@ -147,8 +148,9 @@ class CommandBatchRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext start(String prefix) {
-        return RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false, false,
-                Map.of("app.async.app.sendTimeout", "1s"), RabbitScenarioSupport.Handlers.class, SendDirect.class);
+        return RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(prefix, false, false, Map.of("app.async.app.sendTimeout", "1s")),
+                RabbitScenarioSupport.Handlers.class, SendDirect.class);
     }
 
     private static RabbitDirectAsyncGateway gateway(AnnotationConfigApplicationContext context) {

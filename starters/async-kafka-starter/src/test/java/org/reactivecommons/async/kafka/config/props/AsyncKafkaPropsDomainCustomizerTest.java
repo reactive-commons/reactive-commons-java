@@ -132,7 +132,8 @@ class AsyncKafkaPropsDomainCustomizerTest {
 
         // Assert - new domain was added by customizer
         AsyncKafkaProps accountsResult = propsDomain.getProps("accounts");
-        assertThat(accountsResult.getConnectionProperties().getBootstrapServers()).containsExactly("accounts-host:9093");
+        assertThat(accountsResult.getConnectionProperties().getBootstrapServers())
+                .containsExactly("accounts-host:9093");
         assertThat(accountsResult.getMaxRetries()).isEqualTo(10);
     }
 

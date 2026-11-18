@@ -5,6 +5,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableNotificationListener;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,8 +60,9 @@ class RawNotificationListenerRabbitContainerTest {
     @Test
     void aRawNotificationHandlerReceivesTheNotifications() {
         RECEIVED.clear();
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "rnl",
-                false, false, RawNotificationHandlers.class, SendEvents.class, ListenNotifications.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("rnl", false, false), RawNotificationHandlers.class, SendEvents.class,
+                ListenNotifications.class)) {
             DomainEventBus bus = context.getBean(DomainEventBus.class);
 
             // emitted again until one is handled: the notification queue may not be bound yet

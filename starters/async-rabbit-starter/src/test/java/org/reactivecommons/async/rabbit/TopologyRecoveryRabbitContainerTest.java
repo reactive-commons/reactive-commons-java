@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.TopologyCreator;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
@@ -71,8 +72,8 @@ class TopologyRecoveryRabbitContainerTest {
     }
 
     private void connectionLoss(String prefix, boolean channelErrorFirst) throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix,
-                false, true, QueryHandler.class, ListenQueries.class, SendDirect.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(prefix, false, true), QueryHandler.class, ListenQueries.class, SendDirect.class)) {
             RabbitMQBrokerProvider provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)
                     .getProviders().get(RabbitScenarioSupport.DEFAULT_DOMAIN);
             String appName = provider.props().getAppName();

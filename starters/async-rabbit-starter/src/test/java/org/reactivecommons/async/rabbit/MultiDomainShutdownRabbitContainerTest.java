@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,8 +60,8 @@ class MultiDomainShutdownRabbitContainerTest {
     @Test
     void closingTheApplicationWaitsForTheDeliveriesOfEveryDomainAtTheSameTime() throws Exception {
         started = new CountDownLatch(2);
-        AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, PREFIX, true,
-                false, NeverEndingHandlers.class, SendDirect.class, ListenCommands.class);
+        AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(PREFIX, true, false), NeverEndingHandlers.class, SendDirect.class, ListenCommands.class);
         long closeMillis;
         try {
             RabbitScenarioSupport.awaitConsumers(RABBIT, PREFIX + "-app", PREFIX + "-extra");

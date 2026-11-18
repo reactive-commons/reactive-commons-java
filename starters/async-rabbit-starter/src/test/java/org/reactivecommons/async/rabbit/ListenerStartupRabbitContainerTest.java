@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -71,18 +72,19 @@ class ListenerStartupRabbitContainerTest {
         initialized.set(false);
         initializedWhenHandled = new CompletableFuture<>();
         // the queue of the listener exists, and a message waits in it while the application is down
-        try (AnnotationConfigApplicationContext listener = RabbitScenarioSupport.startWithHandlers(RABBIT, "boot",
-                false, false, StartupHandlers.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext listener = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("boot", false, false), StartupHandlers.class, ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "boot-app.subsEvents");
         }
         try (AnnotationConfigApplicationContext publisher = RabbitScenarioSupport.startWithHandlers(RABBIT,
-                "boot-publisher", false, false, StartupHandlers.class, SendEvents.class)) {
+                new Scenario("boot-publisher", false, false), StartupHandlers.class, SendEvents.class)) {
             Mono.from(publisher.getBean(DomainEventBus.class).emit(new DomainEvent<>(EVENT,
                     UUID.randomUUID().toString(), Map.of("k", "v")))).block(Duration.ofSeconds(10));
         }
 
-        try (AnnotationConfigApplicationContext application = RabbitScenarioSupport.startWithHandlers(RABBIT, "boot",
-                false, false, StartupHandlers.class, ListenEvents.class, LateInitialization.class)) {
+        try (AnnotationConfigApplicationContext application = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("boot", false, false), StartupHandlers.class, ListenEvents.class,
+                LateInitialization.class)) {
             boolean initializedFirst = initializedWhenHandled.get(20, TimeUnit.SECONDS);
             System.out.println("[REAL BROKER] waiting message handled with the application initialized="
                     + initializedFirst);

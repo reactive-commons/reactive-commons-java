@@ -110,7 +110,7 @@ class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessage, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+        messageListener = new StubGenericMessageListener(reactiveMessageListener,
                 discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(MESSAGE_COUNT);
@@ -141,7 +141,7 @@ class ApplicationCommandListenerPerfTest {
         HandlerResolver handlerResolver = createHandlerResolver(HandlerRegistry.register()
                 .handleCommand("app.command.test", this::handleTestMessageDelay, DummyMessage.class)
         );
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+        messageListener = new StubGenericMessageListener(reactiveMessageListener,
                 discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(MESSAGE_COUNT);
@@ -199,7 +199,7 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 250, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+        messageListener = new StubGenericMessageListener(reactiveMessageListener,
                 discardNotifier, handlerResolver, messageConverter, errorReporter
         );
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
@@ -229,7 +229,7 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+        messageListener = new StubGenericMessageListener(reactiveMessageListener,
                 discardNotifier, handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 
@@ -258,7 +258,7 @@ class ApplicationCommandListenerPerfTest {
         );
         int messageCount = 2000;
         reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator, 500, 250);
-        messageListener = new StubGenericMessageListener("test-queue", reactiveMessageListener,
+        messageListener = new StubGenericMessageListener(reactiveMessageListener,
                 discardNotifier, handlerResolver, messageConverter, errorReporter);
         Flux<AcknowledgableDelivery> messageFlux = createSource(messageCount);
 
@@ -324,12 +324,14 @@ class ApplicationCommandListenerPerfTest {
 
     static class StubGenericMessageListener extends ApplicationCommandListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener,
-                                          DiscardNotifier discardNotifier,
+        /**
+         * Listens on {@code test-queue}, bound to {@code directExchange}, with DLQ retries (10 at most).
+         */
+        public StubGenericMessageListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
                                           HandlerResolver handlerResolver, MessageConverter messageConverter,
                                           CustomReporter errorReporter) {
             super(new ListenerContext<>(listener, handlerResolver, messageConverter, new RetryPolicy(true, 10, 10),
-                    false, discardNotifier, errorReporter), queueName, "directExchange", false, Optional.empty());
+                    false, discardNotifier, errorReporter), "test-queue", "directExchange", false, Optional.empty());
         }
 
     }

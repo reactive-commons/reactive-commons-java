@@ -129,7 +129,8 @@ class GenericDirectAsyncGatewayTest {
 
     @Test
     void shouldRequestReplyWithDefaultDomainCloudEvent() {
-        when(directAsyncGateway1.requestReply(cloudEvent, "target", CloudEvent.class)).thenReturn(Mono.just(cloudEvent));
+        when(directAsyncGateway1.requestReply(cloudEvent, "target", CloudEvent.class))
+                .thenReturn(Mono.just(cloudEvent));
         Mono<CloudEvent> flow = genericDirectAsyncGateway.requestReply(cloudEvent, "target", CloudEvent.class);
         StepVerifier.create(flow).expectNext(cloudEvent).verifyComplete();
         verify(directAsyncGateway1).requestReply(cloudEvent, "target", CloudEvent.class);
@@ -145,8 +146,10 @@ class GenericDirectAsyncGatewayTest {
 
     @Test
     void shouldRequestReplyWithSpecificDomainCloudEvent() {
-        when(directAsyncGateway2.requestReply(cloudEvent, "target", CloudEvent.class)).thenReturn(Mono.just(cloudEvent));
-        Mono<CloudEvent> flow = genericDirectAsyncGateway.requestReply(cloudEvent, "target", CloudEvent.class, DOMAIN_2);
+        when(directAsyncGateway2.requestReply(cloudEvent, "target", CloudEvent.class))
+                .thenReturn(Mono.just(cloudEvent));
+        Mono<CloudEvent> flow =
+                genericDirectAsyncGateway.requestReply(cloudEvent, "target", CloudEvent.class, DOMAIN_2);
         StepVerifier.create(flow).expectNext(cloudEvent).verifyComplete();
         verify(directAsyncGateway2).requestReply(cloudEvent, "target", CloudEvent.class);
     }

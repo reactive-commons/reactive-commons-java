@@ -68,10 +68,7 @@ class GenericMessageListenerRecoveryTest {
     @BeforeEach
     void init() {
         ReactiveMessageListener reactiveMessageListener = new ReactiveMessageListener(receiver, topologyCreator);
-        messageListener = new StubGenericMessageListener(
-                "test-queue", reactiveMessageListener, false, false, 10,
-                discardNotifier, "command", errorReporter
-        );
+        messageListener = new StubGenericMessageListener(reactiveMessageListener, discardNotifier, errorReporter);
 
         // A never-ending flux that tracks how many consumers are currently subscribed.
         Flux<AcknowledgableDelivery> trackingFlux = Flux.<AcknowledgableDelivery>never()
@@ -184,11 +181,14 @@ class GenericMessageListenerRecoveryTest {
 
     static class StubGenericMessageListener extends GenericMessageListener {
 
-        public StubGenericMessageListener(String queueName, ReactiveMessageListener listener, boolean useDLQRetries,
-                                          boolean createTopology, long maxRetries, DiscardNotifier discardNotifier,
-                                          String objectType, CustomReporter errorReporter) {
-            super(new ListenerContext<>(listener, null, null, new RetryPolicy(useDLQRetries, maxRetries, 200),
-                    createTopology, discardNotifier, errorReporter), queueName, objectType);
+        /**
+         * Listens on {@code test-queue} for {@code command} messages, with local retries (10 at most) and without
+         * creating the topology.
+         */
+        public StubGenericMessageListener(ReactiveMessageListener listener, DiscardNotifier discardNotifier,
+                                          CustomReporter errorReporter) {
+            super(new ListenerContext<>(listener, null, null, new RetryPolicy(false, 10, 200),
+                    false, discardNotifier, errorReporter), "test-queue", "command");
         }
 
         @Override

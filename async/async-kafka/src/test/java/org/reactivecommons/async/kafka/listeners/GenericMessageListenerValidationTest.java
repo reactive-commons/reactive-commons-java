@@ -14,6 +14,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.KafkaMessage;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
@@ -77,8 +78,9 @@ class GenericMessageListenerValidationTest {
         when(receiverRecord.value()).thenReturn(PAYLOAD);
         when(receiverRecord.headers()).thenReturn(headers);
         when(receiver.getSchemaValidator()).thenReturn(schemaValidator);
-        listener = new GenericMessageListenerTest.SampleListener(receiver, true, true, 1, 1,
-                discardNotifier, "event", customReporter, "appName", List.of("topic"),
+        listener = new GenericMessageListenerTest.SampleListener(receiver,
+                new GenericMessageListenerTest.ListenerSettings(new RetryPolicy(true, 1, 1), true, discardNotifier,
+                        customReporter, GenericMessageListenerTest.Subscription.DEFAULT),
                 message -> {
                     handlerCalled.set(true);
                     return Mono.empty();
@@ -113,7 +115,8 @@ class GenericMessageListenerValidationTest {
         doThrow(failure).when(schemaValidator).validateInbound(anyString(), any(), any());
 
         List<ILoggingEvent> whileHandling = recordLogs(() ->
-                StepVerifier.create(listener.handle(receiverRecord, KafkaMessage.fromDelivery(receiverRecord), Instant.now()))
+                StepVerifier.create(listener.handle(receiverRecord, KafkaMessage.fromDelivery(receiverRecord),
+                                Instant.now()))
                         .expectError(SchemaValidationException.class)
                         .verify());
 
@@ -175,8 +178,8 @@ class GenericMessageListenerValidationTest {
             return null;
         }).when(schemaValidator).validateInbound(anyString(), any(), any());
         GenericMessageListenerTest.SampleListener defaultRetries = new GenericMessageListenerTest.SampleListener(
-                receiver, false, false, -1, 10, discardNotifier, "event", customReporter, "appName",
-                List.of("topic"), message -> {
+                receiver, GenericMessageListenerTest.ListenerSettings.defaultRetries(discardNotifier, customReporter),
+                message -> {
             handlerCalled.set(true);
             return Mono.empty();
         });

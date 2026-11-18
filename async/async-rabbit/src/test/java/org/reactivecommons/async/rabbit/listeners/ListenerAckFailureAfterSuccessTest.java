@@ -92,16 +92,16 @@ class ListenerAckFailureAfterSuccessTest {
             return Flux.just(new AcknowledgableDelivery(delivery, channel, options.getExceptionHandler()))
                     .concatWith(Flux.never());
         });
-        new SucceedingListener(new ReactiveMessageListener(receiver, topologyCreator), withDLQRetry, maxRetries,
-                discardNotifier, errorReporter, handled).startListener();
+        new SucceedingListener(new ReactiveMessageListener(receiver, topologyCreator),
+                new RetryPolicy(withDLQRetry, maxRetries, 50), discardNotifier, errorReporter, handled).startListener();
     }
 
     private static class SucceedingListener extends GenericMessageListener {
         private final AtomicInteger handled;
 
-        SucceedingListener(ReactiveMessageListener listener, boolean withDLQRetry, long maxRetries,
+        SucceedingListener(ReactiveMessageListener listener, RetryPolicy retryPolicy,
                            DiscardNotifier discardNotifier, CustomReporter errorReporter, AtomicInteger handled) {
-            super(new ListenerContext<>(listener, null, null, new RetryPolicy(withDLQRetry, maxRetries, 50), false,
+            super(new ListenerContext<>(listener, null, null, retryPolicy, false,
                     discardNotifier, errorReporter), "test-queue", "command");
             this.handled = handled;
         }

@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.FallbackStrategy;
+import org.reactivecommons.async.commons.RetryPolicy;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.slf4j.LoggerFactory;
@@ -46,9 +47,11 @@ class GenericMessageListenerErrorLogTest {
         previousLevel = logger.getLevel();
         logged.start();
         logger.addAppender(logged);
-        listener = new GenericMessageListenerTest.SampleListener(mock(ReactiveMessageListener.class), false, false,
-                0, 0, mock(DiscardNotifier.class), "event", mock(CustomReporter.class), "group",
-                List.of("orders"), message -> Mono.empty());
+        listener = new GenericMessageListenerTest.SampleListener(mock(ReactiveMessageListener.class),
+                new GenericMessageListenerTest.ListenerSettings(new RetryPolicy(false, 0, 0), false,
+                        mock(DiscardNotifier.class), mock(CustomReporter.class),
+                        new GenericMessageListenerTest.Subscription("group", List.of("orders"))),
+                message -> Mono.empty());
         RecordHeaders headers = new RecordHeaders();
         headers.add("authorization", HEADER_VALUE.getBytes(StandardCharsets.UTF_8));
         byte[] body = BODY.getBytes(StandardCharsets.UTF_8);

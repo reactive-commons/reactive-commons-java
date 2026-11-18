@@ -7,6 +7,7 @@ import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.config.BrokerConfig;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -77,9 +78,9 @@ class HandlerPoolIsolationRabbitContainerTest {
 
     @Test
     void blockingHandlersOfOneListenerDoNotDelayTheHandlersOfAnother() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "hpi",
-                false, true, Handlers.class, SendEvents.class, ListenEvents.class, SendDirect.class,
-                ListenQueries.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("hpi", false, true), Handlers.class, SendEvents.class, ListenEvents.class,
+                SendDirect.class, ListenQueries.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, TARGET + ".subsEvents", TARGET + ".query");
             DomainEventBus bus = context.getBean(DomainEventBus.class);
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);

@@ -3,6 +3,7 @@ package org.reactivecommons.async.kafka;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.impl.config.annotations.EnableTopicListeners;
+import org.reactivecommons.async.kafka.KafkaScenarioSupport.OwnDomain;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -14,7 +15,6 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -84,8 +84,8 @@ class ConsumerLifecycleKafkaContainerTest {
             return Mono.empty();
         });
 
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, "lifecycle-refresh", DOMAIN,
-                Map.of(), handlers, SlowToInitialize.class)) {
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain("lifecycle-refresh", DOMAIN), handlers, SlowToInitialize.class)) {
             await().atMost(WAIT).until(() -> !warmedUpWhenHandled.isEmpty());
             assertThat(warmedUpWhenHandled).as("bean initialized when the handler ran").containsOnly(true);
         }
@@ -109,7 +109,7 @@ class ConsumerLifecycleKafkaContainerTest {
             return Mono.empty();
         });
 
-        AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(), handlers,
+        AnnotationConfigApplicationContext context = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN), handlers,
                 ListenTopics.class);
         assertThat(slowStarted.await(WAIT.toMillis(), TimeUnit.MILLISECONDS)).as("'slow' being handled").isTrue();
         context.close();
@@ -122,7 +122,7 @@ class ConsumerLifecycleKafkaContainerTest {
             afterRestart.add(body(message));
             return Mono.empty();
         });
-        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, group, DOMAIN, Map.of(),
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
                 restarted, ListenTopics.class)) {
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 2);
             assertThat(afterRestart).as("messages delivered after the restart").containsExactly("next");
