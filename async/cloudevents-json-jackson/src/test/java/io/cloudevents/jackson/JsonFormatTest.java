@@ -36,6 +36,7 @@ import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Objects;
 import java.util.stream.Stream;
 
@@ -51,6 +52,7 @@ import static io.cloudevents.jackson.data.Data.V1_WITH_XML_DATA;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class JsonFormatTest {
 
@@ -68,6 +70,16 @@ class JsonFormatTest {
     @MethodSource("wrongJsonContentTypes")
     void isNotJsonContentType(String contentType) {
         boolean json = JsonFormat.dataIsJsonContentType(contentType);
+
+        assertThat(json).isFalse();
+    }
+
+    @Test
+    void rejectsAContentTypeThatWouldBacktrackWithoutHanging() {
+        String contentType = "application/json" + ";".repeat(50_000) + "\n";
+
+        boolean json = assertTimeoutPreemptively(Duration.ofSeconds(2),
+                () -> JsonFormat.dataIsJsonContentType(contentType));
 
         assertThat(json).isFalse();
     }
