@@ -19,10 +19,10 @@ package reactor.rabbitmq;
 import com.rabbitmq.client.*;
 import com.rabbitmq.client.impl.AMQImpl;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxOperator;
@@ -57,9 +57,9 @@ import static reactor.rabbitmq.Helpers.safelyExecute;
 /**
  * Reactive abstraction to create resources and send messages.
  */
+@Slf4j
 public class Sender implements AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Sender.class);
     private static final int CHANNEL_CLOSE_THREADS = 4;
     /**
      * How long closing the sender waits for the channels of its terminated flows to be closed.
@@ -130,24 +130,8 @@ public class Sender implements AutoCloseable {
                 ? createScheduler("rabbitmq-sender-connection-subscription")
                 : options.getConnectionSubscriptionScheduler();
 
-        Mono<? extends Connection> cm;
-        if (options.getConnectionMono() == null) {
-            cm = Mono.fromCallable(() -> {
-                if (options.getConnectionSupplier() == null) {
-                    return options.getConnectionFactory().newConnection();
-                } else {
-                    return options.getConnectionSupplier().apply(null);
-                }
-            });
-            cm = options.getConnectionMonoConfigurator().apply(cm);
-            cm = cm.doOnNext(connection::set)
-                    .subscribeOn(this.connectionSubscriptionScheduler)
-                    .transform(this::cache);
-        } else {
-            cm = options.getConnectionMono();
-        }
-
-        this.connectionMono = cm;
+        // needs the connection subscription scheduler assigned above
+        this.connectionMono = connectionMono(options);
         this.channelMono = options.getChannelMono();
         this.channelPool = options.getChannelPool();
         this.channelCloseHandler = options.getChannelCloseHandler() == null
@@ -163,11 +147,39 @@ public class Sender implements AutoCloseable {
                 ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION)
                         .cacheInvalidateIf(proxy -> Utils.isClosedForGood(proxy.getConnection()))
                 : options.getResourceManagementChannelMono();
-        if (options.getConnectionClosingTimeout() != null && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
-            this.connectionClosingTimeout = (int) options.getConnectionClosingTimeout().toMillis();
-        } else {
-            this.connectionClosingTimeout = -1;
+        this.connectionClosingTimeout = closingTimeout(options);
+    }
+
+    /**
+     * The connection {@link Mono} of the options or, when they give none, one that opens the connection on the
+     * connection subscription scheduler, keeps it and caches it.
+     */
+    private Mono<? extends Connection> connectionMono(SenderOptions options) {
+        if (options.getConnectionMono() != null) {
+            return options.getConnectionMono();
         }
+        Mono<? extends Connection> cm = Mono.fromCallable(() -> {
+            if (options.getConnectionSupplier() == null) {
+                return options.getConnectionFactory().newConnection();
+            } else {
+                return options.getConnectionSupplier().apply(null);
+            }
+        });
+        cm = options.getConnectionMonoConfigurator().apply(cm);
+        return cm.doOnNext(connection::set)
+                .subscribeOn(this.connectionSubscriptionScheduler)
+                .transform(this::cache);
+    }
+
+    /**
+     * The connection closing timeout in milliseconds, or -1 (no timeout) when the options give none or zero.
+     */
+    private static int closingTimeout(SenderOptions options) {
+        Duration timeout = options.getConnectionClosingTimeout();
+        if (timeout != null && !Duration.ZERO.equals(timeout)) {
+            return (int) timeout.toMillis();
+        }
+        return -1;
     }
 
     protected Scheduler createScheduler(String name) {
@@ -209,7 +221,7 @@ public class Sender implements AutoCloseable {
                                 exceptionHandler.accept(new SendContext<>(channel, message), e);
                             }
                         })
-                        .doOnError(e -> LOGGER.warn("Send failed with exception", e))
+                        .doOnError(e -> log.warn("Send failed with exception", e))
                         .doFinally(st -> closeChannel(closeHandler, st, channel))
         ).then();
     }
@@ -220,11 +232,13 @@ public class Sender implements AutoCloseable {
         return sendWithPublishConfirms(messages, new SendOptions());
     }
 
-    public Flux<OutboundMessageResult> sendWithPublishConfirms(Publisher<OutboundMessage> messages, SendOptions options) {
+    public Flux<OutboundMessageResult> sendWithPublishConfirms(Publisher<OutboundMessage> messages,
+                                                               SendOptions options) {
         return Flux.from(sendWithTypedPublishConfirms(messages, options));
     }
 
-    public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(Publisher<OMSG> messages) {
+    public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(
+            Publisher<OMSG> messages) {
         return sendWithTypedPublishConfirms(messages, new SendOptions());
     }
 
@@ -381,20 +395,20 @@ public class Sender implements AutoCloseable {
         if (closingOrClosed.compareAndSet(false, true)) {
             // the channels first, while their connection is still open
             if (channelPool != null) {
-                safelyExecute(LOGGER, channelPool::close, "Error while closing the channel pool");
+                safelyExecute(log, channelPool::close, "Error while closing the channel pool");
             }
-            safelyExecute(LOGGER, this::shutdownChannelCloseThreadPool,
+            safelyExecute(log, this::shutdownChannelCloseThreadPool,
                     "Error while closing channel closing thread pool");
             if (connection.get() != null) {
-                safelyExecute(LOGGER, () -> connection.get().close(this.connectionClosingTimeout),
+                safelyExecute(log, () -> connection.get().close(this.connectionClosingTimeout),
                         "Error while closing sender connection");
             }
             if (this.privateConnectionSubscriptionScheduler) {
-                safelyExecute(LOGGER, this.connectionSubscriptionScheduler::dispose,
+                safelyExecute(log, this.connectionSubscriptionScheduler::dispose,
                         "Error while disposing connection subscription scheduler");
             }
             if (this.privateResourceManagementScheduler) {
-                safelyExecute(LOGGER, this.resourceManagementScheduler::dispose,
+                safelyExecute(log, this.resourceManagementScheduler::dispose,
                         "Error while disposing resource management scheduler");
             }
         }
@@ -404,7 +418,7 @@ public class Sender implements AutoCloseable {
         channelCloseThreadPool.shutdown();
         try {
             if (!channelCloseThreadPool.awaitTermination(CHANNEL_CLOSE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                LOGGER.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
+                log.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -425,6 +439,7 @@ public class Sender implements AutoCloseable {
 
     // --- Inner Classes ---
 
+    @Getter
     public static class SendContext<OMSG extends OutboundMessage> {
 
         protected final Channel channel;
@@ -433,14 +448,6 @@ public class Sender implements AutoCloseable {
         protected SendContext(Channel channel, OMSG message) {
             this.channel = channel;
             this.message = message;
-        }
-
-        public OMSG getMessage() {
-            return message;
-        }
-
-        public Channel getChannel() {
-            return channel;
         }
 
         public void publish(OutboundMessage outboundMessage) throws Exception {
@@ -558,7 +565,7 @@ public class Sender implements AutoCloseable {
         }
 
         @Override
-        public Context currentContext() {
+        public @NonNull Context currentContext() {
             return subscriber.currentContext();
         }
 
@@ -573,7 +580,7 @@ public class Sender implements AutoCloseable {
         }
 
         @Override
-        public void onSubscribe(Subscription subscription) {
+        public void onSubscribe(@NonNull Subscription subscription) {
             if (!Operators.validate(this.subscription, subscription)) {
                 return;
             }
@@ -713,18 +720,18 @@ public class Sender implements AutoCloseable {
                     failAllUnconfirmed();
                     maybeCompleteIfNothingPending();
                 } else if (sse.isHardError() && channel instanceof Recoverable) {
-                    LOGGER.warn("Connection lost on channel {} ({} unconfirmed messages reported as unknown), "
+                    log.warn("Connection lost on channel {} ({} unconfirmed messages reported as unknown), "
                                     + "waiting for automatic recovery: {}",
                             channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
                     failAllUnconfirmed();
                     maybeCompleteIfNothingPending();
                 } else {
-                    LOGGER.warn("Channel {} closed ({} unconfirmed messages reported as unknown): {}",
+                    log.warn("Channel {} closed ({} unconfirmed messages reported as unknown): {}",
                             channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
                     terminate(sse);
                 }
             } catch (Exception e) {
-                LOGGER.warn("Error while handling the shutdown of channel {}", channel.getChannelNumber(), e);
+                log.warn("Error while handling the shutdown of channel {}", channel.getChannelNumber(), e);
             }
         }
 
@@ -737,7 +744,7 @@ public class Sender implements AutoCloseable {
                 try {
                     emit(new OutboundMessageResult<>(entry.getValue(), false, false, true));
                 } catch (Exception e) {
-                    LOGGER.warn("Error while notifying an unconfirmed message after a channel failure", e);
+                    log.warn("Error while notifying an unconfirmed message after a channel failure", e);
                 }
             }
         }
@@ -774,7 +781,7 @@ public class Sender implements AutoCloseable {
         }
 
         private void handleError(Exception e, OutboundMessageResult<OMSG> result) {
-            LOGGER.error("error in publish confirm sending", e);
+            log.error("error in publish confirm sending", e);
             if (state.get() == SubscriberState.COMPLETE) {
                 return;
             }
@@ -782,7 +789,7 @@ public class Sender implements AutoCloseable {
                 try {
                     emit(result);
                 } catch (Exception emitException) {
-                    LOGGER.warn("Error while notifying a failed message", emitException);
+                    log.warn("Error while notifying a failed message", emitException);
                 }
             }
             terminate(e);
@@ -820,7 +827,7 @@ public class Sender implements AutoCloseable {
         }
 
         private void removeListeners() {
-            safelyExecute(LOGGER, () -> {
+            safelyExecute(log, () -> {
                 if (confirmListener != null) {
                     channel.removeConfirmListener(confirmListener);
                 }

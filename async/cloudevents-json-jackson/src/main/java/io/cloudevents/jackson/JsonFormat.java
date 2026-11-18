@@ -31,11 +31,14 @@ import tools.jackson.databind.module.SimpleModule;
 import java.util.regex.Pattern;
 
 /**
- * Implementation of {@link EventFormat} for <a href="https://github.com/cloudevents/spec/blob/v1.0/json-format.md">JSON event format</a>
- * using Jackson. This format is resolvable with {@link io.cloudevents.core.provider.EventFormatProvider} using the content type {@link #CONTENT_TYPE}.
+ * Implementation of {@link EventFormat} for
+ * <a href="https://github.com/cloudevents/spec/blob/v1.0/json-format.md">JSON event format</a>
+ * using Jackson. This format is resolvable with {@link io.cloudevents.core.provider.EventFormatProvider} using the
+ * content type {@link #CONTENT_TYPE}.
  * <p>
- * If you want to use the {@link CloudEvent} serializers/deserializers directly in your mapper, you can use {@link #getCloudEventJacksonModule()} or
- * {@link #getCloudEventJacksonModule(boolean, boolean)} to get a {@link SimpleModule} to register in your {@link JsonMapper} instance.
+ * If you want to use the {@link CloudEvent} serializers/deserializers directly in your mapper, you can use
+ * {@link #getCloudEventJacksonModule()} or {@link #getCloudEventJacksonModule(boolean, boolean)} to get a
+ * {@link SimpleModule} to register in your {@link JsonMapper} instance.
  */
 public final class JsonFormat implements EventFormat {
 
@@ -46,7 +49,8 @@ public final class JsonFormat implements EventFormat {
     /**
      * JSON Data Content Type Discriminator
      */
-    private static final Pattern JSON_CONTENT_TYPE_PATTERN = Pattern.compile("^(application|text)/([a-zA-Z]+\\+)?json(;.*)*$");
+    private static final Pattern JSON_CONTENT_TYPE_PATTERN =
+            Pattern.compile("^(application|text)/([a-zA-Z]+\\+)?json(;.*)*$");
     private final JsonMapper mapper;
     private final JsonFormatOptions options;
 
@@ -94,8 +98,10 @@ public final class JsonFormat implements EventFormat {
                 JsonFormatOptions.builder()
                         .forceDataBase64Serialization(true)
                         .forceStringSerialization(this.options.isForceStringSerialization())
-                        .forceExtensionNameLowerCaseDeserialization(this.options.isForceExtensionNameLowerCaseDeserialization())
-                        .forceIgnoreInvalidExtensionNameDeserialization(this.options.isForceIgnoreInvalidExtensionNameDeserialization())
+                        .forceExtensionNameLowerCaseDeserialization(
+                                this.options.isForceExtensionNameLowerCaseDeserialization())
+                        .forceIgnoreInvalidExtensionNameDeserialization(
+                                this.options.isForceIgnoreInvalidExtensionNameDeserialization())
                         .build()
         );
     }
@@ -108,8 +114,10 @@ public final class JsonFormat implements EventFormat {
                 JsonFormatOptions.builder()
                         .forceDataBase64Serialization(this.options.isForceDataBase64Serialization())
                         .forceStringSerialization(true)
-                        .forceExtensionNameLowerCaseDeserialization(this.options.isForceExtensionNameLowerCaseDeserialization())
-                        .forceIgnoreInvalidExtensionNameDeserialization(this.options.isForceIgnoreInvalidExtensionNameDeserialization())
+                        .forceExtensionNameLowerCaseDeserialization(
+                                this.options.isForceExtensionNameLowerCaseDeserialization())
+                        .forceIgnoreInvalidExtensionNameDeserialization(
+                                this.options.isForceIgnoreInvalidExtensionNameDeserialization())
                         .build()
         );
     }
@@ -123,7 +131,8 @@ public final class JsonFormat implements EventFormat {
                         .forceDataBase64Serialization(this.options.isForceDataBase64Serialization())
                         .forceStringSerialization(this.options.isForceStringSerialization())
                         .forceExtensionNameLowerCaseDeserialization(true)
-                        .forceIgnoreInvalidExtensionNameDeserialization(this.options.isForceIgnoreInvalidExtensionNameDeserialization())
+                        .forceIgnoreInvalidExtensionNameDeserialization(
+                                this.options.isForceIgnoreInvalidExtensionNameDeserialization())
                         .build()
         );
     }
@@ -136,7 +145,8 @@ public final class JsonFormat implements EventFormat {
                 JsonFormatOptions.builder()
                         .forceDataBase64Serialization(this.options.isForceDataBase64Serialization())
                         .forceStringSerialization(this.options.isForceStringSerialization())
-                        .forceExtensionNameLowerCaseDeserialization(this.options.isForceExtensionNameLowerCaseDeserialization())
+                        .forceExtensionNameLowerCaseDeserialization(
+                                this.options.isForceExtensionNameLowerCaseDeserialization())
                         .forceIgnoreInvalidExtensionNameDeserialization(true)
                         .build()
         );
@@ -161,7 +171,8 @@ public final class JsonFormat implements EventFormat {
     }
 
     @Override
-    public CloudEvent deserialize(byte[] bytes, CloudEventDataMapper<? extends CloudEventData> mapper) throws EventDeserializationException {
+    public CloudEvent deserialize(byte[] bytes, CloudEventDataMapper<? extends CloudEventData> mapper)
+            throws EventDeserializationException {
         CloudEvent deserialized = this.deserialize(bytes);
         if (deserialized.getData() == null) {
             return deserialized;
@@ -194,7 +205,8 @@ public final class JsonFormat implements EventFormat {
      * @see #withForceJsonDataToBase64()
      * @see #withForceNonJsonDataToString()
      */
-    public static SimpleModule getCloudEventJacksonModule(boolean forceDataBase64Serialization, boolean forceStringSerialization) {
+    public static SimpleModule getCloudEventJacksonModule(boolean forceDataBase64Serialization,
+                                                          boolean forceStringSerialization) {
         return getCloudEventJacksonModule(
                 JsonFormatOptions.builder()
                         .forceDataBase64Serialization(forceDataBase64Serialization)
@@ -212,7 +224,9 @@ public final class JsonFormat implements EventFormat {
         ceModule.addSerializer(CloudEvent.class, new CloudEventSerializer(
                 options.isForceDataBase64Serialization(), options.isForceStringSerialization()));
         ceModule.addDeserializer(CloudEvent.class, new CloudEventDeserializer(
-                options.isForceExtensionNameLowerCaseDeserialization(), options.isForceIgnoreInvalidExtensionNameDeserialization(), options.isDataContentTypeDefaultingDisabled()));
+                options.isForceExtensionNameLowerCaseDeserialization(),
+                options.isForceIgnoreInvalidExtensionNameDeserialization(),
+                options.isDataContentTypeDefaultingDisabled()));
         return ceModule;
     }
 

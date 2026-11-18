@@ -75,12 +75,14 @@ public final class JsonFormatOptions {
             return this;
         }
 
-        public JsonFormatOptionsBuilder forceExtensionNameLowerCaseDeserialization(boolean forceExtensionNameLowerCaseDeserialization) {
+        public JsonFormatOptionsBuilder forceExtensionNameLowerCaseDeserialization(
+                boolean forceExtensionNameLowerCaseDeserialization) {
             this.forceExtensionNameLowerCaseDeserialization = forceExtensionNameLowerCaseDeserialization;
             return this;
         }
 
-        public JsonFormatOptionsBuilder forceIgnoreInvalidExtensionNameDeserialization(boolean forceIgnoreInvalidExtensionNameDeserialization) {
+        public JsonFormatOptionsBuilder forceIgnoreInvalidExtensionNameDeserialization(
+                boolean forceIgnoreInvalidExtensionNameDeserialization) {
             this.forceIgnoreInvalidExtensionNameDeserialization = forceIgnoreInvalidExtensionNameDeserialization;
             return this;
         }

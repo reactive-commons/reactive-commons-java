@@ -43,7 +43,8 @@ public class Data {
     public static byte[] DATA_JSON_SERIALIZED = "{}".getBytes(StandardCharsets.UTF_8);
     public static byte[] DATA_XML_SERIALIZED = "<stuff></stuff>".getBytes(StandardCharsets.UTF_8);
     public static byte[] DATA_TEXT_SERIALIZED = "Hello World Lorena!".getBytes(StandardCharsets.UTF_8);
-    public static byte[] BINARY_VALUE = { (byte) 0xE0, (byte) 0xFF, (byte) 0x00, (byte) 0x44, (byte) 0xAA }; // Base64: 4P8ARKo=
+    // Base64: 4P8ARKo=
+    public static byte[] BINARY_VALUE = { (byte) 0xE0, (byte) 0xFF, (byte) 0x00, (byte) 0x44, (byte) 0xAA };
 
     public static final CloudEvent V1_MIN = CloudEventBuilder.v1()
             .withId(ID)

@@ -91,7 +91,8 @@ public class Receiver implements Closeable {
             cm = options.getConnectionMono();
         }
         this.connectionMono = cm;
-        if (options.getConnectionClosingTimeout() != null && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
+        if (options.getConnectionClosingTimeout() != null
+                && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
             this.connectionClosingTimeout = (int) options.getConnectionClosingTimeout().toMillis();
         } else {
             this.connectionClosingTimeout = -1;

@@ -116,7 +116,8 @@ class JsonFormatTest {
     @ParameterizedTest
     @MethodSource("deserializeTestArgumentsUpperCaseExtensionName")
     void deserializeWithUpperCaseExtensionName(String inputFile, CloudEvent output) {
-        CloudEvent deserialized = getFormat().withForceExtensionNameLowerCaseDeserialization().deserialize(loadFile(inputFile));
+        CloudEvent deserialized = getFormat().withForceExtensionNameLowerCaseDeserialization()
+                .deserialize(loadFile(inputFile));
         assertThat(deserialized)
                 .isEqualTo(output);
     }
@@ -124,7 +125,8 @@ class JsonFormatTest {
     @ParameterizedTest
     @MethodSource("deserializeTestArgumentsInvalidExtensionName")
     void deserializeWithInvalidExtensionName(String inputFile, CloudEvent output) {
-        CloudEvent deserialized = getFormat().withForceIgnoreInvalidExtensionNameDeserialization().deserialize(loadFile(inputFile));
+        CloudEvent deserialized = getFormat().withForceIgnoreInvalidExtensionNameDeserialization()
+                .deserialize(loadFile(inputFile));
         assertThat(deserialized)
                 .isEqualTo(output);
     }
@@ -260,13 +262,15 @@ class JsonFormatTest {
 
     public static Stream<Arguments> deserializeTestArgumentsUpperCaseExtensionName() {
         return Stream.of(
-                Arguments.of("v1/json_data_with_ext_upper_case.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
+                Arguments.of("v1/json_data_with_ext_upper_case.json",
+                        normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
         );
     }
 
     public static Stream<Arguments> deserializeTestArgumentsInvalidExtensionName() {
         return Stream.of(
-                Arguments.of("v1/json_data_with_ext_invalid.json", normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
+                Arguments.of("v1/json_data_with_ext_invalid.json",
+                        normalizeToJsonValueIfNeeded(V1_WITH_JSON_DATA_WITH_EXT))
         );
     }
 
@@ -294,7 +298,9 @@ class JsonFormatTest {
         try {
             return String.join(
                     "",
-                    Files.readAllLines(Paths.get(Objects.requireNonNull(Thread.currentThread().getContextClassLoader().getResource(input)).toURI()), StandardCharsets.UTF_8)
+                    Files.readAllLines(Paths.get(Objects.requireNonNull(
+                            Thread.currentThread().getContextClassLoader().getResource(input)).toURI()),
+                            StandardCharsets.UTF_8)
             ).getBytes(StandardCharsets.UTF_8);
         } catch (IOException | URISyntaxException e) {
             throw new RuntimeException(e);

@@ -20,8 +20,7 @@ import com.rabbitmq.client.ShutdownSignalException;
 import com.rabbitmq.client.impl.recovery.AutorecoveringConnection;
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -29,12 +28,12 @@ import java.util.concurrent.Callable;
 import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 
+@Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class ExceptionHandlers {
 
-    public static final Predicate<Throwable> CONNECTION_RECOVERY_PREDICATE = new ConnectionRecoveryTriggeringPredicate();
-
-    private static final Logger LOGGER = LoggerFactory.getLogger(ExceptionHandlers.class);
+    public static final Predicate<Throwable> CONNECTION_RECOVERY_PREDICATE =
+            new ConnectionRecoveryTriggeringPredicate();
 
     public static class ConnectionRecoveryTriggeringPredicate implements Predicate<Throwable> {
         @Override
@@ -132,7 +131,7 @@ public class ExceptionHandlers {
         @Override
         public void accept(Receiver.AcknowledgmentContext acknowledgmentContext, Exception e) {
             if (isChannelClosed(e)) {
-                LOGGER.warn("Acknowledgment not sent, the channel is closed (the broker redelivers the message): {}",
+                log.warn("Acknowledgment not sent, the channel is closed (the broker redelivers the message): {}",
                         e.getMessage());
                 return;
             }
