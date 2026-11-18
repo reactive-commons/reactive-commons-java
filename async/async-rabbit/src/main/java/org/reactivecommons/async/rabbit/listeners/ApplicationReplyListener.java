@@ -15,6 +15,7 @@ import reactor.core.publisher.Mono;
 import reactor.rabbitmq.ConsumeOptions;
 import reactor.rabbitmq.Receiver;
 
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -81,8 +82,9 @@ public class ApplicationReplyListener {
                 .thenMany(receiver.consumeAutoAck(queueName, consumeOptions).doOnNext(delivery -> {
                     liveness.onDelivery();
                     try {
-                        final String correlationID = delivery.getProperties().getHeaders().get(CORRELATION_ID).toString();
-                        final boolean isEmpty = delivery.getProperties().getHeaders().get(COMPLETION_ONLY_SIGNAL) != null;
+                        final Map<String, Object> headers = delivery.getProperties().getHeaders();
+                        final String correlationID = headers.get(CORRELATION_ID).toString();
+                        final boolean isEmpty = headers.get(COMPLETION_ONLY_SIGNAL) != null;
                         if (isEmpty) {
                             router.routeEmpty(correlationID);
                         } else {

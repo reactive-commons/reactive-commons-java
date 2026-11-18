@@ -498,9 +498,9 @@ public final class ListenerSchedulers {
         }
 
         /**
-         * Whether the busy threads wait apart (each for its own work) in this sample and in the previous one of the same
-         * starving episode. A single sample may catch a thread between two tasks, or a lock being handed over to the
-         * next thread: with two threads, that alone would look like threads waiting apart.
+         * Whether the busy threads wait apart (each for its own work) in this sample and in the previous one of the
+         * same starving episode. A single sample may catch a thread between two tasks, or a lock being handed over to
+         * the next thread: with two threads, that alone would look like threads waiting apart.
          */
         private boolean waitApartTwiceInARow() {
             final boolean apart = !busyThreadsWaitTogether();

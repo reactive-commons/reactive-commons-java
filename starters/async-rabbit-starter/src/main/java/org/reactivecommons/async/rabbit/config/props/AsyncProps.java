@@ -108,7 +108,8 @@ public class AsyncProps extends GenericAsyncProps<RabbitProperties> {
 
     public Boolean getListenReplies() {
         if (listenReplies == null) {
-            throw new IllegalArgumentException("The 'listenReplies' property is required, please specify a 'true' or 'false' value.");
+            throw new IllegalArgumentException("The 'listenReplies' property is required, please specify a 'true' "
+                    + "or 'false' value.");
         }
         return listenReplies;
     }

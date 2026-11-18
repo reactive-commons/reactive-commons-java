@@ -24,7 +24,8 @@ public class BrokerConfigProps implements IBrokerConfigProps {
 
     @Override
     public String getNotificationsQueue() {
-        return resolveTemporaryQueue(notificationsQueueName, asyncProps.getDomain().getEvents().getNotificationSuffix());
+        return resolveTemporaryQueue(notificationsQueueName,
+                asyncProps.getDomain().getEvents().getNotificationSuffix());
     }
 
     @Override
