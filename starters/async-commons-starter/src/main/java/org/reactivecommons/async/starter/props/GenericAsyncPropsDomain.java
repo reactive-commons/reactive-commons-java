@@ -36,27 +36,40 @@ public class GenericAsyncPropsDomain<T extends GenericAsyncProps<P>, P> extends 
         }
 
         super.forEach((key, value) -> { // To ensure that each domain has an appName
-            if (value.getAppName() == null) {
-                if (defaultAppName == null || defaultAppName.isEmpty()) {
-                    throw new InvalidConfigurationException("defaultAppName does not has value and domain " + key
-                            + " has not set the property appName. please use respective property or " +
-                            " spring.application.name property or withDefaultAppName in builder");
-                }
-                value.setAppName(defaultAppName);
-            }
-            if (value.getConnectionProperties() == null) {
-                if (defaultProperties == null) {
-                    throw new InvalidConfigurationException("Domain " + key + " could not be instantiated because no" +
-                            " properties found, please use withDefaultProperties or define the" +
-                            "default " + key + " domain with properties explicitly");
-                }
-                value.setConnectionProperties(MAPPER.convertValue(defaultProperties, propsClass));
-            }
+            requireAppName(key, value, defaultAppName);
+            requireConnectionProperties(key, value, defaultProperties, propsClass);
             if (secretFiller != null) {
                 secretFiller.fillWithSecret(key, value);
             }
             fillCustoms(value);
         });
+    }
+
+    private static void requireAppName(String key, GenericAsyncProps<?> value, String defaultAppName) {
+        if (value.getAppName() == null) {
+            if (defaultAppName == null || defaultAppName.isEmpty()) {
+                throw new InvalidConfigurationException("defaultAppName does not has value and domain " + key
+                        + " has not set the property appName. please use respective property or " +
+                        " spring.application.name property or withDefaultAppName in builder");
+            }
+            value.setAppName(defaultAppName);
+        }
+    }
+
+    /**
+     * Gives the domain a copy of the default connection properties when it has none. The class is the one received by
+     * the constructor, so a subclass changing {@code propsClass} while the domains are being filled sees no difference.
+     */
+    private static <P> void requireConnectionProperties(String key, GenericAsyncProps<P> value, P defaultProperties,
+                                                        Class<P> propsClass) {
+        if (value.getConnectionProperties() == null) {
+            if (defaultProperties == null) {
+                throw new InvalidConfigurationException("Domain " + key + " could not be instantiated because no" +
+                        " properties found, please use withDefaultProperties or define the" +
+                        "default " + key + " domain with properties explicitly");
+            }
+            value.setConnectionProperties(MAPPER.convertValue(defaultProperties, propsClass));
+        }
     }
 
     protected void fillCustoms(T asyncProps) {

@@ -34,7 +34,8 @@ public class KeyMatcher implements Matcher {
     private static int compare(String firstExpression, String secondExpression) {
         String[] firstExpressionArr = getSeparated(firstExpression);
         String[] secondExpressionArr = getSeparated(secondExpression);
-        return compare(secondExpressionArr.length - firstExpressionArr.length, firstExpressionArr, secondExpressionArr, 0);
+        return compare(secondExpressionArr.length - firstExpressionArr.length,
+                firstExpressionArr, secondExpressionArr, 0);
     }
 
     private static int compare(int current, String[] first, String[] second, int idx) {
@@ -44,19 +45,32 @@ public class KeyMatcher implements Matcher {
         if (first[idx].equals(second[idx])) {
             return compare(current, first, second, idx + 1);
         }
+        return compareDifferent(first, second, idx);
+    }
+
+    /**
+     * Compares the different words at {@code idx}: a literal word is more specific than a wildcard, and {@code *} is
+     * more specific than {@code #}, in which case the next words keep deciding.
+     */
+    private static int compareDifferent(String[] first, String[] second, int idx) {
         if (!isWildcard(first[idx])) {
             return -1;
         }
         if (!isWildcard(second[idx])) {
             return 1;
         }
-        if (first[idx].equals(MULTIPLE_WORD_WILDCARD) && second[idx].equals(SINGLE_WORD_WILDCARD)) {
-            return compare(1, first, second, idx + 1);
+        int order = wildcardOrder(first[idx], second[idx]);
+        return order != 0 ? compare(order, first, second, idx + 1) : second.length - first.length;
+    }
+
+    private static int wildcardOrder(String first, String second) {
+        if (first.equals(MULTIPLE_WORD_WILDCARD) && second.equals(SINGLE_WORD_WILDCARD)) {
+            return 1;
         }
-        if (first[idx].equals(SINGLE_WORD_WILDCARD) && second[idx].equals(MULTIPLE_WORD_WILDCARD)) {
-            return compare(-1, first, second, idx + 1);
+        if (first.equals(SINGLE_WORD_WILDCARD) && second.equals(MULTIPLE_WORD_WILDCARD)) {
+            return -1;
         }
-        return second.length - first.length;
+        return 0;
     }
 
     private static boolean isWildcard(String word) {
