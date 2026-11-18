@@ -19,20 +19,24 @@ class SendLimitsTest {
 
     @Test
     void rejectsASendTimeoutThatIsNotPositive() {
+        Duration negative = Duration.ofMillis(-1);
+
         assertThatThrownBy(() -> new SendLimits(null, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("sendTimeout must be positive: null");
         assertThatThrownBy(() -> new SendLimits(Duration.ZERO, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("sendTimeout must be positive: PT0S");
-        assertThatThrownBy(() -> new SendLimits(Duration.ofMillis(-1), 1))
+        assertThatThrownBy(() -> new SendLimits(negative, 1))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("sendTimeout must be positive: PT-0.001S");
     }
 
     @Test
     void rejectsAMaxPendingSendsThatIsNotPositive() {
-        assertThatThrownBy(() -> new SendLimits(Duration.ofSeconds(1), 0))
+        Duration sendTimeout = Duration.ofSeconds(1);
+
+        assertThatThrownBy(() -> new SendLimits(sendTimeout, 0))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessage("maxPendingSends must be positive: 0");
     }

@@ -195,27 +195,27 @@ class ChannelDummy implements Channel {
 
     @Override
     public void close() throws IOException, TimeoutException {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void close(int closeCode, String closeMessage) throws IOException, TimeoutException {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void abort() {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void abort(int closeCode, String closeMessage) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void addReturnListener(ReturnListener listener) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -230,12 +230,12 @@ class ChannelDummy implements Channel {
 
     @Override
     public void clearReturnListeners() {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void addConfirmListener(ConfirmListener listener) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -250,7 +250,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void clearConfirmListeners() {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -260,39 +260,39 @@ class ChannelDummy implements Channel {
 
     @Override
     public void setDefaultConsumer(Consumer consumer) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicQos(int prefetchSize, int prefetchCount, boolean global) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicQos(int prefetchCount, boolean global) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicQos(int prefetchCount) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicPublish(String exchange, String routingKey, AMQP.BasicProperties props, byte[] body) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicPublish(String exchange, String routingKey, boolean mandatory, AMQP.BasicProperties props,
                              byte[] body) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicPublish(String exchange, String routingKey, boolean mandatory, boolean immediate,
                              AMQP.BasicProperties props, byte[] body) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -343,13 +343,13 @@ class ChannelDummy implements Channel {
     @Override
     public void exchangeDeclareNoWait(String exchange, String type, boolean durable, boolean autoDelete,
                                       boolean internal, Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void exchangeDeclareNoWait(String exchange, BuiltinExchangeType type, boolean durable, boolean autoDelete,
                                       boolean internal, Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -364,7 +364,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void exchangeDeleteNoWait(String exchange, boolean ifUnused) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -386,7 +386,7 @@ class ChannelDummy implements Channel {
     @Override
     public void exchangeBindNoWait(String destination, String source, String routingKey,
                                    Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -403,7 +403,7 @@ class ChannelDummy implements Channel {
     @Override
     public void exchangeUnbindNoWait(String destination, String source, String routingKey,
                                      Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -420,7 +420,7 @@ class ChannelDummy implements Channel {
     @Override
     public void queueDeclareNoWait(String queue, boolean durable, boolean exclusive, boolean autoDelete,
                                    Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -440,7 +440,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void queueDeleteNoWait(String queue, boolean ifUnused, boolean ifEmpty) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -456,7 +456,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void queueBindNoWait(String queue, String exchange, String routingKey, Map<String, Object> arguments) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -482,17 +482,17 @@ class ChannelDummy implements Channel {
 
     @Override
     public void basicAck(long deliveryTag, boolean multiple) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicNack(long deliveryTag, boolean multiple, boolean requeue) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void basicReject(long deliveryTag, boolean requeue) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -617,7 +617,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void basicCancel(String consumerTag) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -667,17 +667,17 @@ class ChannelDummy implements Channel {
 
     @Override
     public void waitForConfirmsOrDie() throws IOException, InterruptedException {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void waitForConfirmsOrDie(long timeout) throws IOException, InterruptedException, TimeoutException {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void asyncRpc(Method method) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -702,12 +702,12 @@ class ChannelDummy implements Channel {
 
     @Override
     public void addShutdownListener(ShutdownListener listener) {
-
+        // not used by the listeners under test
     }
 
     @Override
     public void removeShutdownListener(ShutdownListener listener) {
-
+        // not used by the listeners under test
     }
 
     @Override
@@ -717,7 +717,7 @@ class ChannelDummy implements Channel {
 
     @Override
     public void notifyListeners() {
-
+        // not used by the listeners under test
     }
 
     @Override
