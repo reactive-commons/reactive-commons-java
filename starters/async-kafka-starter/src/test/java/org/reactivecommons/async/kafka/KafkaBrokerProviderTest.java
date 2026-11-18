@@ -84,6 +84,7 @@ class KafkaBrokerProviderTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldStopTheListenersAndCloseTheClientsOnceWhenClosed() {
         AtomicBoolean consumerCancelled = new AtomicBoolean();
         AtomicInteger releases = new AtomicInteger();

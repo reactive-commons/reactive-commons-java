@@ -232,9 +232,9 @@ public class KafkaPropertiesBase {
      * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
      */
     public Map<String, Object> buildConsumerProperties(@Nullable SslBundles sslBundles) {
-        Map<String, Object> properties = buildConsumerProperties();
-        applySslBundle(properties, sslBundles, this.consumer.getSsl().getBundle());
-        return properties;
+        Map<String, Object> built = buildConsumerProperties();
+        applySslBundle(built, sslBundles, this.consumer.getSsl().getBundle());
+        return built;
     }
 
     /**
@@ -245,9 +245,9 @@ public class KafkaPropertiesBase {
      * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
      */
     public Map<String, Object> buildProducerProperties(@Nullable SslBundles sslBundles) {
-        Map<String, Object> properties = buildProducerProperties();
-        applySslBundle(properties, sslBundles, this.producer.getSsl().getBundle());
-        return properties;
+        Map<String, Object> built = buildProducerProperties();
+        applySslBundle(built, sslBundles, this.producer.getSsl().getBundle());
+        return built;
     }
 
     /**
@@ -258,9 +258,9 @@ public class KafkaPropertiesBase {
      * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
      */
     public Map<String, Object> buildAdminProperties(@Nullable SslBundles sslBundles) {
-        Map<String, Object> properties = buildAdminProperties();
-        applySslBundle(properties, sslBundles, this.admin.getSsl().getBundle());
-        return properties;
+        Map<String, Object> built = buildAdminProperties();
+        applySslBundle(built, sslBundles, this.admin.getSsl().getBundle());
+        return built;
     }
 
     /**

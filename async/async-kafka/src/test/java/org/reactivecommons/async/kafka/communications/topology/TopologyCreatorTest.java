@@ -75,6 +75,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldCheckATopicByDescribingOnlyThatTopic() {
         // Arrange
         describeAnswers(found());
@@ -87,6 +88,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldFailWhenCheckTopics() {
         // Arrange
         describeAnswers(failed(new UnknownTopicOrPartitionException("unknown")));
@@ -98,6 +100,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldNotDescribeATopicAlreadyFound() {
         // Arrange
         describeAnswers(found());
@@ -154,6 +157,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldRegisterCreatedDlqTopicsSoTheyCanBeSentTo() {
         // Arrange
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();
@@ -172,6 +176,7 @@ class TopologyCreatorTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     void shouldTreatAlreadyExistingDlqTopicAsCreated() {
         // Arrange: another replica already created the DLQ topic
         KafkaFutureImpl<Void> create = new KafkaFutureImpl<>();

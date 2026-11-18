@@ -49,8 +49,14 @@ public record KafkaClientSettings(String domain, String clientIdBase, @Nullable 
      */
     public static String clientIdBase(AsyncKafkaProps props) {
         String configured = props.getConnectionProperties().getClientId();
-        String base = StringUtils.hasText(configured) ? configured
-                : StringUtils.hasText(props.getAppName()) ? props.getAppName() : DEFAULT_CLIENT_ID;
+        String base;
+        if (StringUtils.hasText(configured)) {
+            base = configured;
+        } else if (StringUtils.hasText(props.getAppName())) {
+            base = props.getAppName();
+        } else {
+            base = DEFAULT_CLIENT_ID;
+        }
         return base + "-" + Integer.toHexString(ThreadLocalRandom.current().nextInt(0x100000, 0x1000000));
     }
 

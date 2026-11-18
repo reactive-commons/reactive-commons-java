@@ -44,7 +44,7 @@ public class KafkaReactiveHealthIndicator extends RCHealthIndicator {
      */
     public static final Duration RESTART_GRACE_PERIOD = Duration.ofSeconds(30);
     static final String ERROR = "error";
-    static final String LISTENERS = "listeners";
+    static final String LISTENERS_DETAIL = "listeners";
     /**
      * Over the timeout given to the admin client, before the check is given up even if the client did not answer.
      */
@@ -142,7 +142,7 @@ public class KafkaReactiveHealthIndicator extends RCHealthIndicator {
                 stuck.addAll(listener.topics());
             }
         }
-        builder.withDetail(LISTENERS, details);
+        builder.withDetail(LISTENERS_DETAIL, details);
         return stuck;
     }
 

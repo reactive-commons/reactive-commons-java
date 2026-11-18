@@ -97,7 +97,7 @@ class GenericMessageListenerRestartTest {
     void shouldStartTheBackoffAgainOnceTheFlowDeliversAMessage() {
         // Fails 6 times, then delivers a message and fails again, then keeps failing
         givenSubscriptions(subscription -> subscription == 7
-                ? Flux.just(record()).concatWith(Mono.delay(Duration.ofMillis(10))
+                ? Flux.just(receivedRecord()).concatWith(Mono.delay(Duration.ofMillis(10))
                 .then(Mono.error(new KafkaException("Commit failed"))))
                 : Flux.error(new KafkaException("Not authorized to access topics")));
         listener = listener(message -> Mono.empty());
@@ -116,7 +116,7 @@ class GenericMessageListenerRestartTest {
     void shouldReportTheListenerAsRestartingUntilItConsumesAgain() {
         givenSubscriptions(subscription -> subscription == 1
                 ? Flux.error(new KafkaException("Broker may not be available"))
-                : Flux.just(record()).concatWith(Flux.never()));
+                : Flux.just(receivedRecord()).concatWith(Flux.never()));
         listener = listener(message -> Mono.empty());
 
         listener.startListener(topologyCreator);
@@ -173,9 +173,10 @@ class GenericMessageListenerRestartTest {
         return gaps;
     }
 
-    private static ReceiverRecord<String, byte[]> record() {
+    private static ReceiverRecord<String, byte[]> receivedRecord() {
         ReceiverRecord<String, byte[]> receiverRecord = mock(ReceiverRecord.class);
-        lenient().when(receiverRecord.receiverOffset()).thenReturn(mock(ReceiverOffset.class));
+        ReceiverOffset offset = mock(ReceiverOffset.class);
+        lenient().when(receiverRecord.receiverOffset()).thenReturn(offset);
         lenient().when(receiverRecord.topic()).thenReturn("topic");
         lenient().when(receiverRecord.key()).thenReturn("key");
         lenient().when(receiverRecord.value()).thenReturn("message".getBytes(StandardCharsets.UTF_8));

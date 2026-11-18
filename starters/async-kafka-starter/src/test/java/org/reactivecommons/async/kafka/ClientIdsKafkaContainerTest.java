@@ -104,8 +104,7 @@ class ClientIdsKafkaContainerTest {
     private static List<String> clientIds(String domain) throws MalformedObjectNameException {
         return ManagementFactory.getPlatformMBeanServer()
                 .queryNames(new ObjectName(domain + ":type=app-info,*"), null).stream()
-                .map(name -> name.getKeyProperty("id") != null ? name.getKeyProperty("id")
-                        : name.getKeyProperty("client-id"))
+                .map(name -> name.getKeyProperty(name.getKeyProperty("id") != null ? "id" : "client-id"))
                 .filter(id -> id != null && id.startsWith(CLIENT_ID))
                 // A client may be registered under both keys, "id" and "client-id"
                 .distinct()

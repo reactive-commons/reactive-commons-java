@@ -43,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 
 import static java.lang.String.format;
@@ -88,7 +89,7 @@ public abstract class GenericMessageListener {
     /**
      * The last offset acknowledged by the current consumer: committing it commits every offset it acknowledged.
      */
-    private volatile ReceiverOffset lastAcknowledged;
+    private final AtomicReference<ReceiverOffset> lastAcknowledged = new AtomicReference<>();
     private final AtomicLong restarts = new AtomicLong();
     private volatile boolean restarting;
     /**
@@ -188,7 +189,7 @@ public abstract class GenericMessageListener {
 
         // Each subscription gets its own consumer, so its own flow control
         Flux<ReceiverRecord<String, byte[]>> records = Flux.defer(() -> {
-            lastAcknowledged = null;
+            lastAcknowledged.set(null);
             PartitionFlowControl flowControl = new PartitionFlowControl(this::consuming);
             return receive(creator, flowControl)
                     .transform(received -> consumeFaultTolerant(received, flowControl))
@@ -321,7 +322,7 @@ public abstract class GenericMessageListener {
     }
 
     private Mono<Void> commitAcknowledged() {
-        ReceiverOffset last = lastAcknowledged;
+        ReceiverOffset last = lastAcknowledged.get();
         if (last == null) {
             return Mono.empty();
         }
@@ -429,7 +430,7 @@ public abstract class GenericMessageListener {
      */
     protected void acknowledge(ReceiverRecord<String, byte[]> msj) {
         msj.receiverOffset().acknowledge();
-        lastAcknowledged = msj.receiverOffset();
+        lastAcknowledged.set(msj.receiverOffset());
     }
 
     /**
@@ -570,8 +571,10 @@ public abstract class GenericMessageListener {
     /**
      * Publishes a discarded message to its DLQ, and fails if it could not be published yet.
      *
+     * @param msj        the record received, for the overrides that publish it as it is
      * @param dlqHeaders headers to add to the message in the DLQ, see {@link KafkaDlqHeaders}
      */
+    @SuppressWarnings("java:S1172")
     protected Mono<Void> notifyDiscard(Message message, ReceiverRecord<String, byte[]> msj,
                                        Map<String, Object> dlqHeaders) {
         // The notifier publishes a new event built from the message: the headers reach the event bus that publishes

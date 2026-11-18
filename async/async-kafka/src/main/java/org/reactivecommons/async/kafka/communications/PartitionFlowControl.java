@@ -10,6 +10,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Limits, for each partition of a subscription, the messages received and not handled yet. A partition is paused on
@@ -31,7 +32,7 @@ public final class PartitionFlowControl {
     private final Map<TopicPartition, Integer> waiting = new HashMap<>();
     private final Set<TopicPartition> paused = new HashSet<>();
     private final Runnable onAssigned;
-    private volatile KafkaReceiver<String, byte[]> receiver;
+    private final AtomicReference<KafkaReceiver<String, byte[]>> receiver = new AtomicReference<>();
 
     public PartitionFlowControl() {
         this(() -> {
@@ -47,7 +48,7 @@ public final class PartitionFlowControl {
     }
 
     void attach(KafkaReceiver<String, byte[]> receiver) {
-        this.receiver = receiver;
+        this.receiver.set(receiver);
     }
 
     void assigned() {
@@ -86,7 +87,7 @@ public final class PartitionFlowControl {
 
     private void onConsumer(String action, TopicPartition partition,
                             java.util.function.Consumer<Consumer<String, byte[]>> change) {
-        KafkaReceiver<String, byte[]> current = receiver;
+        KafkaReceiver<String, byte[]> current = receiver.get();
         if (current == null) {
             return;
         }

@@ -149,8 +149,14 @@ class KafkaSetupUtilsTest {
     @Test
     void shouldReadADotEnvWithBlankLinesCommentsAndWindowsLineEndings(@TempDir Path dir) throws IOException {
         Path env = dir.resolve(".env");
-        Files.writeString(env, "# kafka\r\nbootstrap.servers=broker:9092\r\n\r\n   \r\n  # indented comment\r\n"
-                + "sasl.jaas.config=module required user=\"a\" password=\"b=c\";\r\n");
+        Files.writeString(env, """
+                # kafka\r
+                bootstrap.servers=broker:9092\r
+                \r
+                   \r
+                  # indented comment\r
+                sasl.jaas.config=module required user="a" password="b=c";\r
+                """);
 
         KafkaProperties props = KafkaSetupUtils.readPropsFromDotEnv(env);
 

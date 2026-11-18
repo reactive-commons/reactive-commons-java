@@ -3,6 +3,7 @@ package org.reactivecommons.async.kafka.communications;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.junit.jupiter.api.AfterEach;
@@ -170,7 +171,7 @@ class ReactiveMessageSenderLimitsTest {
                 .verify(TIMEOUT);
 
         assertThat(attempts).hasValue(2);
-        assertThat(producer.history()).extracting(record -> record.key()).containsExactly("second");
+        assertThat(producer.history()).extracting(ProducerRecord::key).containsExactly("second");
     }
 
     private ReactiveMessageSender sender(Supplier<KafkaSender<String, byte[]>> factory, Duration sendTimeout,
