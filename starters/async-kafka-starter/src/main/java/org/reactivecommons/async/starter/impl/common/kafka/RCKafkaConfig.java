@@ -3,6 +3,8 @@ package org.reactivecommons.async.starter.impl.common.kafka;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
 import org.reactivecommons.async.kafka.KafkaBrokerProviderFactory;
+import org.reactivecommons.async.kafka.KafkaClientSettingsFactory;
+import org.reactivecommons.async.kafka.KafkaSchemaValidators;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
 import org.reactivecommons.async.kafka.config.KafkaPropertiesAutoConfig;
@@ -23,7 +25,8 @@ import org.springframework.context.annotation.Import;
 
 @Configuration
 @EnableConfigurationProperties({KafkaPropertiesAutoConfig.class, AsyncKafkaPropsDomainProperties.class})
-@Import({AsyncKafkaPropsDomain.class, KafkaBrokerProviderFactory.class})
+@Import({AsyncKafkaPropsDomain.class, KafkaBrokerProviderFactory.class, KafkaSchemaValidators.class,
+        KafkaClientSettingsFactory.class})
 public class RCKafkaConfig {
 
     @Bean

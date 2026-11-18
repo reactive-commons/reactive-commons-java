@@ -82,35 +82,30 @@ public class ReactiveMessageSender {
     /**
      * A sender over a single {@link KafkaSender}, with the default {@code sendTimeout} and {@code maxPendingSends}.
      * Since the same {@link KafkaSender} is used again, it cannot recover from a producer that could not be created:
-     * prefer {@link #ReactiveMessageSender(Supplier, MessageConverter, TopologyCreator, SchemaValidator, Duration, int)}.
+     * prefer {@link #ReactiveMessageSender(Supplier, MessageConverter, TopologyCreator, SchemaValidator,
+     * SendLimits)}.
      */
     public ReactiveMessageSender(KafkaSender<String, byte[]> sender, MessageConverter messageConverter,
                                  TopologyCreator topologyCreator, SchemaValidator schemaValidator) {
-        this(() -> sender, messageConverter, topologyCreator, schemaValidator, DEFAULT_SEND_TIMEOUT,
-                DEFAULT_MAX_PENDING_SENDS);
+        this(() -> sender, messageConverter, topologyCreator, schemaValidator,
+                new SendLimits(DEFAULT_SEND_TIMEOUT, DEFAULT_MAX_PENDING_SENDS));
     }
 
     /**
-     * @param senderFactory   creates the {@link KafkaSender} on the first send, and again after a producer that could
-     *                        not be created or failed for good
-     * @param sendTimeout     how long a send waits for its outcome before failing
-     * @param maxPendingSends how many sends may wait for their outcome at once; beyond it a send fails at once
+     * @param senderFactory creates the {@link KafkaSender} on the first send, and again after a producer that could
+     *                      not be created or failed for good
+     * @param limits        how long a send waits for its outcome, and how many sends may wait for it at once
      */
     public ReactiveMessageSender(Supplier<KafkaSender<String, byte[]>> senderFactory,
                                  MessageConverter messageConverter, TopologyCreator topologyCreator,
-                                 SchemaValidator schemaValidator, Duration sendTimeout, int maxPendingSends) {
-        if (sendTimeout == null || sendTimeout.isNegative() || sendTimeout.isZero()) {
-            throw new IllegalArgumentException("sendTimeout must be positive: " + sendTimeout);
-        }
-        if (maxPendingSends < 1) {
-            throw new IllegalArgumentException("maxPendingSends must be positive: " + maxPendingSends);
-        }
+                                 SchemaValidator schemaValidator, SendLimits limits) {
+        Objects.requireNonNull(limits, "limits");
         this.senderFactory = Objects.requireNonNull(senderFactory, "senderFactory");
         this.messageConverter = messageConverter;
         this.topologyCreator = topologyCreator;
         this.schemaValidator = schemaValidator == null ? NoOpSchemaValidator.INSTANCE : schemaValidator;
-        this.sendTimeout = sendTimeout;
-        this.maxPendingSends = maxPendingSends;
+        this.sendTimeout = limits.sendTimeout();
+        this.maxPendingSends = limits.maxPendingSends();
     }
 
     /**
@@ -218,11 +213,9 @@ public class ReactiveMessageSender {
      */
     private synchronized RuntimeException accept(SenderRecord<String, byte[], Long> senderRecord,
                                                  MonoSink<Void> sink) {
-        if (closed) {
-            return new IllegalStateException(CLOSED_MESSAGE);
-        }
-        if (confirmations.size() >= maxPendingSends) {
-            return queueFull();
+        RuntimeException rejection = rejectionBeforeEmit();
+        if (rejection != null) {
+            return rejection;
         }
         if (pipeline == null) {
             pipeline = startPipeline();
@@ -234,6 +227,25 @@ public class ReactiveMessageSender {
             return null;
         }
         confirmations.remove(id);
+        return emitFailure(result);
+    }
+
+    /**
+     * Called holding the lock of the sender.
+     *
+     * @return why a send is rejected before its record is emitted, or {@code null} if it may be emitted
+     */
+    private RuntimeException rejectionBeforeEmit() {
+        if (closed) {
+            return new IllegalStateException(CLOSED_MESSAGE);
+        }
+        if (confirmations.size() >= maxPendingSends) {
+            return queueFull();
+        }
+        return null;
+    }
+
+    private RuntimeException emitFailure(Sinks.EmitResult result) {
         if (result == Sinks.EmitResult.FAIL_OVERFLOW || result == Sinks.EmitResult.FAIL_ZERO_SUBSCRIBER) {
             return queueFull();
         }

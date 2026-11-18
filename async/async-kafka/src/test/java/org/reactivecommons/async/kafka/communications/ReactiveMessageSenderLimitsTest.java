@@ -177,7 +177,7 @@ class ReactiveMessageSenderLimitsTest {
     private ReactiveMessageSender sender(Supplier<KafkaSender<String, byte[]>> factory, Duration sendTimeout,
                                          int maxPendingSends) {
         return new ReactiveMessageSender(factory, converter, topologyCreator, NoOpSchemaValidator.INSTANCE,
-                sendTimeout, maxPendingSends);
+                new SendLimits(sendTimeout, maxPendingSends));
     }
 
     private static KafkaMessage message(String key) {

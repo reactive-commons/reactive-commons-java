@@ -1566,7 +1566,8 @@ public class KafkaPropertiesBase {
         /**
          * Control flag for login configuration.
          */
-        private KafkaJaasLoginModuleInitializer.ControlFlag controlFlag = KafkaJaasLoginModuleInitializer.ControlFlag.REQUIRED;
+        private KafkaJaasLoginModuleInitializer.ControlFlag controlFlag =
+                KafkaJaasLoginModuleInitializer.ControlFlag.REQUIRED;
 
         /**
          * Additional JAAS options.

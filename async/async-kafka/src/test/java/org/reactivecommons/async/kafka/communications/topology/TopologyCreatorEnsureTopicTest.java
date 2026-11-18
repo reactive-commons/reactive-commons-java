@@ -34,7 +34,8 @@ import static org.mockito.Mockito.when;
 
 /**
  * {@link TopologyCreator#ensureTopic(String)} checks a topic with the admin client without blocking the subscribing
- * thread, and does not ask the cluster again for a topic found missing within {@link TopologyCreator#MISSING_TOPIC_TTL}.
+ * thread, and does not ask the cluster again for a topic found missing within
+ * {@link TopologyCreator#MISSING_TOPIC_TTL}.
  */
 class TopologyCreatorEnsureTopicTest {
 
@@ -48,7 +49,8 @@ class TopologyCreatorEnsureTopicTest {
 
     @BeforeEach
     void setUp() {
-        creator = new TopologyCreator(adminClient, new KafkaCustomizations(), true, TTL, EXISTING_TTL, now::get);
+        creator = new TopologyCreator(adminClient, new KafkaCustomizations(), true,
+                new TopicCache(TTL, EXISTING_TTL, now::get));
     }
 
     /**

@@ -9,8 +9,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.ext.CustomReporter;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
+import org.reactivecommons.async.kafka.config.KafkaReceiverOptionsCustomizer;
+import org.reactivecommons.async.kafka.config.KafkaSenderOptionsCustomizer;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.converters.json.KafkaJacksonMessageConverter;
+import org.reactivecommons.async.kafka.metrics.KafkaMetricsFactory;
 import org.reactivecommons.async.kafka.validation.DomainSchemaValidatorProvider;
 import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
@@ -18,6 +21,8 @@ import org.reactivecommons.async.starter.broker.BrokerProvider;
 import org.reactivecommons.async.starter.broker.BrokerProviderFactory;
 import org.reactivecommons.async.starter.broker.DiscardProvider;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
+import org.springframework.boot.ssl.SslBundles;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -54,7 +59,13 @@ class KafkaBrokerProviderFactoryTest {
     @BeforeEach
     void setUp() {
         providerFactory = new KafkaBrokerProviderFactory(converter, errorReporter, customizations,
-                schemaValidatorProvider, domainSchemaValidatorProvider);
+                new KafkaSchemaValidators(schemaValidatorProvider, domainSchemaValidatorProvider),
+                new KafkaClientSettingsFactory(none(SslBundles.class), none(KafkaReceiverOptionsCustomizer.class),
+                        none(KafkaSenderOptionsCustomizer.class), none(KafkaMetricsFactory.class)));
+    }
+
+    private static <T> ObjectProvider<T> none(Class<T> type) {
+        return new StaticListableBeanFactory().getBeanProvider(type);
     }
 
     @AfterEach

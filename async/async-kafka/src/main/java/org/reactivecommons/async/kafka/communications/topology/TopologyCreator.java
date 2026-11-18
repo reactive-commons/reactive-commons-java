@@ -71,22 +71,17 @@ public class TopologyCreator {
     private final AtomicBoolean closed = new AtomicBoolean();
 
     public TopologyCreator(AdminClient adminClient, KafkaCustomizations customizations, boolean checkTopics) {
-        this(adminClient, customizations, checkTopics, MISSING_TOPIC_TTL, EXISTING_TOPIC_TTL, System::nanoTime);
+        this(adminClient, customizations, checkTopics, TopicCache.DEFAULT);
     }
 
     TopologyCreator(AdminClient adminClient, KafkaCustomizations customizations, boolean checkTopics,
-                    Duration missingTopicTtl, LongSupplier nanoClock) {
-        this(adminClient, customizations, checkTopics, missingTopicTtl, EXISTING_TOPIC_TTL, nanoClock);
-    }
-
-    TopologyCreator(AdminClient adminClient, KafkaCustomizations customizations, boolean checkTopics,
-                    Duration missingTopicTtl, Duration existingTopicTtl, LongSupplier nanoClock) {
+                    TopicCache topicCache) {
         this.adminClient = adminClient;
         this.customizations = customizations;
         this.checkTopics = checkTopics;
-        this.missingTopicTtl = missingTopicTtl;
-        this.existingTopicTtl = existingTopicTtl;
-        this.nanoClock = nanoClock;
+        this.missingTopicTtl = topicCache.missingTtl();
+        this.existingTopicTtl = topicCache.existingTtl();
+        this.nanoClock = topicCache.nanoClock();
     }
 
     /**
@@ -149,7 +144,8 @@ public class TopologyCreator {
     }
 
     protected NewTopic toNewTopic(TopicCustomization customization) {
-        NewTopic topic = new NewTopic(customization.getTopic(), customization.getPartitions(), customization.getReplicationFactor());
+        NewTopic topic = new NewTopic(customization.getTopic(), customization.getPartitions(),
+                customization.getReplicationFactor());
         if (customization.getConfig() != null) {
             return topic.configs(customization.getConfig());
         }

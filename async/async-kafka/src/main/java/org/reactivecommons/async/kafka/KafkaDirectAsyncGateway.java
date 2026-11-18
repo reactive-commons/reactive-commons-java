@@ -67,7 +67,8 @@ public class KafkaDirectAsyncGateway implements DirectAsyncGateway {
     }
 
     @Override
-    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type,
+                                                       String domain) {
         return notImplemented();
     }
 

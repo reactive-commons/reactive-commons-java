@@ -270,20 +270,27 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
     }
 
     private void validate(String topic, byte[] payload, ParsedSchema<JsonSchema> schema, String hint) {
-        if (schema == null || schema.getParsedSchema() == null) {
-            throw new SchemaValidationException("No schema was resolved for topic " + topic);
-        }
-        Set<ValidationMessage> failures;
-        try {
-            failures = schema.getParsedSchema().validate(objectMapper.readTree(payload),
-                    executionContext -> executionContext.getExecutionConfig().setLocale(MESSAGES_LOCALE));
-        } catch (Exception e) {
-            throw new SchemaValidationException("Unable to read the payload of topic " + topic + " as JSON", e);
-        }
+        Set<ValidationMessage> failures = failuresOf(topic, payload, schema);
         if (failures != null && !failures.isEmpty()) {
             String message = String.format("Error validating data of topic %s against json schema: %s",
                     topic, describe(failures));
             throw new SchemaValidationException(hint == null ? message : message + ". " + hint);
+        }
+    }
+
+    /**
+     * @return what the payload breaks of the schema, with the messages in {@link #MESSAGES_LOCALE}
+     * @throws SchemaValidationException when no schema was resolved, or the payload cannot be read as JSON
+     */
+    private Set<ValidationMessage> failuresOf(String topic, byte[] payload, ParsedSchema<JsonSchema> schema) {
+        if (schema == null || schema.getParsedSchema() == null) {
+            throw new SchemaValidationException("No schema was resolved for topic " + topic);
+        }
+        try {
+            return schema.getParsedSchema().validate(objectMapper.readTree(payload),
+                    executionContext -> executionContext.getExecutionConfig().setLocale(MESSAGES_LOCALE));
+        } catch (Exception e) {
+            throw new SchemaValidationException("Unable to read the payload of topic " + topic + " as JSON", e);
         }
     }
 

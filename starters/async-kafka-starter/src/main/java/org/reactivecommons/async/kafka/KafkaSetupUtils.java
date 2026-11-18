@@ -16,6 +16,7 @@ import org.reactivecommons.async.commons.DiscardNotifier;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageListener;
 import org.reactivecommons.async.kafka.communications.ReactiveMessageSender;
+import org.reactivecommons.async.kafka.communications.SendLimits;
 import org.reactivecommons.async.kafka.communications.topology.KafkaCustomizations;
 import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.config.KafkaProperties;
@@ -38,10 +39,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 import static org.reactivecommons.async.api.HandlerRegistry.DEFAULT_DOMAIN;
 
@@ -54,6 +55,28 @@ public final class KafkaSetupUtils {
      * a limit, an unreachable broker would hold the shutdown of the application.
      */
     static final Duration CLOSE_TIMEOUT = Duration.ofSeconds(10);
+
+    /**
+     * The connection properties that have no effect, in the order they are reported, each with when it counts as
+     * configured.
+     */
+    private static final List<IgnoredProperty> IGNORED_PROPERTIES = List.of(
+            new IgnoredProperty("consumer.enable-auto-commit",
+                    props -> Boolean.TRUE.equals(props.getConsumer().getEnableAutoCommit())),
+            new IgnoredProperty("consumer.auto-commit-interval",
+                    props -> props.getConsumer().getAutoCommitInterval() != null),
+            // Read by the KafkaAdmin of Spring for Apache Kafka, which is not registered: the application starts anyway
+            new IgnoredProperty("admin.fail-fast", props -> props.getAdmin().isFailFast()),
+            new IgnoredProperty("listener.*",
+                    props -> differsFromDefault(props.getListener(), new KafkaPropertiesBase.Listener())),
+            new IgnoredProperty("template.*",
+                    props -> differsFromDefault(props.getTemplate(), new KafkaPropertiesBase.Template())),
+            new IgnoredProperty("retry.*",
+                    props -> differsFromDefault(props.getRetry(), new KafkaPropertiesBase.Retry())),
+            new IgnoredProperty("streams.*",
+                    props -> differsFromDefault(props.getStreams(), new KafkaPropertiesBase.Streams())),
+            new IgnoredProperty("jaas.*",
+                    props -> differsFromDefault(props.getJaas(), new KafkaPropertiesBase.Jaas())));
 
     /**
      * The discarded messages are published with the headers of where they came from ({@link KafkaDlqHeaders}), which
@@ -102,7 +125,7 @@ public final class KafkaSetupUtils {
                 : ReactiveMessageSender.DEFAULT_MAX_PENDING_SENDS;
         SenderOptions<String, byte[]> options = createSenderOptions(props, sendTimeout, settings);
         return new ReactiveMessageSender(() -> KafkaSender.create(options), converter, topologyCreator,
-                schemaValidator, sendTimeout, maxPendingSends);
+                schemaValidator, new SendLimits(sendTimeout, maxPendingSends));
     }
 
     static SenderOptions<String, byte[]> createSenderOptions(KafkaProperties props) {
@@ -256,33 +279,10 @@ public final class KafkaSetupUtils {
      * them, by their name relative to {@code connectionProperties}. Only their names: their values may be secrets.
      */
     public static List<String> ignoredProperties(KafkaProperties props) {
-        List<String> ignored = new ArrayList<>();
-        if (Boolean.TRUE.equals(props.getConsumer().getEnableAutoCommit())) {
-            ignored.add("consumer.enable-auto-commit");
-        }
-        if (props.getConsumer().getAutoCommitInterval() != null) {
-            ignored.add("consumer.auto-commit-interval");
-        }
-        if (props.getAdmin().isFailFast()) {
-            // Read by the KafkaAdmin of Spring for Apache Kafka, which is not registered: the application starts anyway
-            ignored.add("admin.fail-fast");
-        }
-        if (differsFromDefault(props.getListener(), new KafkaPropertiesBase.Listener())) {
-            ignored.add("listener.*");
-        }
-        if (differsFromDefault(props.getTemplate(), new KafkaPropertiesBase.Template())) {
-            ignored.add("template.*");
-        }
-        if (differsFromDefault(props.getRetry(), new KafkaPropertiesBase.Retry())) {
-            ignored.add("retry.*");
-        }
-        if (differsFromDefault(props.getStreams(), new KafkaPropertiesBase.Streams())) {
-            ignored.add("streams.*");
-        }
-        if (differsFromDefault(props.getJaas(), new KafkaPropertiesBase.Jaas())) {
-            ignored.add("jaas.*");
-        }
-        return ignored;
+        return IGNORED_PROPERTIES.stream()
+                .filter(property -> property.configured().test(props))
+                .map(IgnoredProperty::name)
+                .toList();
     }
 
     /**
@@ -337,4 +337,10 @@ public final class KafkaSetupUtils {
         return props;
     }
 
+    /**
+     * @param name       the name of the property relative to {@code connectionProperties}
+     * @param configured whether the property is configured, so it would be expected to have an effect
+     */
+    private record IgnoredProperty(String name, Predicate<KafkaProperties> configured) {
+    }
 }

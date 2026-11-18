@@ -15,9 +15,9 @@ import java.util.function.Supplier;
 
 /**
  * The metrics of the messages handled by the listeners of a domain, tagged with {@code domain} and {@code topic}. The
- * names follow those of the RabbitMQ listeners ({@code reactive_commons.consumer.*}), under {@code reactive_commons.kafka}
- * so that both brokers can be used in the same application: a meter name must keep the same tag keys, and the RabbitMQ
- * ones are tagged with {@code queue}.
+ * names follow those of the RabbitMQ listeners ({@code reactive_commons.consumer.*}), under
+ * {@code reactive_commons.kafka} so that both brokers can be used in the same application: a meter name must keep the
+ * same tag keys, and the RabbitMQ ones are tagged with {@code queue}.
  * <ul>
  *     <li>{@value #MESSAGES} - Counter, extra tag {@code outcome}: {@code ack} (handled), {@code discard} (failed for
  *     good, logged and skipped) or {@code dlq} (failed for good, sent to its DLQ).</li>

@@ -55,80 +55,30 @@ final class ApicurioTopicValidators {
      */
     static Map<String, SchemaValidator> buildValidators(List<ApicurioRegistry> registries, String domain,
                                                         SharedSchemaResolvers resolvers) {
-        Map<String, SchemaValidator> validators = new HashMap<>();
         if (registries == null || registries.isEmpty()) {
-            return validators;
+            return new HashMap<>();
         }
-        Map<String, String> declaredBy = new HashMap<>();
+        DomainTopics topics = new DomainTopics(domain, resolvers);
         for (int i = 0; i < registries.size(); i++) {
-            addTopicsOf(registries.get(i), path(domain, i), domain, validators, declaredBy, resolvers);
+            topics.addTopicsOf(registries.get(i), path(domain, i));
         }
-        return validators;
+        return topics.validators;
     }
 
     private static String path(String domain, int registryIndex) {
         return "reactive.commons.kafka." + domain + ".apicurio.registries[" + registryIndex + "]";
     }
 
-    private static void addTopicsOf(ApicurioRegistry registry, String registryPath, String domain,
-                                    Map<String, SchemaValidator> validators, Map<String, String> declaredBy,
-                                    SharedSchemaResolvers resolvers) {
-        if (registry == null) {
-            throw new InvalidConfigurationException(registryPath + " is empty. Declare its name, its properties and "
-                    + "the topics validated against it, or remove it.");
-        }
-        String registryLabel = labelOf(registry.getName(), registryPath);
-        List<ApicurioTopic> topics = registry.getTopics();
-        if (topics == null || topics.isEmpty()) {
-            throw new InvalidConfigurationException(registryLabel + " declares no topics, so Reactive Commons would "
-                    + "open a connection to the Apicurio Registry without validating anything. List the topics to "
-                    + "validate under " + registryPath + ".topics, or remove the registry.");
-        }
-        for (int j = 0; j < topics.size(); j++) {
-            ApicurioTopic topic = topics.get(j);
-            String topicPath = registryPath + ".topics[" + j + "]";
-            if (topic == null || !isSet(topic.getName())) {
-                throw new InvalidConfigurationException(topicPath + " of " + registryLabel + " has no name. Set "
-                        + topicPath + ".name to the Kafka topic to validate.");
-            }
-            String name = topic.getName().trim();
-            String previous = declaredBy.put(name, registryLabel);
-            if (previous != null) {
-                throw new InvalidConfigurationException("Topic '" + name + "' of domain " + domain + " is declared "
-                        + "by " + previous + " and by " + registryLabel + ", so it has two schema configurations "
-                        + "and neither of them can be chosen: a record only carries its topic name. Declare the "
-                        + "topic once per domain, under the registry that validates it. The same topic name may be "
-                        + "declared by another domain, against another registry.");
-            }
-            validators.put(name, createValidator(registry, topic, name, topicPath, registryLabel, resolvers));
-        }
-    }
-
     /**
-     * Whether the topic is validated at all, decided by {@code apicurio.registry.serde.validation-enabled} exactly
-     * as it would be for the Apicurio serdes. When it is {@code false} the topic keeps the no-op validator instead
-     * of connecting to the registry, which is also what an undeclared topic gets.
-     * <p>
-     * A validated topic is validated in both directions: on publish, which is also what writes the schema
-     * coordinates in the record headers, and on consume. To validate a single direction, declare a
-     * {@code SchemaValidator} or a {@code DomainSchemaValidatorProvider} bean that delegates to a validator built
-     * with {@code ApicurioSchemaValidator.builder()}.
+     * @return the name of the topic, trimmed
+     * @throws InvalidConfigurationException when the topic has no name
      */
-    private static SchemaValidator createValidator(ApicurioRegistry registry, ApicurioTopic topic,
-                                                   String name, String topicPath, String registryLabel,
-                                                   SharedSchemaResolvers resolvers) {
-        Map<String, Object> effective = merge(registry.getProperties(), topic.getProperties());
-        if (isValidationDisabled(effective)) {
-            return NoOpSchemaValidator.INSTANCE;
+    private static String topicName(ApicurioTopic topic, String topicPath, String registryLabel) {
+        if (topic == null || !isSet(topic.getName())) {
+            throw new InvalidConfigurationException(topicPath + " of " + registryLabel + " has no name. Set "
+                    + topicPath + ".name to the Kafka topic to validate.");
         }
-        assertRegistryUrlIsSet(effective, name, topicPath, registryLabel);
-        assertHeadersAreEnabled(effective, name, topicPath);
-        assertResolverStrategyIsRecognised(effective, name, topicPath);
-        assertVersionIsResolvable(effective, name, topicPath);
-
-        return ApicurioSchemaValidatorFactory.create(
-                resolvers.forRegistry(ApicurioSchemaValidatorFactory.registryConfig(effective)),
-                effective, null);
+        return topic.getName().trim();
     }
 
     /**
@@ -216,5 +166,84 @@ final class ApicurioTopicValidators {
 
     private static boolean isSet(String value) {
         return value != null && !value.isBlank();
+    }
+
+    /**
+     * The topics declared by the registries of a domain, and their validators, built one registry after the other.
+     */
+    private static final class DomainTopics {
+        private final String domain;
+        private final SharedSchemaResolvers resolvers;
+        private final Map<String, SchemaValidator> validators = new HashMap<>();
+        /**
+         * The label of the registry that declares each topic.
+         */
+        private final Map<String, String> declaredBy = new HashMap<>();
+
+        private DomainTopics(String domain, SharedSchemaResolvers resolvers) {
+            this.domain = domain;
+            this.resolvers = resolvers;
+        }
+
+        private void addTopicsOf(ApicurioRegistry registry, String registryPath) {
+            if (registry == null) {
+                throw new InvalidConfigurationException(registryPath + " is empty. Declare its name, its properties "
+                        + "and the topics validated against it, or remove it.");
+            }
+            String registryLabel = labelOf(registry.getName(), registryPath);
+            List<ApicurioTopic> topics = registry.getTopics();
+            if (topics == null || topics.isEmpty()) {
+                throw new InvalidConfigurationException(registryLabel + " declares no topics, so Reactive Commons "
+                        + "would open a connection to the Apicurio Registry without validating anything. List the "
+                        + "topics to validate under " + registryPath + ".topics, or remove the registry.");
+            }
+            for (int j = 0; j < topics.size(); j++) {
+                ApicurioTopic topic = topics.get(j);
+                String topicPath = registryPath + ".topics[" + j + "]";
+                String name = topicName(topic, topicPath, registryLabel);
+                declare(name, registryLabel);
+                validators.put(name, createValidator(registry, topic, name, topicPath, registryLabel));
+            }
+        }
+
+        /**
+         * @throws InvalidConfigurationException when another registry of the domain already declared the topic
+         */
+        private void declare(String name, String registryLabel) {
+            String previous = declaredBy.put(name, registryLabel);
+            if (previous != null) {
+                throw new InvalidConfigurationException("Topic '" + name + "' of domain " + domain + " is declared "
+                        + "by " + previous + " and by " + registryLabel + ", so it has two schema configurations "
+                        + "and neither of them can be chosen: a record only carries its topic name. Declare the "
+                        + "topic once per domain, under the registry that validates it. The same topic name may be "
+                        + "declared by another domain, against another registry.");
+            }
+        }
+
+        /**
+         * Whether the topic is validated at all, decided by {@code apicurio.registry.serde.validation-enabled}
+         * exactly as it would be for the Apicurio serdes. When it is {@code false} the topic keeps the no-op
+         * validator instead of connecting to the registry, which is also what an undeclared topic gets.
+         * <p>
+         * A validated topic is validated in both directions: on publish, which is also what writes the schema
+         * coordinates in the record headers, and on consume. To validate a single direction, declare a
+         * {@code SchemaValidator} or a {@code DomainSchemaValidatorProvider} bean that delegates to a validator
+         * built with {@code ApicurioSchemaValidator.builder()}.
+         */
+        private SchemaValidator createValidator(ApicurioRegistry registry, ApicurioTopic topic, String name,
+                                                String topicPath, String registryLabel) {
+            Map<String, Object> effective = merge(registry.getProperties(), topic.getProperties());
+            if (isValidationDisabled(effective)) {
+                return NoOpSchemaValidator.INSTANCE;
+            }
+            assertRegistryUrlIsSet(effective, name, topicPath, registryLabel);
+            assertHeadersAreEnabled(effective, name, topicPath);
+            assertResolverStrategyIsRecognised(effective, name, topicPath);
+            assertVersionIsResolvable(effective, name, topicPath);
+
+            return ApicurioSchemaValidatorFactory.create(
+                    resolvers.forRegistry(ApicurioSchemaValidatorFactory.registryConfig(effective)),
+                    effective, null);
+        }
     }
 }

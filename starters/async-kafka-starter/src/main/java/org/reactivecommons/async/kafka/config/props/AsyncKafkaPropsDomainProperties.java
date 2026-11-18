@@ -7,7 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @NoArgsConstructor
 @ConfigurationProperties(prefix = "reactive.commons.kafka")
-public class AsyncKafkaPropsDomainProperties extends GenericAsyncPropsDomainProperties<AsyncKafkaProps, KafkaProperties> {
+public class AsyncKafkaPropsDomainProperties
+        extends GenericAsyncPropsDomainProperties<AsyncKafkaProps, KafkaProperties> {
 
     /**
      * @deprecated in favor of {@link AsyncKafkaPropsDomain.KafkaPropsCustomizer}, which allows the same programmatic
