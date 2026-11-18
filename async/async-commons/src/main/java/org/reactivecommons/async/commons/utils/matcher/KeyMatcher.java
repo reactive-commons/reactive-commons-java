@@ -60,7 +60,7 @@ public class KeyMatcher implements Matcher {
             return 1;
         }
         int order = wildcardOrder(first[idx], second[idx]);
-        return order != 0 ? compare(order, first, second, idx + 1) : second.length - first.length;
+        return order == 0 ? second.length - first.length : compare(order, first, second, idx + 1);
     }
 
     private static int wildcardOrder(String first, String second) {
