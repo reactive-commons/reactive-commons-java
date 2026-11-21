@@ -113,8 +113,7 @@ Each Kafka client of a domain gets a `client.id` of its own: `<base>-producer` f
 `<base>-consumer-<n>` for each consumer (a consumer created again after a failure gets a new number) and `<base>-admin`
 for the admin client. `<base>` is `connectionProperties.client-id` when it is set, or else `spring.application.name`,
 followed by a short random suffix of each domain of each instance (for example `orders-3fa91c`), so two clients never
-share their JMX beans and metrics, and the broker tells them apart in its logs and quotas. A `client-id` set in the
-`consumer`, `producer` or `admin` section is used as it is for that client (the consumers still add `-<n>`).
+share their JMX beans and metrics, and the broker tells them apart in its logs and quotas.
 
 :::caution[Quotas and ACLs by client id]
 Before this version every client of a domain used `spring.application.name` as its `client.id`. Quotas or ACLs defined
@@ -150,6 +149,24 @@ reactive:
 ```
 
 A bundle cannot be combined with the `ssl.key-store-*` and `ssl.trust-store-*` properties of the same section.
+
+## Logging
+
+The library logs through SLF4J, with its loggers under `org.reactivecommons`. Declare their level explicitly in the
+configuration of the application, with `INFO` in production:
+
+```yaml
+logging:
+  level:
+    root: INFO
+    org.reactivecommons: INFO
+```
+
+Use `DEBUG` only to diagnose a problem, in development or for a limited time, because at that level the library
+writes one line for each message it handles, which slows the application down under load (see
+[Logging in the applications](./1-rabbitmq.md#logging-in-the-applications)), and the headers and the body of the
+failed or unreadable messages, which may carry personal data or credentials (see
+[Retries of a failed message](#retries-of-a-failed-message)).
 
 ## Customizing the reactor-kafka options
 
@@ -201,22 +218,6 @@ when its cluster answers and none of its listeners has been restarting for more 
 The details of a domain are its `domain`, the cluster id (`version`) and, for each listener, its `topics`, whether it
 is `restarting`, for how long (`restartingSeconds`) and how many times it restarted (`restarts`). They never contain
 the connection properties.
-
-:::warning[Liveness and readiness probes]
-The health of a domain depends on an external system, the Kafka cluster: do not make it part of the liveness probe
-(Spring Boot's `livenessState`), since restarting the application does not fix a broker that cannot be reached and
-would restart every instance during an outage of the broker. Reactive Commons does not add it to any health group;
-whether it is part of the readiness probe is up to your application, for example:
-
-```yaml
-management:
-  endpoint:
-    health:
-      group:
-        readiness:
-          include: readinessState,reactiveCommons
-```
-:::
 
 ## Metrics
 
