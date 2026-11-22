@@ -1,7 +1,12 @@
 package org.reactivecommons.async.kafka;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -14,6 +19,7 @@ import org.reactivecommons.async.kafka.config.KafkaSenderOptionsCustomizer;
 import org.reactivecommons.async.kafka.config.props.AsyncKafkaProps;
 import org.reactivecommons.async.kafka.metrics.KafkaDomainMetrics;
 import org.reactivecommons.async.kafka.validation.NoOpSchemaValidator;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.kafka.autoconfigure.SslBundleSslEngineFactory;
 import org.springframework.boot.ssl.DefaultSslBundleRegistry;
 import org.springframework.boot.ssl.SslBundle;
@@ -259,6 +265,78 @@ class KafkaSetupUtilsTest {
 
         assertThat(receiverOptions.consumerProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)).isEqualTo("false");
         assertThat(senderOptions.stopOnError()).isFalse();
+    }
+
+    /**
+     * The properties are checked after the customizers, so a value a customizer sets is checked too.
+     */
+    @Test
+    void shouldNotCreateTheListenerWithAConsumerPropertyACustomizerSetsAndTheClientRejects() {
+        KafkaReceiverOptionsCustomizer receiver = (domain, options) -> options
+                .consumerProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "lastest");
+        KafkaClientSettings settings = new KafkaClientSettings("app", "svc-1", null, List.of(receiver),
+                List.of(), KafkaDomainMetrics.NONE);
+        KafkaProperties props = new KafkaProperties();
+
+        assertThatThrownBy(() -> KafkaSetupUtils.createReceiverOptions(props, settings))
+                .isInstanceOf(ConfigException.class)
+                .hasMessageContaining(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
+    }
+
+    @Test
+    void shouldNotCreateTheSenderWithAProducerPropertyACustomizerSetsAndTheClientRejects() {
+        KafkaSenderOptionsCustomizer sender = (domain, options) -> options
+                .producerProperty(ProducerConfig.ACKS_CONFIG, "everything");
+        KafkaClientSettings settings = new KafkaClientSettings("app", "svc-1", null, List.of(),
+                List.of(sender), KafkaDomainMetrics.NONE);
+        KafkaProperties props = new KafkaProperties();
+        Duration sendTimeout = Duration.ofSeconds(3);
+
+        assertThatThrownBy(() -> KafkaSetupUtils.createSenderOptions(props, sendTimeout, settings))
+                .isInstanceOf(ConfigException.class)
+                .hasMessageContaining(ProducerConfig.ACKS_CONFIG);
+    }
+
+    /**
+     * CR-09: checking the properties does not write the values of the consumer in the log, and those of the producer
+     * at most once (the Kafka producer has no public way to check them without logging them), instead of twice each
+     * per domain. The values are written by the logger of {@link AbstractConfig}; those of the clients are captured
+     * too.
+     */
+    @Test
+    void shouldNotLogTheConfigurationOfTheClientsEachTimeItIsChecked() {
+        List<Logger> loggers = List.of((Logger) LoggerFactory.getLogger(AbstractConfig.class),
+                (Logger) LoggerFactory.getLogger(ConsumerConfig.class),
+                (Logger) LoggerFactory.getLogger(ProducerConfig.class));
+        List<Level> levels = loggers.stream().map(Logger::getLevel).toList();
+        ListAppender<ILoggingEvent> logged = new ListAppender<>();
+        logged.start();
+        loggers.forEach(logger -> {
+            logger.addAppender(logged);
+            logger.setLevel(Level.INFO);
+        });
+        try {
+            KafkaSetupUtils.createReceiverOptions(new KafkaProperties());
+            KafkaSetupUtils.createSenderOptions(new KafkaProperties());
+        } finally {
+            for (int i = 0; i < loggers.size(); i++) {
+                loggers.get(i).detachAppender(logged);
+                loggers.get(i).setLevel(levels.get(i));
+            }
+            logged.stop();
+        }
+
+        // Each dump lists every property of the client: auto.offset.reset only exists in the consumer, acks only in
+        // the producer
+        assertThat(dumps(logged, ConsumerConfig.AUTO_OFFSET_RESET_CONFIG)).as("consumer dumps").isZero();
+        assertThat(dumps(logged, ProducerConfig.ACKS_CONFIG)).as("producer dumps").isLessThanOrEqualTo(1);
+    }
+
+    private static long dumps(ListAppender<ILoggingEvent> logged, String property) {
+        return logged.list.stream()
+                .map(ILoggingEvent::getFormattedMessage)
+                .filter(message -> message.contains(" values: ") && message.contains("\t" + property + " = "))
+                .count();
     }
 
     /**

@@ -149,9 +149,10 @@ public final class KafkaSetupUtils {
      * record whose topic has no metadata (an unreachable broker, a topic that does not exist), and the records are
      * sent one after the other, so the client default (60 s) would hold every later send a minute per record.
      * <p>
-     * The properties are checked as the Kafka producer reads them, also after the customizers, so a mistake (e.g. a
-     * misspelled value of {@code acks}) fails the startup with the error of the client, not every send once the
-     * application runs.
+     * The properties are checked once, as the Kafka producer reads them, after the customizers: a mistake in the
+     * configured properties or in a customizer (e.g. a misspelled value of {@code acks}) fails the startup with the
+     * error of the client, not every send once the application runs. The check writes the values in the log once,
+     * because the Kafka producer has no public way to check them without logging them.
      */
     static SenderOptions<String, byte[]> createSenderOptions(KafkaProperties props, Duration sendTimeout,
                                                              KafkaClientSettings settings) {
@@ -161,7 +162,6 @@ public final class KafkaSetupUtils {
         producerProperties.put(ProducerConfig.CLIENT_ID_CONFIG, StringUtils.hasText(props.getProducer().getClientId())
                 ? props.getProducer().getClientId() : settings.producerClientId());
         producerProperties.putIfAbsent(ProducerConfig.MAX_BLOCK_MS_CONFIG, sendTimeout.toMillis());
-        new ProducerConfig(producerProperties);
         SenderOptions<String, byte[]> options = SenderOptions.<String, byte[]>create(producerProperties)
                 .stopOnError(false)
                 .closeTimeout(CLOSE_TIMEOUT)
@@ -211,9 +211,10 @@ public final class KafkaSetupUtils {
     }
 
     /**
-     * The properties are checked as the Kafka consumer reads them, so a mistake (e.g. a misspelled value of
-     * {@code auto.offset.reset}) fails the startup with the error of the client, instead of failing every
-     * subscription of the listeners once the application runs.
+     * The properties are checked once, as the Kafka consumer reads them, after the customizers: a mistake in the
+     * configured properties or in a customizer (e.g. a misspelled value of {@code auto.offset.reset}) fails the
+     * startup with the error of the client, instead of failing every subscription of the listeners once the
+     * application runs. The check does not write the values in the log: the Kafka consumer does when it is created.
      * <p>
      * {@code enable.auto.commit} is set to {@code false} again after the customizers: an offset is only committed
      * once its message was handled.
@@ -225,7 +226,6 @@ public final class KafkaSetupUtils {
         consumerProperties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
         consumerProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, StringUtils.hasText(props.getConsumer().getClientId())
                 ? props.getConsumer().getClientId() : settings.consumerClientId());
-        new ConsumerConfig(consumerProperties);
         ReceiverOptions<String, byte[]> options = ReceiverOptions.<String, byte[]>create(consumerProperties)
                 .closeTimeout(CLOSE_TIMEOUT)
                 .consumerListener(settings.metrics().consumerListener());
@@ -240,7 +240,7 @@ public final class KafkaSetupUtils {
                     ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         }
         options = options.consumerProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        new ConsumerConfig(options.consumerProperties());
+        new UnloggedConsumerConfig(options.consumerProperties());
         return options;
     }
 
@@ -342,5 +342,16 @@ public final class KafkaSetupUtils {
      * @param configured whether the property is configured, so it would be expected to have an effect
      */
     private record IgnoredProperty(String name, Predicate<KafkaProperties> configured) {
+    }
+
+    /**
+     * Checks the properties of a consumer as {@link ConsumerConfig} does, without writing their values in the log:
+     * the constructor that does not log them is only open to subclasses.
+     */
+    private static final class UnloggedConsumerConfig extends ConsumerConfig {
+
+        private UnloggedConsumerConfig(Map<String, Object> properties) {
+            super(properties, false);
+        }
     }
 }
