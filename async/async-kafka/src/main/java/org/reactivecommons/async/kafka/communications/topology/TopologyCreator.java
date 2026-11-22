@@ -291,7 +291,9 @@ public class TopologyCreator {
 
     /**
      * Closes the admin client used to describe and create the topics, once every user of the creator closed it (see
-     * {@link #retain()}). The requests still pending are failed after {@link #CLOSE_TIMEOUT}. Idempotent.
+     * {@link #retain()}). The requests still pending are failed after {@link #CLOSE_TIMEOUT}. Call it exactly once
+     * per owner: once for the creator and once for each successful {@link #retain()}; once every owner closed it,
+     * later calls do nothing.
      */
     public void close() {
         if (owners.updateAndGet(count -> Math.max(0, count - 1)) == 0 && closed.compareAndSet(false, true)) {
