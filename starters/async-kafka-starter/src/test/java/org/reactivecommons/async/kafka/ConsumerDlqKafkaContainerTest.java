@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.committedOffset;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.createTopic;
 import static org.reactivecommons.async.kafka.KafkaScenarioSupport.publish;
@@ -121,6 +122,38 @@ class ConsumerDlqKafkaContainerTest {
             assertThat(noValue.value()).as("value of the header without value").isNull();
             assertThat(header(dlq, "name")).as("non-ASCII header").isEqualTo("ñandú");
             assertThat(header(dlq, "x-dlq-original-topic")).as("original topic").isEqualTo(topic);
+            await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 1);
+        }
+    }
+
+    /**
+     * The headers reach the DLQ with their bytes, not read as text: a binary value (e.g. the id of a schema) is not
+     * corrupted. With a repeated key, the last value is kept, the one the handler sees.
+     */
+    @Test
+    void aRawMessageWithBinaryHeadersReachesTheDlqWithTheBytesOfEachHeader() throws Exception {
+        String topic = "dlq.raw-binary";
+        String group = "dlq-raw-binary";
+        byte[] binary = {0x00, (byte) 0xFF, (byte) 0xFE, (byte) 0x80};
+        byte[] lastRepeated = {(byte) 0xC3, 0x28};
+        ProducerRecord<String, String> original = new ProducerRecord<>(topic, "order-4", "{\"id\":4}");
+        original.headers().add("schema-id", binary);
+        original.headers().add("repeated", "first".getBytes(StandardCharsets.UTF_8));
+        original.headers().add("repeated", lastRepeated);
+        publish(KAFKA, original);
+
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA,
+                new OwnDomain(group, DOMAIN, Map.of("withDLQRetry", "true", "maxRetries", "1", "retryDelay", "100")),
+                failingHandlerWithItsDlq(topic), ListenTopics.class)) {
+            await().atMost(WAIT).until(() -> !readRecords(KAFKA, topic + ".dlq").isEmpty());
+            ConsumerRecord<String, String> dlq = readRecords(KAFKA, topic + ".dlq").get(0);
+            assertArrayEquals(binary, dlq.headers().lastHeader("schema-id").value(), "bytes of the binary header");
+            assertThat(dlq.headers().headers("repeated")).as("values of the repeated header").hasSize(1);
+            assertArrayEquals(lastRepeated, dlq.headers().lastHeader("repeated").value(), "last repeated value");
+            assertThat(header(dlq, "x-dlq-original-topic")).as("original topic").isEqualTo(topic);
+            assertThat(header(dlq, "x-dlq-original-offset")).as("original offset").isEqualTo("0");
+            assertThat(header(dlq, "x-dlq-exception-class")).as("exception class")
+                    .isEqualTo(IllegalStateException.class.getName());
             await().atMost(WAIT).until(() -> committedOffset(KAFKA, group, topic, 0) == 1);
         }
     }

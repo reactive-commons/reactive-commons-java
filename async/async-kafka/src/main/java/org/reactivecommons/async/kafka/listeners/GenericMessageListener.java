@@ -61,7 +61,7 @@ public abstract class GenericMessageListener {
      */
     static final Duration RESTART_MIN_BACKOFF = Duration.ofMillis(200);
     static final Duration RESTART_MAX_BACKOFF = Duration.ofSeconds(5);
-    private static final double RESTART_JITTER = 0.5;
+    static final double RESTART_JITTER = 0.5;
     private final Scheduler scheduler;
     private final Scheduler errorReporterScheduler;
     private final KafkaListenerSchedulers ownSchedulers;

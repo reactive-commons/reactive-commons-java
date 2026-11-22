@@ -99,10 +99,22 @@ public class HandlerRegistryConfiguration {
 configs) already registered for that topic name. If the domain's `createTopology` switch is `false`, the setup is never
 invoked and the topic is assumed to already exist.
 
+The setup of each topic runs on its own. When one fails (it returns an error or throws: the topic is not authorized, its
+configuration is not valid, the broker is unreachable...), the failure is logged at `ERROR` with the name of the topic,
+the other topics of the domain are set up and consumed anyway, and the setup that failed is run again in the background,
+after a wait that grows from 200 ms to 5 s, until it succeeds or the application stops. It does not restart the consumer
+of the domain.
+
+This isolates the setup only: once the topics are consumed, an error of one of them while polling (for instance, the
+application is no longer authorized to read it) still stops the consumer the topics of the domain share, which is
+subscribed again, with the same waits, until the error goes away.
+
 ## Sending the discarded messages to a DLQ
 
-With `withDLQRetry: true`, a message of a topic that exhausted its retries is sent, as it is (key, body and headers), to
-the DLQ of its topic, `<topic>.dlq`, in the same domain. Its offset is committed once it is there.
+With `withDLQRetry: true`, a message of a topic that exhausted its retries is sent to the DLQ of its topic,
+`<topic>.dlq`, in the same domain, with its key, its body and the bytes of each of its headers as they are, binary
+values included. Of a header key repeated in the record, only its last value is kept, the one the handler sees. Its
+offset is committed once it is there.
 
 The topology setup of the listener owns the whole topology, so it must create that topic too:
 

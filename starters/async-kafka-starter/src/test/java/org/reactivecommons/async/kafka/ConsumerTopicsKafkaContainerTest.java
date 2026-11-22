@@ -19,6 +19,10 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
@@ -38,6 +42,10 @@ class ConsumerTopicsKafkaContainerTest {
 
     private static final String DOMAIN = "accounts";
     private static final Duration WAIT = Duration.ofSeconds(60);
+    /**
+     * Longer than the longest wait between two attempts to set up a topology (5 s).
+     */
+    private static final Duration LONGER_THAN_A_RETRY = Duration.ofSeconds(7);
 
     @Container
     private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
@@ -99,6 +107,71 @@ class ConsumerTopicsKafkaContainerTest {
             }
             await().atMost(WAIT).until(() -> tombstones.size() == 2);
             assertThat(tombstones).containsExactlyInAnyOrder("topics.dlq.one:deleted", "topics.dlq.two:deleted");
+        }
+    }
+
+    /**
+     * A topic whose topology cannot be set up does not keep the other topics of the domain from being consumed, and
+     * its setup is retried in the background until the context closes, not after.
+     */
+    @Test
+    void aTopicWhoseTopologyFailsDoesNotStopTheOtherTopicsOfTheDomain() throws Exception {
+        String group = "topics-broken-topology";
+        String broken = "topics.topology.broken";
+        String healthy = "topics.topology.healthy";
+        AtomicInteger brokenAttempts = new AtomicInteger();
+        List<String> received = new CopyOnWriteArrayList<>();
+        HandlerRegistry handlers = HandlerRegistry.register()
+                .listenTopic(DOMAIN, broken, message -> Mono.fromRunnable(() -> received.add(broken)),
+                        creator -> Mono.defer(() -> {
+                            brokenAttempts.incrementAndGet();
+                            return Mono.error(new IllegalStateException("topology down"));
+                        }))
+                .listenTopic(DOMAIN, healthy, message -> Mono.fromRunnable(() -> received.add(body(message))),
+                        creator -> ((TopologyCreator) creator).createTopics(List.of(healthy)));
+
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
+                handlers, ListenTopics.class)) {
+            publish(KAFKA, healthy, "record of " + healthy);
+            await().atMost(WAIT).until(() -> received.contains("record of " + healthy));
+            await().atMost(WAIT).until(() -> brokenAttempts.get() >= 3);
+        }
+
+        int attemptsWhenClosed = brokenAttempts.get();
+        await().during(LONGER_THAN_A_RETRY).atMost(LONGER_THAN_A_RETRY.plusSeconds(5))
+                .until(() -> brokenAttempts.get() == attemptsWhenClosed);
+    }
+
+    /**
+     * A topic whose topology failed is set up again in the background, without restarting the consumer of the domain,
+     * and is consumed once it is.
+     */
+    @Test
+    void aTopicWhoseTopologyFailedIsConsumedOnceItsSetupSucceeds() throws Exception {
+        String group = "topics-recovered-topology";
+        String recovered = "topics.topology.recovered";
+        String healthy = "topics.topology.other";
+        AtomicBoolean fixed = new AtomicBoolean();
+        CountDownLatch setUp = new CountDownLatch(1);
+        List<String> received = new CopyOnWriteArrayList<>();
+        HandlerRegistry handlers = HandlerRegistry.register()
+                .listenTopic(DOMAIN, recovered, message -> Mono.fromRunnable(() -> received.add(body(message))),
+                        creator -> Mono.defer(() -> fixed.get()
+                                ? ((TopologyCreator) creator).createTopics(List.of(recovered))
+                                .doOnSuccess(done -> setUp.countDown())
+                                : Mono.error(new IllegalStateException("topology down"))))
+                .listenTopic(DOMAIN, healthy, message -> Mono.fromRunnable(() -> received.add(body(message))),
+                        creator -> ((TopologyCreator) creator).createTopics(List.of(healthy)));
+
+        try (AnnotationConfigApplicationContext ignored = startOnOwnDomain(KAFKA, new OwnDomain(group, DOMAIN),
+                handlers, ListenTopics.class)) {
+            publish(KAFKA, healthy, "record of " + healthy);
+            await().atMost(WAIT).until(() -> received.contains("record of " + healthy));
+
+            fixed.set(true);
+            assertThat(setUp.await(WAIT.toMillis(), TimeUnit.MILLISECONDS)).as("topology set up again").isTrue();
+            publish(KAFKA, recovered, "record of " + recovered);
+            await().atMost(WAIT).until(() -> received.contains("record of " + recovered));
         }
     }
 

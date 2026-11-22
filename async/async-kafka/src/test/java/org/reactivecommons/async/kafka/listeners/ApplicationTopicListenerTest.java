@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -233,8 +235,9 @@ class ApplicationTopicListenerTest {
         assertThat(sent.getValue().getProperties().getTopic()).isEqualTo("my.custom.topic.dlq");
         assertThat(sent.getValue().getProperties().getKey()).isEqualTo("order-1");
         assertThat(sent.getValue().getBody()).isEqualTo(body);
+        // The bytes of each header of the record, as they are
         assertThat(sent.getValue().getProperties().getHeaders())
-                .containsEntry("trace-id", "abc")
+                .containsEntry("trace-id", "abc".getBytes(StandardCharsets.UTF_8))
                 .containsEntry("no-value", null)
                 .containsEntry(KafkaDlqHeaders.ORIGINAL_TOPIC, "my.custom.topic")
                 .containsEntry(KafkaDlqHeaders.ORIGINAL_PARTITION, "2")
@@ -313,6 +316,59 @@ class ApplicationTopicListenerTest {
 
         try {
             assertThat(setUp).containsExactly("topic.one", "topic.two");
+        } finally {
+            listener.stop();
+        }
+    }
+
+    /**
+     * A topology that cannot be set up does not keep the other topics from being set up and consumed: it is set up
+     * again in the background, without restarting the consumer.
+     */
+    @Test
+    void shouldConsumeAndSetUpAgainInTheBackgroundWhenTheTopologyOfATopicFails() throws InterruptedException {
+        CountDownLatch brokenAttempts = new CountDownLatch(3);
+        List<String> setUp = new CopyOnWriteArrayList<>();
+        RegisteredQueueListener broken = new RegisteredQueueListener("topic.broken", message -> Mono.empty(),
+                creator -> Mono.fromRunnable(brokenAttempts::countDown)
+                        .then(Mono.error(new IllegalStateException("topology down"))));
+        RegisteredQueueListener healthy = new RegisteredQueueListener("topic.healthy", message -> Mono.empty(),
+                creator -> Mono.fromRunnable(() -> setUp.add("topic.healthy")));
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
+        ApplicationTopicListener listener = new ApplicationTopicListener(context(true), List.of(broken, healthy),
+                "app", null, null);
+
+        listener.startListener(topologyCreator);
+
+        try {
+            verify(receiver, timeout(5000)).listen(eq("app"), eq(List.of("topic.broken", "topic.healthy")), any());
+            assertThat(setUp).containsExactly("topic.healthy");
+            assertThat(brokenAttempts.await(5, TimeUnit.SECONDS)).as("set up again in the background").isTrue();
+            assertThat(listener.restarts()).as("restarts of the consumer").isZero();
+        } finally {
+            listener.stop();
+        }
+    }
+
+    /**
+     * A setup that throws instead of returning an error is isolated too.
+     */
+    @Test
+    void shouldConsumeTheOtherTopicsWhenTheTopologySetupOfATopicThrows() {
+        RegisteredQueueListener throwing = new RegisteredQueueListener("topic.throwing", message -> Mono.empty(),
+                creator -> {
+                    throw new IllegalStateException("topology down");
+                });
+        RegisteredQueueListener healthy = new RegisteredQueueListener("topic.healthy", message -> Mono.empty(),
+                creator -> Mono.empty());
+        when(receiver.listen(anyString(), any(List.class), any())).thenReturn(Flux.never());
+        ApplicationTopicListener listener = new ApplicationTopicListener(context(true), List.of(throwing, healthy),
+                "app", null, null);
+
+        listener.startListener(topologyCreator);
+
+        try {
+            verify(receiver, timeout(5000)).listen(eq("app"), any(List.class), any());
         } finally {
             listener.stop();
         }
