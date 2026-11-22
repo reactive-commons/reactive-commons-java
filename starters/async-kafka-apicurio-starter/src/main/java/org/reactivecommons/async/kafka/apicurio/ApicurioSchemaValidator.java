@@ -1,5 +1,6 @@
 package org.reactivecommons.async.kafka.apicurio;
 
+import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.microsoft.kiota.ApiException;
 import com.networknt.schema.JsonSchema;
@@ -225,9 +226,10 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
     /**
      * A registry that could not be queried, or that answered with a transient error, throws a
      * {@link SchemaResolutionException}, which the listeners retry: the record may be valid, and querying the registry
-     * again may succeed. Any other failure (any other answer of the registry, e.g. 401, 404 or 500, or a configuration
-     * error) throws a {@link SchemaValidationException}: asking again would fail the same way, so the record is
-     * discarded instead of holding its partition.
+     * again may succeed. Any other failure (any other answer of the registry, e.g. 401, 404 or 500, content that cannot
+     * be read as JSON, such as a malformed schema or the HTML page of a proxy, or a configuration error) throws a
+     * {@link SchemaValidationException}: asking again would fail the same way, so the record is discarded instead of
+     * holding its partition. {@link #isTransient(Throwable)} tells them apart.
      */
     private SchemaLookupResult<JsonSchema> resolve(String topic, ArtifactReference reference) {
         SchemaLookupResult<JsonSchema> lookup;
@@ -253,9 +255,20 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
      * reports an answer of the registry as an {@link ApiException} with its HTTP status, and a failure to reach it
      * (connection refused or reset, socket timeout, unknown host, no route) as an {@link IOException}. The Apicurio
      * client does not retry an HTTP answer by itself.
+     * <p>
+     * The causes are walked from the outermost one, and the first of these decides:
+     * <ol>
+     *     <li>an {@link ApiException} with an HTTP status: transient only for a status in
+     *     {@link #TRANSIENT_HTTP_STATUSES};</li>
+     *     <li>a {@link JacksonException}: not transient. Jackson reports content it cannot read (a malformed schema,
+     *     or the HTML page of a proxy) as an {@link IOException}, but reading the same content again fails the same
+     *     way. It is not transient even when another {@link IOException} wraps it.</li>
+     * </ol>
+     * When neither is found, any other {@link IOException} in the chain is a network failure, so transient.
      *
      * @return {@code true} for an answer in {@link #TRANSIENT_HTTP_STATUSES}, or for a network failure without
-     * answer; {@code false} for any other answer and for any failure that is neither
+     * answer; {@code false} for any other answer, for content that cannot be read, and for any failure that is
+     * neither
      */
     private static boolean isTransient(Throwable error) {
         boolean networkFailure = false;
@@ -263,6 +276,9 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         for (Throwable cause = error; cause != null && depth < MAX_CAUSE_DEPTH; cause = cause.getCause(), depth++) {
             if (cause instanceof ApiException apiException && apiException.getResponseStatusCode() > 0) {
                 return TRANSIENT_HTTP_STATUSES.contains(apiException.getResponseStatusCode());
+            }
+            if (cause instanceof JacksonException) {
+                return false;
             }
             networkFailure |= cause instanceof IOException;
         }

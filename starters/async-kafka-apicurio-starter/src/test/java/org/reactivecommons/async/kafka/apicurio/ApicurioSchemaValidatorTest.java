@@ -1,5 +1,7 @@
 package org.reactivecommons.async.kafka.apicurio;
 
+import com.fasterxml.jackson.core.JsonParseException;
+import com.microsoft.kiota.ApiException;
 import com.microsoft.kiota.ApiExceptionBuilder;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.JsonSchemaFactory;
@@ -16,6 +18,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -34,6 +37,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.StringJoiner;
+import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
@@ -340,12 +344,64 @@ class ApicurioSchemaValidatorTest {
     @Test
     void shouldClassifyByTheAnswerOfTheRegistryOverTheNetworkFailureItWraps() {
         when(schemaResolver.resolveSchemaByArtifactReference(any())).thenThrow(new RuntimeException(
-                new ApiExceptionBuilder().withMessage("Unauthorized").withResponseStatusCode(401)
-                        .withThrowable(new IOException("stream closed")).build()));
+                registryAnswer(401, new IOException("stream closed"))));
         Headers headers = new RecordHeaders();
 
         assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
-                .isExactlyInstanceOf(SchemaValidationException.class);
+                .isExactlyInstanceOf(SchemaValidationException.class)
+                .hasRootCauseInstanceOf(IOException.class);
+    }
+
+    /**
+     * Jackson reports content it cannot read (a malformed schema, or the HTML page of a proxy) as an IOException, but
+     * reading it again would fail the same way, so the record is rejected instead of holding its partition. It holds
+     * alone, wrapped by the resolver in a RuntimeException, and wrapped in another IOException.
+     */
+    @ParameterizedTest
+    @MethodSource("unreadableContentFailures")
+    void shouldRejectARecordWhenTheContentOfTheRegistryCannotBeRead(Exception failure) {
+        when(schemaResolver.resolveSchemaByArtifactReference(any())).thenAnswer(invocation -> {
+            throw failure;
+        });
+        Headers headers = new RecordHeaders();
+
+        assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
+                .isExactlyInstanceOf(SchemaValidationException.class)
+                .hasMessageContaining("Unable to resolve the schema")
+                .hasRootCauseInstanceOf(JsonParseException.class);
+    }
+
+    static Stream<Exception> unreadableContentFailures() {
+        return Stream.of(unreadableContent(),
+                new RuntimeException(unreadableContent()),
+                new IOException("Unable to parse the schema", unreadableContent()));
+    }
+
+    private static JsonParseException unreadableContent() {
+        return new JsonParseException(null, "Unexpected character ('<' (code 60))");
+    }
+
+    /**
+     * A transient answer of the registry is found before the content it could not read, so it still decides.
+     */
+    @Test
+    void shouldClassifyByATransientAnswerOfTheRegistryOverTheContentItCouldNotRead() {
+        when(schemaResolver.resolveSchemaByArtifactReference(any())).thenThrow(new RuntimeException(
+                registryAnswer(503, unreadableContent())));
+        Headers headers = new RecordHeaders();
+
+        assertThatThrownBy(() -> validator.validateInbound("person.topic", VALID, headers))
+                .isExactlyInstanceOf(SchemaResolutionException.class)
+                .hasRootCauseInstanceOf(JsonParseException.class);
+    }
+
+    /**
+     * An answer of the registry that also carries its cause. The status is set last: {@code withMessage} and
+     * {@code withThrowable} of the builder create a new exception that keeps neither the status nor, for
+     * {@code withThrowable}, the given cause.
+     */
+    private static ApiException registryAnswer(int status, Throwable cause) {
+        return new ApiExceptionBuilder().withThrowable(cause).withResponseStatusCode(status).build();
     }
 
     private void givenTheRegistryAnswers(int status) {

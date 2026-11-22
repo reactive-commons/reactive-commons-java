@@ -494,7 +494,12 @@ Any other failure to obtain the schema would be the same if asked again, so the 
 | HTTP `429` (too many requests), `502`, `503`, `504`                                               | `SchemaResolutionException`: retried                   |
 | No HTTP answer: connection refused or reset, socket timeout, unknown host, no route, other I/O    | `SchemaResolutionException`: retried                   |
 | Any other HTTP answer, e.g. `400`, `401`, `403`, `404`, `408`, `409`, `500`, `501`                | `SchemaValidationException`: discarded or sent to DLQ  |
+| Content that is not valid JSON, e.g. a malformed schema or the HTML page of a proxy               | `SchemaValidationException`: discarded or sent to DLQ  |
 | Any other failure, e.g. a wrong configuration of the artifact                                     | `SchemaValidationException`: discarded or sent to DLQ  |
+
+Jackson reports content it cannot parse as an I/O error, but parsing the same content again fails the same way, so
+it is not taken as a network failure, even when another I/O error wraps it. Only a transient HTTP answer found before
+it in the chain of causes makes it retried.
 
 It is the same list the Apicurio serdes retry with `apicurio.registry.retry.transient-errors=true` (429, plus 502, 503,
 504 and the network failures); 503 is the status HTTP defines as temporary. The Apicurio client does not retry an HTTP
