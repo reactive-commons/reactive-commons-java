@@ -7,6 +7,7 @@ import io.netty.handler.ssl.SslContext;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.rabbit.config.RabbitProperties;
 import org.reactivecommons.async.rabbit.config.props.AsyncProps;
+import reactor.test.StepVerifier;
 
 import javax.net.ssl.SSLEngine;
 import java.io.IOException;
@@ -14,14 +15,23 @@ import java.lang.reflect.Field;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.awaitility.Awaitility.await;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class RabbitMQSetupUtilsTest {
+
+    private static final Duration BLOCKING = Duration.ofSeconds(10);
 
     /**
      * Opening a connection blocks (TCP, TLS and AMQP handshakes, up to the connection timeout): every attempt, the
@@ -50,6 +60,82 @@ class RabbitMQSetupUtilsTest {
 
         assertThat(attempts).as("first attempt + 2 retries").hasSize(3)
                 .allSatisfy(thread -> assertThat(thread).startsWith("boundedElastic"));
+    }
+
+    /**
+     * The application releases its connections while one is still being opened (e.g. its context closes right after
+     * it started): once open, that connection is closed instead of being kept by nobody, and its subscriber gets an
+     * error rather than a connection nobody will close.
+     */
+    @Test
+    void aConnectionOpenedAfterItsApplicationReleasedItsConnectionsIsClosed() throws Exception {
+        ConnectionFactory factory = mock(ConnectionFactory.class);
+        Connection connection = mock(Connection.class);
+        when(connection.isOpen()).thenReturn(true);
+        CountDownLatch opening = new CountDownLatch(1);
+        CountDownLatch released = new CountDownLatch(1);
+        when(factory.newConnection(anyString())).thenAnswer(invocation -> {
+            opening.countDown();
+            assertThat(released.await(BLOCKING.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+            return connection;
+        });
+        RabbitMQSetupUtils.retainConnections(factory);
+
+        StepVerifier.create(RabbitMQSetupUtils.listenerConnectionMono(() -> factory, "test-app"))
+                .then(() -> releaseWhileOpening(factory, opening, released))
+                .expectError(IllegalStateException.class)
+                .verify(BLOCKING);
+
+        verify(connection).close(anyInt());
+        assertThat(RabbitMQSetupUtils.establishedListenerConnection(factory)).isEmpty();
+        assertThat(RabbitMQSetupUtils.establishedConnection(factory)).isEmpty();
+    }
+
+    /**
+     * The broker refuses the connection and the application releases its connections meanwhile: the attempts stop,
+     * instead of retrying for ever to open a connection nobody uses.
+     */
+    @Test
+    void theConnectionAttemptsStopOnceTheApplicationReleasedItsConnections() throws Exception {
+        ConnectionFactory factory = mock(ConnectionFactory.class);
+        AtomicInteger attempts = new AtomicInteger();
+        CountDownLatch refused = new CountDownLatch(1);
+        when(factory.newConnection(anyString())).thenAnswer(invocation -> {
+            attempts.incrementAndGet();
+            refused.countDown();
+            throw new IOException("broker unreachable");
+        });
+        RabbitMQSetupUtils.retainConnections(factory);
+
+        StepVerifier.create(RabbitMQSetupUtils.listenerConnectionMono(() -> factory, "test-app"))
+                .then(() -> {
+                    awaitQuietly(refused);
+                    RabbitMQSetupUtils.releaseConnections(factory);
+                })
+                .expectError()
+                .verify(BLOCKING);
+
+        int attemptsWhenReleased = attempts.get();
+        // the backoff between two attempts starts at 300 ms: a retry would show within this period
+        await().during(Duration.ofSeconds(2)).atMost(Duration.ofSeconds(3))
+                .until(() -> attempts.get() == attemptsWhenReleased);
+        verify(factory, atLeastOnce()).newConnection(anyString());
+    }
+
+    private static void releaseWhileOpening(ConnectionFactory factory, CountDownLatch opening,
+                                            CountDownLatch released) {
+        awaitQuietly(opening);
+        RabbitMQSetupUtils.releaseConnections(factory);
+        released.countDown();
+    }
+
+    private static void awaitQuietly(CountDownLatch latch) {
+        try {
+            assertThat(latch.await(BLOCKING.toMillis(), TimeUnit.MILLISECONDS)).isTrue();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
     }
 
     @Test

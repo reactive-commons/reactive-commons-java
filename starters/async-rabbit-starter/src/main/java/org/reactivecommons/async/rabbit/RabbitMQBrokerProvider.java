@@ -247,8 +247,9 @@ public class RabbitMQBrokerProvider implements BrokerProvider<AsyncProps> {
      * Stops the listeners and the publisher, and releases their threads. The listeners stop consuming first and their
      * deliveries in flight are given up to {@link #DRAIN_TIMEOUT} to be handled and acknowledged, so they are not
      * redelivered (and handled twice) after the shutdown; the publisher stays open meanwhile for the handlers. The
-     * connection shared by the sender and the listener is not closed here: it is cached per connection factory and
-     * shared by every domain.
+     * connections of the sender and of the listener are not closed here: they are cached per connection factory,
+     * which other components of the application may share (e.g. the discard provider, with the default domain), and
+     * are closed by the release run last, once no provider uses them.
      */
     @Override
     public void close() {

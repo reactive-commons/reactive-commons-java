@@ -57,6 +57,8 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 
 @Slf4j
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
@@ -243,39 +245,82 @@ public final class RabbitMQSetupUtils {
 
     private static Mono<Connection> createConnectionMono(ConnectionFactory factory, String appName,
                                                          ConnectionRole role) {
-        return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role), key -> {
-            final ConnectionFactory f = key.factory();
-            log.info("Creating {} connection mono to RabbitMQ Broker in host '{}'", role.kind, f.getHost());
-            final AtomicInteger failedAttempts = new AtomicInteger();
-            return Mono.fromCallable(() -> f.newConnection(
-                            appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")
-                    ))
-                    // opening a connection blocks (up to the connection timeout): neither on the thread that
-                    // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
-                    .subscribeOn(Schedulers.boundedElastic())
-                    .doOnError(err -> logConnectionFailure(f, role, failedAttempts.incrementAndGet(), err))
-                    .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
-                            .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL)))
-                    .doOnNext(connection -> {
-                        final int failed = failedAttempts.getAndSet(0);
-                        if (failed > 0) {
-                            log.info("{} connection to RabbitMQ Broker in host '{}' established after {} failed "
-                                    + "attempts", role.kind, f.getHost(), failed);
-                        }
-                        ESTABLISHED_CONNECTIONS.put(key, connection);
-                        if (role == ConnectionRole.SENDER) {
-                            final ConnectionBlockedState blockedState = blockedState(f);
-                            connection.addBlockedListener(blockedState::onBlocked, blockedState::onUnblocked);
-                            // kept across recoveries, like the blocked listener: a closed connection is not blocked
-                            connection.addShutdownListener(cause -> blockedState.onConnectionShutdown());
-                        }
-                    })
-                    // a connection the client will not re-open is replaced by a new one the next time it is used (e.g.
-                    // when a listener restarts or a publishing flow is re-subscribed), unless the application released
-                    // its connections meanwhile
-                    .cacheInvalidateIf(connection -> CONNECTION_CACHE.containsKey(key)
-                            && closedForGood(connection, role));
-        });
+        return CONNECTION_CACHE.computeIfAbsent(new ConnectionKey(factory, role),
+                key -> newConnectionMono(key, appName));
+    }
+
+    /**
+     * The Mono of the connection of the key, cached in {@link #CONNECTION_CACHE}. Once the application releases its
+     * connections ({@link #releaseConnections}, {@link #releaseEventLoopGroup}), the key no longer maps to this Mono:
+     * no new attempt is made, and a connection that was being opened is closed once open, since nobody would close
+     * it. Its subscribers then get an {@link IllegalStateException}.
+     */
+    private static Mono<Connection> newConnectionMono(ConnectionKey key, String appName) {
+        final ConnectionFactory f = key.factory();
+        final ConnectionRole role = key.role();
+        log.info("Creating {} connection mono to RabbitMQ Broker in host '{}'", role.kind, f.getHost());
+        final AtomicInteger failedAttempts = new AtomicInteger();
+        final AtomicReference<Mono<Connection>> self = new AtomicReference<>();
+        final BooleanSupplier live = () -> CONNECTION_CACHE.get(key) == self.get();
+        final Mono<Connection> connectionMono = Mono.defer(() -> live.getAsBoolean()
+                        ? Mono.fromCallable(() -> f.newConnection(
+                                appName + "-" + InstanceIdentifier.getInstanceId(role.kind, "")))
+                        : released(role))
+                // opening a connection blocks (up to the connection timeout): neither on the thread that
+                // subscribes nor, for the retries, on the non-blocking parallel thread of the backoff
+                .subscribeOn(Schedulers.boundedElastic())
+                .doOnError(err -> {
+                    if (live.getAsBoolean()) {
+                        logConnectionFailure(f, role, failedAttempts.incrementAndGet(), err);
+                    }
+                })
+                .retryWhen(Retry.backoff(Long.MAX_VALUE, Duration.ofMillis(START_INTERVAL))
+                        .maxBackoff(Duration.ofMillis(MAX_BACKOFF_INTERVAL))
+                        .filter(err -> live.getAsBoolean()))
+                .flatMap(connection -> keepIfLive(key, connection, live))
+                .doOnNext(connection -> {
+                    final int failed = failedAttempts.getAndSet(0);
+                    if (failed > 0) {
+                        log.info("{} connection to RabbitMQ Broker in host '{}' established after {} failed "
+                                + "attempts", role.kind, f.getHost(), failed);
+                    }
+                    if (role == ConnectionRole.SENDER) {
+                        final ConnectionBlockedState blockedState = blockedState(f);
+                        connection.addBlockedListener(blockedState::onBlocked, blockedState::onUnblocked);
+                        // kept across recoveries, like the blocked listener: a closed connection is not blocked
+                        connection.addShutdownListener(cause -> blockedState.onConnectionShutdown());
+                    }
+                })
+                // a connection the client will not re-open is replaced by a new one the next time it is used (e.g.
+                // when a listener restarts or a publishing flow is re-subscribed), unless the application released
+                // its connections meanwhile
+                .cacheInvalidateIf(connection -> CONNECTION_CACHE.containsKey(key)
+                        && closedForGood(connection, role));
+        self.set(connectionMono);
+        return connectionMono;
+    }
+
+    /**
+     * Registers the connection just opened as the established one of the key, under the lock of
+     * {@link #releaseConnections}: either the release that follows closes it, or the release already happened and
+     * the connection is closed here, on the thread meant for blocking calls that opened it.
+     */
+    private static Mono<Connection> keepIfLive(ConnectionKey key, Connection connection, BooleanSupplier live) {
+        synchronized (EVENT_LOOP_GROUP_LOCK) {
+            if (live.getAsBoolean()) {
+                ESTABLISHED_CONNECTIONS.put(key, connection);
+                return Mono.just(connection);
+            }
+        }
+        log.info("The {} connection to RabbitMQ opened after its application released its connections: closing it",
+                key.role().kind);
+        closeConnection(connection);
+        return released(key.role());
+    }
+
+    private static <T> Mono<T> released(ConnectionRole role) {
+        return Mono.error(new IllegalStateException("The RabbitMQ connections of the application have been "
+                + "released: its " + role.kind + " connection is not opened"));
     }
 
     /**
@@ -423,7 +468,8 @@ public final class RabbitMQSetupUtils {
 
     /**
      * Unregisters a user of the connections of the factory. Once none is left, its connections are closed and the
-     * factory is forgotten: an application created later with the same properties gets new ones.
+     * factory is forgotten, along with the Mono of its connections: a connection still being opened is closed once
+     * open, and no new attempt is made.
      */
     public static void releaseConnections(ConnectionFactory factory) {
         synchronized (EVENT_LOOP_GROUP_LOCK) {
