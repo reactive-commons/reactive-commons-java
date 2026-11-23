@@ -33,7 +33,7 @@ class SenderKafkaContainerTest {
     private static final Duration WAIT = Duration.ofSeconds(30);
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableDomainEventBus

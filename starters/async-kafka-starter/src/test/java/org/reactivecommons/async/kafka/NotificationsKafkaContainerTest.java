@@ -40,7 +40,7 @@ class NotificationsKafkaContainerTest {
     private static final Duration PUBLISH_EVERY = Duration.ofMillis(500);
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableNotificationListener

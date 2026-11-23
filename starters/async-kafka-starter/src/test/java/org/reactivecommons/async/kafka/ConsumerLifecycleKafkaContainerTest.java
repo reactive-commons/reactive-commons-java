@@ -46,7 +46,7 @@ class ConsumerLifecycleKafkaContainerTest {
     private static final AtomicBoolean WARMED_UP = new AtomicBoolean();
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableTopicListeners

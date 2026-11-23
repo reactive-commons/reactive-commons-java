@@ -48,7 +48,7 @@ class ClientIdsKafkaContainerTest {
     private static final AtomicInteger RECEIVED = new AtomicInteger();
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableEventListeners

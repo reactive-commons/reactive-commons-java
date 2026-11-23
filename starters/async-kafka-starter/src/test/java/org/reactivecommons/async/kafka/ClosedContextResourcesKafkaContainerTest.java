@@ -49,7 +49,7 @@ class ClosedContextResourcesKafkaContainerTest {
     private static final String ADMIN_THREAD = "kafka-admin-client-thread";
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableTopicListeners

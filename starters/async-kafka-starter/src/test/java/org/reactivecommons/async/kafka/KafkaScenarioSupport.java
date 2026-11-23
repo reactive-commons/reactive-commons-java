@@ -26,11 +26,15 @@ import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.reactivecommons.async.starter.impl.common.kafka.RCKafkaConfig;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
+import org.testcontainers.containers.ContainerLaunchException;
+import org.testcontainers.containers.output.OutputFrame;
 import org.testcontainers.kafka.KafkaContainer;
 
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -45,8 +49,23 @@ import java.util.stream.Stream;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class KafkaScenarioSupport {
 
-    static final String KAFKA_IMAGE = "apache/kafka-native";
+    /**
+     * The same version as the kafka-clients the library uses, pinned so that every run tests the same broker.
+     */
+    static final String KAFKA_IMAGE = "apache/kafka-native:4.4.0";
     static final String PRODUCER_THREAD = "kafka-producer-network-thread";
+    /**
+     * The broker sometimes exits while it starts on a loaded machine (e.g. a CI runner): a new container is tried.
+     */
+    static final int STARTUP_ATTEMPTS = 3;
+
+    /**
+     * The broker of a test class, created the same way for every class: started up to {@link #STARTUP_ATTEMPTS}
+     * times and, when it never starts, failing with the last lines the broker wrote.
+     */
+    static KafkaContainer kafkaContainer() {
+        return new DiagnosedKafkaContainer();
+    }
 
     /**
      * The configuration of a service that uses RabbitMQ for its default domain: the Kafka 'app' domain is disabled
@@ -256,5 +275,62 @@ final class KafkaScenarioSupport {
                 .filter(name -> Stream.of(prefixes).anyMatch(name::startsWith))
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * A Kafka container that keeps the last lines its broker wrote and, when it does not start, puts them in the
+     * exception: Gradle shows the exception of a failed test class but not its output, where Testcontainers logs the
+     * output of the failed container.
+     */
+    private static final class DiagnosedKafkaContainer extends KafkaContainer {
+
+        private static final int KEPT_LINES = 200;
+
+        private final Deque<String> output = new ArrayDeque<>(); // guarded by itself
+
+        private DiagnosedKafkaContainer() {
+            super(KAFKA_IMAGE);
+            withStartupAttempts(STARTUP_ATTEMPTS);
+            withLogConsumer(this::keep);
+        }
+
+        /**
+         * Each attempt creates a new container: only the output of the last one is kept.
+         */
+        @Override
+        protected void containerIsCreated(String containerId) {
+            super.containerIsCreated(containerId);
+            synchronized (output) {
+                output.clear();
+            }
+        }
+
+        @Override
+        public void start() {
+            try {
+                super.start();
+            } catch (ContainerLaunchException e) {
+                throw new ContainerLaunchException("The Kafka broker " + KAFKA_IMAGE + " did not start in "
+                        + STARTUP_ATTEMPTS + " attempts. Last output of the broker:\n" + keptOutput(), e);
+            }
+        }
+
+        private void keep(OutputFrame frame) {
+            if (frame.getType() == OutputFrame.OutputType.END) {
+                return;
+            }
+            synchronized (output) {
+                if (output.size() == KEPT_LINES) {
+                    output.removeFirst();
+                }
+                output.addLast(frame.getUtf8StringWithoutLineEnding());
+            }
+        }
+
+        private String keptOutput() {
+            synchronized (output) {
+                return output.isEmpty() ? "(none)" : String.join("\n", output);
+            }
+        }
     }
 }

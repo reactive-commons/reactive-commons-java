@@ -48,7 +48,7 @@ class ConsumerOrderingKafkaContainerTest {
     private static final Duration LONGER_THAN_A_COMMIT = Duration.ofSeconds(7);
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableTopicListeners
