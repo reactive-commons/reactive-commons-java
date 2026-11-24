@@ -15,12 +15,18 @@ import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException
 import reactor.core.publisher.Mono;
 import tools.jackson.databind.JsonNode;
 
+import java.nio.charset.StandardCharsets;
 
 import static org.reactivecommons.async.commons.converters.json.JacksonMessageConverter.APPLICATION_CLOUD_EVENT_JSON;
 
 @Slf4j
 @RequiredArgsConstructor
 public class DLQDiscardNotifier implements DiscardNotifier {
+    /**
+     * Name of the discarded messages that cannot be read; they are published as {@code corruptData.dlq}.
+     */
+    public static final String UNREADABLE_MESSAGES = "corruptData";
+
     private final DomainEventBus eventBus;
     private final MessageConverter messageConverter;
 
@@ -76,16 +82,35 @@ public class DLQDiscardNotifier implements DiscardNotifier {
         }
     }
 
+    /**
+     * Logs the message in a single {@code ERROR} line, with where it comes from, its size and the class of the error;
+     * its body, which may carry personal data, and the stack trace only at {@code DEBUG}.
+     */
     private Mono<Void> notifyUnreadableMessage(Message message, MessageConversionException e) {
         String bodyString;
         try {
-            bodyString = new String(message.getBody());
+            bodyString = new String(message.getBody(), StandardCharsets.UTF_8);
         } catch (Exception ex) {
             bodyString = "Opaque binary Message, unable to decode: " + ex.getMessage();
         }
-        log.error("Unable to interpret discarded message: {}", bodyString, e);
-        DomainEvent<String> event = new DomainEvent<>("corruptData.dlq", "corruptData", bodyString);
+        Message.Properties properties = message.getProperties();
+        log.error("Unable to interpret discarded message {} of topic {} ({} bytes, content type {}): {} (body at "
+                        + "DEBUG)", properties == null ? null : sanitize(properties.getKey()),
+                properties == null ? null : sanitize(properties.getTopic()),
+                message.getBody() == null ? 0 : message.getBody().length,
+                properties == null ? null : sanitize(properties.getContentType()), e.getClass().getName());
+        if (log.isDebugEnabled()) {
+            log.debug("Body of the discarded message that cannot be interpreted: {}", bodyString, e);
+        }
+        DomainEvent<String> event = new DomainEvent<>(UNREADABLE_MESSAGES + ".dlq", UNREADABLE_MESSAGES, bodyString);
         return Mono.from(eventBus.emit(event));
+    }
+
+    /**
+     * The identifiers come from the producer of the message: a line break in them would let it forge log lines.
+     */
+    private static String sanitize(String value) {
+        return value == null ? null : value.replace('\r', '_').replace('\n', '_');
     }
 
     private Mono<Void> onError(Throwable e) {

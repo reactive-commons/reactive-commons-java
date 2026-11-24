@@ -9,6 +9,7 @@ import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
 import org.reactivecommons.async.commons.converters.json.DefaultObjectMapperSupplier;
 import org.reactivecommons.async.commons.converters.json.ObjectMapperSupplier;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -21,7 +22,6 @@ import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -93,9 +93,9 @@ class MessageBodyConversionRabbitContainerTest {
 
     @Test
     void theDataOfTheMessagesIsConvertedStraightFromTheirBody() {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, PREFIX,
-                false, true, Map.of(), Handlers.class, CountingMapper.class, SendEvents.class, SendDirect.class,
-                ListenEvents.class, ListenCommands.class, ListenQueries.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(PREFIX, false, true), Handlers.class, CountingMapper.class, SendEvents.class,
+                SendDirect.class, ListenEvents.class, ListenCommands.class, ListenQueries.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, APP + ".subsEvents", APP, APP + ".query");
             DomainEventBus bus = context.getBean(DomainEventBus.class);
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);

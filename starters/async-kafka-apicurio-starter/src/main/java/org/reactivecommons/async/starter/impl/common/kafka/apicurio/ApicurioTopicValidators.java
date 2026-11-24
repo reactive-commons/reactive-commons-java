@@ -55,43 +55,62 @@ final class ApicurioTopicValidators {
      */
     static Map<String, SchemaValidator> buildValidators(List<ApicurioRegistry> registries, String domain,
                                                         SharedSchemaResolvers resolvers) {
-        Map<String, SchemaValidator> validators = new HashMap<>();
         if (registries == null || registries.isEmpty()) {
-            return validators;
+            return new HashMap<>();
         }
-        Map<String, String> declaredBy = new HashMap<>();
+        DomainTopics topics = new DomainTopics(domain, resolvers);
         for (int i = 0; i < registries.size(); i++) {
-            addTopicsOf(registries.get(i), path(domain, i), domain, validators, declaredBy, resolvers);
+            topics.addTopicsOf(registries.get(i), path(domain, i));
         }
-        return validators;
+        return topics.validators;
     }
 
     private static String path(String domain, int registryIndex) {
         return "reactive.commons.kafka." + domain + ".apicurio.registries[" + registryIndex + "]";
     }
 
-    private static void addTopicsOf(ApicurioRegistry registry, String registryPath, String domain,
-                                    Map<String, SchemaValidator> validators, Map<String, String> declaredBy,
-                                    SharedSchemaResolvers resolvers) {
-        if (registry == null) {
-            throw new InvalidConfigurationException(registryPath + " is empty. Declare its name, its properties and "
-                    + "the topics validated against it, or remove it.");
+    /**
+     * The topics declared by the registries of a domain, and their validators, built one registry after the other.
+     */
+    private static final class DomainTopics {
+        private final String domain;
+        private final SharedSchemaResolvers resolvers;
+        private final Map<String, SchemaValidator> validators = new HashMap<>();
+        /**
+         * The label of the registry that declares each topic.
+         */
+        private final Map<String, String> declaredBy = new HashMap<>();
+
+        private DomainTopics(String domain, SharedSchemaResolvers resolvers) {
+            this.domain = domain;
+            this.resolvers = resolvers;
         }
-        String registryLabel = labelOf(registry.getName(), registryPath);
-        List<ApicurioTopic> topics = registry.getTopics();
-        if (topics == null || topics.isEmpty()) {
-            throw new InvalidConfigurationException(registryLabel + " declares no topics, so Reactive Commons would "
-                    + "open a connection to the Apicurio Registry without validating anything. List the topics to "
-                    + "validate under " + registryPath + ".topics, or remove the registry.");
-        }
-        for (int j = 0; j < topics.size(); j++) {
-            ApicurioTopic topic = topics.get(j);
-            String topicPath = registryPath + ".topics[" + j + "]";
-            if (topic == null || !isSet(topic.getName())) {
-                throw new InvalidConfigurationException(topicPath + " of " + registryLabel + " has no name. Set "
-                        + topicPath + ".name to the Kafka topic to validate.");
+
+        private void addTopicsOf(ApicurioRegistry registry, String registryPath) {
+            if (registry == null) {
+                throw new InvalidConfigurationException(registryPath + " is empty. Declare its name, its properties "
+                        + "and the topics validated against it, or remove it.");
             }
-            String name = topic.getName().trim();
+            String registryLabel = labelOf(registry.getName(), registryPath);
+            List<ApicurioTopic> topics = registry.getTopics();
+            if (topics == null || topics.isEmpty()) {
+                throw new InvalidConfigurationException(registryLabel + " declares no topics, so Reactive Commons "
+                        + "would open a connection to the Apicurio Registry without validating anything. List the "
+                        + "topics to validate under " + registryPath + ".topics, or remove the registry.");
+            }
+            for (int j = 0; j < topics.size(); j++) {
+                ApicurioTopic topic = topics.get(j);
+                String topicPath = registryPath + ".topics[" + j + "]";
+                String name = topicName(topic, topicPath, registryLabel);
+                declare(name, registryLabel);
+                validators.put(name, createValidator(registry, topic, name, topicPath, registryLabel));
+            }
+        }
+
+        /**
+         * @throws InvalidConfigurationException when another registry of the domain already declared the topic
+         */
+        private void declare(String name, String registryLabel) {
             String previous = declaredBy.put(name, registryLabel);
             if (previous != null) {
                 throw new InvalidConfigurationException("Topic '" + name + "' of domain " + domain + " is declared "
@@ -100,121 +119,131 @@ final class ApicurioTopicValidators {
                         + "topic once per domain, under the registry that validates it. The same topic name may be "
                         + "declared by another domain, against another registry.");
             }
-            validators.put(name, createValidator(registry, topic, name, topicPath, registryLabel, resolvers));
         }
-    }
 
-    /**
-     * Whether the topic is validated at all, decided by {@code apicurio.registry.serde.validation-enabled} exactly
-     * as it would be for the Apicurio serdes. When it is {@code false} the topic keeps the no-op validator instead
-     * of connecting to the registry, which is also what an undeclared topic gets.
-     * <p>
-     * A validated topic is validated in both directions: on publish, which is also what writes the schema
-     * coordinates in the record headers, and on consume. To validate a single direction, declare a
-     * {@code SchemaValidator} or a {@code DomainSchemaValidatorProvider} bean that delegates to a validator built
-     * with {@code ApicurioSchemaValidator.builder()}.
-     */
-    private static SchemaValidator createValidator(ApicurioRegistry registry, ApicurioTopic topic,
-                                                   String name, String topicPath, String registryLabel,
-                                                   SharedSchemaResolvers resolvers) {
-        Map<String, Object> effective = merge(registry.getProperties(), topic.getProperties());
-        if (isValidationDisabled(effective)) {
-            return NoOpSchemaValidator.INSTANCE;
+        /**
+         * Whether the topic is validated at all, decided by {@code apicurio.registry.serde.validation-enabled}
+         * exactly as it would be for the Apicurio serdes. When it is {@code false} the topic keeps the no-op
+         * validator instead of connecting to the registry, which is also what an undeclared topic gets.
+         * <p>
+         * A validated topic is validated in both directions: on publish, which is also what writes the schema
+         * coordinates in the record headers, and on consume. To validate a single direction, declare a
+         * {@code SchemaValidator} or a {@code DomainSchemaValidatorProvider} bean that delegates to a validator
+         * built with {@code ApicurioSchemaValidator.builder()}.
+         */
+        private SchemaValidator createValidator(ApicurioRegistry registry, ApicurioTopic topic, String name,
+                                                String topicPath, String registryLabel) {
+            Map<String, Object> effective = merge(registry.getProperties(), topic.getProperties());
+            if (isValidationDisabled(effective)) {
+                return NoOpSchemaValidator.INSTANCE;
+            }
+            assertRegistryUrlIsSet(effective, name, topicPath, registryLabel);
+            assertHeadersAreEnabled(effective, name, topicPath);
+            assertResolverStrategyIsRecognised(effective, name, topicPath);
+            assertVersionIsResolvable(effective, name, topicPath);
+
+            return ApicurioSchemaValidatorFactory.create(
+                    resolvers.forRegistry(ApicurioSchemaValidatorFactory.registryConfig(effective)),
+                    effective, null);
         }
-        assertRegistryUrlIsSet(effective, name, topicPath, registryLabel);
-        assertHeadersAreEnabled(effective, name, topicPath);
-        assertResolverStrategyIsRecognised(effective, name, topicPath);
-        assertVersionIsResolvable(effective, name, topicPath);
 
-        return ApicurioSchemaValidatorFactory.create(
-                resolvers.forRegistry(ApicurioSchemaValidatorFactory.registryConfig(effective)),
-                effective, null);
-    }
-
-    /**
-     * @return the properties of the registry with the ones of the topic applied over them
-     */
-    private static Map<String, Object> merge(Map<String, String> registryProperties,
-                                             Map<String, String> topicProperties) {
-        Map<String, Object> effective = new HashMap<>();
-        putAll(effective, registryProperties);
-        putAll(effective, topicProperties);
-        return effective;
-    }
-
-    private static void putAll(Map<String, Object> target, Map<String, String> source) {
-        if (source != null) {
-            target.putAll(source);
+        /**
+         * @return the name of the topic, trimmed
+         * @throws InvalidConfigurationException when the topic has no name
+         */
+        private static String topicName(ApicurioTopic topic, String topicPath, String registryLabel) {
+            if (topic == null || !isSet(topic.getName())) {
+                throw new InvalidConfigurationException(topicPath + " of " + registryLabel + " has no name. Set "
+                        + topicPath + ".name to the Kafka topic to validate.");
+            }
+            return topic.getName().trim();
         }
-    }
 
-    private static boolean isValidationDisabled(Map<String, Object> effective) {
-        Object value = effective.get(SerdeConfig.VALIDATION_ENABLED);
-        return value != null && "false".equalsIgnoreCase(value.toString());
-    }
-
-    private static void assertRegistryUrlIsSet(Map<String, Object> effective, String name, String topicPath,
-                                               String registryLabel) {
-        if (!isSet(stringValue(effective, SchemaResolverConfig.REGISTRY_URL))) {
-            throw new InvalidConfigurationException("No Apicurio Registry endpoint is configured for topic '" + name
-                    + "': set " + SchemaResolverConfig.REGISTRY_URL + " in the properties of " + registryLabel
-                    + ", or in " + topicPath + ".properties.");
+        /**
+         * @return the properties of the registry with the ones of the topic applied over them
+         */
+        private static Map<String, Object> merge(Map<String, String> registryProperties,
+                                                 Map<String, String> topicProperties) {
+            Map<String, Object> effective = new HashMap<>();
+            putAll(effective, registryProperties);
+            putAll(effective, topicProperties);
+            return effective;
         }
-    }
 
-    private static void assertHeadersAreEnabled(Map<String, Object> effective, String name, String topicPath) {
-        if (!ApicurioSchemaValidatorFactory.areHeadersEnabled(effective)) {
-            throw new InvalidConfigurationException(KafkaSerdeConfig.ENABLE_HEADERS + " is "
-                    + stringValue(effective, KafkaSerdeConfig.ENABLE_HEADERS) + " for topic '" + name
-                    + "', but Reactive Commons always writes the schema coordinates in the record headers: "
-                    + "they are the only channel it has to tell the consumer which schema version a record was "
-                    + "published with. Remove that property from " + topicPath + ".properties, or set it to true.");
+        private static void putAll(Map<String, Object> target, Map<String, String> source) {
+            if (source != null) {
+                target.putAll(source);
+            }
         }
-    }
 
-    /**
-     * Rejects an {@code apicurio.registry.artifact-resolver-strategy} Reactive Commons cannot honour.
-     */
-    private static void assertResolverStrategyIsRecognised(Map<String, Object> effective, String name,
-                                                           String topicPath) {
-        String strategy = stringValue(effective, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
-        if (ApicurioSchemaValidatorFactory.isResolverStrategyRecognised(strategy)) {
-            return;
+        private static boolean isValidationDisabled(Map<String, Object> effective) {
+            Object value = effective.get(SerdeConfig.VALIDATION_ENABLED);
+            return value != null && "false".equalsIgnoreCase(value.toString());
         }
-        throw new InvalidConfigurationException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
-                + strategy + " for topic '" + name + "', but Reactive Commons only recognises "
-                + ApicurioSchemaValidatorFactory.TOPIC_ID_STRATEGY + " and "
-                + ApicurioSchemaValidatorFactory.SIMPLE_TOPIC_ID_STRATEGY + ": any other strategy is read by "
-                + "Apicurio only when a Kafka record is handed to its serdes, which never happens here, so it "
-                + "would be instantiated and never invoked. Set " + topicPath + ".properties."
-                + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id instead.");
-    }
 
-    /**
-     * Rejects a topic that leaves the schema version to chance: {@code apicurio.registry.find-latest} keeps its
-     * Apicurio default of {@code false}, so either the version is pinned or the latest one is opted into.
-     */
-    private static void assertVersionIsResolvable(Map<String, Object> effective, String name, String topicPath) {
-        if (!ApicurioSchemaValidatorFactory.isVersionResolvable(effective)) {
-            throw new InvalidConfigurationException("No schema version could be resolved for topic '" + name + "': "
-                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " is empty and "
-                    + SchemaResolverConfig.FIND_LATEST_ARTIFACT + " is false, which is its default in Apicurio. Set "
-                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " to pin the topic to a single version, or "
-                    + "set " + SchemaResolverConfig.FIND_LATEST_ARTIFACT + "=true to validate against the latest "
-                    + "one, either in the registry properties or in " + topicPath + ".properties.");
+        private static void assertRegistryUrlIsSet(Map<String, Object> effective, String name, String topicPath,
+                                                   String registryLabel) {
+            if (!isSet(stringValue(effective, SchemaResolverConfig.REGISTRY_URL))) {
+                throw new InvalidConfigurationException("No Apicurio Registry endpoint is configured for topic '" + name
+                        + "': set " + SchemaResolverConfig.REGISTRY_URL + " in the properties of " + registryLabel
+                        + ", or in " + topicPath + ".properties.");
+            }
         }
-    }
 
-    private static String labelOf(String name, String path) {
-        return isSet(name) ? "registry '" + name + "' (" + path + ")" : path;
-    }
+        private static void assertHeadersAreEnabled(Map<String, Object> effective, String name, String topicPath) {
+            if (!ApicurioSchemaValidatorFactory.areHeadersEnabled(effective)) {
+                throw new InvalidConfigurationException(KafkaSerdeConfig.ENABLE_HEADERS + " is "
+                        + stringValue(effective, KafkaSerdeConfig.ENABLE_HEADERS) + " for topic '" + name
+                        + "', but Reactive Commons always writes the schema coordinates in the record headers: "
+                        + "they are the only channel it has to tell the consumer which schema version a record was "
+                        + "published with. Remove that property from " + topicPath + ".properties, or set it to true.");
+            }
+        }
 
-    private static String stringValue(Map<String, Object> configs, String key) {
-        Object value = configs.get(key);
-        return value == null ? null : value.toString();
-    }
+        /**
+         * Rejects an {@code apicurio.registry.artifact-resolver-strategy} Reactive Commons cannot honour.
+         */
+        private static void assertResolverStrategyIsRecognised(Map<String, Object> effective, String name,
+                                                               String topicPath) {
+            String strategy = stringValue(effective, SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY);
+            if (ApicurioSchemaValidatorFactory.isResolverStrategyRecognised(strategy)) {
+                return;
+            }
+            throw new InvalidConfigurationException(SchemaResolverConfig.ARTIFACT_RESOLVER_STRATEGY + " is set to "
+                    + strategy + " for topic '" + name + "', but Reactive Commons only recognises "
+                    + ApicurioSchemaValidatorFactory.TOPIC_ID_STRATEGY + " and "
+                    + ApicurioSchemaValidatorFactory.SIMPLE_TOPIC_ID_STRATEGY + ": any other strategy is read by "
+                    + "Apicurio only when a Kafka record is handed to its serdes, which never happens here, so it "
+                    + "would be instantiated and never invoked. Set " + topicPath + ".properties."
+                    + SchemaResolverConfig.EXPLICIT_ARTIFACT_ID + " to a fixed artifact id instead.");
+        }
 
-    private static boolean isSet(String value) {
-        return value != null && !value.isBlank();
+        /**
+         * Rejects a topic that leaves the schema version to chance: {@code apicurio.registry.find-latest} keeps its
+         * Apicurio default of {@code false}, so either the version is pinned or the latest one is opted into.
+         */
+        private static void assertVersionIsResolvable(Map<String, Object> effective, String name, String topicPath) {
+            if (!ApicurioSchemaValidatorFactory.isVersionResolvable(effective)) {
+                throw new InvalidConfigurationException("No schema version could be resolved for topic '" + name + "': "
+                        + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " is empty and "
+                        + SchemaResolverConfig.FIND_LATEST_ARTIFACT + " is false, which is its default in Apicurio. "
+                        + "Set " + SchemaResolverConfig.EXPLICIT_ARTIFACT_VERSION + " to pin the topic to a single "
+                        + "version, or set " + SchemaResolverConfig.FIND_LATEST_ARTIFACT + "=true to validate against "
+                        + "the latest one, either in the registry properties or in " + topicPath + ".properties.");
+            }
+        }
+
+        private static String labelOf(String name, String path) {
+            return isSet(name) ? "registry '" + name + "' (" + path + ")" : path;
+        }
+
+        private static String stringValue(Map<String, Object> configs, String key) {
+            Object value = configs.get(key);
+            return value == null ? null : value.toString();
+        }
+
+        private static boolean isSet(String value) {
+            return value != null && !value.isBlank();
+        }
     }
 }

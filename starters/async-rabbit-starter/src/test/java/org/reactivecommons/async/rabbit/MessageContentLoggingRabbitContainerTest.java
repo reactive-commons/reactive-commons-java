@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -103,8 +104,9 @@ class MessageContentLoggingRabbitContainerTest {
     @Test
     void theLogsIdentifyFailingMessagesAndHoldOnlyTheBeginningOfTheirBody() throws Exception {
         FAILURES.set(0);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "mcl",
-                false, false, PROPERTIES, FailingHandlers.class, SendEvents.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("mcl", false, false, PROPERTIES), FailingHandlers.class, SendEvents.class,
+                ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, "mcl-app.subsEvents");
             DomainEventBus bus = context.getBean(DomainEventBus.class);
             String failingId = UUID.randomUUID().toString();

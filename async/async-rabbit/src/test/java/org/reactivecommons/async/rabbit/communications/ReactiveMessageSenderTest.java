@@ -17,6 +17,7 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.reactivecommons.async.commons.converters.MessageConverter;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
+import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
 import org.reactivecommons.async.commons.exceptions.SendFailureMessageTooLargeException;
 import org.reactivecommons.async.commons.exceptions.SendFailureNoAckException;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
@@ -585,6 +586,89 @@ class ReactiveMessageSenderTest {
         }
     }
 
+    /**
+     * The latency of a publish refused before being written is tagged with the cause of the refusal: a full buffer,
+     * a message too large or a blocked connection.
+     */
+    @Test
+    void theLatencyOfAPublishRefusedBeforeBeingWrittenIsTaggedWithItsCause() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
+            ((Flux<OutboundMessage>) invocation.getArgument(0)).subscribe(new BaseSubscriber<>() {
+                @Override
+                protected void hookOnSubscribe(Subscription subscription) {
+                    // no demand: the messages wait in the buffer of the flow, as while its channel is busy
+                }
+            });
+            return Flux.never();
+        });
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        ConnectionBlockedState blockedState = new ConnectionBlockedState();
+        try (ReactiveMessageSender stalledSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1, 64, blockedState,
+                registry, "test-domain"))) {
+            SomeClass small = new SomeClass("1", "a", null);
+            // one of them waits in the buffer of 1 message, the other one is rejected
+            for (int i = 0; i < 2; i++) {
+                stalledSender.sendWithConfirm(small, "exchange", "rkey", new HashMap<>(), true)
+                        .subscribe(null, error -> {
+                        });
+            }
+            await().atMost(Duration.ofSeconds(5)).until(() -> latencies(registry, "rejected", true) == 1);
+
+            SomeClass large = new SomeClass("42", "x".repeat(100), new Date());
+            StepVerifier.create(stalledSender.sendWithConfirm(large, "exchange", "rkey", new HashMap<>(), true))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            StepVerifier.create(stalledSender.sendNoConfirm(large, "exchange", "rkey", new HashMap<>(), false))
+                    .verifyError(SendFailureMessageTooLargeException.class);
+            blockedState.onBlocked("low on memory");
+            StepVerifier.create(stalledSender.sendWithConfirm(small, "exchange", "rkey", new HashMap<>(), true))
+                    .verifyError(SendFailureBrokerBlockedException.class);
+
+            assertThat(latencies(registry, "rejected", true)).isEqualTo(1);
+            assertThat(latencies(registry, "too_large", true)).isEqualTo(1);
+            assertThat(latencies(registry, "too_large", false)).isEqualTo(1);
+            assertThat(latencies(registry, "blocked", true)).isEqualTo(1);
+            assertThat(latencies(registry, "failed", true)).as("none of them is a generic failure").isZero();
+        }
+    }
+
+    /**
+     * The latency of a message the broker returned, or whose confirm was lost with its channel, is tagged with that
+     * outcome and not as a nack.
+     */
+    @Test
+    void theLatencyOfAPublishReturnedOrOfUnknownOutcomeIsTaggedWithItsOutcome() {
+        when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation ->
+                Flux.from(invocation.<Publisher<OutboundMessage>>getArgument(0))
+                        .map(message -> "returned".equals(message.getRoutingKey())
+                                ? new OutboundMessageResult<>(message, true, true)
+                                : new OutboundMessageResult<>(message, false, false, true)));
+        SimpleMeterRegistry registry = new SimpleMeterRegistry();
+        try (ReactiveMessageSender meteredSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
+                unroutableMessageNotifier, new SenderSettings(false, Duration.ofSeconds(5), 1024,
+                ReactiveMessageSender.DEFAULT_MAX_MESSAGE_SIZE, new ConnectionBlockedState(), registry,
+                "test-domain"))) {
+            SomeClass message = new SomeClass("42", "Daniel", new Date());
+            StepVerifier.create(meteredSender.sendWithConfirm(message, "exchange", "returned", new HashMap<>(), true))
+                    .expectError(SendFailureReturnedException.class)
+                    .verify(Duration.ofSeconds(5));
+            StepVerifier.create(meteredSender.sendWithConfirm(message, "exchange", "lost", new HashMap<>(), true))
+                    .expectError(SendConfirmUnknownException.class)
+                    .verify(Duration.ofSeconds(5));
+
+            assertThat(latencies(registry, "returned", true)).isEqualTo(1);
+            assertThat(latencies(registry, "unknown", true)).isEqualTo(1);
+            assertThat(latencies(registry, "nack", true)).isZero();
+            assertThat(latencies(registry, "failed", true)).isZero();
+        }
+    }
+
+    private static long latencies(SimpleMeterRegistry registry, String outcome, boolean confirm) {
+        Timer timer = registry.find("reactive_commons.publish.latency")
+                .tags("domain", "test-domain", "confirm", Boolean.toString(confirm), "outcome", outcome).timer();
+        return timer == null ? 0 : timer.count();
+    }
+
     @Test
     void sendWithConfirmFailsWhenTheBrokerReturnsTheMessage() {
         when(sender.sendWithTypedPublishConfirms(any(Publisher.class), any(SendOptions.class))).then(invocation -> {
@@ -592,8 +676,8 @@ class ReactiveMessageSenderTest {
             return argument.map(msg -> new OutboundMessageResult<>(msg, true, true));
         });
         // the flows are subscribed when the sender is created: use a new sender so it sees this stub
-        try (ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter, null,
-                false, unroutableMessageNotifier)) {
+        try (ReactiveMessageSender returningSender = new ReactiveMessageSender(sender, "TestApp", messageConverter,
+                null, false, unroutableMessageNotifier)) {
             StepVerifier.create(returningSender.sendWithConfirm(new SomeClass("42", "Daniel", new Date()), "exchange",
                             "rkey", new HashMap<>(), true))
                     .expectError(SendFailureReturnedException.class)

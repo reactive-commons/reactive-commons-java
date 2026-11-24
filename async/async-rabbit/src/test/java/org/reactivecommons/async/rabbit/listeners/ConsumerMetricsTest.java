@@ -35,7 +35,8 @@ class ConsumerMetricsTest {
     @Test
     void theRepliesLostCounterOfADomainIsReleasedWithItsReplyListener() {
         SimpleMeterRegistry registry = new SimpleMeterRegistry();
-        ConsumerMetrics app = ConsumerMetrics.forReplyListener(registry, "app", "replies-1", new ListenerLiveness("r1"));
+        ConsumerMetrics app =
+                ConsumerMetrics.forReplyListener(registry, "app", "replies-1", new ListenerLiveness("r1"));
         ConsumerMetrics other = ConsumerMetrics.forReplyListener(registry, "other", "replies-2",
                 new ListenerLiveness("r2"));
 

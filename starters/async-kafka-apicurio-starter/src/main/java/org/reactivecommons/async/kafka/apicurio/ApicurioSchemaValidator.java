@@ -1,6 +1,8 @@
 package org.reactivecommons.async.kafka.apicurio;
 
+import com.fasterxml.jackson.core.JacksonException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.microsoft.kiota.ApiException;
 import com.networknt.schema.JsonSchema;
 import com.networknt.schema.ValidationMessage;
 import io.apicurio.registry.resolver.ParsedSchema;
@@ -12,6 +14,7 @@ import io.apicurio.registry.serde.kafka.headers.HeadersHandler;
 import lombok.Builder;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.common.header.Headers;
+import org.reactivecommons.async.kafka.validation.SchemaResolutionException;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
 
@@ -54,6 +57,19 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
      * Apicurio resolves a missing group id as this group, so both spellings name the same one.
      */
     private static final String DEFAULT_GROUP_ID = "default";
+
+    /**
+     * The answers of the registry worth asking again: too many requests (429), and a gateway or the registry itself
+     * temporarily unable to answer (502, 503, 504). It is the same list the Apicurio serdes retry with
+     * {@code apicurio.registry.retry.transient-errors=true}, and 503 is the one HTTP defines as temporary. Any other
+     * answer would be the same if asked again.
+     */
+    private static final Set<Integer> TRANSIENT_HTTP_STATUSES = Set.of(429, 502, 503, 504);
+
+    /**
+     * Guards the walk of the causes of a failure against a cyclic chain.
+     */
+    private static final int MAX_CAUSE_DEPTH = 32;
 
     private final SchemaResolver<JsonSchema, Object> schemaResolver;
     private final boolean ownsResolver;
@@ -207,13 +223,25 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         return empty ? null : reference;
     }
 
+    /**
+     * A registry that could not be queried, or that answered with a transient error, throws a
+     * {@link SchemaResolutionException}, which the listeners retry: the record may be valid, and querying the registry
+     * again may succeed. Any other failure (any other answer of the registry, e.g. 401, 404 or 500, content that cannot
+     * be read as JSON, such as a malformed schema or the HTML page of a proxy, or a configuration error) throws a
+     * {@link SchemaValidationException}: asking again would fail the same way, so the record is discarded instead of
+     * holding its partition. {@link #isTransient(Throwable)} tells them apart.
+     */
     private SchemaLookupResult<JsonSchema> resolve(String topic, ArtifactReference reference) {
         SchemaLookupResult<JsonSchema> lookup;
         try {
             lookup = schemaResolver.resolveSchemaByArtifactReference(reference);
         } catch (Exception e) {
-            throw new SchemaValidationException(
-                    String.format("Unable to resolve the schema for topic %s and reference %s", topic, reference), e);
+            String message = String.format("Unable to resolve the schema for topic %s and reference %s", topic,
+                    reference);
+            if (isTransient(e)) {
+                throw new SchemaResolutionException(message, e);
+            }
+            throw new SchemaValidationException(message, e);
         }
         if (lookup == null) {
             throw new SchemaValidationException(
@@ -222,21 +250,63 @@ public class ApicurioSchemaValidator implements SchemaValidator, Closeable {
         return lookup;
     }
 
+    /**
+     * Whether querying the registry again may succeed. The resolver wraps the failures of the registry client, which
+     * reports an answer of the registry as an {@link ApiException} with its HTTP status, and a failure to reach it
+     * (connection refused or reset, socket timeout, unknown host, no route) as an {@link IOException}. The Apicurio
+     * client does not retry an HTTP answer by itself.
+     * <p>
+     * The causes are walked from the outermost one, and the first of these decides:
+     * <ol>
+     *     <li>an {@link ApiException} with an HTTP status: transient only for a status in
+     *     {@link #TRANSIENT_HTTP_STATUSES};</li>
+     *     <li>a {@link JacksonException}: not transient. Jackson reports content it cannot read (a malformed schema,
+     *     or the HTML page of a proxy) as an {@link IOException}, but reading the same content again fails the same
+     *     way. It is not transient even when another {@link IOException} wraps it.</li>
+     * </ol>
+     * When neither is found, any other {@link IOException} in the chain is a network failure, so transient.
+     *
+     * @return {@code true} for an answer in {@link #TRANSIENT_HTTP_STATUSES}, or for a network failure without
+     * answer; {@code false} for any other answer, for content that cannot be read, and for any failure that is
+     * neither
+     */
+    private static boolean isTransient(Throwable error) {
+        boolean networkFailure = false;
+        int depth = 0;
+        for (Throwable cause = error; cause != null && depth < MAX_CAUSE_DEPTH; cause = cause.getCause(), depth++) {
+            if (cause instanceof ApiException apiException && apiException.getResponseStatusCode() > 0) {
+                return TRANSIENT_HTTP_STATUSES.contains(apiException.getResponseStatusCode());
+            }
+            if (cause instanceof JacksonException) {
+                return false;
+            }
+            networkFailure |= cause instanceof IOException;
+        }
+        return networkFailure;
+    }
+
     private void validate(String topic, byte[] payload, ParsedSchema<JsonSchema> schema, String hint) {
-        if (schema == null || schema.getParsedSchema() == null) {
-            throw new SchemaValidationException("No schema was resolved for topic " + topic);
-        }
-        Set<ValidationMessage> failures;
-        try {
-            failures = schema.getParsedSchema().validate(objectMapper.readTree(payload),
-                    executionContext -> executionContext.getExecutionConfig().setLocale(MESSAGES_LOCALE));
-        } catch (Exception e) {
-            throw new SchemaValidationException("Unable to read the payload of topic " + topic + " as JSON", e);
-        }
+        Set<ValidationMessage> failures = failuresOf(topic, payload, schema);
         if (failures != null && !failures.isEmpty()) {
             String message = String.format("Error validating data of topic %s against json schema: %s",
                     topic, describe(failures));
             throw new SchemaValidationException(hint == null ? message : message + ". " + hint);
+        }
+    }
+
+    /**
+     * @return what the payload breaks of the schema, with the messages in {@link #MESSAGES_LOCALE}
+     * @throws SchemaValidationException when no schema was resolved, or the payload cannot be read as JSON
+     */
+    private Set<ValidationMessage> failuresOf(String topic, byte[] payload, ParsedSchema<JsonSchema> schema) {
+        if (schema == null || schema.getParsedSchema() == null) {
+            throw new SchemaValidationException("No schema was resolved for topic " + topic);
+        }
+        try {
+            return schema.getParsedSchema().validate(objectMapper.readTree(payload),
+                    executionContext -> executionContext.getExecutionConfig().setLocale(MESSAGES_LOCALE));
+        } catch (Exception e) {
+            throw new SchemaValidationException("Unable to read the payload of topic " + topic + " as JSON", e);
         }
     }
 

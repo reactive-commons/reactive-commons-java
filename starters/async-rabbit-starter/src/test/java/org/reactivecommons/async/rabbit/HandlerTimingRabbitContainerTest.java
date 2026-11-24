@@ -8,6 +8,7 @@ import org.mockito.Mockito;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -62,8 +63,9 @@ class HandlerTimingRabbitContainerTest {
 
     @Test
     void aStepOfTheSystemClockDoesNotChangeTheDurationsMeasuredByTheListener() {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, PREFIX,
-                false, false, ClockSteppingHandlers.class, SendDirect.class, ListenCommands.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(PREFIX, false, false), ClockSteppingHandlers.class, SendDirect.class,
+                ListenCommands.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, PREFIX + "-app");
             MeterRegistry registry = context.getBean(MeterRegistry.class);
 

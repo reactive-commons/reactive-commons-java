@@ -377,9 +377,14 @@ reference is resolved at that moment rather than during the validation of the fi
 
 ### Blocking behaviour and cache lifetime
 
-Resolving a schema is a **blocking** HTTP call issued from the thread that publishes or consumes the record, and the
-Apicurio registry client does not apply a request timeout, so an unreachable registry can hold that thread. Two defaults
-are therefore changed with respect to the Apicurio serdes, both overridable through `properties`:
+Resolving a schema is a **blocking** HTTP call. When publishing, it is issued from a thread of Reactor's
+`Schedulers.boundedElastic()`, never from the thread that calls `emit` (for example an event loop of WebFlux), and the
+`emit` still fails after `sendTimeout` (see [Publishing](./2-kafka.md#publishing)). Since each record is then validated
+on its own thread, two `emit` that must reach the topic in order have to be chained (`emit(a).then(emit(b))`).
+When consuming, it is issued from the threads that run the handlers of the listener, never from the thread of the Kafka
+consumer, so a slow registry holds back the partition of the record but not the polling and the commits of the others.
+The Apicurio registry client does not apply a request timeout, so an unreachable registry can hold that thread. Two
+defaults are therefore changed with respect to the Apicurio serdes, both overridable through `properties`:
 
 | Property                                   | Apicurio default | Reactive Commons default | Reason                                                                                                                 |
 |--------------------------------------------|------------------|--------------------------|------------------------------------------------------------------------------------------------------------------------|
@@ -468,22 +473,43 @@ own code, which decides what to do with it.
 
 ### Consuming
 
-The record is **not** delivered to the handler and, most importantly, **schema validation is never retried**.
+The record is **not** delivered to the handler and, most importantly, **an invalid record is never retried**.
 
-Schema validation happens before the handler runs, and it is never retried: `maxRetries` and `retryDelay` do not apply
-to it. This is intentional: an invalid payload will never become valid by being processed again, so retrying it only
-delays the inevitable and wastes consumer throughput.
+Schema validation runs before the handler, in each attempt to handle the record. A record that does not match its
+schema fails with a `SchemaValidationException`, which is not retried: `maxRetries` and `retryDelay` do not apply to it.
+An invalid payload will never become valid by being processed again, so retrying it would only hold back its partition.
+The record is sent to its DLQ when `withDLQRetry` is true, and otherwise logged and skipped (its offset is committed),
+whatever `maxRetries` is.
 
-The record therefore goes straight to the fallback strategy on the very first attempt:
+A registry that cannot be reached, or that answers with a transient error, says nothing about the record, so it is not
+treated as an invalid one: the validator fails with a `SchemaResolutionException`, a subclass of
+`SchemaValidationException`, and the record is retried like a failed handler (see
+[Retries of a failed message](./2-kafka.md#retries-of-a-failed-message)). With the default settings it is retried until
+the registry answers again, and the records after it in its partition wait.
 
-| `maxRetries`     | Behaviour on schema validation failure                                      |
-|------------------|-----------------------------------------------------------------------------|
-| `>= 0` (default) | `DEFINITIVE_DISCARD`: sent to the DLQ (or acknowledged if the DLQ is off)   |
-| `-1`             | `FAST_RETRY`: **infinite** re-delivery loop, the message is never discarded |
+Any other failure to obtain the schema would be the same if asked again, so the record is rejected like an invalid one:
 
-:::warning Do not use `maxRetries = -1` together with schema validation
-That setting means *infinite fast retries*, and an invalid payload will be redelivered forever, blocking the partition.
-:::
+| Failure to obtain the schema                                                                      | Result                                                 |
+|---------------------------------------------------------------------------------------------------|--------------------------------------------------------|
+| HTTP `429` (too many requests), `502`, `503`, `504`                                               | `SchemaResolutionException`: retried                   |
+| No HTTP answer: connection refused or reset, socket timeout, unknown host, no route, other I/O    | `SchemaResolutionException`: retried                   |
+| Any other HTTP answer, e.g. `400`, `401`, `403`, `404`, `408`, `409`, `500`, `501`                | `SchemaValidationException`: discarded or sent to DLQ  |
+| Content that is not valid JSON, e.g. a malformed schema or the HTML page of a proxy               | `SchemaValidationException`: discarded or sent to DLQ  |
+| Any other failure, e.g. a wrong configuration of the artifact                                     | `SchemaValidationException`: discarded or sent to DLQ  |
+
+Jackson reports content it cannot parse as an I/O error, but parsing the same content again fails the same way, so
+it is not taken as a network failure, even when another I/O error wraps it. Only a transient HTTP answer found before
+it in the chain of causes makes it retried.
+
+It is the same list the Apicurio serdes retry with `apicurio.registry.retry.transient-errors=true` (429, plus 502, 503,
+504 and the network failures); 503 is the status HTTP defines as temporary. The Apicurio client does not retry an HTTP
+answer by itself.
+
+The consequence: a registry that fails on the request (`500`) or rejects the credentials (`401`, `403`) does not hold
+the partition: the record is discarded, or sent to its DLQ when `withDLQRetry` is true. Watch the discards, or the DLQ,
+when you rotate the credentials of the registry.
+
+A record without value (the tombstone of a compacted topic) has no payload, so it is not validated.
 
 ## Customizing the validator
 

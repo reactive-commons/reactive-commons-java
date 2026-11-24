@@ -859,6 +859,26 @@ establish its own two connections to the broker. As a result, the entire microse
 
 ## Threads, logging and performance
 
+### Log level of the library
+
+The library logs through SLF4J, with its loggers under `org.reactivecommons`. Declare their level explicitly in the
+configuration of the application, with `INFO` in production:
+
+```yaml
+logging:
+  level:
+    root: INFO
+    org.reactivecommons: INFO
+```
+
+Use `DEBUG` only to diagnose a problem, in development or for a limited time, because at that level the library:
+
+- writes one line for each message it handles (`<type> with path <path> handled, took <n> ms`), which slows the
+  application down under load (see [Logging in the applications](#logging-in-the-applications));
+- writes the headers and the body of a message whose handler fails, and the body of a message that cannot be read
+  (logger `org.reactivecommons.async.commons.DLQDiscardNotifier`). They may carry personal data or credentials, which
+  must not stay in the logs of a production environment.
+
 ### Logging in the applications
 
 Logging is often the first limit of an application under load: a synchronous appender writes each event while it

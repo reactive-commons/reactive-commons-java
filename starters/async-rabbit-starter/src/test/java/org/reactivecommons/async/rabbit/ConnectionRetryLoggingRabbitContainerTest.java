@@ -5,6 +5,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.Test;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
@@ -40,8 +41,8 @@ class ConnectionRetryLoggingRabbitContainerTest {
         ListAppender<ILoggingEvent> logged = new ListAppender<>();
         logged.start();
         logger.addAppender(logged);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "crl",
-                false, false, Map.of("spring.rabbitmq.password", "wrong-password"),
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("crl", false, false, Map.of("spring.rabbitmq.password", "wrong-password")),
                 RabbitScenarioSupport.Handlers.class, SendDirect.class, ListenCommands.class)) {
             // the publishing and the consuming connections keep failing meanwhile
             await().pollDelay(OUTAGE).atMost(OUTAGE.plusSeconds(1)).until(() -> true);

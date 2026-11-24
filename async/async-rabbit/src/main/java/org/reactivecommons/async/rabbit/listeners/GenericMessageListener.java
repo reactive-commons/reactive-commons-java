@@ -2,6 +2,7 @@ package org.reactivecommons.async.rabbit.listeners;
 
 import com.rabbitmq.client.AMQP;
 import com.rabbitmq.client.Channel;
+import com.rabbitmq.client.ShutdownSignalException;
 import io.micrometer.core.instrument.Timer;
 import lombok.extern.slf4j.Slf4j;
 import org.reactivecommons.async.commons.ListenerContext;
@@ -138,39 +139,43 @@ public abstract class GenericMessageListener {
                 .exceptionHandler(FailFastAcknowledgmentHandler.INSTANCE)
                 // active only once the broker registered the consumer, not when its channel opens
                 .consumerRegisteredCallback(liveness::onSubscribed)
-                .channelCallback(channel -> {
-                    consumingChannel.set(channel);
-                    channel.addShutdownListener(cause -> {
-                        if (stopped.get()) {
-                            // the application stopped the listener (e.g. it is shutting down) and closed the channel
-                            log.debug("Channel of queue {} closed: the listener is stopped", queueName);
-                            return;
-                        }
-                        log.warn("Channel shutdown detected in queue {} channel open: {} connection open: {}",
-                                queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
-                        if (channel.getConnection().isOpen() && !channel.isOpen()) {
-                            log.warn("Recovering listener for queue: {}", queueName);
-                            restarts.schedule(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
-                        }
-                    });
-                });
+                .channelCallback(this::watchChannel);
 
-        if (createTopology) {
-            this.messageFlux = setUpBindings(messageListener.topologyCreator())
-                    .thenMany(receiver.consumeManualAck(queueName, consumeOptions)
-                            .doOnError(err -> log.error("Error listening queue {}", getRootCauseMessage(err), err))
-                            .transform(this::consumeFaultTolerant));
-        } else {
-            this.messageFlux = receiver.consumeManualAck(queueName, consumeOptions)
-                    .doOnError(err -> log.error("Error listening queue {}", getRootCauseMessage(err), err))
-                    .transform(this::consumeFaultTolerant);
-        }
+        // cold: the channel is only opened and the consumer only registered once subscribed (after the bindings)
+        final Flux<AcknowledgableDelivery> deliveries = receiver.consumeManualAck(queueName, consumeOptions)
+                .doOnError(err -> log.error("Error listening queue {}", getRootCauseMessage(err), err))
+                .transform(this::consumeFaultTolerant);
+        this.messageFlux = createTopology
+                ? setUpBindings(messageListener.topologyCreator()).thenMany(deliveries)
+                : deliveries;
 
         // the shared handler pool grows to fit every listener: one whose handlers block cannot starve the others
         if (handlerPoolRoom.compareAndSet(false, true)) {
             ListenerSchedulers.registerListener(messageListener.maxConcurrency());
         }
         subscribe();
+    }
+
+    /**
+     * Keeps the channel opened for the consumer, and restarts the listener when the broker closes it.
+     */
+    private void watchChannel(Channel channel) {
+        consumingChannel.set(channel);
+        channel.addShutdownListener(cause -> onChannelShutdown(channel, cause));
+    }
+
+    private void onChannelShutdown(Channel channel, ShutdownSignalException cause) {
+        if (stopped.get()) {
+            // the application stopped the listener (e.g. it is shutting down) and closed the channel
+            log.debug("Channel of queue {} closed: the listener is stopped", queueName);
+            return;
+        }
+        log.warn("Channel shutdown detected in queue {} channel open: {} connection open: {}",
+                queueName, channel.isOpen(), channel.getConnection().isOpen(), cause);
+        if (channel.getConnection().isOpen() && !channel.isOpen()) {
+            log.warn("Recovering listener for queue: {}", queueName);
+            restarts.schedule(ConsumerMetrics.REASON_CHANNEL_SHUTDOWN);
+        }
     }
 
     /**

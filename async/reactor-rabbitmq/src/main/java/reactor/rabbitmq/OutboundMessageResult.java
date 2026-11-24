@@ -16,6 +16,8 @@
 
 package reactor.rabbitmq;
 
+import org.jspecify.annotations.NonNull;
+
 /**
  * Result of publishing a message with publisher confirms.
  *
@@ -25,19 +27,19 @@ package reactor.rabbitmq;
  * @param unknown         whether the outcome is unknown: the message may or may not have reached the broker because
  *                        the channel or the connection failed before its confirmation arrived
  */
-public record OutboundMessageResult<OMSG extends OutboundMessage>(OMSG outboundMessage, boolean ack, boolean returned,
-                                                                  boolean unknown) {
+public record OutboundMessageResult<M extends OutboundMessage>(M outboundMessage, boolean ack, boolean returned,
+                                                               boolean unknown) {
 
-    public OutboundMessageResult(OMSG outboundMessage, boolean ack) {
+    public OutboundMessageResult(M outboundMessage, boolean ack) {
         this(outboundMessage, ack, false);
     }
 
-    public OutboundMessageResult(OMSG outboundMessage, boolean ack, boolean returned) {
+    public OutboundMessageResult(M outboundMessage, boolean ack, boolean returned) {
         this(outboundMessage, ack, returned, false);
     }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
         return "OutboundMessageResult{" +
                 "outboundMessage=" + outboundMessage +
                 ", ack=" + ack +

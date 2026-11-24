@@ -19,10 +19,10 @@ package reactor.rabbitmq;
 import com.rabbitmq.client.*;
 import com.rabbitmq.client.impl.AMQImpl;
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
+import org.jspecify.annotations.NonNull;
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxOperator;
@@ -57,9 +57,9 @@ import static reactor.rabbitmq.Helpers.safelyExecute;
 /**
  * Reactive abstraction to create resources and send messages.
  */
+@Slf4j
 public class Sender implements AutoCloseable {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(Sender.class);
     private static final int CHANNEL_CLOSE_THREADS = 4;
     /**
      * How long closing the sender waits for the channels of its terminated flows to be closed.
@@ -130,24 +130,8 @@ public class Sender implements AutoCloseable {
                 ? createScheduler("rabbitmq-sender-connection-subscription")
                 : options.getConnectionSubscriptionScheduler();
 
-        Mono<? extends Connection> cm;
-        if (options.getConnectionMono() == null) {
-            cm = Mono.fromCallable(() -> {
-                if (options.getConnectionSupplier() == null) {
-                    return options.getConnectionFactory().newConnection();
-                } else {
-                    return options.getConnectionSupplier().apply(null);
-                }
-            });
-            cm = options.getConnectionMonoConfigurator().apply(cm);
-            cm = cm.doOnNext(connection::set)
-                    .subscribeOn(this.connectionSubscriptionScheduler)
-                    .transform(this::cache);
-        } else {
-            cm = options.getConnectionMono();
-        }
-
-        this.connectionMono = cm;
+        // needs the connection subscription scheduler assigned above
+        this.connectionMono = connectionMono(options);
         this.channelMono = options.getChannelMono();
         this.channelPool = options.getChannelPool();
         this.channelCloseHandler = options.getChannelCloseHandler() == null
@@ -163,11 +147,39 @@ public class Sender implements AutoCloseable {
                 ? connectionMono.map(CHANNEL_PROXY_CREATION_FUNCTION)
                         .cacheInvalidateIf(proxy -> Utils.isClosedForGood(proxy.getConnection()))
                 : options.getResourceManagementChannelMono();
-        if (options.getConnectionClosingTimeout() != null && !Duration.ZERO.equals(options.getConnectionClosingTimeout())) {
-            this.connectionClosingTimeout = (int) options.getConnectionClosingTimeout().toMillis();
-        } else {
-            this.connectionClosingTimeout = -1;
+        this.connectionClosingTimeout = closingTimeout(options);
+    }
+
+    /**
+     * The connection {@link Mono} of the options or, when they give none, one that opens the connection on the
+     * connection subscription scheduler, keeps it and caches it.
+     */
+    private Mono<? extends Connection> connectionMono(SenderOptions options) {
+        if (options.getConnectionMono() != null) {
+            return options.getConnectionMono();
         }
+        Mono<? extends Connection> cm = Mono.fromCallable(() -> {
+            if (options.getConnectionSupplier() == null) {
+                return options.getConnectionFactory().newConnection();
+            } else {
+                return options.getConnectionSupplier().apply(null);
+            }
+        });
+        cm = options.getConnectionMonoConfigurator().apply(cm);
+        return cm.doOnNext(connection::set)
+                .subscribeOn(this.connectionSubscriptionScheduler)
+                .transform(this::cache);
+    }
+
+    /**
+     * The connection closing timeout in milliseconds, or -1 (no timeout) when the options give none or zero.
+     */
+    private static int closingTimeout(SenderOptions options) {
+        Duration timeout = options.getConnectionClosingTimeout();
+        if (timeout != null && !Duration.ZERO.equals(timeout)) {
+            return (int) timeout.toMillis();
+        }
+        return -1;
     }
 
     protected Scheduler createScheduler(String name) {
@@ -209,7 +221,7 @@ public class Sender implements AutoCloseable {
                                 exceptionHandler.accept(new SendContext<>(channel, message), e);
                             }
                         })
-                        .doOnError(e -> LOGGER.warn("Send failed with exception", e))
+                        .doOnError(e -> log.warn("Send failed with exception", e))
                         .doFinally(st -> closeChannel(closeHandler, st, channel))
         ).then();
     }
@@ -220,21 +232,23 @@ public class Sender implements AutoCloseable {
         return sendWithPublishConfirms(messages, new SendOptions());
     }
 
-    public Flux<OutboundMessageResult> sendWithPublishConfirms(Publisher<OutboundMessage> messages, SendOptions options) {
+    public Flux<OutboundMessageResult> sendWithPublishConfirms(Publisher<OutboundMessage> messages,
+                                                               SendOptions options) {
         return Flux.from(sendWithTypedPublishConfirms(messages, options));
     }
 
-    public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(Publisher<OMSG> messages) {
+    public <M extends OutboundMessage> Flux<OutboundMessageResult<M>> sendWithTypedPublishConfirms(
+            Publisher<M> messages) {
         return sendWithTypedPublishConfirms(messages, new SendOptions());
     }
 
-    public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(
-            Publisher<OMSG> messages, SendOptions options) {
+    public <M extends OutboundMessage> Flux<OutboundMessageResult<M>> sendWithTypedPublishConfirms(
+            Publisher<M> messages, SendOptions options) {
         var sendOptions = options == null ? new SendOptions() : options;
         final Mono<? extends Channel> currentChannelMono = getChannelMono(sendOptions);
         final BiConsumer<SignalType, Channel> closeHandler = getChannelCloseHandler(sendOptions);
 
-        Flux<OutboundMessageResult<OMSG>> result = currentChannelMono.map(channel -> {
+        Flux<OutboundMessageResult<M>> result = currentChannelMono.map(channel -> {
             try {
                 channel.confirmSelect();
             } catch (IOException e) {
@@ -381,20 +395,20 @@ public class Sender implements AutoCloseable {
         if (closingOrClosed.compareAndSet(false, true)) {
             // the channels first, while their connection is still open
             if (channelPool != null) {
-                safelyExecute(LOGGER, channelPool::close, "Error while closing the channel pool");
+                safelyExecute(log, channelPool::close, "Error while closing the channel pool");
             }
-            safelyExecute(LOGGER, this::shutdownChannelCloseThreadPool,
+            safelyExecute(log, this::shutdownChannelCloseThreadPool,
                     "Error while closing channel closing thread pool");
             if (connection.get() != null) {
-                safelyExecute(LOGGER, () -> connection.get().close(this.connectionClosingTimeout),
+                safelyExecute(log, () -> connection.get().close(this.connectionClosingTimeout),
                         "Error while closing sender connection");
             }
             if (this.privateConnectionSubscriptionScheduler) {
-                safelyExecute(LOGGER, this.connectionSubscriptionScheduler::dispose,
+                safelyExecute(log, this.connectionSubscriptionScheduler::dispose,
                         "Error while disposing connection subscription scheduler");
             }
             if (this.privateResourceManagementScheduler) {
-                safelyExecute(LOGGER, this.resourceManagementScheduler::dispose,
+                safelyExecute(log, this.resourceManagementScheduler::dispose,
                         "Error while disposing resource management scheduler");
             }
         }
@@ -404,7 +418,7 @@ public class Sender implements AutoCloseable {
         channelCloseThreadPool.shutdown();
         try {
             if (!channelCloseThreadPool.awaitTermination(CHANNEL_CLOSE_TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                LOGGER.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
+                log.warn("Channels of the sender still closing after {}", CHANNEL_CLOSE_TIMEOUT);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -425,22 +439,15 @@ public class Sender implements AutoCloseable {
 
     // --- Inner Classes ---
 
-    public static class SendContext<OMSG extends OutboundMessage> {
+    @Getter
+    public static class SendContext<M extends OutboundMessage> {
 
         protected final Channel channel;
-        protected final OMSG message;
+        protected final M message;
 
-        protected SendContext(Channel channel, OMSG message) {
+        protected SendContext(Channel channel, M message) {
             this.channel = channel;
             this.message = message;
-        }
-
-        public OMSG getMessage() {
-            return message;
-        }
-
-        public Channel getChannel() {
-            return channel;
         }
 
         public void publish(OutboundMessage outboundMessage) throws Exception {
@@ -457,11 +464,11 @@ public class Sender implements AutoCloseable {
         }
     }
 
-    public static class ConfirmSendContext<OMSG extends OutboundMessage> extends SendContext<OMSG> {
+    public static class ConfirmSendContext<M extends OutboundMessage> extends SendContext<M> {
 
-        private final PublishConfirmSubscriber<OMSG> subscriber;
+        private final PublishConfirmSubscriber<M> subscriber;
 
-        protected ConfirmSendContext(Channel channel, OMSG message, PublishConfirmSubscriber<OMSG> subscriber) {
+        protected ConfirmSendContext(Channel channel, M message, PublishConfirmSubscriber<M> subscriber) {
             super(channel, message);
             this.subscriber = subscriber;
         }
@@ -490,20 +497,20 @@ public class Sender implements AutoCloseable {
         }
     }
 
-    private static class PublishConfirmOperator<OMSG extends OutboundMessage>
-            extends FluxOperator<OMSG, OutboundMessageResult<OMSG>> {
+    private static class PublishConfirmOperator<M extends OutboundMessage>
+            extends FluxOperator<M, OutboundMessageResult<M>> {
 
         private final Channel channel;
         private final SendOptions options;
 
-        PublishConfirmOperator(Publisher<OMSG> source, Channel channel, SendOptions options) {
+        PublishConfirmOperator(Publisher<M> source, Channel channel, SendOptions options) {
             super(Flux.from(source));
             this.channel = channel;
             this.options = options;
         }
 
         @Override
-        public void subscribe(CoreSubscriber<? super OutboundMessageResult<OMSG>> actual) {
+        public void subscribe(CoreSubscriber<? super OutboundMessageResult<M>> actual) {
             source.subscribe(new PublishConfirmSubscriber<>(channel, actual, options));
         }
     }
@@ -526,15 +533,15 @@ public class Sender implements AutoCloseable {
      *     sequence can never be attributed to an old message, and the flux keeps running.</li>
      * </ul>
      */
-    static class PublishConfirmSubscriber<OMSG extends OutboundMessage> implements
-            CoreSubscriber<OMSG>, Subscription {
+    static class PublishConfirmSubscriber<M extends OutboundMessage> implements
+            CoreSubscriber<M>, Subscription {
 
         private final AtomicReference<SubscriberState> state = new AtomicReference<>(SubscriberState.INIT);
         private final AtomicReference<Throwable> firstException = new AtomicReference<>();
-        final ConcurrentNavigableMap<Long, OMSG> unconfirmed = new ConcurrentSkipListMap<>();
+        final ConcurrentNavigableMap<Long, M> unconfirmed = new ConcurrentSkipListMap<>();
 
         private final Channel channel;
-        private final CoreSubscriber<OutboundMessageResult<OMSG>> subscriber;
+        private final CoreSubscriber<OutboundMessageResult<M>> subscriber;
         private final BiConsumer<SendContext, Exception> exceptionHandler;
 
         private Subscription subscription;
@@ -546,7 +553,7 @@ public class Sender implements AutoCloseable {
         final boolean trackReturned;
         final BiFunction<AMQP.BasicProperties, Long, AMQP.BasicProperties> propertiesProcessor;
 
-        PublishConfirmSubscriber(Channel channel, CoreSubscriber<? super OutboundMessageResult<OMSG>> subscriber,
+        PublishConfirmSubscriber(Channel channel, CoreSubscriber<? super OutboundMessageResult<M>> subscriber,
                                  SendOptions options) {
             this.channel = channel;
             this.subscriber = Operators.serialize(subscriber);
@@ -558,7 +565,7 @@ public class Sender implements AutoCloseable {
         }
 
         @Override
-        public Context currentContext() {
+        public @NonNull Context currentContext() {
             return subscriber.currentContext();
         }
 
@@ -573,7 +580,7 @@ public class Sender implements AutoCloseable {
         }
 
         @Override
-        public void onSubscribe(Subscription subscription) {
+        public void onSubscribe(@NonNull Subscription subscription) {
             if (!Operators.validate(this.subscription, subscription)) {
                 return;
             }
@@ -628,14 +635,14 @@ public class Sender implements AutoCloseable {
         }
 
         @Override
-        public void onNext(OMSG message) {
+        public void onNext(M message) {
             if (state.get() == SubscriberState.COMPLETE) {
                 Operators.onDiscard(message, currentContext());
                 return;
             }
             long nextPublishSeqNo = channel.getNextPublishSeqNo();
             try {
-                OMSG stale = unconfirmed.put(nextPublishSeqNo, message);
+                M stale = unconfirmed.put(nextPublishSeqNo, message);
                 if (stale != null && stale != message) {
                     // Should not happen once pending messages are cleared on failures, but never lose a result.
                     emit(new OutboundMessageResult<>(stale, false, false, true));
@@ -666,7 +673,7 @@ public class Sender implements AutoCloseable {
                 Object deliveryTagObj = properties.getHeaders() == null
                         ? null : properties.getHeaders().get(REACTOR_RABBITMQ_DELIVERY_TAG_HEADER);
                 if (deliveryTagObj instanceof Long deliveryTag) {
-                    OMSG outboundMessage = unconfirmed.remove(deliveryTag);
+                    M outboundMessage = unconfirmed.remove(deliveryTag);
                     if (outboundMessage != null) {
                         emit(new OutboundMessageResult<>(outboundMessage, true, true));
                     }
@@ -682,7 +689,7 @@ public class Sender implements AutoCloseable {
         private void handleAckNack(long deliveryTag, boolean multiple, boolean ack) {
             try {
                 if (multiple) {
-                    Map.Entry<Long, OMSG> entry;
+                    Map.Entry<Long, M> entry;
                     while ((entry = unconfirmed.firstEntry()) != null && entry.getKey() <= deliveryTag) {
                         // remove(key, value) guarantees a single result even if a failure drains the map concurrently
                         if (unconfirmed.remove(entry.getKey(), entry.getValue())) {
@@ -690,7 +697,7 @@ public class Sender implements AutoCloseable {
                         }
                     }
                 } else {
-                    OMSG outboundMessage = unconfirmed.remove(deliveryTag);
+                    M outboundMessage = unconfirmed.remove(deliveryTag);
                     if (outboundMessage != null) {
                         emitConfirm(outboundMessage, ack);
                     }
@@ -701,7 +708,7 @@ public class Sender implements AutoCloseable {
             maybeCompleteIfNothingPending();
         }
 
-        private void emitConfirm(OMSG message, boolean ack) {
+        private void emitConfirm(M message, boolean ack) {
             // the confirmation may arrive before basicPublish returned to onNext: it is written all the same
             message.confirmedByBroker();
             emit(new OutboundMessageResult<>(message, ack, false));
@@ -713,18 +720,18 @@ public class Sender implements AutoCloseable {
                     failAllUnconfirmed();
                     maybeCompleteIfNothingPending();
                 } else if (sse.isHardError() && channel instanceof Recoverable) {
-                    LOGGER.warn("Connection lost on channel {} ({} unconfirmed messages reported as unknown), "
+                    log.warn("Connection lost on channel {} ({} unconfirmed messages reported as unknown), "
                                     + "waiting for automatic recovery: {}",
                             channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
                     failAllUnconfirmed();
                     maybeCompleteIfNothingPending();
                 } else {
-                    LOGGER.warn("Channel {} closed ({} unconfirmed messages reported as unknown): {}",
+                    log.warn("Channel {} closed ({} unconfirmed messages reported as unknown): {}",
                             channel.getChannelNumber(), unconfirmed.size(), sse.getMessage());
                     terminate(sse);
                 }
             } catch (Exception e) {
-                LOGGER.warn("Error while handling the shutdown of channel {}", channel.getChannelNumber(), e);
+                log.warn("Error while handling the shutdown of channel {}", channel.getChannelNumber(), e);
             }
         }
 
@@ -732,17 +739,17 @@ public class Sender implements AutoCloseable {
          * Reports every message waiting for a confirmation as {@code unknown} and forgets it.
          */
         void failAllUnconfirmed() {
-            Map.Entry<Long, OMSG> entry;
+            Map.Entry<Long, M> entry;
             while ((entry = unconfirmed.pollFirstEntry()) != null) {
                 try {
                     emit(new OutboundMessageResult<>(entry.getValue(), false, false, true));
                 } catch (Exception e) {
-                    LOGGER.warn("Error while notifying an unconfirmed message after a channel failure", e);
+                    log.warn("Error while notifying an unconfirmed message after a channel failure", e);
                 }
             }
         }
 
-        private void emit(OutboundMessageResult<OMSG> result) {
+        private void emit(OutboundMessageResult<M> result) {
             subscriber.onNext(result);
         }
 
@@ -773,8 +780,8 @@ public class Sender implements AutoCloseable {
             }
         }
 
-        private void handleError(Exception e, OutboundMessageResult<OMSG> result) {
-            LOGGER.error("error in publish confirm sending", e);
+        private void handleError(Exception e, OutboundMessageResult<M> result) {
+            log.error("error in publish confirm sending", e);
             if (state.get() == SubscriberState.COMPLETE) {
                 return;
             }
@@ -782,7 +789,7 @@ public class Sender implements AutoCloseable {
                 try {
                     emit(result);
                 } catch (Exception emitException) {
-                    LOGGER.warn("Error while notifying a failed message", emitException);
+                    log.warn("Error while notifying a failed message", emitException);
                 }
             }
             terminate(e);
@@ -820,20 +827,23 @@ public class Sender implements AutoCloseable {
         }
 
         private void removeListeners() {
-            safelyExecute(LOGGER, () -> {
-                if (confirmListener != null) {
-                    channel.removeConfirmListener(confirmListener);
-                }
-                if (shutdownListener != null) {
-                    channel.removeShutdownListener(shutdownListener);
-                }
-                if (returnListener != null) {
-                    channel.removeReturnListener(returnListener);
-                }
-                if (recoveryListener != null && channel instanceof Recoverable recoverable) {
-                    recoverable.removeRecoveryListener(recoveryListener);
-                }
-            }, "Error while removing the listeners of channel " + channel.getChannelNumber());
+            safelyExecute(log, this::detachListeners,
+                    "Error while removing the listeners of channel " + channel.getChannelNumber());
+        }
+
+        private void detachListeners() {
+            if (confirmListener != null) {
+                channel.removeConfirmListener(confirmListener);
+            }
+            if (shutdownListener != null) {
+                channel.removeShutdownListener(shutdownListener);
+            }
+            if (returnListener != null) {
+                channel.removeReturnListener(returnListener);
+            }
+            if (recoveryListener != null && channel instanceof Recoverable recoverable) {
+                recoverable.removeRecoveryListener(recoveryListener);
+            }
         }
     }
 

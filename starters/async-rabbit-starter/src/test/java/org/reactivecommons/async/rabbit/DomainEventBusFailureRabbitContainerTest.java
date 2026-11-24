@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.exceptions.SendFailureReturnedException;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -32,9 +33,9 @@ class DomainEventBusFailureRabbitContainerTest {
 
     @Test
     void anEventReturnedByTheBrokerFailsWithTheTypedExceptionOfItsOutcome() {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "ebf",
-                false, false, Map.of("app.async.app.mandatory", "true"), RabbitScenarioSupport.Handlers.class,
-                SendEvents.class)) {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("ebf", false, false, Map.of("app.async.app.mandatory", "true")),
+                RabbitScenarioSupport.Handlers.class, SendEvents.class)) {
             DomainEventBus bus = context.getBean(DomainEventBus.class);
 
             // mandatory, and no queue is bound to its name: the broker returns it

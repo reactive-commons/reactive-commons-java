@@ -7,6 +7,7 @@ import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.AsyncQuery;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.listeners.ListenerSchedulers;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -173,8 +174,9 @@ class ListenerSchedulersRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext start(String prefix) {
-        return RabbitScenarioSupport.startWithHandlers(RABBIT, prefix, false, true, BlockingHandlers.class, SendEvents.class,
-                SendDirect.class, ListenEvents.class, ListenCommands.class, ListenQueries.class);
+        return RabbitScenarioSupport.startWithHandlers(RABBIT, new Scenario(prefix, false, true),
+                BlockingHandlers.class, SendEvents.class, SendDirect.class, ListenEvents.class, ListenCommands.class,
+                ListenQueries.class);
     }
 
     private static List<String> handlerThreads() {

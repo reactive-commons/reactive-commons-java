@@ -88,7 +88,8 @@ class ListenerSchedulersTest {
                     running.decrementAndGet();
                 }).subscribeOn(ListenerSchedulers.handlers()), 600)
                 .blockLast(Duration.ofSeconds(30));
-        assertThat(peak.get()).as("handlers running at the same time").isGreaterThan(ListenerSchedulers.MAX_HANDLER_THREADS);
+        assertThat(peak.get()).as("handlers running at the same time")
+                .isGreaterThan(ListenerSchedulers.MAX_HANDLER_THREADS);
 
         ListenerSchedulers.unregisterListener(250);
         ListenerSchedulers.unregisterListener(250);
@@ -107,7 +108,8 @@ class ListenerSchedulersTest {
                 .blockLast(Duration.ofSeconds(30));
 
         assertThat(threads).as("threads used by a burst of tasks that do not block")
-                .hasSizeLessThanOrEqualTo(Runtime.getRuntime().availableProcessors() * 4) // 250 when it grows without need
+                // 250 when it grows without need
+                .hasSizeLessThanOrEqualTo(Runtime.getRuntime().availableProcessors() * 4)
                 .allMatch(name -> name.startsWith("rc-handlers-"));
     }
 
@@ -441,7 +443,8 @@ class ListenerSchedulersTest {
     void theThreadsNoLongerNeededAreReleasedWhileTasksKeepComing() throws InterruptedException {
         AtomicLong offset = new AtomicLong();
         ListenerSchedulers.ElasticExecutor pool = new ListenerSchedulers.ElasticExecutor(
-                ListenerSchedulers.MAX_HANDLER_THREADS, "shrinking", KEEP_ALIVE, () -> System.nanoTime() + offset.get());
+                ListenerSchedulers.MAX_HANDLER_THREADS, "shrinking", KEEP_ALIVE,
+                () -> System.nanoTime() + offset.get());
         try {
             runTasksWaitingForTheirOwnResult(pool, 200, 200);
             int grown = pool.getPoolSize();
@@ -590,7 +593,8 @@ class ListenerSchedulersTest {
     }
 
     private static int baseThreads() {
-        return Math.min(ListenerSchedulers.MAX_HANDLER_THREADS, Math.max(2, Runtime.getRuntime().availableProcessors()));
+        return Math.min(ListenerSchedulers.MAX_HANDLER_THREADS,
+                Math.max(2, Runtime.getRuntime().availableProcessors()));
     }
 
     private static void sleep(long millis) {

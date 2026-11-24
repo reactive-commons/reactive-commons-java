@@ -11,6 +11,7 @@ import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
 import org.reactivecommons.async.commons.exceptions.SendFailureBrokerBlockedException;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.ConnectionBlockedState;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
@@ -281,8 +282,8 @@ class ConnectionBlockedRealAlarmRabbitContainerTest {
         all[0] = SendEvents.class;
         all[1] = ListenEvents.class;
         System.arraycopy(features, 0, all, 2, features.length);
-        AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, prefix,
-                false, true, handlers, all);
+        AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario(prefix, false, true), handlers, all);
         RabbitScenarioSupport.awaitConsumers(RABBIT, prefix + "-app.subsEvents");
         return context;
     }

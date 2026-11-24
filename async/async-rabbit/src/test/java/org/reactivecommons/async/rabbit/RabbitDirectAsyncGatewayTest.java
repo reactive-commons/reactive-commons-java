@@ -375,9 +375,9 @@ class RabbitDirectAsyncGatewayTest {
         }
 
         @Override
-        public <OMSG extends OutboundMessage> Flux<OutboundMessageResult<OMSG>> sendWithTypedPublishConfirms(
-                Publisher<OMSG> messages, SendOptions options) {
-            return Flux.from(messages).map(omsg -> new OutboundMessageResult<>(omsg, true));
+        public <M extends OutboundMessage> Flux<OutboundMessageResult<M>> sendWithTypedPublishConfirms(
+                Publisher<M> messages, SendOptions options) {
+            return Flux.from(messages).map(m -> new OutboundMessageResult<>(m, true));
         }
 
         @Override

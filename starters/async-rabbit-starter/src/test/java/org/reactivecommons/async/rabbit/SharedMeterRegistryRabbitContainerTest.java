@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -125,8 +126,8 @@ class SharedMeterRegistryRabbitContainerTest {
     }
 
     private static AnnotationConfigApplicationContext start() {
-        return RabbitScenarioSupport.startWithHandlers(RABBIT, "smr", false, true, SharedRegistryHandlers.class,
-                SendEvents.class, ListenEvents.class);
+        return RabbitScenarioSupport.startWithHandlers(RABBIT, new Scenario("smr", false, true),
+                SharedRegistryHandlers.class, SendEvents.class, ListenEvents.class);
     }
 
     private static double gauge(String name, String tag, String value) {

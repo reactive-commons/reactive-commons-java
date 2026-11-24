@@ -93,7 +93,8 @@ class ConsumerQueueDepthTest {
             assertThat(eventually(() -> depth(registry) == 7.0)).isTrue();
             open.set(false);
 
-            assertThat(eventually(() -> Double.isNaN(depth(registry)))).as("a stale depth would hide a backlog").isTrue();
+            assertThat(eventually(() -> Double.isNaN(depth(registry))))
+                    .as("a stale depth would hide a backlog").isTrue();
         }
     }
 

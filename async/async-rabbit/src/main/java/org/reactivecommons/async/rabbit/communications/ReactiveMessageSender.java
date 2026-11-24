@@ -161,6 +161,17 @@ public class ReactiveMessageSender implements AutoCloseable {
             OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_FAILED, OUTCOME_TOO_LARGE);
     private static final List<String> NO_CONFIRM_OUTCOMES = List.of(
             OUTCOME_PUBLISHED, OUTCOME_FAILED, OUTCOME_REJECTED, OUTCOME_TIMEOUT, OUTCOME_BLOCKED, OUTCOME_TOO_LARGE);
+    /**
+     * The outcome of the latency of a failed publish, by the type of its failure, checked in order. A
+     * {@link SendFailureNoAckException} that is none of these is a nack or a failure (see
+     * {@code PendingMessage.latencyOutcome}).
+     */
+    private static final List<Map.Entry<Class<? extends Throwable>, String>> LATENCY_OUTCOMES = List.of(
+            Map.entry(SendFailureReturnedException.class, OUTCOME_RETURNED),
+            Map.entry(SendFailureBrokerBlockedException.class, OUTCOME_BLOCKED),
+            Map.entry(SendFailureMessageTooLargeException.class, OUTCOME_TOO_LARGE),
+            Map.entry(SendFailureHandOverRejectedException.class, OUTCOME_REJECTED),
+            Map.entry(SendConfirmUnknownException.class, OUTCOME_UNKNOWN));
 
     @Getter
     private final Sender sender;
@@ -290,7 +301,7 @@ public class ReactiveMessageSender implements AutoCloseable {
         this.executorService2.allowCoreThreadTimeOut(true);
         this.timeoutChecker.allowCoreThreadTimeOut(true);
         this.metrics = new PublishMetrics(settings.meterRegistry(), settings.domain(), this.blockedState,
-                activeConfirmFlows, activeNoConfirmFlows, this.executorService2);
+                new PublishGauges(activeConfirmFlows, activeNoConfirmFlows, this.executorService2));
         this.outcomes = new Outcomes(this.metrics, this.executorService);
         initializeSenders();
     }
@@ -1144,20 +1155,10 @@ public class ReactiveMessageSender implements AutoCloseable {
         }
 
         private String latencyOutcome(Throwable error) {
-            if (error instanceof SendFailureReturnedException) {
-                return OUTCOME_RETURNED;
-            }
-            if (error instanceof SendFailureBrokerBlockedException) {
-                return OUTCOME_BLOCKED;
-            }
-            if (error instanceof SendFailureMessageTooLargeException) {
-                return OUTCOME_TOO_LARGE;
-            }
-            if (error instanceof SendFailureHandOverRejectedException) {
-                return OUTCOME_REJECTED;
-            }
-            if (error instanceof SendConfirmUnknownException) {
-                return OUTCOME_UNKNOWN;
+            for (final Map.Entry<Class<? extends Throwable>, String> failure : LATENCY_OUTCOMES) {
+                if (failure.getKey().isInstance(error)) {
+                    return failure.getValue();
+                }
             }
             // the same exception reports a broker nack and a message never written (e.g. no channel, shut down)
             if (error instanceof SendFailureNoAckException && isPublished()) {
@@ -1290,6 +1291,14 @@ public class ReactiveMessageSender implements AutoCloseable {
     }
 
     /**
+     * The state of a sender its gauges read: the live publishing flows of each kind and the hand-over pool, whose
+     * queue size is measured.
+     */
+    private record PublishGauges(AtomicInteger confirmFlows, AtomicInteger noConfirmFlows,
+                                 ThreadPoolExecutor handOver) {
+    }
+
+    /**
      * Micrometer counters/gauges on the publish path. All operations are no-ops when no {@link MeterRegistry} is
      * provided, so the sender can be instantiated in tests without one. The counters are registered once and cached:
      * looking a meter up in the registry on every message would cost far more than incrementing it.
@@ -1308,20 +1317,19 @@ public class ReactiveMessageSender implements AutoCloseable {
         private final Map<Boolean, DistributionSummary> messageSizes = new ConcurrentHashMap<>();
 
         PublishMetrics(MeterRegistry registry, String domain, ConnectionBlockedState blockedState,
-                       AtomicInteger activeConfirmFlows, AtomicInteger activeNoConfirmFlows,
-                       ThreadPoolExecutor handOverExecutor) {
+                       PublishGauges gauges) {
             this.registry = registry;
             // always tagged: Prometheus requires every meter of a name to have the same tag keys
             this.baseTags = Tags.of(Tag.of("domain", domain != null ? domain : ""));
             if (registry != null) {
                 try {
-                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeConfirmFlows,
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", gauges.confirmFlows(),
                             AtomicInteger::get).tags(baseTags.and(TAG_KIND, KIND_CONFIRM)).register(registry));
-                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", activeNoConfirmFlows,
+                    track(() -> Gauge.builder("reactive_commons.publish.flow.live", gauges.noConfirmFlows(),
                             AtomicInteger::get).tags(baseTags.and(TAG_KIND, KIND_NO_CONFIRM)).register(registry));
                     track(() -> Gauge.builder(METRIC_CONNECTION_BLOCKED + ".state", blockedState,
                             s -> s.isBlocked() ? 1.0 : 0.0).tags(baseTags).register(registry));
-                    track(() -> Gauge.builder("reactive_commons.publish.hand_over.queue.size", handOverExecutor,
+                    track(() -> Gauge.builder("reactive_commons.publish.hand_over.queue.size", gauges.handOver(),
                             e -> e.getQueue().size()).tags(baseTags).register(registry));
                     track(() -> FunctionCounter.builder(METRIC_CONNECTION_BLOCKED, blockedState,
                                     ConnectionBlockedState::blockCount)

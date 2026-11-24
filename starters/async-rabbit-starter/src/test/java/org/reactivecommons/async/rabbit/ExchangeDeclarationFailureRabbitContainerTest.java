@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.DomainEvent;
 import org.reactivecommons.api.domain.DomainEventBus;
 import org.reactivecommons.async.commons.exceptions.SendConfirmUnknownException;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.communications.ReactiveMessageSender;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
@@ -62,9 +63,10 @@ class ExchangeDeclarationFailureRabbitContainerTest {
         };
         capture.start();
         logger.addAppender(capture);
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "edf",
-                false, false, Map.of("spring.rabbitmq.username", "limited", "spring.rabbitmq.password", "limited",
-                        "app.async.app.domain.events.exchange", exchange, "app.async.app.sendTimeout", "2s"),
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("edf", false, false, Map.of("spring.rabbitmq.username", "limited",
+                        "spring.rabbitmq.password", "limited", "app.async.app.domain.events.exchange", exchange,
+                        "app.async.app.sendTimeout", "2s")),
                 RabbitScenarioSupport.Handlers.class, SendEvents.class)) {
             DomainEventBus bus = context.getBean(DomainEventBus.class);
             RabbitMQBrokerProvider provider = (RabbitMQBrokerProvider) context.getBean(ConnectionManager.class)

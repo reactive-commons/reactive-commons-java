@@ -16,6 +16,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -236,6 +238,130 @@ class RabbitReactiveHealthIndicatorTest {
         var indicator = withSubscribers(Map.of("app.events", active), Duration.ofSeconds(10));
 
         assertThat(healthOf(indicator)).isEqualTo(RCHealth.Status.UP);
+    }
+
+    @Test
+    void shouldOnlyReportTheClosedConnectionWhenEveryCheckFails(@Mock Connection listenerConnection) {
+        when(connection.isOpen()).thenReturn(false);
+        var reads = new AtomicInteger();
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                counted(reads, Optional.of(listenerConnection)), counted(reads, blockedAndFailingPublisher()),
+                counted(reads, brokenSubscribers()), null, Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details()).containsOnlyKeys("domain", "error")
+                            .containsEntry("error", "Connection to RabbitMQ is closed: unknown");
+                })
+                .verifyComplete();
+        assertThat(reads).as("nothing else is checked").hasValue(0);
+    }
+
+    @Test
+    void shouldReportTheClosedListenerConnectionBeforeThePublisherAndTheListeners(
+            @Mock Connection listenerConnection) {
+        when(connection.isOpen()).thenReturn(true);
+        when(listenerConnection.isOpen()).thenReturn(false);
+        var reads = new AtomicInteger();
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                () -> Optional.of(listenerConnection), counted(reads, blockedAndFailingPublisher()),
+                counted(reads, brokenSubscribers()), null, Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details()).containsOnlyKeys("domain", "error")
+                            .containsEntry("error", "Listener connection to RabbitMQ is closed: unknown");
+                })
+                .verifyComplete();
+        assertThat(reads).as("neither the publisher nor the listeners are read").hasValue(0);
+    }
+
+    @Test
+    void shouldReportTheBlockedConnectionBeforeTheFailingFlowsAndTheListeners() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        var status = blockedAndFailingPublisher();
+        var reads = new AtomicInteger();
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                Optional::empty, () -> status, counted(reads, brokenSubscribers()), null, Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details())
+                            .containsOnlyKeys("domain", "error", "connectionBlockedSince", "connectionBlockedReason",
+                                    "version")
+                            .containsEntry("error", "RabbitMQ broker is back-pressuring (connection.blocked since "
+                                    + status.connectionBlockedSince() + "): low on memory")
+                            .containsEntry("connectionBlockedSince", status.connectionBlockedSince())
+                            .containsEntry("connectionBlockedReason", "low on memory")
+                            .containsEntry("version", "4.1.0");
+                })
+                .verifyComplete();
+        assertThat(reads).as("the listeners are not read").hasValue(0);
+    }
+
+    @Test
+    void shouldReportTheFailingFlowsBeforeTheListenersWhileTheBlockIsWithinItsGrace() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        var status = new PublisherStatus(true, true, 3, Instant.now(), "boom", null, true, Instant.now(),
+                "low on memory");
+        var reads = new AtomicInteger();
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                Optional::empty, () -> status, counted(reads, brokenSubscribers()), Duration.ofMinutes(5),
+                Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details())
+                            .containsOnlyKeys("domain", "error", "lastFailure", "version")
+                            .containsEntry("error", "RabbitMQ publishing flows keep failing (3 re-subscriptions"
+                                    + " without a confirmed message): boom")
+                            .containsEntry("lastFailure", status.lastConfirmFailure());
+                })
+                .verifyComplete();
+        assertThat(reads).as("the listeners are not read").hasValue(0);
+    }
+
+    @Test
+    void shouldReportTheBrokenListenersWithTheirDetailsWhenThePublisherIsHealthy() {
+        when(connection.isOpen()).thenReturn(true);
+        when(connection.getServerProperties()).thenReturn(Map.of("version", "4.1.0"));
+        var indicator = new RabbitReactiveHealthIndicator(DEFAULT_DOMAIN, () -> Optional.of(connection),
+                Optional::empty, PublisherStatus::healthy, this::brokenSubscribers, null, Duration.ofSeconds(10));
+
+        StepVerifier.create(indicator.health())
+                .assertNext(health -> {
+                    assertThat(health.status()).isEqualTo(RCHealth.Status.DOWN);
+                    assertThat(health.details())
+                            .containsOnlyKeys("domain", "error", "brokenListeners", "version")
+                            .containsEntry("error", "RabbitMQ listeners are broken: app.commands restarts keep"
+                                    + " failing (5 without a delivered message): boom")
+                            .containsEntry("brokenListeners", List.of("app.commands"))
+                            .containsEntry("version", "4.1.0");
+                })
+                .verifyComplete();
+    }
+
+    private static <T> Supplier<T> counted(AtomicInteger reads, T value) {
+        return () -> {
+            reads.incrementAndGet();
+            return value;
+        };
+    }
+
+    private static PublisherStatus blockedAndFailingPublisher() {
+        return new PublisherStatus(false, true, 3, Instant.now(), "boom", Instant.now().minusSeconds(60), true,
+                Instant.now().minusSeconds(60), "low on memory");
+    }
+
+    private Map<String, SubscriberStatus> brokenSubscribers() {
+        return Map.of("app.commands", new SubscriberStatus("app.commands", "tag-1", true, Instant.now(), null,
+                null, 5, 5, Instant.now(), "boom"));
     }
 
     private RabbitReactiveHealthIndicator withSubscribers(Map<String, SubscriberStatus> subscribers,

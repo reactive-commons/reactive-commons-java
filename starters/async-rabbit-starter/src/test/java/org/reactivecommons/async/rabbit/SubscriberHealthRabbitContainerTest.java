@@ -3,6 +3,7 @@ package org.reactivecommons.async.rabbit;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.Test;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.reactivecommons.async.rabbit.config.props.AsyncPropsDomain;
 import org.reactivecommons.async.starter.config.ConnectionManager;
 import org.reactivecommons.async.starter.config.health.RCHealth;
@@ -43,8 +44,8 @@ class SubscriberHealthRabbitContainerTest {
      */
     @Test
     void reportsDownWhileTheQueueCannotBeConsumedAndUpOnceTheListenerConsumesAgain() throws Exception {
-        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "sub",
-                false, true, RabbitScenarioSupport.Handlers.class,
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("sub", false, true), RabbitScenarioSupport.Handlers.class,
                 SendEvents.class, ListenEvents.class, PropsOverride.class);
              com.rabbitmq.client.Connection admin = adminConnection()) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);

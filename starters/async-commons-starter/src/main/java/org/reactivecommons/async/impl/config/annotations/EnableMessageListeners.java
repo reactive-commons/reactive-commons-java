@@ -14,8 +14,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * This annotation enables all messages listeners (Query, Commands, Events). If you want to enable separately, please use
- * EnableCommandListeners, EnableQueryListeners or EnableEventListeners.
+ * This annotation enables all messages listeners (Query, Commands, Events). If you want to enable separately, please
+ * use EnableCommandListeners, EnableQueryListeners or EnableEventListeners.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})

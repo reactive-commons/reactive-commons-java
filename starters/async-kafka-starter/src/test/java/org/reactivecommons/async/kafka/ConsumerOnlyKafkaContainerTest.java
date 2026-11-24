@@ -42,7 +42,7 @@ class ConsumerOnlyKafkaContainerTest {
     private static final List<String> RECEIVED = new CopyOnWriteArrayList<>();
 
     @Container
-    private static final KafkaContainer KAFKA = new KafkaContainer(KafkaScenarioSupport.KAFKA_IMAGE);
+    private static final KafkaContainer KAFKA = KafkaScenarioSupport.kafkaContainer();
 
     @Configuration
     @EnableTopicListeners

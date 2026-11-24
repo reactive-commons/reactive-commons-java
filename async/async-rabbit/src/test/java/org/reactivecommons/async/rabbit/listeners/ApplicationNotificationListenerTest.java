@@ -33,7 +33,8 @@ class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass
 
     @BeforeEach
     void initCreator() {
-        Mockito.when(topologyCreator.declare(any(QueueSpecification.class))).thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
+        Mockito.when(topologyCreator.declare(any(QueueSpecification.class)))
+                .thenReturn(just(mock(AMQP.Queue.DeclareOk.class)));
     }
 
     @Test
@@ -54,7 +55,8 @@ class ApplicationNotificationListenerTest extends ListenerReporterTestSuperClass
                         m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
                 );
 
-        assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(DomainEvent::getName, event1, event2));
+        assertContinueAfterSendErrorToCustomReporter(handlerRegistry,
+                createSource(DomainEvent::getName, event1, event2));
     }
 
     @Override

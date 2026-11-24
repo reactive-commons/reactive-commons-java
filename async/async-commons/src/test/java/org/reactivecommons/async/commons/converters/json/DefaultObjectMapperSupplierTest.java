@@ -37,7 +37,8 @@ class DefaultObjectMapperSupplierTest {
         final String serialized = jsonMapper.writeValueAsString(sample);
         assertThat(serialized).contains("2025-12-10");
 
-        final SampleClassWithLocalDateTime result = jsonMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
+        final SampleClassWithLocalDateTime result =
+                jsonMapper.readValue(serialized, SampleClassWithLocalDateTime.class);
 
         assertThat(result.getId()).isEqualTo("123");
         assertThat(result.getName()).isEqualTo("Test");

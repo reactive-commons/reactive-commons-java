@@ -135,11 +135,13 @@ public class RabbitDirectAsyncGateway implements DirectAsyncGateway {
     }
 
     @Override
-    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type, String domain) {
+    public <R extends CloudEvent> Mono<R> requestReply(CloudEvent query, String targetName, Class<R> type,
+                                                       String domain) {
         return requestReplyInternal(query, targetName, type, domain, CloudEvent::getType);
     }
 
-    private <T, R> Mono<R> requestReplyInternal(T query, String targetName, Class<R> type, String domain, Function<T, String> queryTypeExtractor) {
+    private <T, R> Mono<R> requestReplyInternal(T query, String targetName, Class<R> type, String domain,
+                                                Function<T, String> queryTypeExtractor) {
         // Deferred: the reply registration only exists while the query is subscribed, and it is always released
         // (answered, timed out, publication failed or canceled by the caller)
         return Mono.defer(() -> {

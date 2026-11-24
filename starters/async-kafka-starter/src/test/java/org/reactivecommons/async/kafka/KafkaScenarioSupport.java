@@ -2,21 +2,44 @@ package org.reactivecommons.async.kafka;
 
 import lombok.AccessLevel;
 import lombok.NoArgsConstructor;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.ConsumerGroupDescription;
+import org.apache.kafka.common.GroupState;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.reactivecommons.api.domain.RawMessage;
+import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.commons.communications.Message;
 import org.reactivecommons.async.starter.config.ReactiveCommonsConfig;
 import org.reactivecommons.async.starter.config.ReactiveCommonsListenersConfig;
 import org.reactivecommons.async.starter.impl.common.kafka.RCKafkaConfig;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
+import org.testcontainers.containers.ContainerLaunchException;
+import org.testcontainers.containers.output.OutputFrame;
 import org.testcontainers.kafka.KafkaContainer;
 
+import java.nio.charset.StandardCharsets;
+import java.time.Duration;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.Future;
 import java.util.stream.Stream;
 
 /**
@@ -26,8 +49,23 @@ import java.util.stream.Stream;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 final class KafkaScenarioSupport {
 
-    static final String KAFKA_IMAGE = "apache/kafka-native";
+    /**
+     * The same version as the kafka-clients the library uses, pinned so that every run tests the same broker.
+     */
+    static final String KAFKA_IMAGE = "apache/kafka-native:4.4.0";
     static final String PRODUCER_THREAD = "kafka-producer-network-thread";
+    /**
+     * The broker sometimes exits while it starts on a loaded machine (e.g. a CI runner): a new container is tried.
+     */
+    static final int STARTUP_ATTEMPTS = 3;
+
+    /**
+     * The broker of a test class, created the same way for every class: started up to {@link #STARTUP_ATTEMPTS}
+     * times and, when it never starts, failing with the last lines the broker wrote.
+     */
+    static KafkaContainer kafkaContainer() {
+        return new DiagnosedKafkaContainer();
+    }
 
     /**
      * The configuration of a service that uses RabbitMQ for its default domain: the Kafka 'app' domain is disabled
@@ -35,18 +73,66 @@ final class KafkaScenarioSupport {
      */
     static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, String appName, String domain,
                                                                Class<?>... configurations) {
+        return startOnOwnDomain(kafka, new OwnDomain(appName, domain), null, configurations);
+    }
+
+    /**
+     * Same as above, with properties of the domain (e.g. {@code retryDelay}) and the handlers of the application.
+     *
+     * @param ownDomain the application name, its domain and the properties of the domain
+     * @param handlers  the handlers of the application, or {@code null} when a configuration registers them
+     */
+    static AnnotationConfigApplicationContext startOnOwnDomain(KafkaContainer kafka, OwnDomain ownDomain,
+                                                               HandlerRegistry handlers, Class<?>... configurations) {
+        return startOnOwnDomain(kafka.getBootstrapServers(), ownDomain, handlers, configurations);
+    }
+
+    /**
+     * Same as above, against the given bootstrap servers, which may not be reachable.
+     */
+    static AnnotationConfigApplicationContext startOnOwnDomain(String bootstrapServers, OwnDomain ownDomain,
+                                                               HandlerRegistry handlers, Class<?>... configurations) {
+        String prefix = "reactive.commons.kafka." + ownDomain.domain() + ".";
         Map<String, Object> properties = new HashMap<>();
-        properties.put("spring.application.name", appName);
+        properties.put("spring.application.name", ownDomain.appName());
         properties.put("reactive.commons.kafka.app.enabled", "false");
-        properties.put("reactive.commons.kafka." + domain + ".enabled", "true");
-        properties.put("reactive.commons.kafka." + domain + ".connectionProperties.bootstrap-servers",
-                kafka.getBootstrapServers());
-        properties.put("reactive.commons.kafka." + domain + ".connectionProperties.consumer.auto-offset-reset",
-                "earliest");
+        properties.put(prefix + "enabled", "true");
+        properties.put(prefix + "connectionProperties.bootstrap-servers", bootstrapServers);
+        properties.put(prefix + "connectionProperties.consumer.auto-offset-reset", "earliest");
+        ownDomain.properties().forEach((key, value) -> properties.put(prefix + key, value));
+        return start(properties, handlers, configurations);
+    }
+
+    /**
+     * The Kafka domain of its own on which the application registers its handlers.
+     *
+     * @param appName    the {@code spring.application.name} of the application
+     * @param domain     the name of the domain
+     * @param properties properties of the domain, without the {@code reactive.commons.kafka.<domain>} prefix
+     */
+    record OwnDomain(String appName, String domain, Map<String, Object> properties) {
+
+        /**
+         * A domain without properties of its own.
+         */
+        OwnDomain(String appName, String domain) {
+            this(appName, domain, Map.of());
+        }
+    }
+
+    /**
+     * Starts the starter with the given properties, the handlers of the application (or {@code null} when a
+     * configuration registers them) and its configurations.
+     */
+    static AnnotationConfigApplicationContext start(Map<String, Object> properties, HandlerRegistry handlers,
+                                                    Class<?>... configurations) {
         AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext();
         context.getEnvironment().getPropertySources().addFirst(new MapPropertySource("scenario", properties));
         // The configurations of the application first, so the default beans of the starter (e.g. an empty
         // HandlerRegistry) back off, as they do in a Spring Boot application
+        if (handlers != null) {
+            context.registerBean("handlerRegistry", HandlerRegistry.class, () -> handlers);
+        }
         context.register(configurations);
         context.register(RCKafkaConfig.class, ReactiveCommonsConfig.class, ReactiveCommonsListenersConfig.class);
         context.refresh();
@@ -67,6 +153,117 @@ final class KafkaScenarioSupport {
     }
 
     /**
+     * Creates a topic with the given number of partitions.
+     */
+    static void createTopic(KafkaContainer kafka, String topic, int partitions) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            admin.createTopics(List.of(new NewTopic(topic, partitions, (short) 1))).all().get();
+        }
+    }
+
+    /**
+     * Publishes the values, in order, to one partition of a topic, with a plain Kafka producer of the test.
+     */
+    static void publish(KafkaContainer kafka, String topic, int partition, String... values) throws Exception {
+        Map<String, Object> config = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ProducerConfig.CLIENT_ID_CONFIG, "test-publisher");
+        try (KafkaProducer<String, String> producer =
+                     new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            List<Future<RecordMetadata>> sent = new ArrayList<>();
+            for (String value : values) {
+                sent.add(producer.send(new ProducerRecord<>(topic, partition, null, value)));
+            }
+            for (Future<RecordMetadata> result : sent) {
+                result.get();
+            }
+        }
+    }
+
+    /**
+     * The values of every record of a topic, read from the beginning with a plain Kafka consumer of the test, or an
+     * empty list when the topic does not exist.
+     */
+    static List<String> readAll(KafkaContainer kafka, String topic) {
+        return readRecords(kafka, topic).stream().map(ConsumerRecord::value).toList();
+    }
+
+    /**
+     * Every record of a topic, read from the beginning with a plain Kafka consumer of the test, or an empty list when
+     * the topic does not exist.
+     */
+    static List<ConsumerRecord<String, String>> readRecords(KafkaContainer kafka, String topic) {
+        Map<String, Object> config = Map.of(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers());
+        try (KafkaConsumer<String, String> consumer =
+                     new KafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            List<TopicPartition> partitions = consumer.partitionsFor(topic).stream()
+                    .map(info -> new TopicPartition(topic, info.partition()))
+                    .toList();
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+            Map<TopicPartition, Long> end = consumer.endOffsets(partitions);
+            List<ConsumerRecord<String, String>> records = new ArrayList<>();
+            long deadline = System.nanoTime() + Duration.ofSeconds(10).toNanos();
+            while (partitions.stream().anyMatch(p -> consumer.position(p) < end.get(p))
+                    && System.nanoTime() < deadline) {
+                consumer.poll(Duration.ofMillis(200)).forEach(records::add);
+            }
+            return records;
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /**
+     * Publishes a record, with its key and headers, with a plain Kafka producer of the test.
+     */
+    static void publish(KafkaContainer kafka, ProducerRecord<String, String> producerRecord) throws Exception {
+        Map<String, Object> config = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers(),
+                ProducerConfig.CLIENT_ID_CONFIG, "test-publisher");
+        try (KafkaProducer<String, String> producer =
+                     new KafkaProducer<>(config, new StringSerializer(), new StringSerializer())) {
+            producer.send(producerRecord).get();
+        }
+    }
+
+    /**
+     * The offset committed by a consumer group on a partition, or -1 when it committed none.
+     */
+    static long committedOffset(KafkaContainer kafka, String group, String topic, int partition) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            OffsetAndMetadata offset = admin.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get()
+                    .get(new TopicPartition(topic, partition));
+            return offset == null ? -1 : offset.offset();
+        }
+    }
+
+    /**
+     * Whether a consumer group finished rebalancing with the given number of members, each one with partitions
+     * assigned.
+     */
+    static boolean isStableWithAssignedMembers(KafkaContainer kafka, String group, int members) throws Exception {
+        try (AdminClient admin = AdminClient.create(
+                Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, kafka.getBootstrapServers()))) {
+            ConsumerGroupDescription description = admin.describeConsumerGroups(List.of(group)).all().get()
+                    .get(group);
+            return description.groupState() == GroupState.STABLE
+                    && description.members().size() == members
+                    && description.members().stream()
+                    .noneMatch(member -> member.assignment().topicPartitions().isEmpty());
+        }
+    }
+
+    /**
+     * The body of a message received by a raw topic handler, as text.
+     */
+    static String body(RawMessage message) {
+        return new String(((Message) message).getBody(), StandardCharsets.UTF_8);
+    }
+
+    /**
      * Names of the live threads that start with any of the given prefixes and contain the given text.
      */
     static List<String> threads(String contains, String... prefixes) {
@@ -78,5 +275,62 @@ final class KafkaScenarioSupport {
                 .filter(name -> Stream.of(prefixes).anyMatch(name::startsWith))
                 .sorted()
                 .toList();
+    }
+
+    /**
+     * A Kafka container that keeps the last lines its broker wrote and, when it does not start, puts them in the
+     * exception: Gradle shows the exception of a failed test class but not its output, where Testcontainers logs the
+     * output of the failed container.
+     */
+    private static final class DiagnosedKafkaContainer extends KafkaContainer {
+
+        private static final int KEPT_LINES = 200;
+
+        private final Deque<String> output = new ArrayDeque<>(); // guarded by itself
+
+        private DiagnosedKafkaContainer() {
+            super(KAFKA_IMAGE);
+            withStartupAttempts(STARTUP_ATTEMPTS);
+            withLogConsumer(this::keep);
+        }
+
+        /**
+         * Each attempt creates a new container: only the output of the last one is kept.
+         */
+        @Override
+        protected void containerIsCreated(String containerId) {
+            super.containerIsCreated(containerId);
+            synchronized (output) {
+                output.clear();
+            }
+        }
+
+        @Override
+        public void start() {
+            try {
+                super.start();
+            } catch (ContainerLaunchException e) {
+                throw new ContainerLaunchException("The Kafka broker " + KAFKA_IMAGE + " did not start in "
+                        + STARTUP_ATTEMPTS + " attempts. Last output of the broker:\n" + keptOutput(), e);
+            }
+        }
+
+        private void keep(OutputFrame frame) {
+            if (frame.getType() == OutputFrame.OutputType.END) {
+                return;
+            }
+            synchronized (output) {
+                if (output.size() == KEPT_LINES) {
+                    output.removeFirst();
+                }
+                output.addLast(frame.getUtf8StringWithoutLineEnding());
+            }
+        }
+
+        private String keptOutput() {
+            synchronized (output) {
+                return output.isEmpty() ? "(none)" : String.join("\n", output);
+            }
+        }
     }
 }

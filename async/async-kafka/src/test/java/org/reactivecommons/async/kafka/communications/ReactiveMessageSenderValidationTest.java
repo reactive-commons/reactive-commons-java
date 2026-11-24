@@ -14,6 +14,7 @@ import org.reactivecommons.async.kafka.communications.topology.TopologyCreator;
 import org.reactivecommons.async.kafka.validation.SchemaValidationException;
 import org.reactivecommons.async.kafka.validation.SchemaValidator;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.kafka.sender.KafkaSender;
 import reactor.test.StepVerifier;
 
@@ -52,6 +53,7 @@ class ReactiveMessageSenderValidationTest {
     void setUp() {
         // lenient: a record that fails the validation never opens the producer
         lenient().when(kafkaSender.send(any(Flux.class))).thenReturn(Flux.never());
+        when(topologyCreator.ensureTopic(anyString())).thenReturn(Mono.empty());
         KafkaMessage.KafkaMessageProperties properties = new KafkaMessage.KafkaMessageProperties();
         properties.setTopic("topic");
         properties.setKey("key");

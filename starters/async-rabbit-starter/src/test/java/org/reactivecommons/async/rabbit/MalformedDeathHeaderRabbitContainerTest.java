@@ -11,6 +11,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -92,8 +93,9 @@ class MalformedDeathHeaderRabbitContainerTest {
     void aMalformedDeathHeaderNeverTerminatesTheListener() throws Exception {
         HANDLED.clear();
         FAILURES.set(0);
-        try (AnnotationConfigApplicationContext ignored = RabbitScenarioSupport.startWithHandlers(RABBIT, "xdh",
-                false, false, Map.of("app.async.app.retryDelay", "200"), RecordingHandlers.class, ListenEvents.class)) {
+        try (AnnotationConfigApplicationContext ignored = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("xdh", false, false, Map.of("app.async.app.retryDelay", "200")), RecordingHandlers.class,
+                ListenEvents.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
 
             // the Java client encodes an Integer as a 32-bit AMQP integer, as other clients may do

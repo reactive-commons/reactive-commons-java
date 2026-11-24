@@ -59,7 +59,8 @@ class ApplicationCommandListenerTest extends ListenerReporterTestSuperClass {
                         m -> Mono.fromRunnable(successSemaphore::release), DummyMessage.class
                 );
 
-        assertContinueAfterSendErrorToCustomReporter(handlerRegistry, createSource(Command::getName, command, command2));
+        assertContinueAfterSendErrorToCustomReporter(handlerRegistry,
+                createSource(Command::getName, command, command2));
     }
 
     @Override

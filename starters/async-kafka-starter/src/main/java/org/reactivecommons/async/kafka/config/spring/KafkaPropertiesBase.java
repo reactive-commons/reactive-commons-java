@@ -26,6 +26,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.jspecify.annotations.Nullable;
 import org.springframework.boot.context.properties.PropertyMapper;
+import org.springframework.boot.kafka.autoconfigure.SslBundleSslEngineFactory;
+import org.springframework.boot.ssl.SslBundle;
+import org.springframework.boot.ssl.SslBundles;
 import org.springframework.boot.context.properties.source.MutuallyExclusiveConfigurationPropertiesException;
 import org.springframework.boot.convert.DurationUnit;
 import org.springframework.core.io.Resource;
@@ -219,6 +222,62 @@ public class KafkaPropertiesBase {
         Map<String, Object> properties = buildCommonProperties();
         properties.putAll(this.admin.buildProperties());
         return properties;
+    }
+
+    /**
+     * Like {@link #buildConsumerProperties()}, with the SSL bundle of {@code consumer.ssl.bundle}, or else of
+     * {@code ssl.bundle}, applied as Spring Boot does.
+     *
+     * @param sslBundles resolves the name of the bundle; may be {@code null} when no bundle is configured
+     * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
+     */
+    public Map<String, Object> buildConsumerProperties(@Nullable SslBundles sslBundles) {
+        Map<String, Object> built = buildConsumerProperties();
+        applySslBundle(built, sslBundles, this.consumer.getSsl().getBundle());
+        return built;
+    }
+
+    /**
+     * Like {@link #buildProducerProperties()}, with the SSL bundle of {@code producer.ssl.bundle}, or else of
+     * {@code ssl.bundle}, applied as Spring Boot does.
+     *
+     * @param sslBundles resolves the name of the bundle; may be {@code null} when no bundle is configured
+     * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
+     */
+    public Map<String, Object> buildProducerProperties(@Nullable SslBundles sslBundles) {
+        Map<String, Object> built = buildProducerProperties();
+        applySslBundle(built, sslBundles, this.producer.getSsl().getBundle());
+        return built;
+    }
+
+    /**
+     * Like {@link #buildAdminProperties()}, with the SSL bundle of {@code admin.ssl.bundle}, or else of
+     * {@code ssl.bundle}, applied as Spring Boot does.
+     *
+     * @param sslBundles resolves the name of the bundle; may be {@code null} when no bundle is configured
+     * @throws IllegalStateException when a bundle is configured and there are no SSL bundles
+     */
+    public Map<String, Object> buildAdminProperties(@Nullable SslBundles sslBundles) {
+        Map<String, Object> built = buildAdminProperties();
+        applySslBundle(built, sslBundles, this.admin.getSsl().getBundle());
+        return built;
+    }
+
+    /**
+     * {@link Ssl#buildProperties()} leaves the TLS settings out when a bundle is named: the client gets them from the
+     * bundle, through an {@code SslEngineFactory}, as in {@code KafkaAutoConfiguration} of Spring Boot.
+     */
+    private void applySslBundle(Map<String, Object> properties, @Nullable SslBundles sslBundles,
+                                @Nullable String clientBundle) {
+        String name = StringUtils.hasText(clientBundle) ? clientBundle : this.ssl.getBundle();
+        if (!StringUtils.hasText(name)) {
+            return;
+        }
+        if (sslBundles == null) {
+            throw new IllegalStateException("SSL bundle name has been set but no SSL bundles found in context");
+        }
+        properties.put(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, SslBundleSslEngineFactory.class);
+        properties.put(SslBundle.class.getName(), sslBundles.getBundle(name));
     }
 
     /**
@@ -1507,7 +1566,8 @@ public class KafkaPropertiesBase {
         /**
          * Control flag for login configuration.
          */
-        private KafkaJaasLoginModuleInitializer.ControlFlag controlFlag = KafkaJaasLoginModuleInitializer.ControlFlag.REQUIRED;
+        private KafkaJaasLoginModuleInitializer.ControlFlag controlFlag =
+                KafkaJaasLoginModuleInitializer.ControlFlag.REQUIRED;
 
         /**
          * Additional JAAS options.
@@ -1742,7 +1802,6 @@ public class KafkaPropertiesBase {
 
     }
 
-    @SuppressWarnings("serial")
     private static final class Properties extends HashMap<String, Object> {
 
         <V> java.util.function.Consumer<V> in(String key) {

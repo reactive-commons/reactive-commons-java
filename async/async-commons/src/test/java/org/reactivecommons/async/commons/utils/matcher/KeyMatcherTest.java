@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -162,6 +164,25 @@ class KeyMatcherTest {
         assertEquals("prefix.*.#", keyMatcher.match(listeners, "prefix.any.any.any.any"));
         assertEquals("*.*.*", keyMatcher.match(listeners, "any.any.any"));
         assertEquals("*.#.*", keyMatcher.match(listeners, "any.any.any.any.any"));
+    }
+
+    @Test
+    void theMostSpecificPatternWinsWhicheverOrderTheCandidatesArriveIn() {
+        // a literal word beats a wildcard, in either position of the comparison
+        assertSameWinnerInBothOrders("a.*", "*.b", "a.b", "a.*");
+        // '*' beats '#' at the same word
+        assertSameWinnerInBothOrders("a.#", "a.*", "a.x", "a.*");
+        // after '#' against '*', the next words still decide: the literal 'a' beats the '*'
+        assertSameWinnerInBothOrders("#.a", "*.*", "x.a", "#.a");
+        // two wildcard pairs in a row ('#' against '*', then '*' against '#'): the literal 'suffix' decides
+        assertSameWinnerInBothOrders("#.*.suffix", "*.#.*", "any.any.any.suffix", "#.*.suffix");
+        // equal words up to the end of the shorter pattern: the longer pattern wins
+        assertSameWinnerInBothOrders("a.#", "a.#.c", "a.x.c", "a.#.c");
+    }
+
+    private static void assertSameWinnerInBothOrders(String first, String second, String target, String winner) {
+        assertEquals(winner, KeyMatcher.matchMissingKey(new LinkedHashSet<>(List.of(first, second)), target));
+        assertEquals(winner, KeyMatcher.matchMissingKey(new LinkedHashSet<>(List.of(second, first)), target));
     }
 
     @Test

@@ -12,7 +12,8 @@ import tools.jackson.databind.json.JsonMapper;
 import java.util.List;
 
 /**
- * This class implements a {@link CloudEventDataMapper} that maps any input {@link CloudEventData} to the specified target type using the Jackson {@link JsonMapper}.
+ * This class implements a {@link CloudEventDataMapper} that maps any input {@link CloudEventData} to the specified
+ * target type using the Jackson {@link JsonMapper}.
  *
  * @param <T> the target type of the conversion
  */
@@ -52,8 +53,8 @@ public class PojoCloudEventDataMapper<T> implements CloudEventDataMapper<PojoClo
     }
 
     /**
-     * Creates a {@link PojoCloudEventDataMapper} mapping {@link CloudEventData} into {@link PojoCloudEventData}&lt;T&gt;
-     * using a Jackson {@link JsonMapper}.
+     * Creates a {@link PojoCloudEventDataMapper} mapping {@link CloudEventData} into
+     * {@link PojoCloudEventData}&lt;T&gt; using a Jackson {@link JsonMapper}.
      *
      * <p>
      * When working with generic types (e.g. {@link List}&lt;{@link String}&gt;),
@@ -70,8 +71,8 @@ public class PojoCloudEventDataMapper<T> implements CloudEventDataMapper<PojoClo
     }
 
     /**
-     * Creates a {@link PojoCloudEventDataMapper} mapping {@link CloudEventData} into {@link PojoCloudEventData}&lt;T&gt;
-     * using a Jackson {@link JsonMapper}.
+     * Creates a {@link PojoCloudEventDataMapper} mapping {@link CloudEventData} into
+     * {@link PojoCloudEventData}&lt;T&gt; using a Jackson {@link JsonMapper}.
      *
      * <p>
      * This overload is more suitable for mapping generic objects (e.g. {@link List}&lt;{@link String}&gt;),

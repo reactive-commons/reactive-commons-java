@@ -150,14 +150,39 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
         if (!conn.isOpen()) {
             return builder.down().withDetail(ERROR, "Connection to RabbitMQ is closed: " + closeReason(conn)).build();
         }
+        return connectedHealth(builder, conn);
+    }
+
+    /**
+     * The health while the publishing connection is open: the first failing check, in order of priority (listener
+     * connection, publisher, listeners), or UP when none fails. Each check is only made when the previous ones pass.
+     */
+    private RCHealth connectedHealth(RCHealth.RCHealthBuilder builder, Connection conn) {
+        RCHealth down = listenerDown(builder);
+        if (down != null) {
+            return down;
+        }
+        PublisherStatus status = publisherStatus.get();
+        Instant now = Instant.now();
+        down = publisherDown(builder, conn, status, now);
+        if (down == null) {
+            down = subscribersDown(builder, conn, now);
+        }
+        return down != null ? down : builder.up().withDetail(VERSION, serverVersion(conn)).build();
+    }
+
+    private RCHealth listenerDown(RCHealth.RCHealthBuilder builder) {
         Optional<Connection> listening = listenerConnection.get();
         if (listening.isPresent() && !listening.get().isOpen()) {
             return builder.down()
                     .withDetail(ERROR, "Listener connection to RabbitMQ is closed: " + closeReason(listening.get()))
                     .build();
         }
-        PublisherStatus status = publisherStatus.get();
-        Instant now = Instant.now();
+        return null;
+    }
+
+    private RCHealth publisherDown(RCHealth.RCHealthBuilder builder, Connection conn, PublisherStatus status,
+                                   Instant now) {
         if (connectionBlocked(status, now)) {
             return builder.down()
                     .withDetail(ERROR, connectionBlockedReason(status))
@@ -173,6 +198,10 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
                     .withDetail(VERSION, serverVersion(conn))
                     .build();
         }
+        return null;
+    }
+
+    private RCHealth subscribersDown(RCHealth.RCHealthBuilder builder, Connection conn, Instant now) {
         List<SubscriberStatus> broken = brokenSubscribers(subscribers.get(), now);
         if (!broken.isEmpty()) {
             return builder.down()
@@ -181,7 +210,7 @@ public class RabbitReactiveHealthIndicator extends RCHealthIndicator {
                     .withDetail(VERSION, serverVersion(conn))
                     .build();
         }
-        return builder.up().withDetail(VERSION, serverVersion(conn)).build();
+        return null;
     }
 
     /**

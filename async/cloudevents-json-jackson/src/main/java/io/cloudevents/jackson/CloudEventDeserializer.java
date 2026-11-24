@@ -64,34 +64,14 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
         private static final String DATA_BASE64 = "data_base64";
 
         @Override
-        public <T extends CloudEventWriter<V>, V> V read(CloudEventWriterFactory<T, V> writerFactory, CloudEventDataMapper<? extends CloudEventData> mapper) throws CloudEventRWException, IllegalStateException {
+        public <T extends CloudEventWriter<V>, V> V read(CloudEventWriterFactory<T, V> writerFactory,
+                                                         CloudEventDataMapper<? extends CloudEventData> mapper)
+                throws CloudEventRWException, IllegalStateException {
             try {
                 SpecVersion specVersion = SpecVersion.parse(getStringNode(this.node, this.p, "specversion"));
                 CloudEventWriter<V> writer = writerFactory.create(specVersion);
 
-                // Read mandatory attributes
-                for (String attr : specVersion.getMandatoryAttributes()) {
-                    if (!"specversion".equals(attr)) {
-                        writer.withContextAttribute(attr, getStringNode(this.node, this.p, attr));
-                    }
-                }
-
-                // Parse datacontenttype if any
-                String contentType = getOptionalStringNode(this.node, "datacontenttype");
-                if (!this.disableDataContentTypeDefaulting && contentType == null && this.node.has("data")) {
-                    contentType = "application/json";
-                }
-                if (contentType != null) {
-                    writer.withContextAttribute("datacontenttype", contentType);
-                }
-
-                // Read optional attributes
-                for (String attr : specVersion.getOptionalAttributes()) {
-                    String val = getOptionalStringNode(this.node, attr);
-                    if (val != null) {
-                        writer.withContextAttribute(attr, val);
-                    }
-                }
+                String contentType = readContextAttributes(writer, specVersion);
 
                 CloudEventData data = readData(contentType);
                 readExtensions(writer);
@@ -103,6 +83,38 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
             } catch (IllegalArgumentException e) {
                 throw MismatchedInputException.from(this.p, CloudEvent.class, e.getMessage());
             }
+        }
+
+        /**
+         * Writes the mandatory attributes (except specversion), the datacontenttype and the optional attributes.
+         *
+         * @return the content type written, or {@code null} if none
+         */
+        private String readContextAttributes(CloudEventContextWriter writer, SpecVersion specVersion) {
+            // Read mandatory attributes
+            for (String attr : specVersion.getMandatoryAttributes()) {
+                if (!"specversion".equals(attr)) {
+                    writer.withContextAttribute(attr, getStringNode(this.node, this.p, attr));
+                }
+            }
+
+            // Parse datacontenttype if any
+            String contentType = getOptionalStringNode(this.node, "datacontenttype");
+            if (!this.disableDataContentTypeDefaulting && contentType == null && this.node.has("data")) {
+                contentType = "application/json";
+            }
+            if (contentType != null) {
+                writer.withContextAttribute("datacontenttype", contentType);
+            }
+
+            // Read optional attributes
+            for (String attr : specVersion.getOptionalAttributes()) {
+                String val = getOptionalStringNode(this.node, attr);
+                if (val != null) {
+                    writer.withContextAttribute(attr, val);
+                }
+            }
+            return contentType;
         }
 
         private CloudEventData readData(String contentType) {
@@ -120,7 +132,8 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
                     return JsonCloudEventData.wrap(node.remove("data"));
                 }
                 JsonNode dataNode = node.remove("data");
-                assertNodeIsString(dataNode, "data", "Because content type is not a json, only a string is accepted as data");
+                assertNodeIsString(dataNode, "data",
+                        "Because content type is not a json, only a string is accepted as data");
                 return BytesCloudEventData.wrap(dataNode.asString().getBytes(StandardCharsets.UTF_8));
             }
             return null;
@@ -139,7 +152,8 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
             });
         }
 
-        private void writeExtensionAttribute(CloudEventContextWriter writer, String extensionName, JsonNode extensionValue) {
+        private void writeExtensionAttribute(CloudEventContextWriter writer, String extensionName,
+                                             JsonNode extensionValue) {
             switch (extensionValue.getNodeType()) {
                 case BOOLEAN:
                     writer.withContextAttribute(extensionName, extensionValue.booleanValue());
@@ -163,7 +177,8 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
         private String getStringNode(ObjectNode objNode, JsonParser p, String attributeName) {
             String val = getOptionalStringNode(objNode, attributeName);
             if (val == null) {
-                throw MismatchedInputException.from(p, CloudEvent.class, "Missing mandatory " + attributeName + " attribute");
+                throw MismatchedInputException.from(p, CloudEvent.class,
+                        "Missing mandatory " + attributeName + " attribute");
             }
             return val;
         }
@@ -217,12 +232,14 @@ class CloudEventDeserializer extends StdDeserializer<CloudEvent> {
 
     @Override
     public CloudEvent deserialize(JsonParser p, DeserializationContext ctxt) {
-        // In future we could eventually find a better solution avoiding this buffering step, but now this is the best option
+        // In the future, we could eventually find a better solution avoiding this buffering step,
+        // but now this is the best option
         // Other sdk does the same in order to support all versions
         ObjectNode node = ctxt.readValue(p, ObjectNode.class);
 
         try {
-            return new JsonMessage(p, node, this.forceExtensionNameLowerCaseDeserialization, this.forceIgnoreInvalidExtensionNameDeserialization, this.disableDataContentTypeDefaulting)
+            return new JsonMessage(p, node, this.forceExtensionNameLowerCaseDeserialization,
+                    this.forceIgnoreInvalidExtensionNameDeserialization, this.disableDataContentTypeDefaulting)
                     .read(CloudEventBuilder::fromSpecVersion);
         } catch (RuntimeException e) {
             throw MismatchedInputException.from(p, CloudEvent.class, e.getMessage());

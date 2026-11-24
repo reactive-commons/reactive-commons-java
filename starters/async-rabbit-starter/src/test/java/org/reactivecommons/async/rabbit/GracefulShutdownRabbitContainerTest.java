@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.reactivecommons.api.domain.Command;
 import org.reactivecommons.async.api.DirectAsyncGateway;
 import org.reactivecommons.async.api.HandlerRegistry;
+import org.reactivecommons.async.rabbit.RabbitScenarioSupport.Scenario;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -66,9 +67,8 @@ class GracefulShutdownRabbitContainerTest {
     void closingTheApplicationLetsTheRunningHandlersFinishAndAcknowledgeTheirDeliveries() throws Exception {
         HANDLED.set(0);
         started = new CountDownLatch(COMMANDS);
-        AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT, "gsd", false,
-                false, SlowHandlers.class, SendDirect.class, ListenCommands.class);
-        try {
+        try (AnnotationConfigApplicationContext context = RabbitScenarioSupport.startWithHandlers(RABBIT,
+                new Scenario("gsd", false, false), SlowHandlers.class, SendDirect.class, ListenCommands.class)) {
             RabbitScenarioSupport.awaitConsumers(RABBIT, QUEUE);
             DirectAsyncGateway gateway = context.getBean(DirectAsyncGateway.class);
             Flux.range(0, COMMANDS)
@@ -76,8 +76,6 @@ class GracefulShutdownRabbitContainerTest {
                             Map.of("id", i)), QUEUE))
                     .blockLast(Duration.ofSeconds(30));
             assertThat(started.await(30, TimeUnit.SECONDS)).as("every handler started").isTrue();
-        } finally {
-            context.close();
         }
 
         await().alias("connections closed").atMost(Duration.ofSeconds(15))
