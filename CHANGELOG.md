@@ -1,5 +1,13 @@
 # Changelog
 
+## [v7.9.0](https://github.com/reactive-commons/reactive-commons-java/tree/v7.9.0) (2026-11-24)
+
+[Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.8.1...v7.9.0)
+
+**Merged pull requests:**
+
+- feat\(kafka\): reliable and observable consumer delivery [\#192](https://github.com/reactive-commons/reactive-commons-java/pull/192) ([luisgomez29](https://github.com/luisgomez29))
+
 ## [v7.8.1](https://github.com/reactive-commons/reactive-commons-java/tree/v7.8.1) (2026-11-17)
 
 [Full Changelog](https://github.com/reactive-commons/reactive-commons-java/compare/v7.8.0...v7.8.1)
